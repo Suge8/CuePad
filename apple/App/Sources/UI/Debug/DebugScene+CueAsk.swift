@@ -49,7 +49,6 @@ extension DebugScene {
 
     private enum Proposal { case sheet, thread, slide, drawer }
 
-    /// 方形缩略图取细节最多的那一段（`DeliverableLooks.detailRegion`）也要一眼认得出是哪张，所以每个方案有一块显眼、彼此分得开的样子。
     private static func proposalPNG(_ proposal: Proposal) -> Data {
         let indigo = Color(red: 0.18, green: 0.29, blue: 0.62)
         let question = Text("可以推送 scheduler 的重连修复吗？", tableName: "Demo").font(.system(size: 15, weight: .semibold))

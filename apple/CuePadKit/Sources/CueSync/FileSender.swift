@@ -21,13 +21,11 @@ actor FileSender {
   private let cloud: any FileCloud & RecordUploader
   private let coordinator: SyncCoordinator
   private let board: TransferBoard
-  /// 对过最低对端版本（`RecordSender.ready`）之后文件才传，同别的记录。
   private let ready: @Sendable () async -> Bool
   private let generation: SyncGeneration
   private var stopped: Bool { generation.isOver }
   private var tasks: [Task<Void, Never>] = []
   private var uploads: [UUID: Task<Void, Never>] = [:]
-  /// 补位同一时刻只有一趟在跑；跑的时候又被叫到记成再补一趟（两趟交错会各自按同一个在路上的数多取）。
   private var filling = false
   private var refill = false
 
@@ -43,8 +41,8 @@ actor FileSender {
   }
 
   func start() async {
-    let changes = await coordinator.store.syncChanges()  // 先订阅：返回后的提交都不会漏
-    guard !stopped else { return }  // 订阅期间停下了
+    let changes = await coordinator.store.syncChanges()
+    guard !stopped else { return }
     let due = coordinator.retryDue.stream()
     tasks = [
       Task { for await change in changes where change.tables.contains(.attachments) { await self.fill() } },
@@ -81,7 +79,6 @@ actor FileSender {
         send(records) { progress in try await upload.result(progress) }
       }
     } catch {
-      // 接不上的那几条仍是待推送，照常再传一遍；连不上的由下一次传归类
       Self.log.notice("没能列出上次的文件上传：\(error.brief, privacy: .public)")
     }
   }
@@ -110,9 +107,9 @@ actor FileSender {
     for name in pending {
       guard !stopped, await coordinator.fileUploads.count < Self.parallel else { return }
       let taken: CKRecord?
-      do { taken = try await coordinator.takeFile(name) } catch { return }  // 停下了或读库出错：协调器已记下，下一次触发再来
-      guard let record = taken else { continue }  // 已在路上，或这一版传不上去
-      guard !stopped else { return await release([record]) }  // 读库时停下了：放回，不开始
+      do { taken = try await coordinator.takeFile(name) } catch { return }
+      guard let record = taken else { continue }
+      guard !stopped else { return await release([record]) }
       send([record]) { [cloud] progress in try await cloud.uploadFile(record, progress: progress) }
     }
   }
@@ -131,7 +128,6 @@ actor FileSender {
       let outcome = await coordinator.sent(sent, for: OutgoingBatch(saves: records, deletes: []))
       guard !outcome.paused else { return await release(records) }
       for record in sent.saved {
-        // 删不掉的保底只多占一个硬链接，下次收下同一个文件时再删
         do { try await coordinator.store.attachmentUploaded(record.recordID.recordName) } catch {
           Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)")
         }
@@ -158,7 +154,7 @@ actor FileSender {
   private func failed(_ error: any Error) async {
     if SyncFault(error) == .account(.quotaExceeded) { return await coordinator.holdFiles(error) }
     if let error = error as? CKError, error.code == .zoneNotFound {
-      try? await cloud.saveZone()  // 新装的第一次就是文件：建区，下一次触发再传
+      try? await cloud.saveZone()
       return
     }
     await coordinator.hold(await coordinator.failed(error), waiting: false)

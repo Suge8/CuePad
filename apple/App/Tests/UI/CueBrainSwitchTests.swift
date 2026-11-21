@@ -5,8 +5,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 选择器写设置走 `AppServices.updateCue`，写法照它的菜单项（`CueConfigControls`）；说话走 `Workspace.speak`。
-/// 大脑是真的 Pi，模型是 `CueHostTests` 的假端点（看得到每一轮用的模型与强度）。
 @MainActor
 @Suite(.releasesLibraries, .pinnedPi, .serialized)
 struct CueBrainSwitchTests {
@@ -21,11 +19,11 @@ struct CueBrainSwitchTests {
         let rig = try await CueHostTests.Rig()
         try await say("暗号是 PAPAYA", to: rig, expecting: "收到：暗号是 PAPAYA")
 
-        try await rig.services.updateCue {  // 模型菜单里 Pi 那组的 Fake Model 2
+        try await rig.services.updateCue {
             $0.runtime = .known(.pi)
             $0.model = "fake/fake-model-2"
         }
-        try await rig.services.updateCue { $0.effort = .known(.high) }  // 思考强度选"高"
+        try await rig.services.updateCue { $0.effort = .known(.high) }
         try await say("暗号是什么？", to: rig, expecting: "记得，暗号是 PAPAYA")
 
         let used = try #require(rig.model.requests.last)

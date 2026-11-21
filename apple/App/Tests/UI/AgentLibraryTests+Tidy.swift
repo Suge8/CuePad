@@ -56,7 +56,7 @@ extension AgentLibraryTests {
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         try write("你是 Codex\n", codex.appending(path: "prompt.md"))
-        try write("", codex.appending(path: "AGENTS.md"))  // 空文件等同没有：不算 Codex 写了一份、不进合并
+        try write("", codex.appending(path: "AGENTS.md"))
         let config = "model = \"gpt\"\nmodel_instructions_file = \"prompt.md\"\n\n[tools]\nweb = true\n"
         try write(config, codex.appending(path: "config.toml"))
         let keeping = keep()

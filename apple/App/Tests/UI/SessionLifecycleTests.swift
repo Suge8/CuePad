@@ -61,7 +61,6 @@ struct SessionLifecycleTests {
     }
 }
 
-/// 桥是 Cue 插话的最后一道关：库里的开轮者可能还没同步到，交出前按桥上此刻的开轮者再核一次。
 @Suite(.releasesLibraries)
 struct CueSendGuardTests {
     private final class Peer: SessionLink {

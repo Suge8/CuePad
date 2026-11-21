@@ -24,7 +24,6 @@ struct CueActivityTests {
         try await store.bindSession("zoom", to: canvas.id)
         try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: Question(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
 
-        // 实时活动只在 iPhone 上：按手机推（和 iCloud 对过、不是哪台 Mac），Mac 上的本机事实在 CueGateTests
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
         func kinds(_ now: CueNow) -> [CueNow.Item.Kind] { now.items.map(\.kind) }
 
@@ -51,7 +50,6 @@ struct CueActivityTests {
         try await recorder.update(sessionID: "zoom", state: .ended)
         try await recorder.update(sessionID: "testflight", state: .ended)
         cue = try await now()
-        // 刚做完的让已有的岛再留一会儿（不够新开一只），过了那一段才结束
         #expect(kinds(cue) == [.done, .done, .done] && cue.isLive && !cue.hasConfirmedActivity && cue.first == nil)
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).items.isEmpty)
         let later = CueNow(

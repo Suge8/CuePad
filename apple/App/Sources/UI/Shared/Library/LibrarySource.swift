@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 页底一行：看的是哪台 Mac 报来的、多新。只手机与 iPad 有（Mac 上看的就是本机此刻的文件）。
 struct LibrarySource: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace

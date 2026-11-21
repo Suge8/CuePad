@@ -4,9 +4,6 @@ import Foundation
 import UIKit
 #endif
 
-/// 手机、iPad 这头问 Mac（`LiveSignal`）：开着的会话页有没有页面可看，开着的活预览去哪连。会话页看得见时问（`watch`），
-/// 那台 Mac 不在线、中转没连上时不问；每 `LiveSignal.renewal` 续问一次，Mac 有变化会主动答。iPad 几个窗口开着同一个会话合成一份问。
-/// 答复只在内存里：页面地址是那台 Mac 上的服务，不进库、不同步。
 @Observable
 final class LiveRemote {
     struct Pages: Equatable, Sendable {
@@ -14,13 +11,10 @@ final class LiveRemote {
         var serving: [URL]
         var sent: LiveAddress?
         var door: LiveSignal.Door?
-        /// 隧道放行的 Mac 本机端口：手机照搬到自己的回环上（`LiveTunnel.Proxy.mirror`）。
         var ports: [Int]
     }
 
-    /// Mac 答的，按 Pi 的会话 id。没答、答了没有页面、过了 `LiveSignal.lease` 没再答都不在里面。
     private(set) var answers: [String: Pages] = [:]
-    /// 问不到那台 Mac 的会话（它不在线、中转说它走了）；手机自己没连上中转的不算。
     private(set) var offline: Set<String> = []
 
     private struct Watch {
@@ -28,7 +22,6 @@ final class LiveRemote {
         var viewers = 0
         var opens = 0
         var loop: Task<Void, Never>?
-        /// 两问之间在等（`pause`）；被催时（`renew`）没在等就记一笔，等的时候不等了。
         var waiting: CheckedContinuation<Void, Never>?
         var owed = false
         var answeredAt: ContinuousClock.Instant?
@@ -36,7 +29,6 @@ final class LiveRemote {
     }
 
     @ObservationIgnored private var watches: [String: Watch] = [:]
-    /// 在请 Mac 放回去的那一遍（`comeBack`）；写进连接、还在等中转退不退回来的那几句（`back`）。
     @ObservationIgnored private var returning: Task<Void, Never>?
     @ObservationIgnored private var backs: Set<UUID> = []
     @ObservationIgnored private let store: CueStore
@@ -49,7 +41,6 @@ final class LiveRemote {
         self.signaling = signaling
     }
 
-    /// 这个会话的页（`open`：连同它的活预览）看得见时调，直到所在任务取消。
     func watch(_ sessionID: String, on host: String, open: Bool = false) async {
         var watch = watches[sessionID] ?? Watch(host: host)
         watch.viewers += 1
@@ -76,10 +67,8 @@ final class LiveRemote {
         }
     }
 
-    /// 正看着的这个会话在哪台 Mac 上。
     func host(_ sessionID: String) -> String? { watches[sessionID]?.host }
 
-    /// 马上再问一次（打开预览、票据不认了、网络回来了、回到前台）。
     func renew(_ sessionID: String) {
         guard watches[sessionID] != nil else { return }
         if let waiting = watches[sessionID]?.waiting {
@@ -99,7 +88,6 @@ final class LiveRemote {
         }
     }
 
-    /// 等 `renewal` 或被催，先到的算。
     private func pause(_ sessionID: String) async {
         guard watches[sessionID]?.owed == false else {
             watches[sessionID]?.owed = false
@@ -126,14 +114,11 @@ final class LiveRemote {
             let open = (watches[sessionID]?.opens ?? 0) > 0
             try await signaling.sendVoice(.live(signal: .watch(request: request, session: sessionID, open: open)), session: channel, to: peer)
         } catch {
-            // 问到一半自己这头断了，同没连上
             guard case .ready = signaling.voiceAvailability else { return held(sessionID) }
             unreachable(sessionID)
         }
     }
 
-    /// 自己这头的中转没连上（刚回到前台、断网），问不出去：不算那台 Mac 不在。答过的留着、租约从这时重新算
-    /// （它只该数问得出去的时间），连上了马上再问（`receive` 的 availability）。
     private func held(_ sessionID: String) {
         if watches[sessionID]?.answeredAt != nil { watches[sessionID]?.answeredAt = .now }
     }
@@ -163,9 +148,6 @@ final class LiveRemote {
         sending.cancel()
     }
 
-    /// 人回到 CuePad 了：用 UU 远程看过的会话（`AppSettings.remoteViewing`），请那台 Mac 把铺满的预览放回去（`LiveSignal.back`）。
-    /// 刚回来时中转多半还在重连，没发到的每秒再试；试 `returnTries` 次还不行就不再管（Mac 的预览栏上有"放回右半"）。
-    /// 不在活动状态（被推送在后台叫醒、又切走了）不发：他可能还在 UU 里看着。iPad 几个窗口各调一次，合成一遍。
     func comeBack() async {
         let task = returning ?? Task { await self.sendBacks() }
         returning = task
@@ -180,7 +162,6 @@ final class LiveRemote {
             #endif
             for (sessionID, host) in settings.remoteViewing {
                 let reached = await back(sessionID, on: host)
-                // 又去看了（`show`）：这一遍作废，记着的留给下一次回来
                 guard !Task.isCancelled else { return }
                 if reached { settings.remoteViewing[sessionID] = nil }
             }
@@ -189,7 +170,6 @@ final class LiveRemote {
         settings.remoteViewing = [:]
     }
 
-    /// 发到了返回 true；中转没连上、那台 Mac 不在、中转转不过去退了回来（它刚断、换了租约，`receive` 的 rejected）返回 false。
     private func back(_ sessionID: String, on host: String) async -> Bool {
         guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return false }
         let request = UUID()
@@ -197,7 +177,6 @@ final class LiveRemote {
         do {
             let peer = try await signaling.resolveVoicePeer(VoiceDeviceID(host))
             try await signaling.sendVoice(.live(signal: .back(request: request, session: sessionID)), session: VoiceSessionID(UUID()), to: peer)
-            // 写进连接不等于转到了：Mac 不答这一句，转不过去时中转会退回来，等它一个往返
             try? await Task.sleep(for: Self.bounceWait)
         } catch {
             backs.remove(request)
@@ -206,7 +185,6 @@ final class LiveRemote {
         return backs.remove(request) != nil
     }
 
-    /// 平常一问一发约两个中转往返；再长就不等了，钮点下去不能没反应。
     static let showWait = Duration.seconds(1)
     static let bounceWait = Duration.seconds(1)
     static let returnTries = 30
@@ -216,7 +194,6 @@ final class LiveRemote {
         offline.insert(sessionID)
     }
 
-    /// 中转收到的活预览帧与连接、对端的去留（`AppServices.liveEvents`）。
     func receive(_ event: VoiceRelayEvent) {
         switch event {
         case .received(let received):

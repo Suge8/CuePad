@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 会话报不出可换的模型时只写原因。写不写只看顶栏那一个状态（`Workspace.shownInHeader`）：出错之后又说了话、点了重试，话在路上时状态就不是出错，块随之收起。
-/// 贴在这里而不在对话末尾：卡在你这里的事都在回复框上方，滚到哪都看得见、按钮在拇指下。
 struct FailureDock: View {
     let session: SessionState
     let delivery: DeliveryRequest?

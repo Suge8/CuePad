@@ -48,7 +48,6 @@ nonisolated extension CueNow.Decay.Change {
     func encode(to encoder: any Encoder) throws {
         var values = encoder.unkeyedContainer()
         switch self {
-        // 那台没开（`offline`）只在有时接在末尾：旧版读到四项就停，不认它也不出错
         case .update(let slot, let kind, let since, let subagents, let offline):
             try values.encode(Operation.update)
             try values.encode(slot)

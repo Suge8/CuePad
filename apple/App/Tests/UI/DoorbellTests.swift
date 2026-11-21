@@ -7,7 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 门铃：一台记下的经 iCloud 收下就按一下，另一台听到当场去拉，不等按节奏的那一拉（两台的钟都不走，节奏拉取不会发生）。
 @MainActor
 @Suite(.releasesLibraries)
 struct DoorbellTests {
@@ -28,7 +27,6 @@ struct DoorbellTests {
         let first = try await Workspace(services: phone.services).createCard(body: "手机上记的", in: Project.defaultID)
         try await eventually("Mac 听到门铃拉到") { try await mac.services.store.card(first.id) != nil }
 
-        // 手机这条断了、一时连不回来：这时记下的那一下按不出去，记着欠一次，连回来先补按
         relay.drop(0, holding: true)
         try await eventually("手机知道断了") { phone.services.relay?.isLive == false }
         let rings = relay.rings

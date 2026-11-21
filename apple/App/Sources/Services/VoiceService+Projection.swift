@@ -3,8 +3,6 @@ import CueStore
 import Foundation
 
 extension VoiceService {
-    /// 这台 Mac 的完整投影：本机界面直接用它，发给手机的是 `bounded()` 后的那份。
-    /// 通话结束后库读不了时，结果已跟不上，阶段报资料库不可用。
     func fullProjection(_ call: VoiceCall) throws -> VoiceCallProjection {
         let record = call.record
         let phase: VoiceCallProjection.Phase = switch call.phase {

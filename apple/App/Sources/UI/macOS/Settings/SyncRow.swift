@@ -86,7 +86,6 @@ struct SyncRow: View {
         _ choice: SyncChoices.Choice, primary: Bool = false, destructive: Bool = false, action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            // 会删东西的那颗字用胭脂，与确认框里同一颗一致
             Button(action: action) { Text(choice.title).foregroundStyle(destructive ? palette.failure : primary ? palette.onAction : palette.ink) }
                 .buttonStyle(ControlButtonStyle(kind: primary ? .primary : .secondary, size: .compact))
             Text(choice.consequence).font(Typography.meta).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)

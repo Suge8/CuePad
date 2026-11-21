@@ -8,7 +8,6 @@ struct AutosaveTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    /// 一次写入的闸门：`save` 开始后停在这里，放行才写。
     private final class Gate: Sendable {
         private let opened = AsyncStream<Void>.makeStream()
         private let started = AsyncStream<Void>.makeStream()

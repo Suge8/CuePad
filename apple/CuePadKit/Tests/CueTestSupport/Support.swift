@@ -23,7 +23,6 @@ public final class Fixture: @unchecked Sendable {
 public enum TestLibraries {
   private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-test-libraries", directoryHint: .isDirectory)
   private static let run: URL = {
-    // 清理与本次运行无关，不挡着第一个要库的用例（可能在主线程上）
     Thread.detachNewThread { removeFinishedRuns() }
     return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
   }()
@@ -100,8 +99,6 @@ public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Da
   return data as Data
 }
 
-/// 截止永远不到的钟：测的不是超时本身的用例，给产品里等别的进程的时限（问版本、起进程到上桥……）用。
-/// 这些等待取决于系统此刻多忙（机器很忙时一个进程起来要几十秒），用真钟就是和墙钟赛跑；真挂住由每个测试的统一时限报。
 public let noDeadline = ManualTiming().timing
 
 public final class ManualTiming: Sendable {
@@ -116,7 +113,6 @@ public final class ManualTiming: Sendable {
   }
   private let state: Mutex<State>
 
-  /// 默认从真实的现在开始（毫秒精度）：Store 用真实时间给记录盖章，两者要在同一时间线上。
   public init(start: Date = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000)) {
     state = Mutex(State(current: start))
   }
@@ -138,12 +134,10 @@ public final class ManualTiming: Sendable {
     for continuation in due { continuation.resume() }
   }
 
-  /// 推进钟之前先等被测的计时器睡下。多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行。
   public func waitForSleeper(until deadline: Date? = nil) async throws {
     try await bounded("手动钟上有人睡下") { await self.sleeperArrives(until: deadline) }
   }
 
-  /// 取消时立即返回。
   private func sleeperArrives(until deadline: Date?) async {
     if state.withLock({ $0.hasSleeper(until: deadline) }) { return }
     let id = UUID()
@@ -169,7 +163,6 @@ public final class ManualTiming: Sendable {
     let id = UUID()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        // 取消可能发生在登记之前（此时 onCancel 找不到它），登记时要再看一次；截止时刻已过（钟在它睡下前就拨过了）的当场醒
         let waiters: [CheckedContinuation<Void, Never>]?? = state.withLock { state in
           if Task.isCancelled { return nil }
           let due = deadline(state.current)
@@ -189,13 +182,11 @@ public final class ManualTiming: Sendable {
   }
 }
 
-/// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
 public struct TimedOut: Error, CustomStringConvertible {
   public let description: String
   public init(description: String) { self.description = description }
 }
 
-/// 一次性旗：先订阅再触发时，订阅的一侧举旗，触发的一侧用 `eventually` 等它。
 public final class Signal: Sendable {
   private let raised = Atomic(false)
   public init() {}
@@ -208,8 +199,6 @@ public final class Signal: Sendable {
 /// 取九成是让「等不到：X」这句话赶在它之前说出来。
 public let conditionBudget: Duration = .seconds(Double(ProcessInfo.processInfo.environment["CUEPAD_TEST_TIME_LIMIT"].flatMap(Int.init) ?? 120) * 0.9)
 
-/// 给一次等待加上限：到 `conditionBudget` 还没等到就抛 `TimedOut`，写明在等什么。测试里等流的下一项、等替身放行都经这里，不裸等。
-/// `wait` 要响应取消（`AsyncStream` 的迭代、库的订阅都响应），不然到了上限也回不来。
 public func bounded<T: Sendable>(_ what: String, _ wait: @escaping @Sendable () async throws -> T) async throws -> T {
   try await withThrowingTaskGroup(of: T.self) { group in
     group.addTask { try await wait() }
@@ -233,8 +222,6 @@ public func holdThread(until signal: DispatchSemaphore) -> Bool {
   return true
 }
 
-/// 有界条件等待，只给没有事件可订阅的异步用（文件系统通知、socket、子进程、系统弹窗与布局、后台落盘）：
-/// 条件一成立马上返回，到了上限抛 `TimedOut`。库里的变化用下面按读取订阅的那个。
 public func eventually(_ what: String, _ condition: () async throws -> Bool) async throws {
   let deadline = ContinuousClock.now + conditionBudget
   while try await !condition() {
@@ -243,13 +230,10 @@ public func eventually(_ what: String, _ condition: () async throws -> Bool) asy
   }
 }
 
-/// 等"什么都不会发生"：负向断言（停止后不再领取、权限不对就不连、链接不跳转）没有事件可等，只能给一段固定时长再确认仍没发生。
-/// 测试里固定时长的等待只经这里写，搜它就知道哪些断言靠时长（负载极高时可能假通过，不会假失败）。
 public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
-/// 写入的时刻只到毫秒、排先后全看它：要让下一次写入的时刻严格晚于此前的，先过这个。等墙钟走过 2 毫秒，不猜时长。
 public func nextMillisecond() async {
   let start = Date.timeIntervalSinceReferenceDate
   while Date.timeIntervalSinceReferenceDate - start < 0.002 { await Task.yield() }
@@ -262,7 +246,7 @@ public func eventually<T: Sendable & Equatable>(
   try await bounded("库里的读取满足条件") {
     var first = true
     for try await value in store.observe(read) {
-      if first { first = false; subscribed?.raise() }  // 初始值到了：订阅已就位
+      if first { first = false; subscribed?.raise() }
       if predicate(value) { return value }
     }
     throw CancellationError()
@@ -272,7 +256,6 @@ public func eventually<T: Sendable & Equatable>(
 struct RawError: Error { let message: String }
 
 extension CueStore {
-  /// 全部会话记录（测试核对用；界面按范围与页读，见 `sessionPage`）。
   public func allSessionStates() throws -> [SessionState] {
     try sessionPage(SessionQuery(limit: .max)).items.map(\.state)
   }

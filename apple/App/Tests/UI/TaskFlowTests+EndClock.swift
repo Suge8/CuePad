@@ -46,7 +46,6 @@ extension TaskFlowTests {
         clock.advance(.seconds(1))
         try await recorder.update(sessionID: "audit-clock", state: .thinking, projectID: Project.defaultID, hosted: true)
         try await store.bindSession("audit-clock", to: borrower.id)
-        // 另一份尚未同步回来的未知结果，在本次领取以后才到达；明确 end 也不能扩大覆盖集合。
         let late = try await peer.services.store.requestEnd(of: ended.target, on: TestApp.hostID)
         let remoteExecutor = DeliveryExecutor(store: peer.services.store, hostID: TestApp.hostID, onIssue: { Issue.record("\($0)") }) { _, _ in
             .unconfirmed(.verbatim("结束结果丢失"))

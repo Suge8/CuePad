@@ -18,7 +18,6 @@ public struct CueRecall: Equatable, Sendable {
   }
 }
 
-/// `through` 是其中最后一句的次序：听到哪了只能是交出去的最后一句。
 public struct CueSaid: Equatable, Sendable {
   public var said: [CueRecall.Reply]
   public var through: Int64
@@ -51,8 +50,6 @@ extension CueStore {
     return found
   }
 
-  /// 只找会话回复那一类（同 `recallCue` 的 replies，不数没列出的）：信封随他的短问句带上的（`CueTools.related`）只要这一类，
-  /// 四类都查在真实库上一句要 80–190 毫秒，都排在资料库的队列上。
   public func recallCueReplies(_ query: String, limit: Int) throws -> [CueRecall.Reply] {
     let patterns = Self.recallPatterns(query)
     return patterns.isEmpty ? [] : try recallSessions(Self.cueReplies, patterns, limit: limit).found
@@ -72,26 +69,21 @@ extension CueStore {
     return messages.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }
   }
 
-  /// 他在会话里说的话：你一方的话里有正证据是他的——终端里打的（没有投送），或 CuePad 替他发的（请求或发送记录上没有来源；Cue 送的写着来源）。
-  /// 不限 Cue 管过的会话：他在自己开的会话里交代的做法也是他的规矩的来处。
   static let saidByHim = """
     role = '\(ChatRole.user.rawValue)' AND (deliveryID IS NULL OR deliveryID IN (
       SELECT id FROM deliveryRequests WHERE origin IS NULL
       UNION SELECT deliveryID FROM sendRecords WHERE origin IS NULL AND deliveryID IS NOT NULL))
     """
 
-  /// 排法同 `recallCue`：做梦查一条做法他以前说过没有。
   public func recallSaid(_ query: String, limit: Int = 20) throws -> [CueRecall.Reply] {
     let patterns = Self.recallPatterns(query)
     return patterns.isEmpty ? [] : try recallSessions(Self.saidByHim, patterns, limit: limit).found
   }
 
-  /// 会话对话读进这台的次序（`arrival`：原地改不变，删了也不复用）到哪了：做梦订阅它，有新的话才看。
   public func sessionMessagesThrough() throws -> Int64 {
     try db.first("SELECT COALESCE(max(arrival), 0) FROM \(ChatMessage.table.rawValue)") { $0.int(0) } ?? 0
   }
 
-  /// 读进这台的次序在 `heard` 之后他说的话，从早到晚至多 `limit` 句；没有新的 `through` 就是 `heard`。
   public func said(after heard: Int64, limit: Int) throws -> CueSaid {
     let said = try replies(where: "arrival > ? AND \(Self.saidByHim)", [heard], orderBy: "arrival", limit: limit)
     let through = try said.last.flatMap { last in
@@ -118,13 +110,9 @@ extension CueStore {
     var arguments: [any SQLBindable], countArguments: [any SQLBindable]
   }
 
-  /// 分 = 命中的词各自的少见程度 ln((N + 1) / (n + 0.5)) 相加（N 是这一类的条数，n 是其中含这个词的），再除以 1 + 长度 / 2000：
-  /// 少见的词定位得准，长回复靠篇幅顺带命中的不该压过短而准的那条。这一类里两成以上都含的词不算命中（"the""测试"这类定位不到东西，也不该算进没列出的条数），
-  /// 词全都这么常见时才照算。比按命中词数排准：问句与多词查询里常见词凑出的命中数会把真正的那条挤下去（LongMemEval 的离线检索，证据进前三从 77% 到 88%）。
   private func recallQuery(
     from table: String, where scope: String, hit: String, _ patterns: [any SQLBindable], length: String?, then: String
   ) throws -> RecallQuery {
-    // 总条数与每个词命中几条一次扫完（一个词一条 count 时，会话回复在真实库上一句要扫十来遍）
     let sums = patterns.indices.map { "COALESCE(SUM(\(hit.replacingOccurrences(of: "?", with: "?\($0 + 1)"))), 0)" }
     let counts = try db.first("SELECT \((["count(*)"] + sums).joined(separator: ", ")) FROM \(table) WHERE \(scope)", patterns) { row in
       (0...patterns.count).map { Double(row.int(Int32($0))) }

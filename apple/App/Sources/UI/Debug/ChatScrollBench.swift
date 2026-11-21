@@ -58,7 +58,6 @@ enum ChatScrollBench {
         let spot = pointer == "out"
             ? corners.max { abs($0.x - center.midX) < abs($1.x - center.midX) } ?? .zero
             : CGPoint(x: center.midX, y: primaryHeight - center.midY)
-        /// 任何退出路径（含出错提前退出）都从这里走：借了前台、动过指针就还回去。
         func finish(_ code: Int32) -> Never {
             DebugForeground.giveBack()
             fflush(stdout)
@@ -99,12 +98,11 @@ enum ChatScrollBench {
             let clock = ContinuousClock()
             let start = clock.now
             if driver == .direct {
-                // 滚动区据这两个通知知道"用户在滚"（贴底的跟随据此不把偏移拉回去）：手势的头尾补发
                 NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
             }
             defer { if driver == .direct { NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll) } }
             for event in Self.events(up: up, gesture) {
-                do { try await clock.sleep(until: start + .seconds(event.at)) } catch { break }  // 取消就不再投递
+                do { try await clock.sleep(until: start + .seconds(event.at)) } catch { break }
                 deliver(event, real: real)
             }
             await Task.wait(for: .milliseconds(200))
@@ -119,7 +117,6 @@ enum ChatScrollBench {
             DebugForeground.movePointer(to: spot)
             await Task.wait(for: .milliseconds(500))
         }
-        // 窗口得在指针下的最上层才发得出事件：等一会儿，等不到就不量
         if driver == .hid {
             var ready = false
             for _ in 0..<20 {
@@ -188,7 +185,6 @@ enum ChatScrollBench {
         return best
     }
 
-    /// 一趟手势的事件：触控板是手指按 `speed`（px/s）匀速滑 1.2 秒（120Hz），抬手后惯性按 0.3 秒的时间常数衰减；滚轮是每 30ms 一格 3 行共 40 格。
     private static func events(up: Bool, _ gesture: Gesture) -> [Event] {
         let sign = up ? 1.0 : -1.0
         if gesture.wheel { return (0..<40).map { Event(at: Double($0) * 0.03, dy: sign * 3, lines: true) } }

@@ -16,7 +16,6 @@ final class CueImageAttachment: NSTextAttachment {
     private static let placeholderSize = CGSize(width: 240, height: 120)
 
     let key: String
-    /// 本机那份；还没从 iCloud 取来为 nil，到了由 `relocate` 补上。
     private(set) var fileURL: URL?
     weak var core: EditorCore?
     private lazy var pointSize: CGSize? = fileURL.flatMap(Thumbnails.pointSize(at:))
@@ -30,7 +29,6 @@ final class CueImageAttachment: NSTextAttachment {
 
     required init?(coder: NSCoder) { nil }
 
-    /// 还没到的也要重画（占位上写着传了几成）。
     func relocate(_ url: URL?) -> Bool {
         guard fileURL == nil else { return false }
         if let url {

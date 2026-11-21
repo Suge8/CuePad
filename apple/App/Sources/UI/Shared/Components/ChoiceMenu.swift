@@ -14,14 +14,12 @@ enum ChoiceMenu {
         let title: LocalizedStringResource
         var subtitle: LocalizedStringResource? = nil
         var image: Glyph? = nil
-        /// nil 是动作（不打勾），否则是选项、当前的打勾。
         var checked: Bool? = nil
         var destructive = false
         var disabled = false
         let choose: () -> Void
     }
 
-    /// 说的是"哪一个"（对象而非动作），两端都要显示出来。
     enum Glyph {
         case icon(Icon)
         case brand(BrandMark)

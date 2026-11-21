@@ -23,7 +23,6 @@ private struct LibraryTextsReading: ViewModifier {
 }
 
 extension AgentLibrary {
-    /// 快照里这一份此刻的正文：同步来的那条的哈希对上快照才算到了。外层 nil 是还在路上（快照先到了，或还没读），内层 nil 是还没有这个文件。
     func arrived(_ file: LibraryFile, in texts: [String: String]?) -> String?? {
         guard let entry = self.file(file) else { return nil }
         return Self.arrived(entry.textPath, hash: entry.hash, in: texts)

@@ -8,7 +8,6 @@ struct TaskOutlineTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    /// 每行 44 高、从上往下排的行框（拖放的落点按它判）。
     private func rowFrames(of rows: [TaskTree.Row]) -> [UUID: CGRect] {
         Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
     }

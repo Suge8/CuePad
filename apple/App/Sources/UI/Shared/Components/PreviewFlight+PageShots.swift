@@ -2,8 +2,6 @@
 import AppKit
 import WebKit
 
-/// 缩略图是 1024 宽排的首屏，全屏页的网页按内容区的宽排：块宽随宽度伸缩的页面（多数），两种排法的块位置对不上，所以要同宽的这一张。
-/// 截的是已经上屏的网页，不另起网页进程；第一次打开（或窗口改了大小）还没有，退回缩略图一比一的摆法（`PreviewPlace.frame`），打开不等它。
 @MainActor final class PreviewPageShots {
     struct Shot {
         let image: CGImage

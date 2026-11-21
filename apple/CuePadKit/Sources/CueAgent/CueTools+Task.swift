@@ -46,9 +46,8 @@ extension CueTools {
       _ = try await store.stopSession(target.session, host: try await host(), cue: true)
       return .ok("已请\(target.label)停下这一轮。（\(target.short)）")
     case .leave:
-      _ = try await host()  // 停用后不再替他判断谁接手
+      _ = try await host()
       let target = try await speaker(args)
-      // 他在等你里答 Cue 问的那张卡，会话等的是 Cue 转达：再留给他回，同一件事就既在等你、又是新回复
       if let question = try await store.question(waitingOn: target.session) {
         let asked = question.asking?.question ?? CueEnvelope.clip(CueFormat.plainText(question.text), 40)
         throw Failure("等你里问着他「\(asked)」（\(question.id.shortID)），他在卡上答了你再转给会话：不用留给他回")
@@ -64,13 +63,9 @@ extension CueTools {
     }
   }
 
-  /// 做完：Cue 按证据确认过就完成（`finishTask`）；顶层任务同时把结果告诉用户，所以要 evidence，结果上只挂 show 点名的图。已完成的只结束没人再用的会话。
-  /// 给 session 是收掉那个会话（`CueStore.endIdleSession`）。
   private func done(_ args: Args) async throws -> Result {
-    _ = try await host()  // 停用后不能再做完事
+    _ = try await host()
     if args.string("task") == nil, let ref = args.string("session") {
-      // 给 session 是收掉会话，给 task 是做完任务：模型把任务编号填进 session 来 done 时，记录里原意都是做完那件任务（多是一个子任务），
-      // 照收掉会话办就做错了事，所以这里不像 say、peek 那样认任务的编号
       guard case .session(let session) = try await references.sessionRef(ref) else {
         throw Failure("「\(ref)」是任务的编号：做完任务给 task；收掉会话给 session 写会话的 id（peek 里有）")
       }
@@ -94,8 +89,6 @@ extension CueTools {
         + (report.map { "\n" + CueToolReceipt(.reply, $0.id).mark } ?? ""))
   }
 
-  /// 做完一件顶层任务时，同一个项目里还没开工的几件（至多 `waitingLimit`）：等这件做完再做的事常已建好、没开工（他交代"做完这件再派"），
-  /// 信封的"在做"里没有它们，做完那一刻看不到就另建一件同样的（长程评测 17 遍里 9 遍另建，4 遍靠同名才没建成两件）。没有为空。
   private func waiting(beside card: Card) async throws -> String {
     let todo = try await store.cueBoard().tasks.filter { $0.task.projectID == card.projectID && $0.task.status == .todo && !$0.isActive }
     guard !todo.isEmpty else { return "" }
@@ -105,7 +98,6 @@ extension CueTools {
 
   static let waitingLimit = 5
 
-  /// 证据（done 做完顶层任务时）：1–`evidenceCount` 条，每条宽不过 `evidenceLimit`；不合就整件退回，什么都不写。
   private static func evidence(_ args: Args) throws -> [String] {
     let items = (args.strings("evidence") ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     guard (1...evidenceCount).contains(items.count) else { throw Failure("evidence 写 1–\(evidenceCount) 条证据（字符串数组），每条一句结论") }
@@ -115,7 +107,6 @@ extension CueTools {
     return items
   }
 
-  /// Cue 写的名字（标题、子任务名）：去掉首尾空白后不空、宽不过 `CueName.limit`。不合抛错，调用方在写任何东西之前查完。
   private static func name(_ raw: String, _ what: String) throws -> String {
     let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { throw Failure("\(what)不能为空") }
@@ -126,7 +117,6 @@ extension CueTools {
     return name
   }
 
-  /// start:true 是建好就开工（同 start，开工参数也同），一次调用办完；开工的参数与 Cue 是否在值班都在写之前查完。
   private func add(_ args: Args) async throws -> Result {
     let heading = try Self.name(try args.required("title"), "标题")
     let names = try (args.strings("steps") ?? []).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") }
@@ -138,7 +128,6 @@ extension CueTools {
       throw Failure("会话「\(session.title)」正在做「\(busy.task.heading)」（\(busy.task.id.shortID)）：同一件事接着做用 say 或给它 edit 加子任务")
     }
     let projectID = try await references.addProject(args, session: session)
-    // 同一件事建第二份（重试、同一轮里并发发出的两次 add）只会开出第二个会话：返回已有的那件
     if session == nil, let same = try await references.openTopTask(titled: heading, in: projectID) {
       let dropped = args.string("body") != nil || !names.isEmpty ? "，这次的正文与子任务也没写（要改用 edit）" : ""
       let unstarted = launch == nil ? "" : "，也没开工（它没开工就 start）"
@@ -165,7 +154,6 @@ extension CueTools {
 
   private func edit(_ args: Args) async throws -> Result {
     let card = try await references.task(args.required("task"))
-    // 先查完再写，免得标题、子任务改了一半才报错
     let heading = try args.string("title").map { try Self.name($0, "标题") }
     let steps = try args.strings("steps").map { try $0.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { try Self.name($0, "子任务") } }
     if steps != nil, card.parentID != nil { throw Failure("子任务只能加在顶层任务上：task 写它的顶层任务") }
@@ -204,7 +192,6 @@ extension CueTools {
     return .ok("「\(card.heading)」（\(card.id.shortID)）：\(done.joined(separator: "，"))。")
   }
 
-  /// 开工的参数（start 与 add 带 start:true 共用），连同在哪台 Mac 开：都查完才开工。
   private struct Launch {
     var agent: AgentKind?
     var model: String?

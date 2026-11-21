@@ -5,21 +5,15 @@ public enum CueLineKind: Equatable, Sendable {
     case heading
     case list
     case fence
-    /// 分割线 `---`（`CueFormat.isRule`）：整行是标记
     case rule
     case code
 }
 
-/// 标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
 public struct CueLineStyle: Equatable, Sendable {
     public var kind: CueLineKind
-    /// 行首标记（缩进 + `##␣`、`-␣`、`1.␣`、`>␣`，或整条围栏行）的 UTF-16 长度；无标记为 0。
     public var markerLength: Int
-    /// 行内 code（含两侧反引号）的范围，相对行首。
     public var inlineCode: [NSRange]
-    /// 行内链接 `[文字](地址)`，相对行首：`label` 是方括号里的文字，`syntax` 是其余的标记（方括号、圆括号与地址）。
     public var links: [CueLink]
-    /// 强调符号的范围，不含被强调的正文。
     public var emphasis: [NSRange]
 
     public init(kind: CueLineKind, markerLength: Int, inlineCode: [NSRange], links: [CueLink] = [], emphasis: [NSRange] = []) {
@@ -36,10 +30,7 @@ public struct CueLink: Equatable, Sendable {
     public var syntax: [NSRange]
 }
 
-/// 一份运行时正文的装饰上下文：围栏位置是全文性质，逐行样式据此判定。
-/// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏、分割线，另加有序列表、引用、行内 code、强调与链接。第一行和别的行一样是正文，没有自动标题。
 public struct CueDecorations: Sendable {
-    /// 顶格 ``` 围栏行的数量。奇数说明有围栏未闭合，其后的行都是代码。
     public var fenceCount: Int { fences.count }
     private let fences: [Int]
 
@@ -49,7 +40,6 @@ public struct CueDecorations: Sendable {
         fences = Self.fenceLocations(in: text)
     }
 
-    /// `line` 是不含换行的行内容，`location` 是它的行首偏移。
     public func style(ofLine line: String, at location: Int) -> CueLineStyle {
         if line.hasPrefix(Self.fence) {
             return CueLineStyle(kind: .fence, markerLength: line.utf16.count, inlineCode: [])
@@ -91,7 +81,7 @@ public struct CueDecorations: Sendable {
     private static func isBlankUnit(_ unit: Character) -> Bool { unit == " " || unit == "\t" }
 
     private static func classify(_ line: String) -> (CueLineKind, Int) {
-        let chars = Array(line.prefix(32))  // 标记只出现在行首，长行不必整行展开
+        let chars = Array(line.prefix(32))
         var i = 0
         while i < chars.count, isBlankUnit(chars[i]) { i += 1 }
         let indent = i
@@ -119,7 +109,6 @@ public struct CueDecorations: Sendable {
         return (.list, String(chars[...j]).utf16.count)
     }
 
-    /// `[文字](地址)`：文字非空、地址里没有空白与右括号；落在行内 code 里的不算。图片 `![](…)` 在运行时是附件，不会出现在这里。
     private static func links(in line: String, outside code: [NSRange]) -> [CueLink] {
         guard line.contains("](") else { return [] }
         return line.matches(of: /\[([^\[\]\n]+)\]\(([^\s()]+)\)/).compactMap { match in

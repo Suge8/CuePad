@@ -9,7 +9,6 @@ struct TaskLine: View {
     var subtasks: TaskProgress?
     var step = false
     var inBubble = false
-    /// 任务气泡总览里要开的那一步（`Workspace.lead`）：行尾一直放实心的"开始"，Mac 上上一次没开成的原因写在标题下面。
     var leads = false
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
@@ -35,7 +34,6 @@ struct TaskLine: View {
             .font(step ? TaskMetrics.stepFont : TaskMetrics.lineFont)
             .lineLimit(titleLines)
         let outcome = done ? nil : self.outcome
-        // 圈与旁注都对着标题第一行（`TaskRingView` 的基线），标题折成两行也不落到中间
         return HStack(alignment: .firstTextBaseline, spacing: TaskMetrics.columnGap) {
             ring(next: next)
             VStack(alignment: .leading, spacing: 0) {
@@ -99,7 +97,6 @@ struct TaskLine: View {
         if !done, leads, let next, inlines(next) { TaskNextMark(next: next, primary: true, retry: retry).fixedSize().transition(.opacity) }
     }
 
-    /// "开始"不一直写在行上的：Mac 指针停上来才出；手机任务气泡里的子任务只有要开的那一步写（每行都写是一墙"开始"，别的步点进去开）。
     private func inlines(_ next: TaskNext) -> Bool {
         guard case .start = next, !leads else { return true }
         #if os(macOS)
@@ -109,7 +106,6 @@ struct TaskLine: View {
         #endif
     }
 
-    /// 只 Mac 有：手机的"开始"打开交给 Agent 的输入框，没开成的原因写在那上面。
     private var outcome: (text: String, failed: Bool)? {
         #if os(macOS)
         guard leads else { return nil }
@@ -129,7 +125,6 @@ struct TaskLine: View {
     private var inline: Bool { sizeClass == .regular }
     private var stacked: Bool { typeSize.isAccessibilitySize }
     private var titleLines: Int { typeSize.isAccessibilitySize ? 4 : 2 }
-    /// 标题折成两行时上下留的白：单行时行高由 44pt 的点按高度撑着。
     private static let titlePadding = Spacing.item
     private static let ringTarget: CGFloat = 44
 
@@ -144,7 +139,6 @@ struct TaskLine: View {
     private var titleLines: Int { 1 }
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = TaskMetrics.ring
-    /// 大纲里这一行缩进多少（`TaskOutline`）：缩在行的底里面，各级悬停的底同宽、左右齐。
     @Environment(\.taskIndent) private var indent
 
     private func framed(_ content: some View) -> some View {

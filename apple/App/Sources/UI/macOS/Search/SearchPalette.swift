@@ -19,7 +19,6 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     }
 }
 
-/// 一个搜索词出一张表，同手机的搜索页（规则在 `PaletteQuery`）：会话一节在上，灵感与任务按项目在下；没打字也没设条件时是空的，只给几类建议。
 struct SearchPalette: View {
     enum Hit: Hashable {
         case session(String)
@@ -43,8 +42,6 @@ struct SearchPalette: View {
 
     var body: some View {
         panel
-            // 常驻（`keptPanel`）：开合不重建，每次开时聚焦、从空的查询看起。收起时查询本来就是空的，结果留着：再开只是现出来，订阅回到前台后库变了再换；
-            // 每次都清掉的话每次开都要当场重读、重建整列结果（真实库约多 150M 条指令）。查过别的才清掉，收着时先读好空查询的那份（`pagePrefetch`）
             .onChange(of: active, initial: true) {
                 focused = active
                 if active {
@@ -77,12 +74,9 @@ struct SearchPalette: View {
             header
             content
         }
-        // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
-        // 面大、字多：玻璃里垫九成实的底，背后的内容不透出来干扰阅读
         .rowContainer(.rect(cornerRadius: Radius.card))
         .glass(in: .rect(cornerRadius: Radius.card))
-        // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity(data == nil || sessions == nil ? 0 : 1)
     }
 
@@ -104,7 +98,6 @@ struct SearchPalette: View {
         FilterBar(query: $query, total: query.listsCards ? data?.matches.total : nil)
              .padding(.horizontal, Spacing.inset).padding(.bottom, Spacing.item)
         Divider()
-        // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
         ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
             results
             preview
@@ -135,8 +128,6 @@ struct SearchPalette: View {
         return sessionRows.first { $0.sessionID == id }
     }
 
-    /// 没结束的在前（本机在线的换上桥上的实时状态：同步记录按节流写，会落后几秒），已结束的在后；没展开时只列头几个。
-    /// 收着时不读会话的实时状态：面板常驻，读了的话每个会话每变一次，收着看不见的它也整个重算、重排。
     private var sessionRows: [SessionState] {
         guard active, query.listsSessions, let sessions else { return [] }
         let live = SessionState.inListOrder(sessions.live.map(workspace.withLiveState), state: \.self, cue: services.liveSessions.cue, at: services.speech)
@@ -211,7 +202,6 @@ struct SearchPalette: View {
             .padding(.vertical, Spacing.item)
             .contentShape(.rect)
             .row(selected: isSelected)
-            // 同下面的卡片行：单击选中、双击打开
             .onTapGesture { selection = hit }
             .simultaneousGesture(TapGesture(count: 2).onEnded { openSession(session.sessionID) })
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
@@ -247,7 +237,6 @@ struct SearchPalette: View {
     @ViewBuilder private var preview: some View {
         if let entry = selected, let data {
             let card = entry.card, text = entry.text
-            // 搜着词时从第一处命中往前一点开始显示，命中不会落在下面看不到的地方
             let rest = CueSummary.snippet(card.body, matching: query.text.split(whereSeparator: \.isWhitespace).map(String.init), whole: true)
             let project = workspace.catalog?.project(card.projectID)
             VStack(alignment: .leading, spacing: Spacing.group) {

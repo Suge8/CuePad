@@ -15,13 +15,11 @@ import UIKit
 final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private var knownAuthorization: UNAuthorizationStatus?
     var authorization: UNAuthorizationStatus { knownAuthorization ?? .notDetermined }
-    /// 点开的通知交给它（`pendingDeepLink`）；资料库打开后接上（早于系统交来点开的通知）。
     @ObservationIgnored weak var services: AppServices?
     #if os(macOS)
     @ObservationIgnored weak var workspace: Workspace?
     @ObservationIgnored let sounds = AlertSounds()
     #endif
-    /// App 图标角标该显示的数（`CueNow.needsYou`），由 Mac 的 `AppDelegate`、iPhone 的 `AppServices.present` 给；没有权限时记着，开了之后补上。
     @ObservationIgnored private var badge = 0
 
     var isAuthorized: Bool { authorization == .authorized || authorization == .provisional }
@@ -30,7 +28,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     /// 没人去点的权限弹窗还会一直留在系统里、盖住之后起的每个实例。Debug 构建给 `-CuePadNotifications YES` 时照常（拿得到权限的起法见 `xc.sh help` 的 run）。
     var delivers: Bool { services.map { $0.location.touchesRealWorld || DebugHooks.deliversNotifications } ?? false }
 
-    /// 用户可能在系统设置里改过：回到前台、后台写角标时重新读。
     func refresh() async {
         knownAuthorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         await showBadge()
@@ -68,7 +65,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         await refresh()
     }
 
-    /// 点开的通知；不是 Agent 或 Cue 的通知则忽略。Mac 上同时把主窗口叫到前面。
     func receive(_ userInfo: [AnyHashable: Any]) {
         switch AlertRoute(userInfo: userInfo) {
         case .session(let tap): services?.pendingDeepLink = .session(tap.sessionState)
@@ -116,7 +112,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 你看过的会话，它在你看之前发来的通知从通知中心收掉：看过从哪台记来都算（`Mark.sessionSeen` 同步），手机上锁屏那条也一样。Cue 的与额度的不动。
     func dismissSeen(_ marks: [String: SessionMarks]) async {
         guard delivers else { return }
         let seen = Dictionary(marks.compactMap { id, marks in marks.seen.map { (SessionState.recordID(sessionID: id), $0) } }) { first, _ in first }
@@ -138,7 +133,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     #if os(iOS)
-    /// 手机收到推送（前台的 Agent、Cue 通知，后台的静默推送）：说明服务器上有新东西，这就拉一次，不等切一次后台。
     func pushed() {
         guard let services else { return }
         Task { await services.syncing.pull() }
@@ -152,7 +146,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         #if os(macOS)
         return await present(route)
         #else
-        // Agent 的由 App 内横幅提示（开着那个会话时连横幅也不弹）；Cue 的没有 App 内横幅，这台手机开着 Cue 页就不弹（对话里已经看到了）
         switch route {
         case .quota: return [.banner, .list, .sound]
         case .cue:
@@ -175,9 +168,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     private(set) var registration: Registration = .pending
     @ObservationIgnored private var enabled = false
 
-    /// 幂等。只在有同步时调用：没有同步就不会有这类通知。尚未决定时，等库里第一次有了 Mac（`CueStore.workMac`）才请求一次权限：
-    /// 之前没有哪台会发来提示，新装一打开就弹系统提示，用户还不知道它要提示什么（设置里通知那一行随时能先开）。
-    /// 只弹一次系统提示，不碰真实世界时不要（`delivers`）。
     func enable() async {
         guard !enabled, let services else { return }
         enabled = true
@@ -194,7 +184,6 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     func registered() { registration = .registered }
 
-    /// 设置页的"重试"：重新向系统注册推送（订阅由同步顺带重试，见 `CloudSync.syncNow`）。
     func retryRegistration() {
         guard registration != .registered else { return }
         registration = .pending
@@ -234,13 +223,11 @@ struct AlertMessage {
     }
 }
 
-/// Cue 的消息带选项来问、urgent 的，都算"等你"。手机的 CloudKit 推送与本地通知（`userInfo` 由这里写）都从 userInfo 认出。
 nonisolated enum AlertRoute: Equatable {
     case session(AlertTap)
     case cue
     case quota
 
-    /// 周额度提醒没有开关（nil）。
     var kind: AlertKind? {
         switch self {
         case .session(let tap): tap.kind
@@ -253,7 +240,6 @@ nonisolated enum AlertRoute: Equatable {
         if case .session(let tap) = self { tap.sessionState } else { nil }
     }
 
-    /// 周额度提醒不看你在哪页（nil）。
     var subject: AlertSubject? {
         switch self {
         case .session(let tap): .session(tap.sessionState, tap.kind)

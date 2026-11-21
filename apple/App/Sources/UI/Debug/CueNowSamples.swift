@@ -50,12 +50,10 @@ enum CueNowSamples {
         item("readme", .done, String(localized: "README 截图换成 Swift 版", table: "Demo"), 0.5),
     ], advancing: 1)
 
-    /// 刚做完的那件再过 20 秒就到 `doneWindow`：录头像的做完与"刚做完"那一句同一刻收掉。
     static let doneExpiring = now(.idle, [
         item("readme", .done, String(localized: "README 截图换成 Swift 版", table: "Demo"), CueNow.doneWindow / 60 - 20.0 / 60),
     ], advancing: 0)
 
-    /// 做完一件后又派出三件在跑，做完的那件已过了留它的时候（`doneWindow`）：岛该说在跑的，不再停在做完。
     static let afterDone = now(.idle, [
         item("board", .running, String(localized: "出手机任务看板方案", table: "Demo"), 0.95),
         item("header", .running, String(localized: "出 iOS header 收口方案", table: "Demo"), 0.97),
@@ -72,7 +70,6 @@ enum CueNowSamples {
         item("readme", .done, String(localized: "README 截图换成 Swift 版", table: "Demo"), 2),
     ], advancing: 4, first: push)
 
-    /// 他报的那一刻：Cue 歇着，推进中 4 件——3 件在跑、1 件歇着等它派出的 1 个子代理交回。
     static let four = now(.idle, [
         item("board", .running, String(localized: "出手机任务看板方案", table: "Demo"), 3.2),
         item("header", .running, String(localized: "出 iOS header 收口方案", table: "Demo"), 1.4),
@@ -96,8 +93,6 @@ enum CueNowSamples {
         item("notes", .delegating, String(localized: "发言顺序修复", table: "Demo"), 12.05, subagents: 1),
     ], advancing: 4)
 
-    /// 真实规模：一件拍板、一个会话待回复；推进中 4 件，一共 12 个子代理在跑。
-    /// 只剩新回复：灵动岛与菜单栏是信封。
     static let reply = now(.idle, [
         item("reply/glass", .reply, String(localized: "玻璃按钮重做", table: "Demo"), 9),
         item("canvas", .running, String(localized: "画布缩放", table: "Demo"), 4.2),
@@ -120,7 +115,6 @@ enum CueNowSamples {
         item("dock", .running, String(localized: "底部 tab 切页丝滑收口", table: "Demo"), 0.9),
     ], advancing: 3, first: push)
 
-    /// 推进中的都歇着：实时活动结束，页头照写。
     static let quiet = now(.idle, [
         item("canvas", .resting, String(localized: "画布缩放", table: "Demo"), 18),
         item("notes", .resting, String(localized: "发言顺序修复", table: "Demo"), 40),

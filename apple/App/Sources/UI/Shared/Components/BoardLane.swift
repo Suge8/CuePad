@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// 只铺实色：侧栏开合时整面墙每帧重画，大面积不铺渐变、不描边。
-/// 否决过：四列各垫一块常驻的淡底托盘——暖灰桌面上再叠一层灰，整页发闷。
 struct BoardLane: View {
     let targeted: Bool
     @Environment(\.palette) private var palette
@@ -28,7 +26,6 @@ struct LaneAdd {
         }
     }
 
-    /// 归档做完的：范围跟着看板（`Workspace.archiveCompletedTasks`），说法也跟着写是哪个项目的。
     static func archive(in workspace: Workspace) -> LaneAdd {
         let scope = workspace.catalog?.project(workspace.scopedProject)?.shownName
         return LaneAdd(title: scope.map { "归档「\($0)」做完的（置顶的留着）" } ?? "全部归档做完的（置顶的留着）", icon: .archive) {
@@ -79,7 +76,6 @@ struct LaneAddButton: View {
                 Label(add.title, icon: add.icon).labelStyle(.iconOnly).contentShape(.rect)
             }
         }
-        // 加号是这一列的主动作；别的（已完成的全部归档）是收拾，淡一档
         .foregroundStyle(add.icon != .add ? palette.ink3 : disc == nil ? palette.signature : palette.ink)
         .buttonStyle(PressStyle(disc == nil ? .inline : .button))
         .help(Text(add.title))
@@ -92,14 +88,11 @@ extension Workspace {
     }
 }
 
-/// 不用按宽挑候选（`ViewThatFits`）：多一颗"+"的列，挑候选时整个列名先没了（1280 宽的 Mac 上只剩「11 ＋」），四列看着不是一套规则。
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
-    /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档，不随"更早做完的"展没展开。
     var archives = false
     #if os(iOS)
-    /// 手机竖屏的行头（`BoardRowLane`）：靠左排，字小一档，不垫玻璃。
     var shelf = false
     #endif
     @State private var wins = 0
@@ -111,8 +104,6 @@ struct BoardColumnHeader: View {
     var body: some View {
         let add = archives ? .archive(in: workspace) : LaneAdd.of(column, in: workspace)
         let button = add == nil ? 0 : disc
-        // 列名在列的正中，两边各让出钮那么宽；窄到放不下时只让右边，列名靠左挪半个钮、不截字。
-        // 两个候选都是整个列名，不会像按宽挑"有名没名"那样先把列名挑没（见上）
         return Group {
             if isShelf {
                 row.padding(.trailing, button).frame(maxWidth: .infinity, alignment: .leading)
@@ -133,16 +124,13 @@ struct BoardColumnHeader: View {
             if let add { LaneAddButton(add, cell: CGSize(width: disc, height: height)).font(font) }
         }
         #if os(iOS)
-        // 定高的一排，字号放大到页顶那一排的上限为止：再大字比这一排高，下半截被卡盖住
         .dynamicTypeSize(...FloatingHeaderLayout.largestType)
         #endif
         .frame(height: height)
-        // 又做完一件（正好多一件：读到一批、同步来一串不算）：对勾擦掉，等卡飞到时重写一遍
         .onChange(of: count) { old, new in if column == .done, new == old + 1, !reduceMotion { wins += 1 } }
         .task(id: wins) {
             guard wins > 0 else { return }
             drawn = 0
-            // 又来一件时这一次被取消：不写回，留给新的那一次从头写
             guard (try? await Task.sleep(for: Motion.Write.delay)) != nil else { return }
             withAnimation(Motion.Write.stroke) { drawn = 1 }
         }
@@ -153,7 +141,6 @@ struct BoardColumnHeader: View {
             BoardLaneMark(column: column, size: isShelf ? 16 : Self.mark, drawn: drawn)
             Text(column.title).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
-            // 数紧跟列名：四列同一种排法
             Text("\(count)").monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
                 .padding(.leading, Spacing.glyph)
         }
@@ -170,7 +157,6 @@ struct BoardColumnHeader: View {
 
     private var font: Font { isShelf ? Typography.secondary.weight(.semibold) : Typography.laneTitle }
 
-    /// 行头的圆钮同卡脚那颗一样大（`TaskNextMark`），上下离卡各留一截；列头的垫满玻璃条的高。
     private var disc: CGFloat { isShelf ? TaskNextMark.disc : Self.add }
 
     private var height: CGFloat {
@@ -194,7 +180,6 @@ struct BoardColumnHeader: View {
 struct BoardLaneMark: View {
     let column: TaskBoard.Column
     var size: CGFloat = 16
-    /// 这一笔写到哪了（0…1）。
     var drawn: CGFloat = 1
     @Environment(\.palette) private var palette
 

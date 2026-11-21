@@ -2,7 +2,6 @@
 import SwiftUI
 import UIKit
 
-/// `focusRequests` 每变一次（进入搜索页、再按 ⌘K）聚焦一次。
 struct SearchCapsule: View {
     @Binding var query: String
     let focusRequests: Int
@@ -36,7 +35,6 @@ private struct BarTextField: UIViewRepresentable {
         field.font = .preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
         field.returnKeyType = .search
-        // 搜的是原样的字：自动改正会把 iCloud 改成 ICloud、弹出改正气泡
         field.autocorrectionType = .no
         field.autocapitalizationType = .none
         field.spellCheckingType = .no
@@ -51,7 +49,6 @@ private struct BarTextField: UIViewRepresentable {
     func updateUIView(_ field: Field, context: Context) {
         let coordinator = context.coordinator
         coordinator.parent = self
-        // 上屏的字一出来就报回了 `text`，没在组字时两边不同只能是外面写进来的（调试时预填的搜索词）
         if field.markedTextRange == nil, field.text != text { field.text = text }
         field.textColor = UIColor(palette.ink)
         field.attributedPlaceholder = NSAttributedString(string: prompt, attributes: [.foregroundColor: UIColor(palette.ink3)])
@@ -84,7 +81,6 @@ private struct BarTextField: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextFieldDelegate {
         var parent: BarTextField
-        /// 已经照办的那次聚焦请求；nil 是还没照办过：搜索框一出来就要键盘。
         var focusRequests: Int?
 
         init(_ parent: BarTextField) { self.parent = parent }
@@ -97,7 +93,6 @@ private struct BarTextField: UIViewRepresentable {
             if parent.text != text { parent.text = text }
         }
 
-        /// 搜索键收起键盘：结果是边打边出的，没有另外要提交的。
         func textFieldShouldReturn(_ field: UITextField) -> Bool {
             field.resignFirstResponder()
             return true

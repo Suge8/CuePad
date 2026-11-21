@@ -4,7 +4,6 @@ import CueText
 import Foundation
 import ImageIO
 
-/// 原文留在会话文件里，这里不复制。
 public struct SessionHistory: Sendable, Equatable {
     public var sessionID: String?
     public var cwd: String?
@@ -19,7 +18,6 @@ public struct SessionHistory: Sendable, Equatable {
     }
 }
 
-/// （范围内的会话要有全部消息：没有就从头读一遍补齐；范围外的存着对话的也整份重读，已存的消息跟着读文件的规则更新）。
 public struct HistoryStart: Sendable {
     public var checkpoint: HistoryCheckpoint?
     public var hasTranscript: Bool
@@ -36,11 +34,8 @@ public struct HistoryUpdate: Sendable {
     public var checkpoint: HistoryCheckpoint
     public var history: SessionHistory
     public var messages: [ChatMessage]
-    /// 这次读的时候要不要对话（调用方——索引器——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    /// 这次读完会话名与接着读的那个检查点里的不一样（从头读的有名字就算）：Agent 这期间起了或改了名（`Bridge.read`）
     public var renamed: Bool
-    /// 会话 id：会话文件头里的；还没读到文件头时是路径里的（只有文件名就是会话 id 的才会这样发出）。
     public var sessionID: String { history.sessionID ?? agent.facts.sessionFiles?.sessionID(of: file) ?? file.deletingPathExtension().lastPathComponent }
     public var recap: Recap { checkpoint.projectedRecap }
     public var transcript: SessionTranscript { SessionTranscript(sessionID: sessionID, messages: messages, recap: recap) }
@@ -49,13 +44,9 @@ public struct HistoryUpdate: Sendable {
 
 public enum HistoryEvent: Sendable {
     case updated(HistoryUpdate)
-    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除的）可以丢掉；只回填了一部分（`HistoryScope.sessions`）为 nil，
-    /// 不能据此丢
     case backfillFinished(sessionFiles: [URL]?)
 }
 
-/// 一家 Agent 的哪些会话文件读进对话记录：接入了的是全部（会话目录整个回填，终端里开的也在，只是历史）；没接入的只有 CuePad 托管过的
-/// （`CueStore.hostedSessionIDs`）。实时状态只有托管的有，与这里无关。接入的含义只在这里：索引按它。
 public enum HistoryScope: Sendable, Equatable {
     case all
     case sessions(Set<String>)
@@ -112,12 +103,10 @@ public enum History {
             renamed: state.name != resumed?.name, bytesRead: Int(consumed - start))
     }
 
-    /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
     private static func forEachLine(
         _ handle: FileHandle, from start: UInt64, size: UInt64, _ body: (UnsafeRawBufferPointer) throws -> Void
     ) throws -> UInt64 {
         try handle.seek(toOffset: start)
-        // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
         var block = [UInt8](repeating: 0, count: Int(min(UInt64(blockSize), size - start)))
         guard !block.isEmpty else { return start }
         var carry: [UInt8] = []
@@ -179,11 +168,9 @@ public enum History {
         var at: Date
     }
 
-    /// `files` 是你的消息里的图片要存进的附件目录；nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
     struct Transcript {
         let fallbackID: String
         let files: AttachmentFiles?
-        /// 读的会话文件（不在文件里的为 nil）：dsh 的图片按它找到所在的 dsh 目录
         var file: URL? = nil
         var messages: [ChatMessage] = []
 
@@ -204,8 +191,6 @@ public enum History {
         }
     }
 
-    /// `text` 是文字块用换行连接（标题、摘要、机器消息判断都用它），`stored` 是文字与图片按块的原顺序拼成的正文格式（`CueFormat`，
-    /// 与投送请求的 content 同一种；不存图片时等同 `text`）。
     struct Said {
         fileprivate let files: AttachmentFiles?
         private var texts: [String] = []
@@ -213,7 +198,6 @@ public enum History {
 
         fileprivate init(files: AttachmentFiles?) { self.files = files }
 
-        /// 交给 Agent 的附件行（`AttachmentFiles.agentLine`）认回文件引用：正文里是文件，标题与摘要里是文件名。
         mutating func text(_ block: String?) {
             let text = SessionName.withoutImageNotes(block ?? "")
             guard !text.isEmpty else { return }

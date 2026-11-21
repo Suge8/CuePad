@@ -13,7 +13,6 @@ nonisolated struct SyncSummary: Equatable {
     init(_ status: SyncStatus) {
         switch status {
         case .starting: (title, detail, icon, tone) = (String(localized: "正在连接 iCloud…"), nil, .syncStarting, .calm)
-        // 没有在同步是这台设备的情况（没有 iCloud 权限、隔离库），不是出错
         case .unavailable(let reason): (title, detail, icon, tone) = (String(localized: "没有在同步"), reason, .syncOff, .notice)
         case .idle: (title, detail, icon, tone) = (String(localized: "已同步"), nil, .synced, .calm)
         case .syncing: (title, detail, icon, tone) = (String(localized: "正在同步…"), nil, .syncing, .calm)
@@ -39,13 +38,11 @@ nonisolated struct SyncSummary: Equatable {
     static let failedDetail = String(localized: "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，见下面的明细")
     #endif
 
-    /// 只在同步那一行说，后面给去更新的钮（`updateTitle`）；会话与 Cue 页不再各说一遍。
     static let updateToSync = String(localized: "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出")
     #if os(macOS)
     static let updateTitle = String(localized: "检查更新…")
     #else
     static let updateTitle = String(localized: "在 TestFlight 里更新")
-    /// 打开 TestFlight（列表里 CuePad 那一行有更新钮）。只经 TestFlight 发布，没有 App Store 页。
     static let update = URL(string: "itms-beta://")!
     #endif
 
@@ -79,9 +76,7 @@ extension SyncIssue {
         case .refused: String(localized: "\(subject)没被 iCloud 收下，会自动重试")
         case .local where kind == .incoming: String(localized: "\(subject)没能存进这台设备，已跳过")
         case .local: String(localized: "这台设备的资料库读写出错，会自动重试")
-        // 构造不出来的只在这次运行里不再重试（`SyncCoordinator.unsendable`），改过或下次打开再试
         case .fileMissing: String(localized: "\(subject)的文件不在这台设备上，传不上去；下次打开 CuePad 会再试，还不行就重新添加它")
-        // 跳过的这条令牌已越过，更新后也不会补拉，只有之后的同类内容能同步
         case .unknownType: String(localized: "收到一条更新版本的 CuePad 写的内容，这版认不出，已跳过；更新这台后，之后的同类内容就能同步")
         case .damaged: String(localized: "收到一张损坏的图片，已跳过")
         }
@@ -110,7 +105,6 @@ extension SyncIssue {
         case .activityDestinations: String(localized: "实时活动的推送地址")
         case .agentLibraries: String(localized: "一台 Mac 上的技能与规则")
         case .agentLibraryFiles: String(localized: "一台 Mac 上一份技能或规则的正文")
-        // 本机表不同步，认不出的是更新版本的表
         case nil, .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords, .liveAddresses: String(localized: "一条记录")
         }
     }
@@ -121,7 +115,6 @@ struct ShownSync: Equatable {
     let busy: Bool
     var summary: SyncSummary { SyncSummary(status) }
 
-    /// 这一轮同步没久过门槛（`SyncDriver.syncLasting`）的照旧说已同步：每传一句都要零点几秒，一闪一下"正在同步…"比稍等更扰人。
     init(_ services: AppServices) {
         let status = services.syncing.state.status
         (self.status, busy) = status == .syncing && !services.syncing.syncLasting ? (.idle, services.syncing.isSyncingNow) : (status, services.syncing.isSyncBusy)

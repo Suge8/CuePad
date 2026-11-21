@@ -52,7 +52,7 @@ nonisolated struct UnifiedDiff: Sendable {
                 let context = line.split(separator: "@@", maxSplits: 2, omittingEmptySubsequences: false)
                 add(.hunk, context.count > 2 ? context[2].trimmingCharacters(in: .whitespaces) : "")
             } else if file == nil || inHeader {
-                continue  // 第一段之前的说明，与文件抬头里的 index、mode、similarity 等
+                continue
             } else if line.hasPrefix("+") {
                 add(.added, String(line.dropFirst()), new: new)
                 new += 1
@@ -74,13 +74,11 @@ nonisolated struct UnifiedDiff: Sendable {
             }
         }
         closeFile()
-        // 文件末尾那个换行切出的空行不是改动里的一行
         if let last = lines.last, case .context = last.kind, last.text.isEmpty { lines.removeLast() }
         self.lines = lines
         widest = lines.lazy.map { Self.cells($0.text) }.max() ?? 0
     }
 
-    /// `diff --git a/x b/y` 取 b 那边（改名后的名字）。
     private static func path(fromGit line: String) -> String {
         guard let b = line.range(of: " b/", options: .backwards) else { return String(line.dropFirst("diff --git ".count)) }
         return String(line[b.upperBound...])
@@ -91,7 +89,6 @@ nonisolated struct UnifiedDiff: Sendable {
         return name.hasPrefix("a/") || name.hasPrefix("b/") ? String(name.dropFirst(2)) : name
     }
 
-    /// `@@ -12,5 +14,7 @@` 里旧、新两边的起始行号与行数（省掉的行数是 1）。
     private static func ranges(_ line: String) -> (Int, Int, Int, Int) {
         func range(_ marker: Character) -> (Int, Int) {
             guard let at = line.firstIndex(of: marker) else { return (1, 1) }

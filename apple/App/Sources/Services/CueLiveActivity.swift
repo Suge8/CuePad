@@ -18,16 +18,13 @@ final class CueLiveActivity {
     let remoteState: () throws -> CueActivityState?
     var restoration: Task<Void, Never>?
     private var remoteStarts: [Task<Void, Never>] = []
-    /// 已写进库的开岛令牌：回前台每次都读，没换就不再排一次写入。
     var starterToken: String?
-    /// 令牌流给过的最新一份开岛令牌（`registerStarter`）。
     var starterArrived: Data?
     private(set) var revision = UUID()
     var observers: [String: [Task<Void, Never>]] = [:]
     var destinationWork: Task<Void, Never>?
     let diagnostics: Diagnostics
     var phaseTasks: [Task<Void, Never>] = []
-    /// 每个还在的活动一份取证订阅，活动结束（或被划掉）时自己收掉。
     var diagnosticTasks: [String: Task<Void, Never>] = [:]
 
     init(store: CueStore, sync: (any SyncControlling)?, device: String?, diagnostics: Diagnostics, remoteState: @escaping () throws -> CueActivityState?) {
@@ -66,8 +63,6 @@ final class CueLiveActivity {
         if activities.first?.attributes.remoteUpdates != true { await removeDestination(activityID: nil, reason: "restoreWithoutRemoteActivity") }
     }
 
-    /// 当场使旧请求失效；先结束系统活动，再等已入途的令牌写入收尾，最后撤销地址。
-    /// show 等同一个屏障，所以旧任务不能在新活动登记后补写旧令牌，也不需要在 Store 另存生命周期。
     @discardableResult
     func invalidate(reason: String) -> Task<Void, Never> {
         trace(.invalidated, reason: reason)
@@ -89,7 +84,6 @@ final class CueLiveActivity {
         return ending
     }
 
-    /// foreground 只决定能否开启；远程活动的初始内容必须在等待后从当前所属库重新取。
     func show(_ state: CueActivityState, resend: Bool, foreground: Bool) async {
         let revision = revision
         await restoration?.value
@@ -109,7 +103,6 @@ final class CueLiveActivity {
 
     private func present(_ local: CueActivityState, resend: Bool, foreground: Bool, revision: UUID) async throws {
         var running = Self.running.first
-        // 远程活动即使暂时离线，也不能由本地库接管内容。重启进程后先确认资料所属，再登记令牌。
         if let running, running.attributes.remoteUpdates == true {
             if observers[running.id] == nil {
                 guard try remoteState() != nil else {

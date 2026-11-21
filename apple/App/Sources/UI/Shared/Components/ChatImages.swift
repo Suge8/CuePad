@@ -2,14 +2,12 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 图片文件随同步晚于对话到：到达之前是占位，到达的那一刻换成图。
 struct ChatImages: View {
     let hashes: [String]
     var trip = BubbleTrip.arrived
     var alignment = HorizontalAlignment.trailing
     var side: CGFloat = 120
     var perRow = Self.bubbleRow
-    /// 只摆前几排，没摆出的张数写在最后一格上；点它从那一张看起，全屏页里翻得到全部。
     var rows: Int?
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
@@ -63,7 +61,6 @@ private struct ChatImage: View {
 
     var body: some View {
         Button { if place.isAway { workspace.fetchFile(hash) } else { open() } } label: {
-            // 到达时换一个身份，缩略图重新读文件；一开始就在的不重读
             Thumbnail(hash: hash, height: side, cornerRadius: Radius.block, fitWidth: fitWidth).frame(width: fitWidth == nil ? side : nil).id(place.isAway)
                 .previewSource(zoom, cornerRadius: Radius.block) { [files = services.store.files, hash, side, scale] in
                     await Thumbnail.picture(hash, height: side, scale: scale, in: files)
@@ -105,7 +102,6 @@ struct ChatFiles: View {
 }
 
 extension PreviewItem {
-    /// 名字的扩展名与键的不一致时（键按内容认的、名字没写）接上键的：全屏页按它认类型、找本机那份。
     init?(attachment file: DraftFile) {
         guard let parts = AttachmentKey.parts(file.key) else { return nil }
         let name = AttachmentKey.make(hash: parts.hash, name: file.name) == file.key ? file.name : file.name + "." + parts.format
@@ -114,7 +110,6 @@ extension PreviewItem {
             title: file.name.isEmpty ? String(localized: "图片") : file.name, byteCount: 0)
     }
 
-    /// 缩略图与全屏页按它对上。
     static func id(of key: String) -> UUID {
         let hex = Array(key.prefix(32))
         let groups = [0..<8, 8..<12, 12..<16, 16..<20, 20..<32].map { String(hex[$0]) }

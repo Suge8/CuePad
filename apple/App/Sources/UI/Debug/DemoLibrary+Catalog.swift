@@ -88,7 +88,6 @@ extension DemoLibrary {
         (nil, String(localized: "续费域名", table: "Demo"), nil),
     ]
 
-    /// `done`：几天前做完的（没做完为 nil）。散在前几天：看板的已完成有"更早做完的"那一叠。
     typealias DemoTask = (project: String?, text: String, done: Double?)
 }
 #endif

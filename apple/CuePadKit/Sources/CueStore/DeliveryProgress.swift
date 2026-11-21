@@ -1,7 +1,6 @@
 import Foundation
 
 extension DeliveryRequest {
-  /// `resuming`：重开后接着核对，沿用领取时的期限（旧记录没有期限也不补造），由核对自己收尾。
   func progress(after outcome: DeliveryOutcome, at completed: Date, resuming: Bool = false) -> (DeliveryStatus, ShownText?, Date?) {
     let (status, reason): (DeliveryStatus, ShownText?) =
       switch outcome {
@@ -16,7 +15,6 @@ extension DeliveryRequest {
     return (status, reason, deadline)
   }
 
-  /// 旧 pending 或迟到的错误不能把已交出的意图退回可执行。正证据成功优先于未知，未知优先于失败。
   static func mergingProgress(local: SyncRow, remote: SyncRow) -> SyncRow? {
     func progress(_ row: SyncRow) -> Int {
       switch row.text("status").flatMap(DeliveryStatus.init(rawValue:)) {
@@ -49,10 +47,8 @@ extension DeliveryRequest {
 }
 
 extension CueStore {
-  /// 本机读历史或同步读到真实消息后，投送只向已送达收敛。先落消息，再在同一事务认账，不受请求／消息到达顺序影响。
   func confirmDeliveries(among ids: Set<UUID>, session: String) throws {
     guard !ids.isEmpty else { return }
-    // 消息上服务器之后才收走请求（markPushed）；这之前原气泡由该消息接替。
     try db.run("""
       UPDATE deliveryRequests SET status = 'succeeded', failure = NULL,
         completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
@@ -73,8 +69,6 @@ extension CueStore {
     }
   }
 
-  /// 投送请求在本机还在等结果：远端版本把它变成完成时，记下本机时刻（往返时间的终点）。
-  /// 执行方在本机写结果，不走远端应用；第一次就收到已完成请求的设备从没等过它，也不记。
   private func isAwaitingResult(_ id: String) throws -> Bool {
     try db.first(
       "SELECT 1 FROM deliveryRequests WHERE id = ? AND (status IN (\(DeliveryStatus.openSQL)) OR status = '\(DeliveryStatus.unconfirmed.rawValue)')", [id]) { _ in true } != nil

@@ -98,7 +98,6 @@ extension Command {
     },
   ]
 
-  /// 范围限定到一个项目时只读那一处，不读全库再过滤。
   private static func listedCards(_ call: Call, in scope: Scope) async throws -> [Card] {
     if call.args.has("trash") { return try await call.store.trashedCards() }
     if call.args.has("archived") { return try await call.store.archived() }

@@ -8,7 +8,6 @@ extension ComposerSource {
 }
 
 extension ComposerMetrics {
-    /// 会话页在回复框晚到的两帧里按它留位，对话不被顶上去。
     static let openOneLine = textTop + GrowingTextView().maxHeight + textBottomOpen + slot
 }
 

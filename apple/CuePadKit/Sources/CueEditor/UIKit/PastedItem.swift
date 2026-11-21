@@ -51,7 +51,6 @@ public struct PastedItem: @unchecked Sendable {
         }
     }
 
-    /// 条目里的文件网址；拿不到或不是文件为 nil（就取文件表示）。
     private func linkedFile() async -> URL? {
         await withCheckedContinuation { continuation in
             _ = provider.loadObject(ofClass: URL.self) { url, _ in continuation.resume(returning: url?.isFileURL == true ? url : nil) }

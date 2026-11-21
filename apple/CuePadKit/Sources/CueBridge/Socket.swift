@@ -4,7 +4,6 @@ import Darwin
 import Foundation
 import Synchronization
 
-/// 扩展端做同样的检查。
 enum SocketDirectory {
     /// `sun_path` 上限 104 字节；文件名 `<uuid>.<pid>.sock` 最长约 52 字节，目录路径再留出余量
     static let maxDirectoryPathLength = 50
@@ -23,7 +22,6 @@ enum SocketDirectory {
         }
     }
 
-    /// 扩展收紧成 0600 后才把它改名进来。
     static func isOwnSocket(_ path: String) -> Bool {
         var st = stat()
         return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFSOCK && st.st_uid == getuid() && st.st_mode & 0o077 == 0
@@ -51,8 +49,6 @@ enum SocketDirectory {
     }
 }
 
-/// 一条 Unix socket 连接：按行产出，EOF（含对端被强杀）即 `lines` 结束。
-/// 读在专用串行队列的 DispatchSource 上；写在另一条队列上阻塞完成（图片可达数 MB）。
 final class SocketConnection: Sendable {
     let lines: AsyncStream<Data>
     private let fd: Int32
@@ -65,7 +61,6 @@ final class SocketConnection: Sendable {
         try self.init(peer: try UnixSocket.connect(path))
     }
 
-    /// 对端必须是当前用户的进程，否则关掉它并抛错。
     init(peer fd: Int32) throws {
         var one: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
@@ -92,13 +87,12 @@ final class SocketConnection: Sendable {
         source.resume()
     }
 
-    /// `thenClose`：写完（排在之前的写入之后）再关连接。
     func write(_ data: Data, thenClose: Bool = false) {
         writeQueue.async { [self] in
             defer { if thenClose { source.cancel() } }
             closed.withLock {
                 guard !$0 else { return }
-                writeAll(fd, data)  // 对端已断开时失败：读端会随即 EOF
+                writeAll(fd, data)
             }
         }
     }
@@ -145,7 +139,6 @@ final class ProcessExitWatcher {
     init(pid: Int32, onExit: @escaping @MainActor () -> Void) {
         let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
         self.source = source
-        // 取消即放开回调（连同它对事件源的引用）
         let fire: @MainActor () -> Void = {
             guard !source.isCancelled else { return }
             source.cancel()

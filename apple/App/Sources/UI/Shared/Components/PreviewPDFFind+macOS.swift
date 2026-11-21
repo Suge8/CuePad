@@ -42,7 +42,6 @@ final class PDFFindHost: NSView, NSTextFinderBarContainer, NSMenuItemValidation 
 
     func findBarViewDidChangeHeight() { place() }
 
-    /// 上屏就拿键盘：⌘F、⌘G 经响应链从 PDF 视图走到这里（下面盖着的输入框不再要回焦点，`yieldsFocusWhenCovered`）。
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         window?.makeFirstResponder(pdf)
@@ -88,7 +87,6 @@ final class PDFFindClient: NSObject, NSTextFinderClient {
     private(set) var string = ""
     private var starts: [Int] = [0]
 
-    /// 页与页之间隔一个换行，跨页的词不当一个。
     func reload() {
         guard let document = pdf?.document, starts.count - 1 != document.pageCount || string.isEmpty else { return }
         var text = "", starts = [0]

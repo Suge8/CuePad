@@ -1,11 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 会话的菜单，列表里出现的每一处（会话条、看板、会话列表、搜索）都是这一份，有哪几项、什么顺序只在这里；会话页栏头只放会话自己的事（`SessionMenuItems`）。三组：去哪看（并排打开、它在等的那件）、
-/// 整理（置顶、重命名、标为未读，Mac 上没有页面可看的会话另有打开活预览）、收尾。收尾只有一个词：完成——这件事用完了，会话跟着休眠（`Workspace.complete`）。
-/// 休眠只在它归着没做完的任务时另给一项：事还没完，先让 Agent 歇着。没归着任务的不给，完成就是它。
-/// 置顶、重命名、完成与任务是同一组操作：归着任务的落在那件任务上，没归着的活会话当场给它建一件（`Workspace+Adopt`）；
-/// 只归着做完的旧任务的活会话，完成与重命名照没归着的走（同看板上它那张会话卡）。重命名要填名字、在忙的休眠要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
     let session: SessionState
     var task: SessionTask?
@@ -29,7 +24,6 @@ struct SessionActions: View {
                 RowActionButtons(actions: [Self.rename(session, task: task, in: workspace)])
                 MarkUnreadButton(session: session)
                 #if os(macOS)
-                // 少用的兜底入口，不排进去哪看那一组；有页面可看时栏头有那颗钮，这里不再给第二个入口
                 if workspace.livesHere(session), workspace.liveButton(session.id) == nil {
                     Button("打开活预览", icon: .livePreview) { workspace.openLivePreview(session) }
                 }
@@ -63,13 +57,11 @@ struct SessionActions: View {
         return RowAction(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.finish(agent) } }
     }
 
-    /// 休眠不是删除（对话留着，再说话就醒），用墨色；在忙才问（`Workspace.sleep`）。归着没做完的任务才给；`recovering`：上一次休眠没成或没确认，会话页就地再来一次。
     static func sleep(_ session: SessionState, task: SessionTask? = nil, ending: Bool, recovering: Bool = false, in workspace: Workspace) -> RowAction? {
         guard recovering || session.canEnd && owned(task) else { return nil }
         return RowAction("休眠", icon: .ended, enabled: !ending) { workspace.sleep(session) }
     }
 
-    /// 轻扫与菜单同一个收尾：没归着任务的是完成，归着的是休眠。
     static func swipes(_ session: SessionState, task: SessionTask?, ending: Bool, in workspace: Workspace) -> RowSwipes {
         let close = sleep(session, task: task, ending: ending, in: workspace) ?? complete(session, task: task, in: workspace)
         return RowSwipes(trailing: [close, rename(session, task: task, in: workspace)].compactMap { $0 })
@@ -91,6 +83,5 @@ struct MarkUnreadButton: View {
 enum SessionAsk {
     case rename(SessionState, shown: String, adopts: Bool)
     case end(SessionState)
-    /// 完成前先问（`Workspace.confirmComplete`），答应了跑 `then`。`claimer` 是挨着它弹出的那个视图，nil 时窗口居中出。
     case complete(CompletionAsk, claimer: UUID?, then: @MainActor (Workspace) async throws -> Void)
 }

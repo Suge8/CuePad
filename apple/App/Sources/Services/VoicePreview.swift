@@ -3,8 +3,6 @@ import CueStore
 import Observation
 import os
 
-/// 设置里试听音色。样本随 App 打包（`VoiceSamples/<音色>-zh|en.m4a`，每个音色一段、HE-AAC 16kbps 单声道，46 段共 965KB），
-/// 中文界面放 -zh，其余放 -en。与通话互斥只经 `VoiceService.preview`：通着不放，开始一通先停。
 @Observable final class VoicePreview: NSObject, AVAudioPlayerDelegate {
     private(set) var playing: CueVoice?
     @ObservationIgnored private var player: AVAudioPlayer?
@@ -13,7 +11,6 @@ import os
         stop()
         let player = try AVAudioPlayer(contentsOf: Self.sample(voice))
         #if os(iOS)
-        // 静音键打开时也要出声：试听是用户点的
         try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try AVAudioSession.sharedInstance().setActive(true)
         #endif

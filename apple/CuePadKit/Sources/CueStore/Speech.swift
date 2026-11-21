@@ -1,10 +1,5 @@
 import Foundation
 
-/// 一句话的送达证据，由记录、服务器收下过没有与此刻推出，不另存。
-/// 投送请求：发送中、已发出、准备中都在等；还没到服务器的一直是发送中、不到期；到了服务器，派发期限（`DeliveryRequest.dispatchDeadline`）
-/// 再过一个回执窗口没收到结果是未确认（本机快照不能证明 Mac 未领取）；
-/// 领取后执行、确认超时或本版本不认识的状态只说明未确认，不证明未交出。未确认不自动重发，晚到的正证据可以让它变为已送达。
-/// 对 Cue 说的话没有领取这一步：回执窗口只在同步通着时走，到点是未确认。
 public enum Speech {
   public enum Trip: Equatable, Sendable {
     case sending
@@ -18,17 +13,14 @@ public enum Speech {
 
     public var unconfirmedReason: String? { if case .unconfirmed(let reason) = self { reason } else { nil } }
 
-    /// 控制请求去重：准备仍等待原请求，但不因此授权 Agent 在跑。
     public var awaitingResult: Bool {
       if case .preparing = self { return true }
       return inTransit
     }
 
-    /// 已进入传递等待；准备不在其中，未确认也不授权 Agent 正在运行或安全重发。
     public var inTransit: Bool { self == .sending || self == .sent }
   }
 
-  /// 活动的保留依据，不授权 Agent 正在运行；未确认可保留旧活动，准备不能创建活动。
   public enum Activity: Sendable { case pending, unconfirmed }
 
   public static func activity(_ request: DeliveryRequest, at moment: Moment) -> Activity? {
@@ -46,19 +38,12 @@ public enum Speech {
 
   public static let unconfirmedReason = ShownText("送达尚未确认，可能已经执行，不会自动重发")
 
-  // 说的话的各段等待时限只在这里定
-
-  /// 等服务器回执的窗口；到点只表示缺少确认，不证明服务器未收到。
   public static let sendLimit: TimeInterval = 15
 
-  /// 等接收方回执的窗口；本机不经服务器，也用这一段。
   public static let receiptLimit: TimeInterval = 60
 
-  /// Cue 工具等结果的窗口；到点如实返回未确认，不保证未来一定有结果。
   public static let cueWait: TimeInterval = 20
 
-  /// 推出到哪了的外部输入：此刻，与本机同步从什么时候起通着（nil：此刻不通）。接收方就是本机（`localHost`）时不经同步；
-  /// Cue 的说话工具与 Cue 在同一台 Mac 上：按一直通着算（`always`）、那台就是本机（`CueTools.spoken`）。
   public struct Moment: Equatable, Sendable {
     public var now: Date
     public var reachableSince: Date?
@@ -76,14 +61,11 @@ public enum Speech {
 
     public func isLocal(_ host: String?) -> Bool { host != nil && host == localHost }
 
-    /// 到 `host` 那台 Mac 的同步从什么时候起通着；nil 是此刻不通。
     public func reachableSince(_ host: String?) -> Date? { isLocal(host) ? .distantPast : reachableSince }
 
-    /// 那台 Mac 的在线记录（`MacPresence`）此刻作不作数：本机同步不通时它可能只是没同步来，那台就是本机（刚启动、还没写下在线）也不算。
     public func seesPresence(of host: String) -> Bool { !isLocal(host) && reachableSince != nil }
   }
 
-  /// 对 Cue 说的一句：`said` 是写下的时刻，`delivered` 是交给 Cue 的时刻，`reachedServer` 是服务器收下过它，`host` 是 Cue 运行的那台 Mac。
   public static func trip(said: Date, delivered: Date?, reachedServer: Bool, host: String?, at moment: Moment) -> Trip {
     delivered != nil ? .delivered : waiting(since: said, reachedServer: reachedServer, host: host, at: moment)
   }
@@ -107,33 +89,26 @@ public enum Speech {
     request.status.known.map(DeliveryStatus.waiting.contains) == true
   }
 
-  /// 等派发快照从什么时候起按未确认显示：派发期限再过一个回执窗口——执行的 Mac 到期就写回失败，这一段等它的结果传回来；
-  /// 已领取、已收尾或还没有锚点（不到期）的为 nil。
   static func expiry(of request: DeliveryRequest) -> Date? {
     guard awaitsDispatch(request) else { return nil }
     return request.dispatchDeadline?.addingTimeInterval(receiptLimit)
   }
 
-  /// 等待到这一刻转为未确认；已有回执、已被领取或此刻同步不通时为 nil。
   public static func deadline(said: Date, delivered: Date?, reachedServer: Bool, host: String?, at moment: Moment) -> Date? {
     guard delivered == nil else { return nil }
     return due(said: said, reachedServer: reachedServer, host: host, at: moment)
   }
 
-  /// 投送请求的样子下一次变的时刻（派发、执行或确认等待到期）：只由记录推出，与谁在读、同步通不通无关；已收尾或还没有锚点的为 nil。
-  /// 各端到点重算（`SpeechClock`）只读这里，不另算、不回落到对 Cue 说话的窗口。
   public static func deadline(_ request: DeliveryRequest) -> Date? {
     guard request.isOpen else { return nil }
     return awaitsDispatch(request) ? expiry(of: request) : request.deadlineAt
   }
 
-  /// 失败的时刻：执行方写回的完成时刻；其余不算失败。
   public static func failedAt(_ request: DeliveryRequest, at moment: Moment) -> Date? {
     guard case .failed = trip(request, at: moment) else { return nil }
     return request.completedAt ?? request.modifiedAt
   }
 
-  /// 说的话里明确未送达的句数；未确认不计入。
   public static func undelivered(_ requests: [DeliveryRequest], at moment: Moment) -> Int {
     requests.count { request in
       guard request.mode == .known(.send) else { return false }

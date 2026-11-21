@@ -10,8 +10,6 @@ extension View {
         return modifier(WindowPanel(key: shown.map { AnyHashable($0.id) }, retained: false, style: style, close: close) { if let shown { content(shown) } })
     }
 
-    /// 常驻的模态浮层（⌘K）：`mounted` 之后内容一直挂在窗口里，收起只是透明、点不到、暂停订阅（`pageActive`），再开不重建。
-    /// 一次建文本框、筛选条与列表要几十毫秒，开合又是每天很多次的事；`mounted` 前（第一次开之前）与普通浮层一样开时才建。
     func keptPanel(isPresented: Binding<Bool>, mounted: Bool, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(WindowPanel(
             key: isPresented.wrappedValue ? AnyHashable(true) : nil, retained: mounted, style: .sheet,
@@ -24,8 +22,6 @@ extension View {
 }
 
 extension View {
-    /// 原地长开的一块（Cue 的名牌长成面板）：画在自己那里、随自己的动画长，点它外面或按 Esc 关与别的浮层是同一套（`PanelHost.takes`），
-    /// 它里面再弹的气泡照常叠在上面、先关那一层。挂在长开后的整块上：它的框就是"里面"。
     func grownInPlace(isPresented: Binding<Bool>, close: @escaping @MainActor () -> Void) -> some View {
         modifier(InPlacePanel(isPresented: isPresented, close: close))
     }
@@ -40,7 +36,6 @@ private struct InPlacePanel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background { AreaMark { [host, token] in host.areas[token] = Weak(value: $0) } }
-            // 收起时留着这一条、只记成没开（不 `hide`）：`hide` 连框一起忘掉，而框只在这块视图建出来时报一次，再开就成了"点哪里都算外面"
             .onChange(of: isPresented, initial: true) { _, open in
                 host.show(token, style: .bubble(.unanchored), content: AnyView(EmptyView()), close: ClosePanel(run: close), open: open, inPlace: true)
             }
@@ -49,8 +44,6 @@ private struct InPlacePanel: ViewModifier {
 }
 
 extension View {
-    /// 每个窗口的根视图挂一次：本窗口的浮层都画在这里，盖住整窗（含侧栏）。点浮层外面任意处（含工具栏）或按 Esc 关最上面那一层（`PanelHost`）；
-    /// 模态的开着时按键不进下面那层界面，读屏只在浮层里（`isModal`）。环境要在它外面注入，浮层内容才拿得到。
     func panelHost() -> some View { modifier(PanelHostModifier()) }
 }
 
@@ -62,7 +55,6 @@ final class PanelHost {
         let content: AnyView
         let close: ClosePanel
         var open = true
-        /// 原地长开的（`grownInPlace`）：自己画在原处，浮层那一层不画它，只照同一套关法关。
         var inPlace = false
         var modal: Bool { style.modal }
     }
@@ -223,7 +215,6 @@ private struct WindowPanel<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // 样式也算：从控件长出的气泡，控件的框变了（窗口改大小、调试参数一出现就开时框还没量到）气泡跟着
             .onChange(of: Mode(key: key, retained: retained, style: style), initial: true) { _, mode in
                 if mode.key != nil || mode.retained {
                     host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close.of(token))), close: close, open: mode.key != nil)
@@ -241,7 +232,6 @@ private struct Mode: Equatable {
     let style: PanelStyle
 }
 
-/// 只这一个视图读几何（自己的框），开销可忽略；行里的气泡不走这里（`BubbleSource.press`）。
 private struct ControlBubble<Panel: View>: ViewModifier {
     @Binding var isPresented: Bool
     let width: BubblePlacement.Width
@@ -262,7 +252,6 @@ private struct PanelHostModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.panelCovered, host.covers(nil))
-            // 有浮层开着时 Esc 由按键监听收最上面那层（`takes`），抽屉不挂自己的（`DrawerCatcher`）
             .environment(\.escapeTaken, host.shown.contains(where: \.open))
             .overlay { PanelLayer() }
             .background { WindowReader(host: host) }
@@ -293,9 +282,6 @@ private struct WindowReader: NSViewRepresentable {
     }
 }
 
-/// 不套纸的浮层（`PanelStyle.bare`）怎么摆、怎么出来。
-/// 上沿钉在窗口上方约四分之一处、往下长：居中的话每多打一行字它上下各挪半行，偏上也不盖住正看着的那几列的中段。
-/// 从刚点的那一下长出来（`from`）；快捷键打开的没有那一下，从自己上沿长出。减弱动态效果时只淡入。
 private struct BareStage<Content: View>: View {
     let from: CGPoint?
     @ViewBuilder let content: Content
@@ -325,7 +311,6 @@ private struct BareStage<Content: View>: View {
     }
 }
 
-/// 弹层底由容器统一铺桌面色，内容里的行和卡是纸；弹层内容不自己铺底。
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
     @Environment(\.palette) private var palette

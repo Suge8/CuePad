@@ -3,7 +3,6 @@ import Foundation
 import Network
 import Synchronization
 
-/// 网络路径可用了：每次路径更新为可用时给一个（不补之前的）。整个进程一个路径监视器，第一次用到时开始。
 public enum NetworkReturns {
   public static func stream() -> AsyncStream<Void> { monitor.returns.stream() }
 
@@ -21,7 +20,7 @@ public enum NetworkReturns {
     private let started = Atomic(false)
 
     init() {
-      path.pathUpdateHandler = { update in  // 监视器整个进程一个，不释放
+      path.pathUpdateHandler = { update in
         self.metered.store(update.isExpensive || update.isConstrained, ordering: .relaxed)
         let first = !self.started.exchange(true, ordering: .relaxed)
         if update.status == .satisfied, !first { self.returns.yield(()) }

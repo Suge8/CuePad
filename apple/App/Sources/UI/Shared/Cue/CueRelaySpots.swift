@@ -31,7 +31,6 @@ enum EndSpot: Equatable {
 }
 
 extension View {
-    /// 这次交给刚开出这个会话时，状态标先透明着，光落下时才亮出来（同 `relayArrival`）。
     func relaySpot(session: String?, row: EndSpot.Row = .own) -> some View { modifier(SessionSpot(session: session, row: row)) }
 
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
@@ -45,7 +44,6 @@ extension EnvironmentValues {
     @Entry var relayStage: CueRelayStage.Stage?
 }
 
-/// 起飞与接住共用参与判定，不在窗口根上改环境值。
 private struct SessionSpot: ViewModifier {
     let session: String?
     let row: EndSpot.Row
@@ -74,7 +72,6 @@ private struct TaskSpot: ViewModifier {
     }
 }
 
-/// 藏起来是当场的，不淡出。
 private struct Arrival: ViewModifier {
     let session: String?
     @Environment(\.relayStage) private var stage

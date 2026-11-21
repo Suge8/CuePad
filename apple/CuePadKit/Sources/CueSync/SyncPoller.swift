@@ -2,11 +2,6 @@ import CueStore
 import Foundation
 import os
 
-/// 有理由等就拉：Mac 不收推送，别的设备写来的东西只靠拉；手机的推送不保证送达与时效。手里有正在等的东西时，
-/// 按条件给出的节奏拉（等什么只在 `AppServices.pollingCadence` 定义）。
-///
-/// 节奏变了（多了或换了在等的东西）先立即拉一次，最新状态不等第一个间隔。条件流的第一个值与重给的同一个节奏不立即拉：开始拉取（启动、回到前台）与同步恢复时 App 本来就立即同步，那一拉就是这一拉。
-/// 节奏与拉取都不在调用方的线程上跑（`run` 是 `@concurrent`）：App 从主线程开它，主线程忙时拉取不跟着晚，`fetch` 也别回到主线程。
 public struct SyncPoller: Sendable {
   public struct Cadence: Equatable, Sendable {
     public var interval: Duration
@@ -49,7 +44,6 @@ public struct SyncPoller: Sendable {
     cadence.map { cadence in Task { await self.loop(cadence, now: now, fetch) } }
   }
 
-  /// 间隔从上一次开拉算起（拉的耗时算在间隔里）：服务器上新到的东西最多等一个间隔加一次拉取就到。
   private func loop(_ cadence: Cadence, now: Bool, _ fetch: @escaping @Sendable () async -> Void) async {
     let start = timing.now()
     var began = now ? nil : start
@@ -76,15 +70,10 @@ public struct SyncPoller: Sendable {
 }
 
 extension SyncPoller.Cadence {
-  /// 别的设备写来的东西平均约 1 秒、最坏约 2 秒到。
-  /// Mac 不收推送，门铃不通时这一拉是别的设备的改动到 Mac 的唯一通路，不放慢。
-  /// `doorbell`：门铃通着时降到的兜底间隔（只补门铃自己察觉不到的丢失，由门铃给出，`Relay.silenceLimit`）；nil 是门铃不通。
   public static func mac(waiting: Bool, doorbell: Duration?) -> Self? {
     waiting ? Self(every: doorbell ?? .seconds(2)) : nil
   }
 
-  /// 有发往 Mac 还没结果的请求时每次在等最多 2 分钟：等回执的时限 `Speech.receiptLimit` 是 1 分钟，报了没能送达之后还接着拉一分钟，晚到的回执照样拉回来；再晚的靠推送。
-  /// 正在看的页（Agent、会话近况、Cue）状态与对话是活的，不只靠推送。
   public static func phone(hasOpenDeliveries: Bool, isWatching: Bool, doorbell: Duration?) -> Self? {
     let cadence: Self? =
       switch (hasOpenDeliveries, isWatching) {

@@ -9,7 +9,7 @@ import Testing
     let project = try await store.createProject(name: "圆桌", color: "#111")
     try await store.setDirectory("/work", for: project.id)
     let bound = try await store.createTask("修乱序", in: project.id), handed = try await store.createTask("改文案", in: project.id)
-    for (leaf, token) in [(bound, "t-bound"), (handed, "t-handed")] {  // 同界面的"开新会话"：请求带着叶子自己
+    for (leaf, token) in [(bound, "t-bound"), (handed, "t-handed")] {
       _ = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: nil, token: token), title: "圆桌", on: "mac-a", card: leaf.id)
     }
     #expect(try await store.launchingLeaves([bound.id, handed.id]) == [bound.id, handed.id])
@@ -49,7 +49,6 @@ import Testing
     try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
     #expect(try await store.card(idea.id)?.piSessionID == "s-late")
 
-    // 开成的会话等认领最多一个派发阶段，到点照样收走
     try await clock.waitForSleeper()
     clock.advance(.seconds(DeliveryRequest.phaseLimit))
     _ = try await eventually(store, { try $0.deliveryRequest(launch.id) }) { $0 == nil }

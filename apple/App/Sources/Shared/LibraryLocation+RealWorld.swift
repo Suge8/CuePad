@@ -4,9 +4,6 @@ import AppKit
 #endif
 
 extension LibraryLocation {
-    /// 这个进程碰不碰这台设备上的真实世界（唯一判断）。Agent 配置目录、命令行链接、连接目录、工作区、系统通知、登录项等按 bundle id 或固定位置记，本机构建与正式版共用；库放哪是另一件事（`isIsolated`）。
-    /// 本机构建的开发库在这台 Mac 装着正式版时不碰：那些配置是正式版写的、指向正式版，开发构建一接入就改成指向自己，还会抢走正式版的 socket 与通知；
-    /// 没装时碰（克隆仓库自己编的人，这就是他唯一的 CuePad）。
     var touchesRealWorld: Bool {
         switch origin {
         case .release: true

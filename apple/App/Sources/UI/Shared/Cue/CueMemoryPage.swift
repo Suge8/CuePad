@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// "重点"（钉住的）只有 Cue 整理，它并成的就是普通的一条，不另标。一条只剩正文：时间在组头，谁说的与确切日期只在长按（右键）菜单的抬头与读屏里——一屏要看得到十来条。
-/// 忘掉先确认：库里忘掉是软删、界面上没有拨回去的路。
 struct CueMemoryPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -13,7 +11,6 @@ struct CueMemoryPage: View {
     @State private var forgetting: CueMemoryLine?
     @FocusState private var adding: Bool
 
-    /// 有字但记不成一条（`CueMemoryLine.fits`：写入时同一个判断）。
     private var tooLong: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !CueMemoryLine.fits(text) }
 
     var body: some View {

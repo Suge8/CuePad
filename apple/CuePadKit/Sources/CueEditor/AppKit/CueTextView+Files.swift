@@ -52,7 +52,6 @@ extension CueTextView {
         }
     }
 
-    /// 点在要交给宿主的附件上不移光标（`EditorCore.openableAttachment`）。
     public override func mouseDown(with event: NSEvent) {
         guard event.clickCount == 1, let (hit, rect) = attachment(at: event) else { return super.mouseDown(with: event) }
         onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: rect, named: hit.name))
@@ -70,7 +69,6 @@ extension CueTextView {
         return nil
     }
 
-    /// 复制/剪切/拖出选区一律输出存储格式字符串：附件不会被归档成 RTFD 而丢失键。
     public override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
         let range = selectedRange()
         guard range.length > 0 else { return false }

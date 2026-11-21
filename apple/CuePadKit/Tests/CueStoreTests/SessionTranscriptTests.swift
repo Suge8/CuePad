@@ -16,16 +16,15 @@ import Testing
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     for (id, activity) in [("quiet", longAgo), ("active", now.addingTimeInterval(7 * 86_400))] {
       try await store.upsertSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: activity), host: "mac")
-      // 两个会话的消息都很旧：active 只是之后没有新消息，文件里仍有别的活动
       try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [message(id, id, at: longAgo)], recap: Recap()))
     }
 
     try await store.pruneMessages(olderThan: 7 * 86_400, now: now)
-    #expect(try await store.chatMessages(of: "quiet").count == 1)  // 刚补写的：留着
+    #expect(try await store.chatMessages(of: "quiet").count == 1)
 
     try await store.pruneMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
     #expect(try await store.chatMessages(of: "quiet").isEmpty)
-    #expect(try await store.chatMessages(of: "active").count == 1)  // 会话还在活动：消息再旧也留着
+    #expect(try await store.chatMessages(of: "active").count == 1)
   }
 
   @Test func imagesInMessagesAreRegisteredAndReclaimedWithTheConversation() async throws {

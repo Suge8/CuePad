@@ -5,9 +5,7 @@ import Foundation
 import CueBridge
 #endif
 
-/// 复制不是发送，不记发送记录。
 extension AppServices {
-    /// 本机没有的附件只写它的名字（图片没有名字），复制照样成功。
     func copy(_ storedText: String) throws {
         let content = ClipboardContent(CueFormat.parse(storedText).map { token in
             switch token {

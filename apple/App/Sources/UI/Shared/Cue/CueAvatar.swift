@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 画哪一拍由调用方给（App 里都是 `CueWatch.beat`），这里不另记；放哪条帧序列只在 `CueSprite.of`。
 struct CueAvatar: View {
     nonisolated enum Size {
         case inline, row, header, card
@@ -14,13 +13,11 @@ struct CueAvatar: View {
             }
         }
 
-        /// 只放轮廓变了的帧：眼睛只挪一两点的帧在这么小的头像上看不出来。
         var compact: Bool { side <= Self.row.side }
     }
 
     let beat: CueBeat
     let size: Size
-    /// 头像后面垫的淡圆底；放在自己有底的格里时不要（会话条最上那一格）。
     let plate: Bool
     @Environment(\.palette) private var palette
     @LoopsPlay private var loops
@@ -62,7 +59,6 @@ struct CueAvatar: View {
     }
 }
 
-/// 会话里 Cue 替你说的那一句，气泡里字前面的头像：这句是它说的。
 struct CueMark: View {
     @Environment(Workspace.self) private var workspace
 

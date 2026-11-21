@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// CuePad 起的会话在系统提示里带着那段指引（写着 App 里 cuepad 的绝对路径），与接没接入无关：真 Agent 连假模型，看模型收到的系统提示。
 @MainActor
 @Suite(.releasesLibraries, .timeLimit(.minutes(4)))
 struct SessionBriefTests {

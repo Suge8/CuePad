@@ -6,7 +6,6 @@ import Testing
 @testable import CuePad
 @testable import CueBridge
 
-/// 各家的目录都在临时目录里（`TestApp.agentHomes`）。
 @MainActor
 @Suite(.releasesLibraries)
 struct AgentLibraryTests {
@@ -160,12 +159,12 @@ struct AgentLibraryTests {
         #expect(read(rules) == "规则一\n\n规则二\n\n后来加的\n")
         #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules))
         _ = try await library("读到后来加的") { $0.instruction(.global)?.hash == hash("规则一\n\n规则二\n\n后来加的\n") }
-        await quietPeriod(.milliseconds(300))  // 前面那些改动的跟随都过去了：下面这次只能由盯着 SYSTEM.md 读到
-        try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))  // 原地写，不换文件，所在目录不变
+        await quietPeriod(.milliseconds(300))
+        try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))
         _ = try await library("系统提示跟上") { $0.instruction(.piSystem)?.hash == hash("你是 Pi，改过\n") }
         try skill("from-claude-ai", in: claude.appending(path: "skills/synced/account-a"))
         _ = try await library("自管的计数跟上") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 1)] }
-        try skill("docx", in: claude.appending(path: "skills/synced/account-a"))  // 账号那一层也盯着
+        try skill("docx", in: claude.appending(path: "skills/synced/account-a"))
         _ = try await library("同一个账号里又多一个") { $0.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2)] }
         try skill("openai-docs", in: codex.appending(path: "skills/.system"))
         _ = try await library("Codex 自带的多了一个") { $0.selfManaged.contains(SelfManagedSkills(agent: .codex, count: 1)) }

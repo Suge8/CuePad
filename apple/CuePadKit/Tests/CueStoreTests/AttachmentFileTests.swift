@@ -34,7 +34,7 @@ import Testing
     #expect(try store.files.store(fileAt: file(named: "Report.PDF", report)) == sha256(report) + ".pdf")
     #expect(try store.files.store(fileAt: file(named: "Makefile", report)) == sha256(report))
     #expect(try store.files.store(fileAt: file(named: "main.ts", report)) == sha256(report) + ".txt")  // 快速查看按文本打开，不当视频
-    #expect(try store.files.store(fileAt: file(named: "photo", png)) == key)  // 没有扩展名的图片按内容认
+    #expect(try store.files.store(fileAt: file(named: "photo", png)) == key)
 
     #expect(try Data(contentsOf: #require(store.files.fileURL(for: key))) == png)
     #expect(store.files.fileURL(for: key)?.deletingLastPathComponent().standardizedFileURL == cached.standardizedFileURL)
@@ -43,12 +43,11 @@ import Testing
   @Test func singleFileOverTheLimitIsRefused() throws {
     let url = try file(named: "huge.mov", Data())
     let handle = try FileHandle(forWritingTo: url)
-    try handle.truncate(atOffset: UInt64(AttachmentFiles.maxBytes) + 1)  // 稀疏文件：不真写 500 MB
+    try handle.truncate(atOffset: UInt64(AttachmentFiles.maxBytes) + 1)
     try handle.close()
     #expect(throws: CueStoreError.fileTooLarge(limit: AttachmentFiles.maxBytes)) { try store.files.store(fileAt: url) }
   }
 
-  /// 同一个库的另一个进程里做的事，做完它就退出了（持有它存过的文件的那次运行随之结束）。
   private func inEndedRun<T: Sendable>(_ body: (CueStore) async throws -> T) async throws -> T {
     let earlier = try CueStore(location: .isolated(fixture.directory))
     let result = try await body(earlier)
@@ -88,7 +87,7 @@ import Testing
   @Test func referencingStoredFilesRegistersOneRecordPerKey() async throws {
     let png = pngData(width: 12, height: 12)
     let key = try store.files.store(png)
-    #expect(try records().isEmpty)  // 没被引用的文件不登记、不上传
+    #expect(try records().isEmpty)
 
     let card = try await store.createCard(body: "看 ![](cuepad://file/\(key))")
     _ = try await store.createCard(body: "![](cuepad://file/\(key)) 又一次")
@@ -99,7 +98,6 @@ import Testing
     try await store.updateCard(card.id) { $0.body += "\n[纪要.docx](cuepad://file/\(doc))" }
     #expect(try records().contains([sha256(notes), "\(notes.count)", "docx"]))
 
-    // 发给会话的话里刚粘贴、没存进卡片的同样登记（Mac 要拿到它才发得出去）
     let pasted = try store.files.store(pngData(width: 5, height: 5))
     _ = try await store.requestDelivery("刚粘贴 ![](cuepad://file/\(pasted))", to: SendTarget(kind: .piSession, name: "pi", ref: "s"), on: "mac")
     #expect(try records().count == 3)
@@ -114,7 +112,7 @@ import Testing
       try await earlier.purgeCard(card.id)
       return (keys[0], keys[1], keys[2], keys[3])
     }
-    #if os(macOS)  // 同时开着库的另一个进程（命令行）只在 Mac 上有，iOS 的运行不用锁（`AttachmentRun.locks`）
+    #if os(macOS)
     let cli = try CueStore(location: .isolated(fixture.directory))
     let pending = try cli.files.store(pngData(width: 2, height: 2, shade: 0.7))
     #endif
@@ -132,7 +130,6 @@ import Testing
     #endif
   }
 
-  /// 别处来的记录不收：收了会把删除同步出去，那台的图就没了。
   @Test func recordFromElsewhereArrivingBeforeItsCardSurvivesCleanup() async throws {
     let other = try Fixture()
     let key = try other.store.files.store(pngData(width: 9, height: 9, shade: 0.42))
@@ -174,7 +171,7 @@ import Testing
     let a = try Fixture()
     let png = pngData(width: 13, height: 13, shade: 0.27)
     let (key, theirs, theirCard) = try await {
-      let writer = try CueStore(location: .isolated(a.directory))  // A 上存图建卡的那次运行，随后结束
+      let writer = try CueStore(location: .isolated(a.directory))
       let key = try writer.files.store(png)
       let card = try await writer.createCard(body: "![](cuepad://file/\(key))")
       writer.files.endRun()
@@ -182,7 +179,7 @@ import Testing
     }()
     let aCache = a.directory.appending(path: "Caches/CuePadAttachments/\(key)")
     _ = try await store.applyRemote([.save(try #require(try await a.store.syncRow(recordName: theirs)), systemFields: Data())])
-    try store.files.adopt(fileAt: aCache, key: key)  // 文件那一路取来
+    try store.files.adopt(fileAt: aCache, key: key)
     let card = try await store.createCard(body: "也用 ![](cuepad://file/\(key))")
 
     try await a.store.updateCard(theirCard) { $0.body = "图删了" }

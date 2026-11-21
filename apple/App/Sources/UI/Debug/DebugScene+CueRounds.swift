@@ -22,7 +22,6 @@ extension DebugScene {
         you: (String) async throws -> Void
     ) async throws {
         switch presence {
-        // 你答了"等你"后又说了一句、Cue 跑了一轮回了两句
         case "answered":
             _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
             try await you(String(localized: "顺便看看登录回调那个超时", table: "Demo"))
@@ -45,7 +44,6 @@ extension DebugScene {
                 step(.read, String(localized: "看板", table: "Demo")), step(.search, String(localized: "登录回调 超时", table: "Demo")), step(.add, String(localized: "建任务「登录回调超时」", table: "Demo"), login), step(.start, String(localized: "开工「登录回调超时」", table: "Demo"), login),
                 step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.leave, String(localized: "「notes」留给你回", table: "Demo"), session: "notes")))
             try await store.setDemoCueState(.tool, step: .init(kind: .talk, name: login.heading, task: login.id), round: row, context: context)
-        // Cue 自己醒来的一轮还在跑
         case "woke":
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: process(
                 step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order), step(.talk, String(localized: "对「发言轮次乱序」说：重连用例补完把测试全跑一遍", table: "Demo"), order),
@@ -55,17 +53,14 @@ extension DebugScene {
             try await store.setDemoCueState(.tool, step: .init(kind: .stop, name: "billing", session: SessionState.recordID(sessionID: "billing")), round: row, context: context)
         case "sending":
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
-        // 你说去睡了，一夜里 Cue 陆续说了几句
         case "away":
             _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
             try await you(goingAway)
             try await seedAway(store)
-        // 演示 Mac 不在线、两分钟前说的话一直没交出去
         case "asleep":
             try await store.seedAgeCueMessages(by: 480)
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
             try await store.seedAgeCueMessages(by: 120)
-        // 一天半没人说话，两个会话反复停下、都留给你，中间空闲时看过两眼
         case "patrol":
             try await store.seedAgeCueMessages(by: 30 * 3600)
             let stops: [(Double, String?)] = [

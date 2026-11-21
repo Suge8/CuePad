@@ -8,7 +8,6 @@ final class DebugVoiceLayoutScenario {
     private let kind = DebugScene.args.voiceOpts.scenario
     private var recorded = false
     private var sent = false
-    /// 跨过真实控制通道的分片上限，首片失败必须留下未发送的后续片。
     private static let partialParagraphs = 40
 
     func beforeRecording() throws {

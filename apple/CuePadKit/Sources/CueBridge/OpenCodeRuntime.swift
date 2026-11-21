@@ -28,17 +28,14 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var connection: Connection?
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
-    /// 托管的顶层会话：只有它们（与它们的子代理）上桥、进索引、收事件
     var sessions: [String: Tracked] = [:]
     var parents: [String: String] = [:]
     var childTurns: [String: OpenCodeTurn] = [:]
-    /// 在 CuePad 里结束的时刻：此后的活动才让它重新上线（`revives`）
     var ended: [String: Date] = [:]
     var catalogs: [String: Catalog] = [:]
     var checkpoints: [String: OpenCodeHistory.Checkpoint] = [:]
     var ingestQueue: [String] = []
     var ingesting: Task<Void, Never>?
-    /// CuePad 拉起的服务（它的 `opencode` 与环境），停止接入时由 CuePad 停掉；本来就在跑的为 nil
     var startedService: (executable: URL, environment: [String: String])?
 
     @MainActor final class Connection {
@@ -64,7 +61,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         var info: OpenCodeSessionInfo
         var online = false
         var launchToken: String?
-        /// 引用：几份 `Tracked` 的拷贝同一份一轮的状态
         let turns: HostedTurns
         var parser = OpenCodeTurn()
         var context: ContextUsage?
@@ -84,7 +80,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         return Tracked(info: info, turns: turns)
     }
 
-    /// - Parameter brief: 开的、接着的会话都挂上这条指令（`SessionBrief`，`attachBrief`）。
     public init(
         bridge: Bridge, paths: AgentPaths, store: CueStore, hostID: String, brief: String, opencode: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
@@ -111,10 +106,8 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         refresh()
     }
 
-    /// 会话在服务里：本来就在跑的服务 App 退出时不动，CuePad 拉起的那个由 `stop()` 停掉，会话随之下线。
     public var hostedSessionsOutliveApp: Bool { startedService == nil }
 
-    /// 停下后可再 `start()`（接入开关关了又开）：会话下桥，读到哪的缓存一并丢掉——索引随断开接入删了，再接入从头读。
     public func stop() -> @concurrent @Sendable () async -> Void {
         watching?.cancel()
         watcher?.stop()
@@ -131,7 +124,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         }
     }
 
-    /// 停掉 CuePad 拉起的服务（`opencode service stop`，它删掉登记文件，会话随之下线）；本来就在跑的不动。
     private func stopStartedService() -> @concurrent @Sendable () async -> Void {
         guard let service = startedService else { return {} }
         startedService = nil
@@ -173,7 +165,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         ingestQueue = []
     }
 
-    /// 服务“又能连了”没有事件可等，所以按退避重试：间隔从 1 秒翻倍到 30 秒，连上并拉完快照后复位。
     private func follow(_ connection: Connection) async {
         var delay = Self.retryFloor
         while !Task.isCancelled, self.connection === connection {
@@ -190,7 +181,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
             } catch {
                 Self.log.error("OpenCode 事件流断开或快照失败，\(delay, privacy: .public) 后重连：\(String(describing: error), privacy: .public)")
             }
-            // 事件流断了：到重新拉完快照之前，状态不再是最新的，命令要等重连（`ensureService`）
             connection.ready = false
             guard (try? await Task.sleep(for: delay)) != nil else { return }
             delay = min(delay * 2, Self.retryCeiling)

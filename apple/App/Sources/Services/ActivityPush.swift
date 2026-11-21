@@ -20,7 +20,6 @@ nonisolated struct ActivityPush: Encodable, Sendable {
                 dismissalDate: now.isLive ? nil : Int((now.nextChange(after: now.at) ?? now.at).timeIntervalSince1970))
         }
 
-        /// 结束并立刻从锁屏清掉（快到系统上限的那只）：内容没完，留着就是旧的。
         static func clearing(_ state: CueActivityState) -> Payload {
             var payload = Payload(state)
             payload.aps.event = "end"
@@ -48,7 +47,6 @@ nonisolated struct ActivityPush: Encodable, Sendable {
         var remoteUpdates = true
     }
 
-    /// 正文按键在手机上取文案（`Localizable.xcstrings` 的 `island_start_*`）；标题是那一件的名字。
     struct Alert: Encodable, Sendable {
         var title: String
         var body: Key
@@ -80,13 +78,11 @@ nonisolated struct ActivityPush: Encodable, Sendable {
         }
     }
 
-    /// 开岛那一份比更新多出属性与提醒：内容按留出这些的预算裁，两种都放得下。
     static let byteLimit = 4_096
     static let startOverhead = 384
 
     struct Oversized: Error {}
 
-    /// 数字账完整保留；先缩短显示文字，再省掉放不下的行，第一件等你仍可打开。
     static func fitted(_ original: CueActivityState) throws -> CueActivityState {
         func fits(_ value: CueActivityState) throws -> Bool { try JSONEncoder().encode(Payload(value)).count <= byteLimit - startOverhead }
         if try fits(original) { return original }

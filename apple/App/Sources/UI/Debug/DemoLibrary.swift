@@ -46,7 +46,6 @@ enum DemoLibrary {
         }
     }
 
-    /// `-CuePadQuotaRemindIn`：Claude 的本周到点该响；5 小时（不是周窗口）、按模型的本周与 Codex 的本周（还远）不该响。到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
     private static func seedQuotas(_ store: CueStore) async throws {
         let now = Date.now
         let resetIn = DebugScene.args.quotaOpts.resetIn
@@ -103,9 +102,6 @@ enum DemoLibrary {
             projects: named.map { SeedProject(name: $0.name, icon: $0.icon.rawValue, color: $0.color, pinned: $0.pinned) }, cards: cards)
     }
 
-    /// 演示用的主目录（以 / 结尾）：演示项目绑的文件夹、假 Pi 会话的工作目录都在它下面。Mac 上在隔离库里（`CUEPAD_LIBRARY_DIR/home`，
-    /// 没给隔离库时在临时目录），不是真实主目录：演示实例会真去读写绑定的文件夹（技能与规则的扫描与整理），落在真实主目录下就会改到真的仓库。
-    /// iOS 只作显示。
     static var demoHome: String {
         #if os(macOS)
         let root = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey].map { URL(filePath: $0, directoryHint: .isDirectory) }

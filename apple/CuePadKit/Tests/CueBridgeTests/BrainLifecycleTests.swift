@@ -5,8 +5,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 大脑的生死，经公开入口 `startBrain()`，运行时是假脚本（不花钱、默认跑）。脚本把自己的 pid 写进 `$PID_FILE`，
-/// 用来确认进程真的没了。收尾的宽限按手动钟走（`CueBrainConfig.timing`），到点由测试推进。
 @MainActor
 @Suite
 struct BrainLifecycleTests {
@@ -25,7 +23,6 @@ struct BrainLifecycleTests {
         try #require(pid_t(String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 
-    /// 调用方拿不到大脑，没人能收拾，所以起了的进程不能留下。
     @Test func aRuntimeThatRejectsTheHandshakeIsNotLeftRunning() async throws {
         let clock = ManualTiming()
         let (config, file) = try fakeRuntime(.codex, #"""
@@ -44,7 +41,6 @@ struct BrainLifecycleTests {
 
     @Test func stopEndsARuntimeThatIgnoresEOFAndSIGTERM() async throws {
         let clock = ManualTiming()
-        // 起好要等 CuePad 的工具服务连上（`mcp_status`）：答一句连上了，之后谁也不理。pid 与 trap 都在答之前，起好时已就位
         let (config, file) = try fakeRuntime(.claudeCode, #"""
             trap '' TERM
             read line
@@ -54,7 +50,7 @@ struct BrainLifecycleTests {
             """#, timing: clock.timing)
         let brain = try await config.startBrain()
         let stopped = Task { await brain.stop()() }
-        for _ in 0..<2 {  // 关输入后一段、SIGTERM 后一段
+        for _ in 0..<2 {
             try await clock.waitForSleeper()
             clock.advance(AgentTimeouts.endGrace)
         }
@@ -65,7 +61,6 @@ struct BrainLifecycleTests {
         #expect(last == .exited(nil))
     }
 
-    /// Grok 的 MCP 服务迟迟不报连上时取消启动：很快返回，不等 `mcpReady` 自己的 30 秒时限。
     @Test func cancellingAGrokStartWaitingForMCPReturnsPromptly() async throws {
         let (config, _) = try fakeRuntime(.grok, #"""
             while read line; do

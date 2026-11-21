@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 等你列的卡同别的列一样大、一样的纸：名字带拍板还是新回复，它等你的那一句写两行，点一下进会话，在那里读全、作答。
-/// 否决过：一次摊开一张、与页面反色、选项与回复框都在卡上——一块反色的大面压过整页，句子长了在窄卡里堆成一摞、读不成段，要答还是得点进去。
 struct BoardWaitCard: View {
     let held: TaskBoard.Held
     let project: Project?
@@ -27,7 +25,6 @@ struct BoardWaitCard: View {
         let label = label()
         return BoardLink(to: held.session) {
             #if os(macOS)
-            // 悬停提示里等了多久跟着走：到下一次换字的时刻（`SessionClock.Waited`）只重画卡面，挂着菜单的那一层不随时间重建
             Moments(next: SessionClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in label.help(tip(at: now)) }
             #else
             label
@@ -38,7 +35,6 @@ struct BoardWaitCard: View {
         .completionAsks(claiming: held.item?.task.id)
     }
 
-    /// 等你的是哪一句：拍板是它问的那句，待回复是它最后说的那句的头一句。
     private var ask: String? {
         held.deciding ? SessionProgress.firstLine(held.session.question?.displayText ?? held.session.detail) : SessionProgress.firstSentence(held.session.lastReply)
     }
@@ -61,7 +57,6 @@ struct BoardWaitCard: View {
     #endif
 }
 
-/// 同推进中那张卡的骨架（`BoardCardLayout`）：名字带拍板还是待回复、Agent，等你的那一句，卡脚（`BoardWaitFoot`）是项目与等了多久。
 private struct BoardWaitFace: View {
     let held: TaskBoard.Held
     let ask: String?
@@ -89,7 +84,6 @@ private struct BoardWaitFace: View {
         .contentShape(.rect)
     }
 
-    /// 手机的行里一行：同推进中的卡一样高，问句短时不空着一行。
     private static let lines = 2
 }
 

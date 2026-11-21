@@ -24,7 +24,6 @@ enum IOSInteractionBench {
     private static let turns = TurnLog()
     private static let coldFrames = FrameRecorder()
 
-    /// 画面一摆起来就开始量冷启动（`DebugScene.prepare` 的第一步），读库与摆画面都在它之后。
     static func beginCold() {
         coldFrames.start()
         turns.begin(CACurrentMediaTime(), root: nil)
@@ -58,7 +57,6 @@ enum IOSInteractionBench {
                 DebugScene.abandon("交互测量的结果写不出", error)
             }
         }
-        /// 缺了要量的东西就整次作废：不悄悄少量几项
         func fail(_ reason: String) -> Never {
             write("FAIL " + reason)
             exit(1)
@@ -66,7 +64,6 @@ enum IOSInteractionBench {
         let only = DebugScene.args.driveOpts.interactOnly.map { Set($0.split(separator: ",").map(String.init)) }
         func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
         func row(_ row: [String: Any]) { write(jsonLine("INTERACT", row)) }
-        /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
         func step(_ name: String, window: Duration = .milliseconds(800), finger: Finger? = nil, _ action: () -> Void = {}) async {
             guard wants(name) else { return }
             let pressed: (() async -> Void)? = finger.map { finger in { await Self.touch(write, name, finger) } }
@@ -79,7 +76,6 @@ enum IOSInteractionBench {
         let cold = await cold()
         if wants("冷启动·Cue 页") { row(cold) }
         await SettingsBench.run(workspace, only: only) { name, action in await step(name, action) }
-        // 只量冷启动与设置时不要求库里有别的项（真实库的副本不一定有演示库那几样）
         if let only, only.isSubset(of: SettingsBench.names.union(["冷启动·Cue 页"])) {
             write("DONE")
             exit(0)
@@ -95,12 +91,10 @@ enum IOSInteractionBench {
         guard let idea = try await store.cards(in: Project.defaultID).first else { fail("演示库的默认项目里没有灵感") }
         workspace.select(.shelf)
         await Task.wait(for: .seconds(1))
-        // 书架点项目（推入项目页）→ 返回；同一个项目两遍，另一个项目再一遍
         for id in [projects[0], projects[0], projects[1]] {
             await step("书架点项目") { workspace.push(.project(id)) }
             await step("返回书架") { workspace.path.removeAll() }
         }
-        // 项目页任务区点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         guard let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
         workspace.push(.project(busiest))
         await Task.wait(for: .seconds(2))
@@ -110,12 +104,10 @@ enum IOSInteractionBench {
         }
         workspace.select(.cue)
         await Task.wait(for: .seconds(1))
-        // 侧栏开合：Cue 页开侧栏的进展段（配 `-CuePadManyTasks` 量任务多时）、点侧栏的 Cue 头像回来
         for _ in 0..<2 {
             await step("开侧栏·进展") { workspace.select(.progress) }
             await step("收侧栏回 Cue") { workspace.select(.cue) }
         }
-        // Cue 页头开合面板（点页头的那条路）
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
@@ -123,7 +115,6 @@ enum IOSInteractionBench {
         if !callSteps.isDisjoint(with: only ?? callSteps) {
             await call(workspace, wants: wants) { name, window, action in await step(name, window: window, action) }
         }
-        // Cue 页左边的会话条点会话（先读出这一页再推入）→ 返回 Cue
         for id in [sessions[0], sessions[0], sessions[1]] {
             await step("会话条进会话") { workspace.openSession(id) }
             await step("会话返回 Cue") { workspace.path.removeAll() }
@@ -160,7 +151,6 @@ enum IOSInteractionBench {
         exit(0)
     }
 
-    /// 粘贴进来的一大段：仿诊断 JSON（嵌套的调用栈帧，约 850 行、66 KB），或 `-CuePadPasteFile <路径>` 那个文件。
     private static var pasted: String {
         if let path = DebugScene.args.pasteFile {
             do {
@@ -182,8 +172,6 @@ enum IOSInteractionBench {
         return String(decoding: try! JSONSerialization.data(withJSONObject: tree, options: [.prettyPrinted, .sortedKeys]), as: UTF8.self)
     }
 
-    /// 长文打字：编辑页的正文先写成 `pasted`；输入框（空着）拿到键盘后经剪贴板粘贴进 `pasted`（量这一下：长文粘贴），
-    /// 再一个字一个字地敲（每个字一项）。
     private static func typeLong(
         _ workspace: Workspace, session: UUID, card: UUID, wants: (String) -> Bool, fail: (String) -> Never,
         step: (String, () -> Void) async -> Void
@@ -234,8 +222,6 @@ enum IOSInteractionBench {
     }
 
     private static func stepScroll(_ name: String, _ scroll: UIScrollView, step: (String, () -> Void) async -> Void) async {
-        // 滚动是持续的：量 40 帧里每帧的主线程回合与掉帧（动作只触发第一帧，之后由 display link 推）
-        // 量完滚回原处（顶上是负的上内边距，不是 0）：侧栏的页常驻，滚到哪后面的项就从哪接着看
         let start = scroll.contentOffset
         let driver = ScrollDriver(scroll)
         await step(name) { driver.start() }
@@ -251,7 +237,6 @@ enum IOSInteractionBench {
         guard let view else { return nil }
         if let scroll = view as? UIScrollView, scroll.contentSize.height > scroll.bounds.height, !view.isHidden, view.window != nil,
            scroll.bounds.height > 300 { return scroll }
-        // 藏着、透明的不算
         for sub in view.subviews where !sub.isHidden && sub.alpha > 0 { if let found = scrollView(in: sub) { return found } }
         return nil
     }
@@ -267,13 +252,11 @@ enum IOSInteractionBench {
         action()
         await Task.wait(for: window)
         var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
-        // 动作发出的时刻（与 xctrace 录制对时）
         row["at"] = wall
         row["footprintMB"] = footprintMB()
         return row
     }
 
-    /// 量完这一项时进程的内存占用（phys_footprint，同 Xcode 内存表与系统按它杀进程的口径）。
     private static func footprintMB() -> Double {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
@@ -284,7 +267,6 @@ enum IOSInteractionBench {
     }
 }
 
-/// 每帧往下滚 40pt，到底往回。
 private final class ScrollDriver: NSObject {
     private let scroll: UIScrollView
     private var link: CADisplayLink?

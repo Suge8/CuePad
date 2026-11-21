@@ -2,13 +2,10 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 平放的纸不加模糊阴影：侧栏开合时整面墙每帧重画，靠纸与桌面的明度、色相差把纸托出来。
-    /// `running`：卡边有一道光绕着走（推进中在跑的卡，一列至多 `BoardNow.maxMoving` 张）。
     func boardCard(_ column: TaskBoard.Column, running: Bool = false) -> some View {
         modifier(BoardCardFrame(column: column, running: running))
     }
 
-    /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。
     func boardDim(project: UUID?) -> some View {
         #if os(macOS)
         modifier(BoardDim(project: project))
@@ -19,7 +16,6 @@ extension View {
 }
 
 extension EnvironmentValues {
-    /// 卡在手机竖屏横滑的一行里（`BoardRowLane`）：同一张卡，固定三行、铺满格高，一行里的卡一样高。
     @Entry var boardRow = false
 }
 
@@ -70,10 +66,8 @@ struct BoardPin: View {
     }
 }
 
-/// 项目只在看全部项目时画（调用方给 nil）：选了项目范围时范围已经说了。指针停在上面时别的项目的卡淡下去（`boardDim`）。
 struct BoardProjectTag: View {
     let project: Project
-    /// 手机行里待办、已完成的薄条只画图形：一行里地方给标题。
     var named = true
     #if os(macOS)
     @Environment(Workspace.self) private var workspace
@@ -83,7 +77,6 @@ struct BoardProjectTag: View {
     var body: some View {
         HStack(spacing: Spacing.hair) {
             ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
-            // 卡脚只给得出图形那么宽时名字排成 0 宽裁掉（`BoardFoot`），不剩一个"…"
             if named { Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).fact() }
         }
         .frame(maxWidth: named ? BoardCardMetrics.tagMax : nil, alignment: .leading)
@@ -140,7 +133,6 @@ private extension Character {
     var isLetterOrDigit: Bool { isLetter || isNumber }
 }
 
-/// 拖到已完成、完成、置顶、改名与任务是同一组操作（`Workspace+Adopt`）：第一次这样用时当场给它建任务绑上；完成连同结束这个会话。
 struct BoardSessionCard: View {
     let agent: SessionListItem
     let project: Project?
@@ -168,12 +160,6 @@ struct BoardSessionCard: View {
     }
 }
 
-/// 卡：标题（至多两行，右上角是哪家 Agent 的标志）、推进中多一行此刻在干什么（`BoardNow`）、卡脚。
-/// 三层三种轻重：标题最重，第二行带状态的颜色，卡脚整行淡。
-/// 卡脚左端项目，右端这一列要说的那一样——推进中是时长（`BoardVitals`），别的列是 `facts`；这张卡自己的那一颗钮（开始、就地处理）在最右。
-/// 状态词不放在标题右端：窄列里标题会只剩四五个字。
-/// 手机的行里（`boardRow`）是同一张：标题一行，卡脚沉到格底；待办、已完成收成一行高的薄条（项目的图形、标题、卡脚右端那一样），
-/// 地方让给正在发生的两行。
 struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -181,7 +167,6 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     let project: Project?
     var note: String?
     var session: SessionState?
-    /// 待办、已完成的卡：标题写几行占几行，有旁注才多一行，上下的边也收紧。
     var compact = false
     let title: Title
     let facts: Facts
@@ -246,7 +231,6 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
         HStack(spacing: Spacing.item) {
             Spacer(minLength: 0)
             if advancing { BoardVitals(pulse: pulse) } else { HStack(spacing: Spacing.glyph) { facts }.fixedSize() }
-            // 就地处理的那颗浮在卡上（`boardRescue`），这里只留出它的宽
             if advancing, let session, SessionRescue.of(session) != nil { BoardRescue(session: session, reserves: true).hidden().frame(height: 0) }
         }
         .font(TaskMetrics.caption).lineLimit(1)
@@ -258,7 +242,6 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
 }
 
 extension View {
-    /// 卡脚定高，随字号放大：定死的话大字号下卡脚的字比卡脚高，压到卡边上。
     func boardFootHeight(_ height: CGFloat) -> some View { modifier(BoardFootHeight(height: height)) }
 }
 
@@ -269,8 +252,6 @@ private struct BoardFootHeight: ViewModifier {
     func body(content: Content) -> some View { content.frame(height: height * scale) }
 }
 
-/// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽，项目名用剩下的、放不下就截；
-/// 名字连两三个字都写不下时只留图形，图形也放不下就不画（画半个像画坏了）。再剩的都归右端。
 struct BoardFoot: Layout {
     let glyph: CGFloat
     private static let nameMin: CGFloat = 36
@@ -294,7 +275,6 @@ struct BoardFoot: Layout {
 struct BoardShot: View {
     let shot: CueShown
     let group: String
-    /// 成果图做这张卡的主角：铺满卡宽。
     var hero = false
     let open: (PreviewOpening) -> Void
 

@@ -41,14 +41,12 @@ extension DebugScene {
         let first = try await store.createTask(String(localized: "列出所有回调地址", table: "Demo"), under: mute.id)
         let second = try await store.createTask(String(localized: "换成统一网关并跑测试", table: "Demo"), under: mute.id)
         _ = try await store.createTask(String(localized: "补超时重试的用例", table: "Demo"), under: mute.id)
-        // 先开工（开始时刻记在第一步上）、隔几秒做完它：行尾按它的用时估剩下两步，写"约 N 秒"（`TaskPace`）
         try await store.setStatus(mute.id, .inProgress)
         await Task.wait(for: .seconds(3))
         try await store.setStatus(first.id, .done)
         try await store.linkCard(second.id, toSession: "gateway")
     }
 
-    /// 进展页的看板上点它的卡看任务气泡的正文与子任务；演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡。
     static func seedCanvasSteps(_ store: CueStore) async {
         guard args.canvasSteps else { return }
         await running("画布任务的子任务") { try await canvasSteps(store) }

@@ -1,7 +1,6 @@
 import CueStore
 import Testing
 
-/// 样例是各家真实技能里出现过的写法，合成的最小版。
 @Suite struct SkillDocumentTests {
   struct Write: CustomTestStringConvertible, Sendable {
     let label: String, file: String

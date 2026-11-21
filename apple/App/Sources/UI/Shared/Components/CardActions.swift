@@ -1,13 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// 有哪几项、什么顺序只在 `CardMenu`，这里只画。
 struct CardActions: View {
     let card: Card
     var more = false
     var selectable = false
     var opens = false
-    /// 点它进的那个会话：打开任务旁边多一项并排打开。
     var session: SessionState?
     @Environment(Workspace.self) private var workspace
 
@@ -91,7 +89,6 @@ extension CardMenu.Item {
 }
 
 extension CardMenu.Item {
-    /// 子菜单（移到项目）与此处做不了的（手机上的选择、Mac 上的"更多"、不在大纲里的缩进）为 nil。
     func run(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> (() -> Void)? {
         let id = card.id
         switch self {

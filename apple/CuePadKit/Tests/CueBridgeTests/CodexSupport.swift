@@ -6,11 +6,9 @@ import ImageIO
 import Testing
 @testable import CueBridge
 
-/// 测试连的 Codex：钉住的版本（`PinnedAgent.codex`），模型是本用例的假模型（`FakeModel`，Responses），零网络、不用任何登录。
 let pinnedCodex = PinnedAgent.codex
 let codexTestModel = "gpt-5.5"
 
-/// 一张 64×64 的 sRGB 纯色 PNG（1×1 的图、设备色彩空间里的纯红，模型有时说成别的颜色）。
 func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
     let sRGB = try #require(CGColorSpace(name: CGColorSpace.sRGB))
     let context = try #require(CGContext(
@@ -50,7 +48,6 @@ struct CodexHome {
             "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path, Self.keyVariable: "fake",
         ].merging(Self.deadProxy) { $1 })
     }
-    /// 测试零网络：Codex 自己要连外网的都经指向本机没人监听的端口的代理挡住。假模型在 127.0.0.1，由 NO_PROXY 放行。
     static let deadProxy: [String: String] = {
         var proxy = ["NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"]
         for name in ["https_proxy", "http_proxy", "all_proxy"] {
@@ -71,7 +68,6 @@ struct CodexHome {
         }
     }
 
-    /// 配置：假模型当提供方，最便宜的思考强度，信任工作目录，关掉更新检查与遥测。
     func signIn(approvals: String = "never") throws {
         let config = """
             model = "\(modelName)"
@@ -162,12 +158,9 @@ final class CodexRig {
     let codex: CodexHome
     let bridge: Bridge
     let runtime: CodexRuntime
-    /// 托管的 Codex 经它起时有（`readFault`）
     let readFault: CodexReadFault?
     var model: FakeModel { codex.model }
 
-    /// - Parameter readFault: 托管的 Codex 经 `CodexReadFault` 起，子线程的 `thread/read` 先照这一档回。
-    /// - Parameter timing: CuePad 自己的时限按它量（缺省永不到点，见 `noDeadline`）。
     init(
         approvals: String = "never", model: String = codexTestModel, readFault: CodexReadFault.Mode? = nil, timing: Timing = noDeadline
     ) async throws {
@@ -192,7 +185,6 @@ final class CodexRig {
         (self.codex, self.bridge, self.runtime, self.readFault) = (codex, bridge, runtime, fault)
     }
 
-    /// 关掉托管的进程，删掉临时目录（含凭据，`CodexHome.remove`）。
     func stop() async {
         await runtime.stop()()
         bridge.stop()

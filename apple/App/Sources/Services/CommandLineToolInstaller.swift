@@ -16,7 +16,6 @@ nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
     }
 }
 
-/// 在 `~/.local/bin/cuepad` 建符号链接，不做需要提权的 /usr/local/bin。只认自己的链接：位置上是别的东西时不覆盖、不删除。
 @Observable
 final class CommandLineToolInstaller {
     enum State: Equatable {
@@ -24,12 +23,10 @@ final class CommandLineToolInstaller {
         case notInstalled
         case installed
         case stale
-        /// 位置上是别的文件（nil）或别人的链接（指向哪）。
         case blocked(link: String?)
     }
 
     private(set) var state = State.notInstalled
-    /// 用户 shell 的 PATH 里是否有链接所在目录；读不出来为 nil。链接不在 PATH 里，agent 在 bash 里找不到 `cuepad`。
     private(set) var pathIncludesLinkDirectory: Bool?
 
     let helper: URL
@@ -76,7 +73,6 @@ final class CommandLineToolInstaller {
         await refresh()
     }
 
-    /// 只删自己的链接（含已失效的）；别人的东西抛错、原样保留。
     func uninstall() async throws {
         state = inspect()
         switch state {

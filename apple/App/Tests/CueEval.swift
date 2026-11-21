@@ -7,15 +7,11 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 一件 Cue 开过工、正在做的任务：开工时送进会话的第一句记在发送记录里（会话里那句因此认作 Cue 说的，这一轮不是他开的），
-/// 会话是本机开着的假扩展（Cue 对它说话、作答都送得到），会话说的写进它的会话文件（`file`）。
 struct Working {
     let task: Card
     let session: FakeExtension
     let file: SessionFile
     var id: String { session.sessionID }
-    /// 会话收到的作答（选项原文或填的字），从早到晚。判"替他答了哪个"只认它：say 的话由库认成选项（"B. 留在 R2"按 B 答）才送到会话，
-    /// 认不成的被拒、到不了这里。作答成功的请求随后就从库里清掉，会话收到的是留下来的那一份。
     var answers: [String] { session.commands.filter { $0.json["t"] as? String == "answer" }.compactMap { $0.json["value"] as? String } }
 }
 
@@ -25,10 +21,8 @@ final class CueEval {
     private let output: URL
     private var start = Date.distantFuture
     private var begin: Date?
-    /// 场景里的每一轮（含预热）按 id 留着：管理器只留最近 `CueKeeper.roundsKept` 轮
     private var archive: [Int: CueRound] = [:]
     var report: [String] = []
-    /// 场景自己要写进成绩单的（多日单列的轮，score.py 的"单列的轮"表），JSON 能表示的值
     var extra: [String: Any] = [:]
 
     private init(_ rig: CueHostTests.Rig, output: URL) {
@@ -36,7 +30,6 @@ final class CueEval {
         self.output = output
     }
 
-    /// 起 Rig（值班起来、对过刚启用），跑 `body`（摆状态、叫醒、判定）；不论成败都把现场写完、停掉大脑，再报没过的判定。
     static func run(
         _ name: String, expect: String, suite: EvalSuite = .short, output: URL = evalOutput,
         rig makeRig: () async throws -> CueHostTests.Rig = { try await CueHostTests.Rig(brain: .current) }, _ body: (CueEval) async throws -> [Check]
@@ -62,8 +55,6 @@ final class CueEval {
         try await eventually("Cue 做完被叫醒的那一轮") { self.round?.finishedAt != nil }
     }
 
-    /// 叫醒 Cue，等它把这次引起的都做完才返回：至少一轮做完、没有在跑的、歇着、话都交了，
-    /// 再稳住几秒没有新的一轮（紧跟着的醒来）。返回这次醒来的时段；没叫醒（等不到一轮开始）为 nil。
     func settle(_ wake: () async throws -> Void) async throws -> ClosedRange<Date>? {
         let from = mark()
         try await wake()
@@ -96,8 +87,6 @@ final class CueEval {
         return try await rig.store.cueMessagesToDeliver().isEmpty
     }
 
-    /// 换新后的第一轮：大脑开了新的对话的那一轮（`BrainUsage.renewed`，从大脑的输出里数：新进程，或 Pi 回应了 new_session）。
-    /// 不看上下文用量：缓存过期时开新会话、接上的视图可能比原来的上下文还长。大脑报的轮与记下的轮按先后对齐。
     var renewals: [CueRound] {
         let rounds = rounds
         return (rig.brainDirectory.map(BrainUsage.renewed(in:)) ?? []).filter { $0 < rounds.count }.map { rounds[$0] }
@@ -116,7 +105,6 @@ final class CueEval {
         Self.calls(in: round.map { [$0] } ?? [], tool, action.map { [$0] } ?? [])
     }
 
-    /// `rounds` 里调的 `tool`（`actions` 为空时不论动作）与它的参数；add 带 start:true 建好就开工，也算 start
     static func calls(in rounds: [CueRound], _ tool: String, _ actions: Set<String> = []) -> [(call: CueToolCall, args: [String: Any])] {
         rounds.flatMap(\.calls).compactMap { call in
             let args = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any] ?? [:]
@@ -127,8 +115,6 @@ final class CueEval {
         }
     }
 
-    /// 工具参数指的是不是这个会话（判定认"对哪个会话"都经这里）：task 写这件任务（编号前缀或标题）；session 写会话（编号前缀或会话名），
-    /// 也认这件任务的编号前缀或标题（指那件任务在做的会话）。
     static func refers(_ args: [String: Any], to session: String, title: String, cards: [Card]) -> Bool {
         let isCard = { (ref: String) in cards.contains { $0.id.uuidString.lowercased().hasPrefix(ref) || $0.heading.lowercased() == ref } }
         if let ref = (args["task"] as? String)?.lowercased(), !ref.isEmpty { return isCard(ref) }
@@ -143,8 +129,6 @@ final class CueEval {
         return try await rig.store.cueMessages(limit: 2000).filter { $0.createdAt >= from && $0.author != .known(.you) && !$0.text.isEmpty }
     }
 
-    /// 他看得到的字（消息与记下的记忆）没抄信封、工具结果里括号中的编号：每个场景都判。只认库里真有的任务、会话的编号，
-    /// 会话回复里括号中的提交号（"已提交到本地 main（3f9c2ab）"）照抄是该的。
     func showsNoIDs() async throws -> Check {
         let seen = rig.rounds.filter { $0.startedAt >= start }.flatMap { $0.sent + $0.calls.compactMap(\.result) }
         var ids = Set<String>()
@@ -156,7 +140,6 @@ final class CueEval {
         return Check(.tool, "他看得到的字里没有编号", !written.contains { text in ids.contains { text.contains($0) } })
     }
 
-    /// Cue 这一遍（场景里所有轮）note 下的记忆正文只写事情本身：不以日期时刻或「他说」「他问」开头（记下的时间与是不是他的原话另存）。这一遍没 note 的不计。
     func notesArePlain() -> Check {
         let notes = Self.calls(in: rounds, "memory", ["note"]).filter { !$0.call.failed }.compactMap { $0.args["text"] as? String }
         let dated = notes.filter { $0.contains(/^[\s（(\[【]*(?:\d{4}-)?\d{1,2}-\d{1,2}|^\s*\d{1,2}:\d{2}|^\s*他[说问]/) }

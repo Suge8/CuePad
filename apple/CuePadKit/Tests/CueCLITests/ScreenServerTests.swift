@@ -15,10 +15,8 @@ import Testing
     func send(_ input: ScreenInput) { got.withLock { $0.append(input) } }
   }
 
-  /// 页面把一长段字（填充、粘贴）切成最多 400 个字一条送来，一条有一千多字节：整段到来源，它后面的输入照常到。
   @Test func 页面送来的一长段字整段到来源_后面的输入照常到() async throws {
     let source = Source()
-    // 口被占着就换下一个，试几个为止
     var port = UInt16.random(in: 49152...65000), server: ScreenServer?
     for _ in 0..<8 where server == nil {
       port += 1

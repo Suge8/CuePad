@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// UI 与发布各自直接订阅 Store 的同一份纯事实。读取与推进不经过 CueFeed、MainActor 或界面 Observations。
 nonisolated struct CueReading: Sendable {
     struct Read: Equatable, Sendable {
         let digest: CueDigest
@@ -17,7 +16,6 @@ nonisolated struct CueReading: Sendable {
     }
 
     struct ActivityRead: Equatable, Sendable {
-        /// 各台手机的地址，活动的与开岛的都在（`ActivityDestination.isStarter`）。
         let destinations: [ActivityDestination]
         let publisher: String?
     }

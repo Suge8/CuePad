@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 一个窗口只挂一处、整窗一张（iOS 的根、Mac 主窗口的三栏外面，`MainWindow`）：挂在每一栏上时一屏并排几张一模一样的卡。
 struct CatalogGate<Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(Workspace.self) private var workspace

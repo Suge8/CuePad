@@ -30,9 +30,6 @@ nonisolated extension CueNow {
             lingersUntil: finished.max().map { $0.addingTimeInterval(Self.doneWindow) })
     }
 
-    /// 最近开工或开始等你拍板的那一件：手机上的实时活动没了之后，比它没的那一刻更晚开始的才值得远程再开一只（`ActivityPublisher`）。
-    /// 从全量里取、按每个会话这一轮的起点算（`RuntimeTimeline.Work.began`），不读 `items`：那里只列得下几行，一件任务的行又只写最早那个会话的起点。
-    /// Cue 自己的轮不算（多是几秒的收尾）；等子代理的起点随交回变，也不算。
     static func newest(_ digest: CueDigest, at moment: Speech.Moment) -> Item? {
         let started = RuntimeTimeline(digest, at: moment).works.filter { $0.held == 0 && $0.kind == .running }.map { work in
             var item = work.item
@@ -43,7 +40,6 @@ nonisolated extension CueNow {
     }
 
     private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {
-        // 库里没有 Cue 不等于哪台都没启用：还没和 iCloud 对过时写在等什么（同启用入口读的 `CueGate`）
         if presence == .disabled, let waiting = local.waiting { return .away(waiting, failed: false) }
         return switch presence {
         case .disabled, .asleep, .unconfirmed, .unreachable:
@@ -51,7 +47,6 @@ nonisolated extension CueNow {
         case .idle: .idle
         case .sending: .hearing
         case .working:
-            // 这一轮从醒的那一刻算（Cue 自己醒的轮记着），回你话的那一轮从交给它的那一刻算，都没有时从它写下此刻的状态算
             .working(
                 woke: digest.woke?.text, doing: presence.isUsingTool ? presence.progress : nil,
                 since: digest.woke?.at ?? digest.lastYou?.delivered ?? digest.state?.modifiedAt ?? now)
@@ -76,7 +71,6 @@ nonisolated extension CueNow {
         return Item.Kind.allCases.flatMap { kind in (asks + replies + works + done).filter { $0.kind == kind } }
     }
 
-    /// 截到 `itemLimit` 件，先后照旧；放不下时最后一格留给最近刚做完的那件（刚做完排在最后，照截就被截掉，头像与那一句就读不到它）。
     static func limited(_ items: [Item]) -> [Item] {
         guard items.count > itemLimit, let done = items.first(where: { $0.kind == .done }) else { return Array(items.prefix(itemLimit)) }
         return items.filter { $0.kind != .done }.prefix(itemLimit - 1) + [done]

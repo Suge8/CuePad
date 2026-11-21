@@ -7,7 +7,6 @@ extension LoopLayer.Host {
         static let keyTimes: [NSNumber] = [0, 0.32, 0.62, 1]
     }
 
-    /// 飞的那一趟的位移与透明度（位移是相对正中的变换：不播时就停在正中）。层 y 朝下（两端同，`LoopLayer.Host`），右上是 -y。
     static func flightPath(side: CGFloat) -> [CAAnimation] {
         let distance = side * 0.6
         let up = -distance
@@ -24,7 +23,6 @@ extension LoopLayer.Host {
         return [across, rise, fade]
     }
 
-    /// 纸飞机的剪影（只用来做遮罩，颜色由层底色给），按边长与屏幕倍数缓存。用平台的符号图直接画，不起一份 SwiftUI 渲染（发出那一刻就要它）。
     private static var planes: [PlaneKey: CGImage] = [:]
 
     private struct PlaneKey: Hashable {

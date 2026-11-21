@@ -1,7 +1,6 @@
 #if os(macOS)
 import SwiftUI
 
-/// 任务图标接数，不写"任务"二字：图标已经说了。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void

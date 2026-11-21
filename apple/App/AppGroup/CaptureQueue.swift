@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 分享扩展收到的内容。文件（图片也是）是扩展拷到自己临时目录的那份与显示的文件名。
 nonisolated struct ShareContent: Equatable, Sendable {
     struct File: Equatable, Sendable {
         var url: URL
@@ -15,7 +14,6 @@ nonisolated struct ShareContent: Equatable, Sendable {
     var isEmpty: Bool { (text?.isEmpty ?? true) && urls.isEmpty && files.isEmpty }
 }
 
-/// `stored` 是文件在同一目录里的文件名，`name` 是显示的文件名。
 nonisolated struct PendingCapture: Codable, Equatable, Sendable {
     struct File: Codable, Equatable, Sendable {
         var stored: String
@@ -29,10 +27,6 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
     var createdAt: Date
 }
 
-/// 分享扩展与主 App 之间的数据通路：扩展只往容器里的 `Capture/` 放内容，由主 App 入库，
-/// 资料库始终只有主 App 一个写者，主 App 的界面订阅也照常触发。
-/// 每条是一个目录：先放文件，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过，放了 `abandonedAfter` 还没写完的是扩展半路没了，收拾时删掉。
-/// 目录名（UUID）是条目的稳定标识：入库时与建卡同事务记下（`CueStore.createCard(capture:)`），删失败的条目下次只重试删除。
 nonisolated enum CaptureQueue {
     static let notification = "\(AppIdentity.id).capture-enqueued"
 
@@ -60,8 +54,6 @@ nonisolated enum CaptureQueue {
         try encoder.encode(capture).write(to: directory.appending(path: manifestName), options: .atomic)
     }
 
-    /// 一次扫完：读得出的按写下的先后返回；入不了库、也等不到的当场收拾，`unreadable` 是挪走的那几条读不出的原因（调用方报告）。
-    /// 清单读不出（文件坏了、别的版本的格式）的整条挪进旁边的 `unreadableName` 目录，不再每次重试、也不丢；没写完又放太久的删掉。
     static func pending(in queue: URL, now: Date = .now) -> (entries: [Entry], unreadable: [String]) {
         let fileManager = FileManager.default
         let directories = (try? fileManager.contentsOfDirectory(at: queue, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
@@ -91,7 +83,6 @@ nonisolated enum CaptureQueue {
     }
 
     static let unreadableName = "CaptureUnreadable"
-    /// 扩展写一条最多几秒；放一天还没写完的不会再有人写。
     private static let abandonedAfter: TimeInterval = 86_400
 
     static func remove(_ entry: Entry) throws {

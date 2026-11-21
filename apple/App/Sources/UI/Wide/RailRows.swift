@@ -50,14 +50,12 @@ struct RailRow: View {
     }
 }
 
-/// 放在会话条里的都是会话条的一员，不比行首图标重。
 struct RailTool: View {
     let icon: Icon
     let help: LocalizedStringResource
     let action: () -> Void
     @Environment(\.palette) private var palette
 
-    /// 钮的圆比行首那一列宽：一排钮往左让出多出来的一半，图标正在那一列的中线上。
     static var lead: CGFloat { RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2 }
 
     var body: some View {
@@ -72,10 +70,6 @@ struct RailTool: View {
     }
 }
 
-/// 会话条最上的两格：Cue（选中时它铺满会话条之外，`Workspace.goHome`，同手机以 Cue 为根）与进展。两个最常回的去处并排各占一格，不是两行字，
-/// 格里只有一个居中的图形。Cue 那格是它的大头像（不垫圆底：格本身就是它的底；名字在它铺满时的栏头与读屏里），带新消息的点（同收着时右上那颗钮）；
-/// 进展那格是加粗的图标，右上角一个数是几件在推进（`CueNow.Tally.moving`，没有就不画）。选中的那格是浮起的纸，另一格是淡底。
-/// Cue 那格不写"等你 N"：它数的还有 Cue 自己的提问，紧挨着下面只数会话的"等你"组头，两个数对不上。
 struct RailHome: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -115,7 +109,6 @@ struct RailHome: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// 放得下 Cue 的大头像（`CueAvatar.Size.card`）上下各留一档。
     private static let height: CGFloat = 88
     private static let glyph: CGFloat = 30
 }
@@ -133,11 +126,6 @@ private struct TileSurface: ViewModifier {
     }
 }
 
-/// 会话条上的会话：只有等你的常驻在上面（没有就整组不在），其余的收在各自的项目下面——项目一行写它有几个在推进（记号同看板推进中的列头），点开才列出来。
-/// 项目多了只列一部分（`shownProjects`）：有会话在推进的、置顶的、此刻开着的一定在，其余按目录的顺序补到 `projectCap` 个，全部在组头去的总览页。
-/// 否决过：推进中全部列出（十几行、每行一种状态标，读不过来，看板与 Cue 已经有同一份）；下面的空处填最近结束的会话（栏一直是满的，眼睛没处歇）。
-/// 点项目那一行去它的页并展开；开合只在行尾那个箭头（`RailFold`），点它不换页。展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
-/// 否决过：再点一次选中的行收起（同一行两个意思，箭头看着能点却和点行一样）。
 struct RailSessions: View {
     let data: SessionRailData
     let marked: Set<String>
@@ -149,7 +137,6 @@ struct RailSessions: View {
 
     private var expanded: Set<UUID> { services.settings.railOpenProjects }
 
-    /// 回收站里的项目不留在记着的那一份里。
     private func expand(_ change: (inout Set<UUID>) -> Void) {
         var open = expanded
         change(&open)
@@ -185,11 +172,9 @@ struct RailSessions: View {
         }
         .scrollIndicators(.hidden)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        // 从别处（搜索、看板、Cue 的链接）进了一个项目，它在会话条里也跟着展开：选中的那一行下面就是它的会话。之后收不收由你，不再替你开
         .onChange(of: workspace.mainRoute) { _, route in
             if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
         }
-        // 从别处开了一个会话也一样：它的项目收着，会话条上就没有一行是选中的，看不出人在哪。等你的那几张常驻在上面，不用开
         .onChange(of: marked) { old, new in
             let opened = new.subtracting(old).subtracting(SessionRailRows(data, pulse: workspace.pulse).waiting.map(\.id))
             guard !opened.isEmpty else { return }
@@ -203,7 +188,6 @@ struct RailSessions: View {
         }
     }
 
-    /// 等你的卡是会话条上唯一要你动手的：来的时候从上面浮出来（余光看得到有东西来了），走的时候先淡完，不压住正往上让的那几行。
     private func cell(_ item: SessionRailRows.Item) -> some View {
         SessionRailCell(item: item, selected: marked.contains(item.id), open: open)
             .transition(.asymmetric(insertion: Motion.surface(from: .top, reduceMotion: reduceMotion), removal: .opacity.animation(Motion.yield)))
@@ -236,8 +220,6 @@ struct RailSessions: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// 组头就是去项目总览页的那一行，悬停、选中同别的行。行尾只写个数，不画向右的箭头：下面每个项目的开合也是箭头，
-    /// 同一个图形在相邻两行一个是"进去"、一个是"展开"，看着像这一组能折起来。
     private var projectsHeader: some View {
         let selected = workspace.mainRoute == .shelf && !workspace.cueHome
         return Button { workspace.selectPane(.projects) } label: {
@@ -267,7 +249,6 @@ struct RailSessions: View {
 }
 
 extension View {
-    /// 数只读 `CueNow.Tally`（同 Cue 的名牌与 App 图标的角标，不另算）。会话条露着时等你那一组就在眼前，不画。
     func railWaitingDot(hidden railHidden: Bool) -> some View { modifier(RailWaitingDot(railHidden: railHidden)) }
 }
 
@@ -277,7 +258,6 @@ private struct RailWaitingDot: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 点压在圆的右上角外沿上（圆心约在圆框的内切点）。
     private static let shift: CGFloat = Spacing.hair
 
     func body(content: Content) -> some View {

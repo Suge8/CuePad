@@ -2,7 +2,6 @@ import CueStore
 import CueText
 
 extension CuePrompt {
-  /// 输入是 `dreamInput`。找反复交代的做法不放在 Cue 的轮里：那里只看得到手头这一个会话，查别的会话要占它的一轮与常驻提示。他答了由 Cue 记：重点只归 Cue 写。
   public static func dream(runtime: AgentKind) -> String {
     func name(_ tool: CueTools.DreamTool) -> String { CueMCPServer.toolName(tool.rawValue, on: runtime) }
     let (merge, said, ask) = (name(.merge), name(.said), name(.ask))
@@ -20,8 +19,6 @@ extension CuePrompt {
       """
   }
 
-  /// 交给它的输入：待合并的块（`CueMemoryView.mergeText`），与他在会话里新说的一批话（`said`，没有就不带后面三块）、
-  /// 已是重点的、问过他的（`asked`，`CueStore.cueHabitQuestions`）；都没有为 nil。
   public static func dreamInput(_ view: CueMemoryView, said: [CueRecall.Reply] = [], asked: [CueMessage] = []) -> String? {
     var blocks = view.mergeText.map { ["<merge>\n\($0)\n</merge>"] } ?? []
     if !said.isEmpty {
@@ -38,7 +35,6 @@ extension CuePrompt {
     return blocks.isEmpty ? nil : blocks.joined(separator: "\n\n")
   }
 
-  /// 他的一句话最多给这么多字：超了留头尾各一半、截掉中间。交代做法的话多在一段话的开头或结尾，中间多是贴的日志与代码。
   static let saidLimit = 600
 
   private static func utterance(_ text: String) -> String {

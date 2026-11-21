@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 命令行的失败：`kind.rawValue` 是 `--json` 时 stderr 里的稳定错误码；用法错误退出码 2，其余 1。
 struct CLIError: Error {
   enum Kind: String {
     case usage, notFound = "not_found", ambiguous, invalid, noLibrary = "no_library", readOnly = "read_only", store

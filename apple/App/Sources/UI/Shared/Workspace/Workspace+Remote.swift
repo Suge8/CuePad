@@ -2,13 +2,11 @@ import CueStore
 import Foundation
 
 extension Workspace {
-    /// `sessionID` 给了是要到那台 Mac 上看这个会话的活预览（预览里连不上 Mac 时那颗"在 Mac 上操作"，`viewOnMac`）。
     func operate(on host: String, viewing sessionID: String? = nil) async {
         services.settings.remoteLastHost = host
         if let device = services.settings.remoteDevices[host] { await control(device, host: host, viewing: sessionID) } else { await bind(host, viewing: sessionID) }
     }
 
-    /// 还没连过时返回这几台，由界面先选一台。
     func operateMac() async -> [MacAgents]? {
         let macs: [MacAgents]
         do { macs = try await services.store.allMacAgents() } catch {
@@ -35,20 +33,16 @@ extension Workspace {
         await launch(MacRemote.authorize(nonce: nonce))
     }
 
-    /// 远控这台 Mac。要看的是某个会话的活预览时：拉起前先请 Mac 把它铺满亮出来（`LiveRemote.show`，最多等 `showWait`，发不出不拦），
-    /// 回到 CuePad 时请它放回去（`LiveRemote.comeBack`）。
     private func control(_ device: String, host: String, viewing sessionID: String? = nil) async {
         #if os(iOS)
         if let sessionID { await services.liveRemote.show(sessionID, on: host) }
         let launched = await launch(MacRemote.control(device, host: host))
-        // 没拉起来（UU 卸了）人还在这里：这就请它放回去
         if !launched, sessionID != nil { await services.liveRemote.comeBack() }
         #else
         await launch(MacRemote.control(device, host: host))
         #endif
     }
 
-    /// 拉起 UU 远程；打不开就是没装，提示去 App Store。
     @discardableResult private func launch(_ url: URL) async -> Bool {
         guard await !apps.open(url) else { return true }
         say("先装网易 UU 远程，并在 Mac 上也装好、登录同一个账号", tone: .gone, action: NoticeAction(title: String(localized: "去 App Store")) {

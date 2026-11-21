@@ -1,6 +1,5 @@
 import Foundation
 
-/// 实时活动取证那一份文件（`DiagnosticArchive.activity`）只经这里改：读、追加、写回串行，同时到的两条不互相覆盖。
 actor ActivityDiagnosticRecorder {
     private let archive: DiagnosticArchive
 

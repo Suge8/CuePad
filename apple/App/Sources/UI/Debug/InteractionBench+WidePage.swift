@@ -9,10 +9,7 @@ import AppKit
 struct WidePage {
     private let views: [WideSlot: [ObjectIdentifier]]
     private let readings: [Reading]
-    /// 验不了的，按滚动视图算：每个能滚 `minimumTravel` 的滚动视图都要有一条读数，没有的记成"栏#序号:为什么"——序号是这一栏全部滚动视图（`scrolls`，含滚不到的）从左数的下标，从 0 起，同基线里 `scrolls`、`short` 的序号
-    /// （没到中段、中段没认出一条）；一栏里一个能滚的都没有记成"栏:没有能滚的"。有一条就不算通过：同一栏里读到了一列，别的列漏验照样记在这里。
     let untested: [String]
-    /// 基线时逐栏读到的：各滚动视图能滚多远、中段那个离两端多远、报了位置的条目有多少落在它的可视区里（读不到中段那一条时看缺在哪）。
     let baseline: [[String: Any]]
 
     private struct Reading {
@@ -25,23 +22,12 @@ struct WidePage {
         let visible: CGRect
     }
 
-    /// 验不了不是通过：`perf.py` 在大库上把它判失败（大库的列与对话都长到能滚，就是为验这一条）。
     enum Verdict: String { case ok, untested, broken }
 
-    /// 动作之后每一条读数为什么是那个判定，按先后只取第一条：
-    /// - `scrollGone`：动作前那个滚动视图不在了（页被重建）；
-    /// - `atEnd`：滚动视图被滚回顶或底；
-    /// - `cardGone`：动作前正中那张卡不在可视区里了——不论是滚走了还是卡本身离开了这一列（列变空那一下推进中那张卡走了），都判没保住，
-    ///   找不到不当成保住：要验的列里那张卡就不该被这一下挪走，挪走的卡只能在不验的列里（`InteractionBench+Board`）；
-    /// - `kept`：还在眼前（藏起的 Cue 那一块不比，也记作它）。
-    /// 正中那张卡在动作之前取（`init`，在 `step` 发出动作之前建这一份）。
     enum Reason: String { case kept, scrollGone, atEnd, cardGone }
 
-    /// 滚到中段的那个滚动视图至少要能滚这么远：离两端各留出一截，滚回一端看得出来。
     private static let minimumTravel: CGFloat = 200
 
-    /// 各块里每个能滚的滚动视图都滚到中段，像用户那样：先发开始实时滚动的通知（同 `ChatScrollBench` 的 direct），等两帧滚动区认出"用户在滚"再挪，
-    /// 再等两帧、滚动区按这次滚动读过数才发结束的通知。挪与通知同在一拍里的话，读数到时还算没在滚，贴着最新的对话会被滚回最新处。
     static func scrollToMiddle(_ columns: [WideColumnView]) async {
         for scroll in columns.flatMap(scrollables) {
             guard let document = scroll.documentView else { continue }
@@ -55,7 +41,6 @@ struct WidePage {
             await NextFrame.wait()
             NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
         }
-        // 滚到的那一截要几帧才排成真的（对话离屏的段是空白，`ChatSegments`），排好了才报位置：等到每栏都认得出一条，最多 `settleFrames` 帧
         func settled() -> Bool { columns.allSatisfy { column in scrollables(in: column).allSatisfy { !items(in: column, shownBy: $0).isEmpty } } }
         for _ in 0..<settleFrames {
             if settled() { return }
@@ -80,7 +65,6 @@ struct WidePage {
 
     private static let nudges = 6
 
-    /// 滚到中段后等条目报位置最多等几帧（约 2 秒）：到了还认不出，那一栏记作验不了。
     private static let settleFrames = 120
 
     init(_ columns: [WideColumnView]) {
@@ -91,11 +75,9 @@ struct WidePage {
                 "column": "\(column.slot)", "scrolls": Self.scrolls(in: column).map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
                 "spots": InteractionBench.rows.count, "shown": scrolls.map { Self.items(in: column, shownBy: $0).count },
                 "ends": scrolls.compactMap(Self.ends).map { [Self.round($0.top), Self.round($0.bottom)] },
-                // 滚不到 `minimumTravel` 的（列短、一屏放得下）：没有阅读位置可验，不算漏验，只列出来（能滚多远）
                 "short": Self.scrolls(in: column).enumerated().filter { !Self.isScrollable($0.element) }.map { "#\($0.offset):\(Self.round(($0.element.documentView?.frame.height ?? 0) - $0.element.contentView.bounds.height))" },
             ]
         }
-        // 每个能滚的滚动视图要么有一条读数，要么记进验不了（连同第几个、为什么）：不让同一栏里读到了的那一列盖住漏验的那一列
         var readings: [Reading] = [], untested: [String] = []
         for column in columns {
             let all = Self.scrolls(in: column)
@@ -117,12 +99,8 @@ struct WidePage {
         self.untested = untested
     }
 
-    /// 跨阈值之后的样子比起这份：对象换了或任一条读数没保住是 broken；都保住了但有滚动视图验不了是 untested，不算通过（整项按最差的那一条）。逐栏的明细给测量行：
-    /// 离两端的距离、那一条离可视区正中多远、它报的框与可视区（跨阈值前后；看不见了为空）。
-    /// 收起的 Cue 只是藏起、一直挂着（`MainWindow`）：藏着的那一块不比对象也不读位置（记作 kept），露出来的那一下再比。
     func compare(_ columns: [WideColumnView]) -> (verdict: Verdict, detail: [[String: Any]]) {
         let hidden = Set(columns.filter(\.isHidden).map(\.slot))
-        // 原来的对象都还在就是没重建；宽了多露出一块（如对话下面放得下了的一排）不算
         let swapped = columns.filter { column in !hidden.contains(column.slot) && !Set(views[column.slot] ?? []).isSubset(of: Self.objects(in: column)) }
         let changed = !swapped.isEmpty
         let detail = readings.map { reading -> [String: Any] in
@@ -144,7 +122,6 @@ struct WidePage {
         }
         let verdicts = detail.compactMap { $0["verdict"] as? String }.compactMap(Verdict.init)
         if changed || verdicts.contains(.broken) {
-            // 对象换了的那一块：列出它此刻的滚动视图（原来就有的 same、新出现或换了的 new），看是页被重建还是多出一块
             let objects = swapped.map { column -> [String: Any] in
                 ["column": "\(column.slot)", "swapped": Self.scrolls(in: column).map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height)) \(views[column.slot]?.contains(ObjectIdentifier($0)) == true ? "same" : "new")" },
                  "before": views[column.slot]?.count ?? 0]
@@ -172,7 +149,6 @@ struct WidePage {
             } ?? []
             return own + view.subviews.flatMap(visit)
         }
-        // 按在窗口里从左到右排（左沿一样的按视图树里的先后）：漏验、基线与列宽都用这一套序号
         return visit(column).enumerated()
             .sorted { (visible($0.element, in: column).minX, $0.offset) < (visible($1.element, in: column).minX, $1.offset) }
             .map(\.element)

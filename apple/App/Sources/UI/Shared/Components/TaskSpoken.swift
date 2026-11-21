@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 值是状态（文案见 `TaskSpeech`），默认动作勾选（与圈同一个动作）。`aside`：标签末尾再念的一句；`more`：调用处多给的动作。
     func taskSpoken(
         _ task: Card, title: String, subtasks: TaskProgress?, next: TaskNext?, aside: String? = nil, check: Binding<TaskCheck>, open: @escaping () -> Void, follow: @escaping () -> Void,
         @ViewBuilder more: () -> some View = { EmptyView() }
@@ -13,7 +12,6 @@ extension View {
 
 private struct TaskSpoken<More: View>: ViewModifier {
     let task: Card
-    /// 卡上写的名字（标题为空时是绑着的会话名，`Card.title(session:)`）：念的与看的同一个。
     let title: String
     let subtasks: TaskProgress?
     let next: TaskNext?

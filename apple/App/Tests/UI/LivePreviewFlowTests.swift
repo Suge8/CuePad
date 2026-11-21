@@ -22,14 +22,12 @@ struct LivePreviewFlowTests {
 
     func id(_ sessionID: String) -> UUID { SessionState.recordID(sessionID: sessionID) }
 
-    /// 同 `cuepad live`：命令行只往资料库写这一条，App 读到了再处理。
     func live(_ address: String, for sessionID: String) async throws -> URL {
         let url = try #require(URL(string: address))
         try await store.sendLive(url, to: sessionID, found: false)
         return url
     }
 
-    /// 本机这台上的一个会话：状态记录与带工作目录的索引（认服务按目录归属时读它）。
     func session(_ sessionID: String, _ state: WorkState, in directory: URL) async throws -> SessionState {
         let recorder = try await rig.runtimeRecorder(on: services.hostID)
         try await recorder.update(sessionID: sessionID, state: state, title: sessionID)
@@ -39,8 +37,6 @@ struct LivePreviewFlowTests {
         return try #require(try await store.sessionState(sessionID))
     }
 
-    /// 在这个目录里起一个本机网页服务（Python 自带的目录页，回 HTML），返回它和它的地址。`session` 是起它的那个会话（Agent 给命令带的环境变量），
-    /// 不给就是你自己在终端里起的：跑测试的这个进程自己可能就在某个 Agent 会话里，它带着的会话 id 不传下去。
     func serve(in directory: URL, session: String? = nil, bind: String = "127.0.0.1", port: Int = 0) async throws -> (Process, URL) {
         let server = Process()
         server.executableURL = URL(filePath: "/usr/bin/python3")
@@ -52,7 +48,6 @@ struct LivePreviewFlowTests {
         let out = Pipe()
         server.standardOutput = out
         try server.run()
-        // 起来时打印一行 "Serving HTTP on 127.0.0.1 port 54321 …"
         var port: Int?
         for try await line in out.fileHandleForReading.bytes.lines {
             port = line.split(separator: " ").drop { $0 != "port" }.dropFirst().first.flatMap { Int($0) }
@@ -119,7 +114,6 @@ struct LivePreviewFlowTests {
         let project = try folder()
         let mine = try await session("mine", .settled, in: project)
         _ = try await session("other", .settled, in: project)
-        // 跑测试的这个进程当另一个会话的 Agent：它起的服务没带会话 id，靠进程树认
         let recorder = try await rig.runtimeRecorder(on: services.hostID)
         try await recorder.update(sessionID: "other", state: .settled, title: "other", process: SessionProcess.running(pid: getpid()))
         let (server, url) = try await serve(in: project)
@@ -171,7 +165,6 @@ struct LivePreviewFlowTests {
         #expect(workspace.session(in: .beside(0))?.id == id("c"))
     }
 
-    /// 本机的一页：登录表单（点"登录"把报错写在页上、控制台报一条）、去第二页的链接；第二页同一处是"删除账号"。
     private func site() throws -> URL {
         let directory = try folder()
         try """
@@ -188,18 +181,15 @@ struct LivePreviewFlowTests {
         return directory
     }
 
-    /// 同 `cuepad live <动词>`：命令行把这一条经套接字交给 App，App 从这里接手。
     func agent(_ workspace: Workspace, _ op: String, _ args: LiveChannel.Args = .init(), as sessionID: String = "a") async -> LiveChannel.Reply {
         await workspace.answerLive(.init(session: sessionID, op: op, args: args))
     }
 
-    /// 快照里这一行的引用（`- button "登录" [ref=a3]`）。
     func ref(_ line: String, in snapshot: String) throws -> String {
         let row = try #require(snapshot.split(separator: "\n").first { $0.contains(line) }, "快照里没有 \(line)：\n\(snapshot)")
         return try #require(row.firstMatch(of: /\[ref=(\w+)\]/)).1.description
     }
 
-    /// Agent 用 `cuepad live` 给了地址、会话 a 不在主区：预览在后台建好并载入。
     func backgroundPage(_ workspace: Workspace) async throws -> (Process, URL) {
         let (server, url) = try await serve(in: try site())
         open("b", workspace)
@@ -296,7 +286,6 @@ struct LivePreviewFlowTests {
         let (server, _) = try await backgroundPage(workspace)
         defer { server.terminate() }
         let preview = try #require(workspace.livePreviews[id("a")])
-        // 替身：页面自己跳去了外网的登录（OAuth），不真的联网
         let away = try #require(URL(string: "https://accounts.example.com/oauth"))
         preview.web.loadHTMLString("<!doctype html><title>授权</title><button>允许</button>", baseURL: away)
         try await eventually("页面到了外网地址") { preview.web.url == away && !preview.web.isLoading && preview.web.title == "授权" }

@@ -2,9 +2,6 @@
 import Darwin
 import Foundation
 
-/// `cuepad live snapshot|click|…` 与开着这份库的 App 之间的一问一答：库目录下的 Unix 套接字 `live.sock`，文件 0600、只有本用户连得上，不过网络。
-/// 一条连接一问一答：请求是一行 JSON，应答是一份 JSON、写完就关。客户端写完请求不半关：服务端之后读到 EOF 就是对方走了（Ctrl-C、超时、被杀），
-/// 在做的那一件随之取消。没用资料库的请求-应答（`outcome(of:)` 那条）：快照是一次性的大块临时数据，进会同步的库要加表，沙箱里的 Agent 还写不了库。
 public enum LiveChannel {
   /// 库目录下的 `live.sock`；`sun_path` 只有 104 字节，目录太深（测试的临时库）放不下时换到本用户的临时目录（`confstr`，不随环境变量 TMPDIR 变），
   /// 文件名带库路径的散列。命令行与 App 各自算出同一个。
@@ -32,7 +29,6 @@ public enum LiveChannel {
     }
   }
 
-  /// 各动词的参数并在一处：每个动词只用其中几个（`cuepad live <动词> --help`）。
   public struct Args: Codable, Sendable, Equatable {
     public var ref: String?
     public var text: String?
@@ -55,7 +51,6 @@ public enum LiveChannel {
     }
   }
 
-  /// `upload` 的一个文件：命令行在自己的进程里读出内容交过来，App 不按路径替它读（沙箱里读不到的，借 App 的权限也拿不到）。
   public struct Upload: Codable, Sendable, Equatable {
     public var name: String
     public var data: Data
@@ -63,17 +58,13 @@ public enum LiveChannel {
     public init(name: String, data: Data) { (self.name, self.data) = (name, data) }
   }
 
-  /// 一次 `upload` 交的文件合计上限：内容随请求走（base64 后约 4/3），请求读到 `requestLimit` 为止。
   public static let uploadLimit = 32_000_000
   static let requestLimit = 48_000_000
 
   public struct Reply: Codable, Sendable, Equatable {
-    /// 给 Agent 读的全文；失败时是那句报错。
     public var text: String
     public var failed: Bool
-    /// `--json` 时与 `text` 一起给出的字段（只有几个动词有）。
     public var info: Info?
-    /// 截图的 PNG：由命令行在自己的进程里写盘（沙箱里的 Agent 不借 App 的权限往沙箱外写文件）。
     public var file: Data?
 
     public static func done(_ text: String, _ info: Info? = nil, file: Data? = nil) -> Reply { Reply(text: text, failed: false, info: info, file: file) }
@@ -93,16 +84,13 @@ public enum LiveChannel {
   }
 
   public enum Failure: Error, Equatable {
-    /// 没人在听这个套接字（文件不在、或留下的是崩溃前的）。
     case notListening
     /// 不让连：命令跑在沙箱里（Codex 的 workspace-write 实测 connect 回 EPERM）。
     case sandboxed
-    /// `timeout` 内没读到应答。
     case timedOut
     case broken(String)
   }
 
-  /// 发一条请求、读回应答；`timeout` 内没读完是 `timedOut`，连接随之关掉，App 那边在做的那一件跟着取消。
   public static func ask(_ request: Request, path: String, timeout: Duration) throws(Failure) -> Reply {
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { throw .broken("socket: \(String(cString: strerror(errno)))") }
@@ -129,8 +117,6 @@ public enum LiveChannel {
     do { return try JSONDecoder().decode(Reply.self, from: data) } catch { throw .broken("应答读不懂（\(data.count) 字节）") }
   }
 
-  /// 在 `path` 上听，直到对象释放。每条请求先过 `admit`（会话只操作自己的预览），过了才交给 `handle`；被拒的不进 `handle`。
-  /// `handle` 在对方断开时被取消（任务取消），要在挂起点上看取消。
   public final class Server: Sendable {
     private let fd: Int32
     private let path: String
@@ -144,7 +130,6 @@ public enum LiveChannel {
       let bound = withUnsafePointer(to: &address) {
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(listening, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
       }
-      // 先改权限再 listen：listen 之前谁也连不上，改权限之前那一刻没有空子
       guard bound == 0, chmod(path, 0o600) == 0, listen(listening, 32) == 0 else {
         let reason = String(cString: strerror(errno))
         close(listening)
@@ -196,8 +181,6 @@ public enum LiveChannel {
     _ = writeAll(client, data)
   }
 
-  /// 会话只操作自己的预览：会话号是 Agent 给命令带的环境变量（同 `show`）；这个会话有在跑的 Agent 进程时，连进来的必须是它的后代。
-  /// 终端里自开、没记着进程的会话只能按会话号放行。
   static func admit(_ request: Request, peer: pid_t?, store: CueStore) async -> String? {
     guard !request.session.isEmpty else { return "请求里没有会话" }
     let owner: LiveServers.Owner
@@ -217,7 +200,6 @@ public enum LiveChannel {
 
   private enum Read { case success(Request), failure(String) }
 
-  /// 一行请求：客户端连上就写，5 秒没写完的不等。
   @concurrent private static func readRequest(_ fd: Int32) async -> Read {
     limit(fd, SO_RCVTIMEO, .seconds(5))
     var data = Data()
@@ -234,7 +216,6 @@ public enum LiveChannel {
     return .success(request)
   }
 
-  /// 请求之后对方不再写：一有可读就是断开了。
   private static func watchHangup(_ fd: Int32, _ gone: @escaping @Sendable () -> Void) -> any DispatchSourceRead {
     let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .global())
     source.setEventHandler {

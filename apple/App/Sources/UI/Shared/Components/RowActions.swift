@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 赭黄只给"等你确认"，不在这里。
 enum ActionTone: Sendable {
     case primary, neutral, quiet, destructive
 
@@ -21,7 +20,6 @@ struct RowAction {
     let title: LocalizedStringResource
     let icon: Icon
     let tone: ActionTone
-    /// 此刻做不了（如 Mac 够不着时改名）：照样列出，置灰；不直接消失，用户才知道有这件事。
     let enabled: Bool
     let run: () -> Void
 
@@ -39,13 +37,11 @@ extension View {
     func menuIcons() -> some View { labelStyle(.titleAndIcon) }
 }
 
-/// 排在前面的在最外侧，一滑到底执行它。
 struct RowSwipes {
     var leading: [RowAction] = []
     var trailing: [RowAction] = []
 }
 
-/// 按位置加标题区分，同一边就算有两个同名动作也各是各的。
 struct RowActionButtons: View {
     let actions: [RowAction]
     var tinted = false
@@ -73,8 +69,6 @@ extension View {
         modifier(ListSwipes(swipes: swipes))
     }
 
-    /// 只认慢慢拖开：快甩、贴着屏幕两边起手是返回（`HorizontalPan`），在行上也照样返回。
-    /// `clipped`：滑开的内容裁在行内（拼在一张纸里的行）；单独的一张卡整张移开，不裁。
     func rowSwipes(_ swipes: RowSwipes, clipped: Bool = true) -> some View {
         modifier(SwipeRow(swipes: swipes, clipped: clipped))
     }
@@ -110,7 +104,6 @@ private struct SwipeRow: ViewModifier {
     private static let pill = CGSize(width: 56, height: 38)
     private static let resistance: CGFloat = 12
     private static let labelHeight: CGFloat = 72
-    /// 开始那一刻横向快过这个（点/秒）算快甩：是要返回，不是要露出行的动作（慢慢拖开、看着按钮出来）。
     private static let flick: CGFloat = 600
 
     private var side: [RowAction] { offset > 0 ? swipes.leading : offset < 0 ? swipes.trailing : [] }
@@ -121,7 +114,6 @@ private struct SwipeRow: ViewModifier {
 
     func body(content: Content) -> some View {
         let moved = content
-            // 停开时点行本身只是收回，不打开它
             .overlay { if rest != 0 { Color.clear.contentShape(.rect).onTapGesture { settle(0) }.transition(.identity) } }
             .offset(x: offset)
             .background(alignment: offset > 0 ? .leading : .trailing) { if !side.isEmpty { buttons } }
@@ -170,7 +162,6 @@ private struct SwipeRow: ViewModifier {
         .readerHidden(true)
     }
 
-    /// 这一拖归不归这一行（`velocity` 是开始那一刻的横向速度）：停开着时都归它（拖回去收起）；否则要慢拖、那个方向有动作，快甩让给页上的横拖。
     private func claims(_ velocity: CGFloat) -> Bool {
         rest != 0 || abs(velocity) < Self.flick && !(velocity > 0 ? swipes.leading : swipes.trailing).isEmpty
     }
@@ -182,7 +173,6 @@ private struct SwipeRow: ViewModifier {
         offset = actions.isEmpty ? min(abs(raw) * 0.15, Self.resistance) * (raw < 0 ? -1 : 1) : max(-size.width, min(raw, size.width))
     }
 
-    /// `commits`：手指正常松开；系统取消手势（来电、被别的手势接走）时回到开始的位置。松手时按甩出的方向估落点：过半停开，否则收回。
     private func end(commits: Bool, velocity: CGFloat) {
         guard commits else { return settle(rest) }
         if armed, let first = side.first { return run(first) }

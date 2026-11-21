@@ -34,10 +34,8 @@ nonisolated struct PaletteQuery: Equatable {
     var withAttachments = false { didSet { pages = 1 } }
     var period: Period = .any { didSet { pages = 1 } }
     var pages = 1
-    /// 只看会话（`kind == .sessions`）时才分页；别的时候会话那一节只列头 `sessionPeek` 个。
     var sessionPages = 1
 
-    /// 卡片结果看的那部分：会话页数不算，会话范围点"显示更多"不重读卡片、卡片列表也不回顶。
     var cards: PaletteQuery {
         var cards = self
         cards.sessionPages = 1
@@ -49,14 +47,11 @@ nonisolated struct PaletteQuery: Equatable {
 
     var isFiltered: Bool { kind != .all || project != nil || withAttachments || period != .any }
 
-    /// 没打字也没设条件：什么都不列，只给几类建议（`SearchSuggestions`），不把全库倒出来。
     var isIdle: Bool { text.trimmingCharacters(in: .whitespaces).isEmpty && !isFiltered }
 
-    /// 项目管得到会话；含附件、时间是灵感与任务才有的条件，设了它们会话那一节不列（列出来就是没筛过的）。
     var listsSessions: Bool { !isIdle && (kind == .all || kind == .sessions) && !withAttachments && period == .any }
     var listsCards: Bool { !isIdle && kind != .sessions }
 
-    /// 已结束的会话读几条：只看会话时分页，别的时候只为凑满 `sessionPeek`。
     var endedLimit: Int { kind == .sessions ? SessionListData.pageSize * sessionPages : Self.sessionPeek }
 
     func projectLabel(in projects: [Project]) -> String {
@@ -73,7 +68,6 @@ nonisolated struct PaletteQuery: Equatable {
     }
 }
 
-/// 摘要在 Store 执行体上算好（`CardEntry`），渲染时不解析正文；项目名与图标从 `Workspace.catalog` 读，这里不另存一份。
 nonisolated struct CardMatches: Sendable, Equatable {
     var groups: [CardGroup]
     var total: Int
@@ -97,14 +91,12 @@ nonisolated struct CardGroup: Identifiable, Equatable, Sendable {
     }
 }
 
-/// 同一个项目的排在一段（搜索结果、归档、回收站）。
 nonisolated struct ProjectRun<Item: Sendable & Equatable>: Identifiable, Sendable, Equatable {
     let id: UUID
     var items: [Item]
 }
 
 nonisolated extension Array where Element: Sendable & Equatable {
-    /// 段的次序是各项目头一条出现的次序：列表按时间倒排时，最近动过的项目在前，段里仍按时间。
     func runs(by project: (Element) -> UUID) -> [ProjectRun<Element>] {
         var runs: [ProjectRun<Element>] = []
         var index: [UUID: Int] = [:]

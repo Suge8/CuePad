@@ -3,16 +3,12 @@ import Foundation
 nonisolated enum DeepLink: Equatable, Sendable {
     static let scheme = "cuepad"
 
-    /// 打开 Cue 页，"对 Cue 说"拿到焦点（随手记也在那里说）。
     case speak
     case project(UUID)
     case card(UUID)
     case cue
-    /// 打开一个会话（会话状态记录的 id，`SessionState.id`）：实时活动里会话在问的那件"打开"。
     case session(UUID)
-    /// 网易 UU 远程绑定完回跳（`MacRemote`）：选好的电脑的加密标识，或失败的错误码；`nonce` 认是哪一次绑定。
     case remoteBound(device: String?, error: String?, nonce: String?)
-    /// 网易 UU 远程远控失败回跳（`MacRemote.control`）：哪台 Mac、什么原因；成功的回跳不认（没什么要做）。
     case remoteFailed(host: String?, reason: String)
 
     init?(url: URL) {

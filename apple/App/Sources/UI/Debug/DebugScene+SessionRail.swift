@@ -19,7 +19,6 @@ struct DebugSessionRail: View {
     var body: some View {
         Group {
             if form == .phone {
-                // 手机的会话条要整屏那么宽：展开的面板从左缘的胶囊长出来，铺到屏幕右边；说明叠在右上
                 rail.frame(height: 650).overlay(alignment: .topTrailing) { notes.fixedSize().padding(.trailing, 16) }
             } else {
                 HStack(alignment: .top, spacing: 16) {

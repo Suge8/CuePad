@@ -9,8 +9,6 @@ extension RelayFlight {
         private static let head: CGFloat = 8
         private static let ring: CGFloat = 11
         private static let glide = CAMediaTimingFunction(controlPoints: 0.4, 0, 0.22, 1)
-        /// 飞向头像的光（叫醒、发出）飞多久、飞到哪一成算到点：固定，到点时刻才能由起点推出（`CueWatch` 照它让小人醒，不等这里回报）。
-        /// 到点就是路径终点，不随两端距离改变时长。
         private static let inboundFlight = 0.9
         private static let inboundArrive = 1.0
         static let inboundArrival = inboundFlight
@@ -23,7 +21,6 @@ extension RelayFlight {
         private static let halo: CGFloat = 11
         private static let lit = 0.6
         private static let touch: CGFloat = 4
-        /// 点亮时从几倍的点收到原大：再大就越出头像的框，读成头像外又一个东西。
         private static let litGrowth = 1.2
         private static let easeOut = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
 
@@ -59,7 +56,6 @@ extension RelayFlight {
             }
         }
 
-        /// 否决过：按整段时长的固定几成（0.92）算到点——曲线先快后慢，光头早早就贴到落点、在那里淡着挪，按时长算的那一刻已晚约 0.2s，读成两件事。
         func fly(from start: CGPoint, to end: CGPoint, head: Head, delay: Double, launches: Bool = false, inbound: Bool = false) -> Double {
             let length = RelayFlight.distance(start, end)
             let mid = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
@@ -72,7 +68,6 @@ extension RelayFlight {
             path.move(to: start)
             path.addQuadCurve(to: end, control: control)
             let duration = inbound ? Self.inboundFlight : min(Self.flight.lowerBound + Double(length) / Self.pointsPerSecond, Self.flight.upperBound)
-            // 二次曲线的弧长：弦与控制折线的平均，差不到一成
             let arc = (length + RelayFlight.distance(start, control) + RelayFlight.distance(control, end)) / 2
             let arrive = inbound ? Self.inboundArrive : max(0.5, 1 - Double(Self.touch / max(arc, 1)))
             streak(path, head: head, delay: delay, duration: duration, timing: Self.glide, arrive: arrive, launches: launches)
@@ -181,7 +176,6 @@ extension RelayFlight {
             light(dot: point, avatar: avatar, delay: delay + arrival)
         }
 
-        /// 不带光晕、不在头像外画环、不外扩（头像外的环读成加载进度，否决过）：整个落在头像的框里。
         func light(dot point: CGPoint, avatar: CGRect, delay: Double) {
             let radius = CueFaceMarks.dotSide(min(avatar.width, avatar.height)) / 2
             animate(circle(at: point, radius: radius, fill: 1), delay: delay, duration: Self.lit, [
@@ -248,7 +242,6 @@ extension RelayFlight {
     }
 }
 
-/// 动画真的开始（过了 `beginTime`、渲染服务开播）时回调一次：落点那圈环的开始就是光落下的那一刻。
 private final class Started: NSObject, CAAnimationDelegate {
     private let run: @MainActor () -> Void
 

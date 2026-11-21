@@ -17,7 +17,6 @@ nonisolated struct TaskDrop: Equatable, Sendable {
     var mark: Mark
 }
 
-/// 任务最多几级只在 `Card.maxTaskDepth`。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
         var task: Card
@@ -28,13 +27,11 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var links = Links([])
     private var tasks: [UUID: Card] = [:]
     private var order: [Card] = []
-    /// 层级限制按库里的整棵树算（含已完成、不显示的子任务）：与 Store 写入时的校验同一口径。
     private var everything: [Card] = []
     private var structure = Links([])
 
     private static let deepest = Card.maxTaskDepth - 1
 
-    /// `ordered` 是要显示的任务（同级手动顺序）；`all` 是同一范围里库中的全部任务（含已完成），省略时同 `ordered`。
     init(_ ordered: [Card], all: [Card]? = nil) {
         order = ordered
         everything = all ?? ordered
@@ -68,7 +65,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return rows
     }
 
-    /// 成为上一个同级的最后一个子任务；没有上一个同级、或整棵子树会超过最深一级时为 nil。
     func indent(_ id: UUID) -> TaskMove? {
         let siblings = parents[id].map(children(of:)) ?? roots
         guard let index = siblings.firstIndex(of: id), index > 0 else { return nil }
@@ -82,7 +78,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return TaskMove(slot: slot(under: parents[parent], project: project(of: parent)), after: parent)
     }
 
-    /// 不能落进自己的子树；与原位置相同时为 nil。
     func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
         let candidates = rows.filter { !excluded.contains($0.id) && frames[$0.id] != nil }
@@ -97,7 +92,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         }
         let previous = gap > 0 ? candidates[gap - 1] : nil
         let next = gap < candidates.count ? candidates[gap] : nil
-        // 落回原处（上下邻居与层级都没变）不动：顶层的上一行可能属于别的项目，按"落在它后面"算会悄悄换项目
         if let index = rows.firstIndex(where: { $0.id == dragged }) {
             let before = rows[..<index].last { !excluded.contains($0.id) }
             let after = rows[index...].first { !excluded.contains($0.id) }
@@ -106,7 +100,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let lowest = next?.depth ?? 0
         let highest = min(previous.map { $0.depth + 1 } ?? 0, Self.deepest - height + 1)
         guard lowest <= highest else { return nil }
-        // 想要的层级放不下（上级在库里比看上去深，或带着已完成的深层子任务）时往浅里退
         for depth in stride(from: min(max(depth(of: dragged) + depthShift, lowest), highest), through: lowest, by: -1) {
             let move = gapMove(dragged, depth: depth, previous: previous, next: next)
             if case .under(let parent) = move.slot, !fits(dragged, under: parent) { continue }
@@ -128,7 +121,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     private func gapMove(_ dragged: UUID, depth: Int, previous: Row?, next: Row?) -> TaskMove {
         if let previous, depth == previous.depth + 1 { return TaskMove(slot: .under(previous.id), after: nil) }
-        // 上一行在这一级（或更深处）的祖先就是新的上一个同级
         let sibling = previous.map { ancestor(of: $0.id, atDepth: depth) }
         let project = project(of: sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) } ?? dragged)
         return TaskMove(slot: slot(under: sibling.flatMap { parents[$0] }, project: project), after: sibling)
@@ -150,7 +142,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     private func project(of id: UUID) -> UUID { tasks[id]!.projectID }
 
-    /// 原位置：同级（顶层按同一项目算，与 Store 的同级范围一致）里的上一条。
     private func current(_ id: UUID) -> TaskMove {
         let project = project(of: id)
         let siblings = parents[id].map(children(of:)) ?? roots.filter { tasks[$0]?.projectID == project }
@@ -159,7 +150,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
     }
 }
 
-/// 库里没有环（本机写入校验、远端变更在同一事务里收敛，见 `CardLinks.repairs`），上级链与子树都走得到头。
 nonisolated private struct Links: Equatable, Sendable {
     private(set) var roots: [UUID] = []
     private(set) var parents: [UUID: UUID] = [:]

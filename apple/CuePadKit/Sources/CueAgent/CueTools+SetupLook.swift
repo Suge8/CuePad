@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
 extension CueTools {
   func look(_ part: LookPart?) async throws -> String {
     let now = Date()
@@ -16,7 +15,6 @@ extension CueTools {
       lines = brain(profile, mac: mac, now: now, detail: false) + agents(mac, profile: profile, quotas: quotas, now: now, detail: false)
         + quota(quotas, mac: mac, now: now, detail: false) + [memory] + skills(library, projects: [], detail: false) + projects(facts, detail: false)
     case .brain: lines = brain(profile, mac: mac, now: now, detail: true)
-    // 各模型的额度与重置时刻在它那一行；一条额度记录都没有时另说一句，免得为确认没有再看一次 quota
     case .agents: lines = agents(mac, profile: profile, quotas: quotas, now: now, detail: true) + (quotas.isEmpty ? quota(quotas, mac: mac, now: now, detail: true) : [])
     case .quota: lines = quota(quotas, mac: mac, now: now, detail: true)
     case .skills: lines = skills(try await store.agentLibrary(host: host), projects: try await store.projects(), detail: true)
@@ -66,7 +64,6 @@ extension CueTools {
     return lines
   }
 
-  /// 一个模型："anthropic/claude-opus-5-5（Claude Opus 5.5，默认）· 强度 low/medium/high · fast · 不能看图 · 额度：anthropic 本周 已用 85%"。
   private static func model(_ option: ModelOption, of agent: MacAgent, quotas: [AccountQuota], now: Date) -> String {
     let named = [option.name.isEmpty ? nil : option.name, option.key == agent.model ? "默认" : nil].compactMap(\.self)
     var parts = [agent.kind.modelRef(option.key) + (named.isEmpty ? "" : "（\(named.joined(separator: "，"))）")]

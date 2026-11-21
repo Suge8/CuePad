@@ -3,7 +3,6 @@ import Foundation
 import Darwin
 #endif
 
-/// 系统启动身份，不是 CuePad 启动身份；读取失败时不签发运行证明。
 public enum SystemBoot {
   public static let id: String? = {
     #if os(macOS)
@@ -19,13 +18,11 @@ public enum SystemBoot {
 }
 
 extension SessionState {
-  /// 保留原报告，当前断言另取投影；未知不会被当成空闲或结束。所在的 Mac 不在线时也是未知，为什么在 `offlineMac`。
   public var runtimeState: Open<WorkState> {
     if state == .known(.ended) || state == .known(.interrupted) { return state }
     return runtimeUntil == nil ? .unknown("unconfirmed") : state
   }
 
-  /// 名册保留，过期的运行断言撤销；不捏造已交回或被中断。
   public var runtimeSubagents: [SubagentState] {
     guard runtimeUntil == nil else { return subagents }
     return subagents.map { agent in
@@ -37,7 +34,6 @@ extension SessionState {
 }
 
 extension CueStore {
-  /// 只有同一次系统启动的见证（真实报告、本机收尾或启动对账写下的 `bootID`）且所属 Mac 的 lease 仍有效才确认；旧报告、摘要修改时间均不能背书。
   public func runtimeIsConfirmed(_ session: SessionState, at now: Date = .now) throws -> Bool {
     try runtimeDeadline(session, presences: runtimePresences(), at: now) != nil
   }
@@ -54,7 +50,6 @@ extension CueStore {
     return presence.onlineUntil
   }
 
-  /// Cue 的订阅也跟随运行证明与期限；lease 到期不写库，不能只盯 writeSeq。
   public func runtimeDeadlines() throws -> [Date] {
     let sessions = try runtimeProjection(db.query(
       "SELECT \(SessionState.selection) FROM piSessionStates WHERE \(WorkState.outsideSQL(WorkState.closed))"
@@ -72,8 +67,6 @@ extension CueStore {
     return state
   }
 
-  /// 每批只读一次 host 集合，O(S+H)；所有运行读取共用，不按会话逐条查在线状态。
-  /// 没确认的里所在的 Mac 不在线的（没有在线记录或过了期限）带上它的名字（`offlineMac`）：说的是那台 Mac 没开，不是这个会话说不准；名字只在有这样的会话时读。
   func runtimeProjection(_ sessions: [SessionState]) throws -> [SessionState] {
     guard !sessions.isEmpty else { return [] }
     let presences = try runtimePresences(), now = timing.now()

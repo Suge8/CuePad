@@ -3,33 +3,20 @@ import Foundation
 
 nonisolated enum SendError: Error, Equatable {
     case attachmentUnavailable(String)
-    /// 手机指定的 Pi 会话已结束，或不在这台 Mac 上。
     case sessionNotOnThisMac(String)
-    /// 这台 Mac 不支持的投送目标（来自更新版本或缺少必要信息）。
     case unsupportedTarget(String)
-    /// 本版本不认识的发送方式（来自更新版本的手机）。
     case unsupportedMode(String)
-    /// 发给 Pi 的投送请求没能送达（附执行器写回的原因）。
     case notDelivered(String)
-    /// 这台（`here`）或那台 Mac 上一家能开会话的 Agent 都没有（附原因，`MacAgents.whyNone`）。
     case noAgent(here: Bool, String)
-    /// CuePad 答不了的提问：这家的表单题型 CuePad 不认识（OpenCode 的部分表单），或更新版本的题型。
     case unanswerable
-    /// 这台 Mac 上找不到这个会话的会话文件（被删了，或不是这台 Mac 上的会话）。
     case sessionFileMissing
-    /// 手机请这台 Mac 绑成另一个项目的目录，而那个项目还没有绑定文件夹。
     case noCodeDirectory(String)
     case projectNotHere
-    /// 要在里面启动 Pi 的目录不在了（被删或改名），附目录末段名。
     case directoryMissing(String)
-    /// 已领取、已进入同步发送，或本机快照不足以证明尚未交出，不能安全撤回。
     case alreadyHanded
-    /// 撤回请求已传给那台 Mac，等回执的时限内没有结果：它办到了照样撤。
     case withdrawalPending
     case alreadyHeard
-    /// 要它做事的那台 Mac 已知不在线（参数是它的名字），请求没有写下。
     case macOff(String)
-    /// 请那台 Mac 当场办的事（取一步的详情）等回执的时限内没有结果。
     case noReply
 }
 

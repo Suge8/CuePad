@@ -49,7 +49,6 @@ extension CueEvalTests {
             let backend = try await rig.store.createTask("做重置邮件接口", under: task.id)
             _ = try await rig.store.createTask("做忘记密码页面", under: task.id)
             try await Self.remoteSession(rig, bound: backend, reply: "后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。")
-            // 那台在线、但这次开机（另一个启动身份）后还没报过这个会话：不是不在线，是状态还没确认
             _ = try await rig.store.recordMacPresence(host: "mac-b", bootID: "mac-b-boot") { true }
             _ = try await rig.store.completeTask(backend.id)
             try await eval.trigger { try await rig.say("登录页忘记密码那件，接着做页面那一步。") }
@@ -61,8 +60,6 @@ extension CueEvalTests {
         try #require(try await rig.store.projects().first { $0.name == "演示" })
     }
 
-    /// 绑在 `card` 上的会话开在另一台 Mac（mac-b）上、歇着，回答是 `reply`：mac-b 没有在线记录（不在线），Cue 对它说话被拒。
-    /// 先记下会话、再绑：没绑之前它的动静不叫醒 Cue。
     static func remoteSession(_ rig: CueHostTests.Rig, bound card: Card, reply: String) async throws {
         let id = "s-remote01"
         let recorder = StateRecorder(store: rig.store, hostID: "mac-b")
@@ -75,7 +72,6 @@ extension CueEvalTests {
         try await rig.store.linkCard(card.id, toSession: id)
     }
 
-    /// 说话、开工被拒（say 或接着用上一步会话的 start 出错）的那一轮：回他的那句照实说了（`EvalReading.refusal`），或换了路（另开成了）。没被拒的不计。
     static func refusalChecks(_ eval: CueEval) async throws -> [Check] {
         let refusals = (eval.calls("task", "say") + eval.calls("task", "start")).filter(\.call.failed).compactMap(\.call.result)
         let rerouted = eval.calls("task", "start").contains { !$0.call.failed }

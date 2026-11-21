@@ -17,7 +17,7 @@ struct SessionTaskTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
-        try services.reconcileLaunch()  // Mac 启动
+        try services.reconcileLaunch()
         var session = CueBridge.Session(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), 
@@ -83,7 +83,7 @@ struct SessionTaskTests {
 
         let reopened = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(!reopened.isError)
-        #expect(try await store.card(task.id)?.status == .inProgress)  // 绑过会话就是开始过
+        #expect(try await store.card(task.id)?.status == .inProgress)
         let again = try #require(await cue.call("task", ["action": "edit", "task": task.id.uuidString, "reopen": true]))
         #expect(again.isError)
 
@@ -109,7 +109,6 @@ struct SessionTaskTests {
         #expect(try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
         #expect(try await store.cueBoard().sessions.isEmpty, "随完成的事收起")
-        // 再有动静：时刻显式排在完成之后（收起按时刻严格先后判定，不靠真实时钟走过一毫秒）
         let later = try #require(try await store.card(old.id)?.completedAt).addingTimeInterval(1)
         try await recorder.update(sessionID: "s1", state: .thinking, times: SessionTimes(stateSince: later, busySince: later))
         try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: later.addingTimeInterval(1), busySince: nil))
@@ -175,7 +174,6 @@ struct SessionTaskTests {
 
         let said = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "白屏的根因是什么？"]))
         #expect(!said.isError)
-        // Mac 在后台恢复它、答这一句：时刻显式排在完成之后
         let later = try #require(try await store.card(task.id)?.completedAt).addingTimeInterval(1)
         try await recorder.update(sessionID: "s1", state: .thinking, times: SessionTimes(stateSince: later, busySince: later))
         try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: later.addingTimeInterval(1), busySince: nil))
@@ -195,7 +193,7 @@ struct SessionTaskTests {
     @Test func 叶子开新会话又改绑_换下来的会话留在原叶子下() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
-        try services.reconcileLaunch()  // Mac 启动
+        try services.reconcileLaunch()
         try await rig.offersPi()
         let leaf = try await store.createTask("修登录", in: project.id)
         let workspace = Workspace(services: services)

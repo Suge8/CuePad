@@ -2,8 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// Cue 那一行右边只放额度环：数字账要写全拍板、待回复、推进中、子代理四样，再放一颗"交给 Cue"就只剩六十来点宽。
-/// 各块各是一片玻璃、中间留空，面板自己没有底（输入框自带玻璃，外面再包一层就是玻璃套玻璃）。
 struct MenuBarPad: View {
     var open: (Route) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
@@ -22,7 +20,6 @@ struct MenuBarPad: View {
             if !rows.isEmpty {
                 MenuBarLive(rows: rows, open: open)
                     .modifier(Block())
-                    // 屏幕矮、面板放不下时只有这一块让出高度（在里面滚）：Cue 行、额度与随手记始终整块可见
                     .layoutPriority(-1)
             }
             if workspace.isLibraryReady {

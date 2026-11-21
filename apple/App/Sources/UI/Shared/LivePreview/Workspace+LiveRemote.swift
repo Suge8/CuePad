@@ -3,10 +3,7 @@ import CueStore
 import Foundation
 import UIKit
 
-/// 手机、iPad 上的活预览：看的是会话所在那台 Mac 上的页面（`LiveRemote` 问来），经局域网隧道连过去（`LiveLink`）。
-/// 宽屏开在右半（同 Mac），窄屏铺满一页（`LivePhoneCover`）。隧道只在看得见时开；预览（网页与登录状态）留到离开会话页（`keepLivePreviews`）。
 extension Workspace {
-    /// Mac 答来的这个会话可看的页面，点开时开的在前。只认开合预览的那一个会话（`liveRoute`）：别的会话没在问。
     func livePages(_ session: UUID) -> [URL] { liveAnswer(session)?.pages ?? [] }
 
     private func liveAnswer(_ session: UUID) -> LiveRemote.Pages? {
@@ -27,7 +24,6 @@ extension Workspace {
         return .closed(first)
     }
 
-    /// 开合活预览的那一个会话：宽屏是主区的，窄屏是导航最上面的。
     private var liveRoute: SessionRoute? {
         switch navigation {
         case .wide: session(in: .main)
@@ -55,7 +51,6 @@ extension Workspace {
         }
     }
 
-    /// 预览看得见的这段时间连着 Mac（`LivePreviewPane` 的 task）：收起（滑完、盖着的那一页落下）、进后台就断开，预览留着。
     func connectLive(_ preview: LivePreview) async {
         guard let sessionID = preview.sessionID, let host = preview.host else { return }
         do {
@@ -68,7 +63,6 @@ extension Workspace {
         }
     }
 
-    /// 会话页还开着（窄屏在导航栈里，宽屏在主区或并排）就留着它的预览，离开了才放掉。导航一变就调（`navigation`）。
     func keepLivePreviews() {
         let open: Set<UUID> = switch navigation {
         case .wide: Set(([session(in: .main)].compactMap(\.self) + besideSessions).map(\.id))
@@ -81,23 +75,19 @@ extension Workspace {
         livePreviews = livePreviews.filter { open.contains($0.key) }
     }
 
-    /// 连不上 Mac 时的退路（预览里那颗"在 Mac 上操作"）：用 UU 远程连过去看那一页，Mac 那头把这个会话的活预览铺满亮在最前（`operate(on:viewing:)`）。
     func viewOnMac(_ preview: LivePreview) async {
         guard let sessionID = preview.sessionID, let host = preview.host else { return }
         await operate(on: host, viewing: sessionID)
     }
 
-    /// 直到所在任务取消（`follow`）：每次回到 CuePad（含被系统收掉后重开）调 `returnFromMac`。
     func followReturns() async {
         let activations = NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification)
         await returnFromMac()
         for await _ in activations { await returnFromMac() }
     }
 
-    /// 人回到 CuePad 了：用 UU 远程看过的会话，请那台 Mac 把铺满的预览放回去。
     func returnFromMac() async { await services.liveRemote.comeBack() }
 
-    /// 点一个元素挂进回复框：宽屏回复框就在左边（放大着的先放回右半）；手机上先把预览收回，回复框接过焦点。
     func pickElement() {
         guard let route = liveRoute, let preview = livePreviews[route.id] else { return }
         if preview.picking { return preview.cancelPick() }

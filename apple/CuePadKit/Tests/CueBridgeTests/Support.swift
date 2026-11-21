@@ -15,7 +15,7 @@ private let temporaryRoot: URL = {
     let parent = URL(filePath: "/tmp", directoryHint: .isDirectory)
     let root = parent.appending(path: "\(temporaryPrefix)\(getpid())", directoryHint: .isDirectory)
     Thread.detachNewThread { removeTemporaryRoots(abandonedRoots(in: parent)) }
-    try? FileManager.default.removeItem(at: root)  // 同一 pid 的上一次运行留下的
+    try? FileManager.default.removeItem(at: root)
     try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     atexit { removeTemporaryRoots([URL(filePath: "/tmp/\(temporaryPrefix)\(getpid())")]) }
     return root
@@ -46,8 +46,6 @@ func makeTempDirectory() throws -> URL {
     return dir
 }
 
-/// 托管的 Pi 不随测试进程、桥或 `PiRuntime` 结束：用例收尾时给桥上还在的托管进程逐个发 SIGTERM。
-/// 它们都连在本用例的临时 socket 目录里，是本用例启动的；只按这些 pid 发，不碰别的进程。
 @MainActor func stopHostedProcesses(_ bridge: Bridge) {
     for session in bridge.sessions { kill(session.pid, SIGTERM) }
 }
@@ -61,7 +59,6 @@ func deadPid() async throws -> Int32 {
     return p.processIdentifier
 }
 
-/// 测试读会话文件时你的消息里的图片存进的附件目录（要看存了什么的测试自己造一个资料库）。
 let scratchFiles = try! Fixture().store.files
 
 extension History {
@@ -71,7 +68,6 @@ extension History {
 }
 
 extension HistoryIndexer {
-    /// 索引 `sessions` 这个会话目录（Pi 或 Codex 的，名字是 sessions：它的上层就是这家的配置目录）。
     init(sessions: URL, agent: AgentKind = .pi, start: @escaping @Sendable (URL) async -> HistoryStart? = { _ in nil }) {
         let home = sessions.deletingLastPathComponent()
         self.init(agent: agent, paths: AgentPaths(pi: PiPaths(agentDirectory: home), environment: ["CODEX_HOME": home.path]), files: scratchFiles, start: start)!
@@ -82,7 +78,6 @@ func recap(of session: Session?) -> Recap? {
     session?.sessionFile.flatMap { try? History.index(file: $0, from: nil).checkpoint.recap }
 }
 
-/// Pi 会话文件里的消息条目（文件顺序）：真实 Pi 写出的内容，作为投送是否到达模型的证据。
 struct FileMessage {
     let id: String
     let parent: String?

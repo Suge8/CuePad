@@ -6,11 +6,9 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机的诊断与"把最近日志发到 Mac"经同一朵云替身到 Mac：Mac 那头是 App 用的 `DiagnosticInbox`，落盘目录换成测试自己的。
 @MainActor
 @Suite(.releasesLibraries)
 struct DiagnosticDeliveryTests {
-    /// 一份只有一次崩溃的 MetricKit 包，时间按 `day` 排。
     private func crash(day: Int) -> Data {
         Data(#"{"timeStampEnd": "2026-01-\#(String(format: "%02d", day)) 12:00:00", "crashDiagnostics": [{"diagnosticMetaData": {"exceptionType": 1, "signal": 11}}]}"#.utf8)
     }
@@ -39,7 +37,6 @@ struct DiagnosticDeliveryTests {
         #expect(!kept.contains { $0.hasPrefix("2026-01-03") })
         try await inbox.check()
         #expect(try arrived() == Set(kept))
-        // xc.sh diag 读的要点：每份崩溃旁边一份，带着解出的标题
         let summaries = try landed().filter { $0.hasSuffix(".summary.json") }
         #expect(summaries.count == kept.count - 1)
         let folder = try #require(FileManager.default.contentsOfDirectory(at: inbox.directory, includingPropertiesForKeys: nil).first { !$0.lastPathComponent.hasPrefix(".") })
@@ -57,7 +54,6 @@ struct DiagnosticDeliveryTests {
         #expect(try arrived() == Set(services.diagnostics.archive.names()))
         #expect(try landed().count(where: { $0.hasSuffix(".summary.json") }) == services.diagnostics.archive.names().count - 1)
 
-        // 主线程卡住先记一份、恢复后原地改写带上时长：Mac 上的跟着换成恢复后的
         var note = FreezeNote(start: .now, seconds: nil, page: "cue", actions: [], version: "1", device: "iPhone18,1", os: "iOS 27")
         try services.diagnostics.archive.store(note)
         services.diagnostics.record([])
@@ -92,7 +88,6 @@ struct DiagnosticDeliveryTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: inbox.directory.path).filter { !$0.hasPrefix(".") }.isEmpty)
 
         await cloud.setUploadsFail(false)
-        // 同步自己断网后按真钟退避一阵（期间诊断也不发、抛 RetryHeld），补送的时刻按手动钟一档档拨过去
         try await eventually("断网时没送成的那份补送到了 Mac") {
             clock.advance(DiagnosticOutbox.lastRetry)
             try await inbox.check()

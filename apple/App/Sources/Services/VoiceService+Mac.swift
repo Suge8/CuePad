@@ -12,7 +12,6 @@ extension VoiceService {
         observeCall(call)
     }
 
-    /// 每一通新建，上一通（连同它的记录）随之放掉。
     private func newCall(host: String? = nil, source: VoicePeer.Source = .microphone) -> VoiceCall {
         preview.stop()
         let services = services
@@ -61,9 +60,6 @@ extension VoiceService {
         }
     }
 
-    /// 换绑的唯一入口：Mac 这一通（含已在这边先结束的）从这台手机来的任何一帧（命令、resume、普通帧；等着时同一租约的也算），
-    /// 媒体桥换到这对租约（命令来源核对、挂断、媒体事件都按它认），这一通已有的命令结果按原命令身份补送过去，
-    /// 投影推送重新登记到这里并补发当前投影：宽限期里错过的更新由这份整份状态补齐，Mac 先结束的由此把真实结束原因带给手机。
     func rebind(_ header: VoiceSignalHeader) {
         guard let call, VoiceSessionID(call.session) == header.session else { return }
         let device = header.sender.device
@@ -95,7 +91,6 @@ extension VoiceService {
         call.setMuted(value)
     }
 
-    /// 手机问"你还在吗"（`VoiceMediaSignal.resume`）：照答。换绑与补发投影已在 `rebind` 做过。
     private func answer(_ header: VoiceSignalHeader) {
         guard let call, VoiceSessionID(call.session) == header.session, let signaling else { return }
         Task {
@@ -119,12 +114,10 @@ extension VoiceService {
             await rejectOffer(header, issue: .busy)
             return
         }
-        // 先占住 owner 再读库，第二个设备不能在授权等待期间抢占同一 VoiceCall。
         let media = VoiceRemoteMedia(header: header, offer: offer, signaling: signaling)
         remote = media
         do {
             let profile = try await services.store.cueProfile()
-            // 读库期间手机已离开（挂断、断开）：这一路就此放掉，不然之后的来电一直被当成占线
             guard remote === media else { return }
             guard media.available else { return release(media) }
             guard profile?.activeHost == services.hostID else {
@@ -143,7 +136,6 @@ extension VoiceService {
         }
     }
 
-    /// 手机那一路的唯一出口：这一通收尾完成、或还没建通话就离开时
     private func release(_ media: VoiceRemoteMedia) {
         if remote === media { remote = nil }
     }
@@ -190,9 +182,6 @@ extension VoiceService {
         }
     }
 
-    /// 每个接收者一个发送任务，只发此刻最新的那份：投影先在本机赋值，Mac 自己的通话条不等手机那一路的中转。
-    /// 一次没发出去不等于链路断（断没断只认中转的关闭、离开与拒收）：每秒补发，直到发出最新的、或这个接收者没了；
-    /// 不补的话，之后没有新变化时手机一直停在旧状态。
     private func pushProjection(to device: VoiceDeviceID) {
         guard projectionSenders[device] == nil else { return }
         projectionSenders[device] = Task { [weak self] in

@@ -12,7 +12,6 @@ struct CuePadWidgets: WidgetBundle {
     }
 }
 
-/// App 前台开启，远程内容由 Mac 发布（`CueLiveActivity`）。
 struct CueActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CueActivityAttributes.self) { context in
@@ -42,10 +41,7 @@ struct SnapshotEntry<S: SnapshotFile>: TimelineEntry {
     let snapshot: S?
 }
 
-/// 数据来自主 App 写在共享容器里的快照；主 App 在快照内容变了时刷新时间线，所以这里不自己定时刷新。
-/// 快照里按时刻会变的（`timeline`：Cue 此刻过时、刚做完的那颗收掉）从此刻起排成时间线，到点由系统换，不靠 App 醒来。
 struct SnapshotProvider<S: SnapshotFile>: TimelineProvider {
-    /// 系统占位预览使用的内容；真实读取缺失时保留 nil。
     let empty: S
     var timeline: (S, Date) -> [SnapshotEntry<S>] = { [SnapshotEntry(date: $1, snapshot: $0)] }
 

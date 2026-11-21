@@ -8,48 +8,36 @@ import os
 import Testing
 @testable import CuePad
 
-/// 手机这头的流程测试用的替身：Mac、它上面的网页服务、两者之间的网络。
 extension LivePhoneFlowTests {
-    /// 替身 Mac：答的规则同 `Workspace.receiveLive`（只答它这台上的会话、开着才给入口），放行同 `admitLive`（票据对、端口是这个会话的）。
     final class Mac: VoiceSignaling {
         let local = VoiceEndpoint(device: .init("phone-live"), lease: UUID())
         let endpoint = VoiceEndpoint(device: .init(LivePhoneFlowTests.mac), lease: UUID())
         let key = SymmetricKey(size: .bits256)
         var ticket = Data()
         var pages: [URL] = []
-        /// 认出在服务的（缺省就是 `pages`）。
         var found: [URL]?
-        /// Agent 最近一次发来的（`cuepad live`）。
         var sent: LiveAddress?
         var door: (addresses: [LiveTunnel.Address], port: UInt16)?
-        /// 手机最近一问要不要隧道的入口（预览看得见才要）。
         var opened = false
         var present = true
-        /// 手机自己这头连没连着中转。
         var connected = true
-        /// 接下来那一问问到一半，手机这头的中转断了。
         var drops = false
-        /// 收到的"亮出这个会话"（`LiveSignal.show`）；`showing` 是这一帧发不出去还是挂住不回。
         var revealed: [String] = []
-        /// 收到的"我回来了"（`LiveSignal.back`）；`bounces` 是接下来几句中转转不过去、退回给手机（Mac 刚断、换了租约）。
         var returned: [String] = []
         var bounces = 0
         var showing = Showing.sends
         enum Showing { case sends, fails, hangs }
         private var held: [CheckedContinuation<Void, Never>] = []
 
-        /// 挂住的那几帧放开（用例结束前：挂着的发送攥着替身、替身攥着资料库）。
         func letGo() {
             held.forEach { $0.resume() }
             held = []
         }
         private var server: LiveTunnel.Server?
-        /// 这个会话名下的端口（报给手机的页面地址里的）：隧道只放它们。
         private let shown = OSAllocatedUnfairLock<Set<UInt16>>(initialState: [])
 
         func allow(_ url: URL) { shown.withLock { _ = $0.insert(UInt16(url.port!)) } }
 
-        /// 开（再开就是换一个）隧道口：新票据、新端口，旧口连着的一起断（同 Mac 睡醒、换网后重开）。只放行 `allow` 过的，都接到 `port` 上。
         func openDoor(to port: UInt16) async throws {
             server?.cancel()
             let ticket = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
@@ -145,7 +133,6 @@ extension LivePhoneFlowTests {
         }
     }
 
-    /// 手机与 Mac 之间的那段网络：原样转发；`cut` 是网络断了一下，连着的两头都按出错断（RST），之后照常能连（入口不变）。
     final class Network {
         let listener: NWListener
         let port: UInt16
@@ -193,7 +180,6 @@ extension LivePhoneFlowTests {
         }
     }
 
-    /// 一个此刻没人听的口。
     func vacant() async throws -> URL {
         let page = try await Page("")
         page.stop()

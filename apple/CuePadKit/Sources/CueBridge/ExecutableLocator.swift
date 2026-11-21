@@ -16,8 +16,6 @@ public struct ExecutableLocator: Sendable, Equatable {
 
     public static var standard: ExecutableLocator { ExecutableLocator(shellPath: ProcessInfo.processInfo.environment["PATH"]) }
 
-    /// 用户登录 shell 的 PATH 在前（Agent 的 bash 看到的是它），再是 `standard`。登录 shell 整个进程只问一次
-    /// （慢，至多 5 秒；并发的调用共用这一次），问不到就是 `standard`。生产代码都用它，测试给自己的目录。
     public static var system: ExecutableLocator {
         get async { await resolving.value }
     }
@@ -30,17 +28,14 @@ public struct ExecutableLocator: Sendable, Equatable {
     private init(shellPath: String?) {
         let home = UserHome.directory
         let path = (shellPath ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
-        // 先找到的先问版本：`.local/bin` 排在 Homebrew 之前，包管理器与各家自己的目录在后
         let homes = Self.homeDirectories(home)
         self.init(searchDirectories: path + homes.prefix(1) + [URL(filePath: "/opt/homebrew/bin"), URL(filePath: "/usr/local/bin")] + homes.dropFirst())
     }
 
-    /// 只看装在 `home` 里的（官方脚本与包管理器的缺省位置）：隔离运行时把一个空目录当家目录，像一台什么都没装的 Mac。
     public init(home: URL) {
         self.init(searchDirectories: Self.homeDirectories(home))
     }
 
-    /// 家目录里各家安装脚本（`AgentFacts.installDirectory`）与包管理器的缺省位置，`.local/bin` 在最前。
     private static func homeDirectories(_ home: URL) -> [URL] {
         ([".local/bin", ".bun/bin", ".npm-global/bin"] + AgentKind.allCases.compactMap(\.facts.installDirectory))
             .map { home.appending(path: $0, directoryHint: .isDirectory) }

@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 那台 Mac 由一个领 mac-a 请求的执行器扮演：照基准判断、做完写回新快照。
 @MainActor
 @Suite(.releasesLibraries)
 struct AgentLibraryPhoneTests {

@@ -2,9 +2,6 @@
 import Foundation
 import Observation
 
-/// 此刻正在说的这条回答（不含思考、工具参数与子代理），只在 Mac 的内存里，不入库、不同步。说完的那条仍以库里的对话为准，界面在它落库后原位换下（`landed`，在 App 里）。两处来源，规则相同：
-/// - 在线会话：各家接入维护，经 `Bridge.setDraft` 放进这个会话的格子（不进 `Bridge.changes()`）；
-/// - Cue：大脑报 `TurnEvent.speaking`，值班的 `CueKeeper` 只把在回答你的那一轮放进 `CueKeeper.speech`。
 public struct LiveDraft: Equatable, Sendable {
     public var text: String
     /// 这条回答的起点：晚于对话里上一条回答的时刻，不晚于这条落库后在对话里的时刻（各家都是说完那一刻），没有 `record` 时界面据此认出它已落库（`landed`）。
@@ -36,8 +33,6 @@ public struct LiveDraft: Equatable, Sendable {
     private static func milliseconds(_ date: Date) -> Int64 { Int64((date.timeIntervalSince1970 * 1000).rounded()) }
 }
 
-/// 各家协议层共用，各自只把事件映射到这几个动作。依次说出的几段正文按段号排、换行连接（同对话里回答的写法）；定稿带着运行时记下的时刻时改用其中最早的（`LiveDraft.since`）。
-/// 没变也照样交出去：去重只在下游一处（`LiveDraftFeed`）。
 struct DraftParts {
     let message: String?
     private var parts: [Int: String] = [:]
@@ -58,7 +53,6 @@ struct DraftParts {
         since = since ?? .now
     }
 
-    /// `at` 是运行时把这段记进会话文件的时刻（给得出的才给）。
     mutating func finish(_ part: Int, with text: String, at time: Date? = nil) {
         parts[part] = text
         since = since ?? .now
@@ -72,7 +66,6 @@ struct DraftParts {
     }
 }
 
-/// 来源每个增量交一次（`offer`），刷新节奏只定在这里：清掉与开始另一条（起点不同）立即显示，不让上一条的尾巴晚到。
 @MainActor @Observable
 public final class LiveDraftFeed {
     public private(set) var draft: LiveDraft?
@@ -81,7 +74,6 @@ public final class LiveDraftFeed {
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
     @ObservationIgnored private var flush: Task<Void, Never>?
 
-    /// 逐字的增量合成 `interval` 一次：读它的视图（Markdown 重排）不随每个增量重算
     static let interval: Duration = .milliseconds(100)
 
     public init() {}

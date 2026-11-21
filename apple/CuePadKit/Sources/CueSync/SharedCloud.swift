@@ -13,7 +13,6 @@ struct SharedCloud: SyncCloud {
     var fetch: [Double]
     var records: [Double]
     var other: [Double]
-    /// 附件文件的传输速率（字节/秒，上行、下行；没给就不计）：请求里带的文件按它多花时间。
     var assetUp: Double?
     var assetDown: Double?
 
@@ -27,7 +26,6 @@ struct SharedCloud: SyncCloud {
     static func draw(_ spec: [Double]) -> Double {
       guard spec.count == 2, spec[0] > 0 else { return 0 }
       let sigma = log(max(spec[1], spec[0]) / spec[0]) / 1.645
-      // Box–Muller：一个标准正态
       let normal = sqrt(-2 * log(Double.random(in: Double.ulpOfOne..<1))) * cos(2 * .pi * Double.random(in: 0..<1))
       return spec[0] * exp(sigma * normal)
     }
@@ -92,7 +90,6 @@ struct SharedCloud: SyncCloud {
     try await upload(saving: [record], deleting: [], progress: progress)
   }
 
-  /// 模拟云的上传都在进程里，退出就没了：没有可接上的。
   func resumedFileUploads() async throws -> [ResumedUpload] { [] }
 
   func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord? {
@@ -104,7 +101,6 @@ struct SharedCloud: SyncCloud {
     return found
   }
 
-  /// 进度回调的节奏同 CloudKit。
   private func transfer(_ seconds: Double, _ progress: @Sendable (Double) -> Void) async {
     let began = ContinuousClock.now
     progress(0)
@@ -145,7 +141,6 @@ struct SharedCloud: SyncCloud {
     await wait(latency.other)
   }
 
-  /// 诊断区另一张表：拉同步区拉不到它。没有任何一条（从没传过）时同 CloudKit 报区不在。
   func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch {
     let row = try admit("diagnostics-fetch")
     await wait(latency.fetch)
@@ -245,7 +240,6 @@ struct SharedCloud: SyncCloud {
     return record
   }
 
-  /// 每次请求开一次连接（请求本来就隔着上百毫秒，几个进程各开各的，锁交给 SQLite 的 WAL 与 busy_timeout）。
   private func database<T>(_ body: (Connection) throws -> T) throws -> T {
     let db = try Connection(path)
     defer { db.close() }

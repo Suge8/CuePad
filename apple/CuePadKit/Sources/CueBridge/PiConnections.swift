@@ -4,7 +4,6 @@ import Darwin
 import Foundation
 import os
 
-/// 会话快照只经桥的 attach/update/detach 发布。多个桥可连接同一扩展；ack 只回发送方，命令按扩展收到的顺序执行。
 @MainActor
 final class PiConnections {
     private static let log = Logger(subsystem: AppIdentity.id, category: "bridge")
@@ -12,12 +11,9 @@ final class PiConnections {
     weak var bridge: Bridge?
     private var links: [String: PiConnection] = [:]
     private var watcher: DirectoryWatcher?
-    /// 目录没了、还没盯上新的那一段在重试（`directoryChanged`）
     private var rewatching: Task<Void, Never>?
     private let timing: Timing
-    // 没告别就断线可能早于进程退出，等退出后再清残留 socket。
     private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
-    // 同名 socket 重建后必须重连，所以按文件身份记不兼容，而非名字。
     private var incompatible: [String: SocketDirectory.FileIdentity] = [:]
 
     init(directory: URL, timing: Timing) {
@@ -98,14 +94,12 @@ final class PiConnections {
         } catch UnixSocket.Failure.connect(let code) where code == ECONNREFUSED {
             removeIfStale(name)
         } catch UnixSocket.Failure.connect(let code) where code == ENOENT {
-            // 扫描与文件删除之间的竞态
         } catch {
             incompatible[name] = file
             Self.log.error("\(name, privacy: .public) cannot connect: \(String(describing: error), privacy: .public)")
         }
     }
 
-    /// 还活着的不删、不重试：扩展 listen 好才把 socket 改名进来，活着的进程留下的没人 listen 的只有 /reload 时还没删的旧文件，新文件改名进来时目录会再变一次。
     @discardableResult
     private func removeIfStale(_ name: String) -> Bool {
         guard let pid = SocketDirectory.pid(fromSocketName: name + ".sock"), SocketDirectory.processIsDead(pid) else { return false }
@@ -115,7 +109,6 @@ final class PiConnections {
     private func consume(_ link: PiConnection, name: String) async {
         for await line in link.connection.lines {
             guard links[name] === link else { return }
-            // 读不懂的扩展：之后的消息格式不可知，只认告别（重载的告别要认得出，`SessionEndReason.reload`），等连接断开
             if link.session?.upgrading == true {
                 link.bye = PiWire.identityBye(line) ?? link.bye
                 continue
@@ -195,7 +188,6 @@ final class PiConnections {
         bridge?.attach(session, via: link)
     }
 
-    /// 会话若已出现，随后走正常的结束路径。
     private func reject(_ link: PiConnection, name: String, detail: String) {
         link.rejected = true
         incompatible[name] = link.file
@@ -203,7 +195,6 @@ final class PiConnections {
         link.connection.close()
     }
 
-    /// 正常退出时扩展自己已删。
     private func processExited(_ name: String) {
         let path = socketPath(name)
         if SocketDirectory.isOwnSocket(path) { unlink(path) }
@@ -214,7 +205,6 @@ final class PiConnections {
         guard links[name] === link else { return }
         links[name] = nil
         link.replies.closeAll(BridgeError.sessionEnded)
-        // 没有告别就断开 = 进程被强杀，socket 文件会残留：进程已确认退出就现在删，否则等它的退出通知
         if link.bye == nil, link.id != nil, !removeIfStale(name), let watcher = link.exitWatcher {
             orphanExitWatchers[name] = watcher
         } else {

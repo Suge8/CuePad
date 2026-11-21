@@ -1,9 +1,6 @@
 import CueStore
 import Foundation
 
-/// 写给 Cue 看的样子（信封与 `setup look`），中文、不随界面语言；界面上的说法在 App 的 `QuotaMeter`。
-/// 吃紧（`tight`）的规则只在这里。读不到（查询失败、不报额度）不算吃紧：那是没有证据，不是用得多；常年查询失败的账号若算吃紧，信封每一轮都写它，Cue 照系统提示就一直绕开能用的那家。
-/// 账号里有的窗口过了重置时间（`AccountQuota.reading` 整个算 `.expired`）时，没重置的窗口照常读（`live`）：5 小时窗口刚重置、本周已用到九成的账号照样吃紧。
 enum CueQuotaWords {
   static let tightUse = 0.8
 
@@ -32,13 +29,11 @@ enum CueQuotaWords {
     return "\(account(quota))\(mark) " + windows.joined(separator: "；")
   }
 
-  /// 带上重置时刻：额度用完时 Cue 只看 `setup look agents` 一次，换不了模型就照它定时接着做。
   static func binding(_ quota: AccountQuota, model: ModelKey, at now: Date) -> String {
     guard let window = live(quota, at: now)?.binding(at: now, model: model.id) else { return "\(account(quota)) \(status(quota, at: now))" }
     return "\(account(quota)) \(name(window)) 已用 \(percent(window, at: now))，\(CueScheduleWords.time(window.resetsAt, now: now)) 重置"
   }
 
-  /// 读法、卡着的规则仍是 `AccountQuota` 的；读不到或窗口全过了重置时间为 nil。
   private static func live(_ quota: AccountQuota, at now: Date) -> AccountQuota? {
     guard [.observed, .expired].contains(quota.reading(at: now)) else { return nil }
     var live = quota

@@ -17,7 +17,6 @@ nonisolated final class ChatAnchor: Sendable {
 
     struct Tracked: Equatable {
         var shift: CGFloat = 0
-        /// 挪动来自第几次排版（连着两次挪同样多也各报一次）；没挪为 0。
         var layout = 0
         var onScreen: Set<UUID> = []
     }
@@ -89,7 +88,6 @@ nonisolated final class ChatAnchor: Sendable {
         }
     }
 
-    /// `keeping` 为 false（贴着最新由底锚管、跳去了某一条由滚动区对准）时不攒挪动，只认此刻读到哪。
     func track(read: CGFloat, height: CGFloat, keeping: Bool) -> Tracked {
         state.withLock { state in
             if read != state.lastRead || !keeping { state.inFlight = 0 }
@@ -111,7 +109,6 @@ nonisolated final class ChatAnchor: Sendable {
         Set(state.runs.lazy.filter { $0.top < top + height && $0.top + $0.height > top }.map(\.id))
     }
 
-    /// 那一段还是空白（刚滚进来，下一次更新才排成真的）时改认可见区里它下面第一段真的：空白换成真的之后段里各条怎么分布不知道，按空白对会差出它估高的那点出入。
     private static func mark(at top: CGFloat, height: CGFloat, in state: State) -> Mark? {
         guard let index = state.runs.firstIndex(where: { $0.top + $0.height > top }) else { return nil }
         let run = state.real.contains(state.runs[index].id)
@@ -121,7 +118,6 @@ nonisolated final class ChatAnchor: Sendable {
         return Mark(run: run, row: row, point: inside, width: state.width)
     }
 
-    /// 按那一条认而不是按段：它可能换了段（上面排开一批时最上面那段从更早的一条起、段首变了）。那一段此刻是空白也照记下的各条认：空白的高就是各条那次排出来的。
     private static func locate(_ mark: Mark, in state: State) -> CGFloat? {
         func scaled(_ offset: CGFloat, from old: CGFloat, to new: CGFloat) -> CGFloat {
             state.width != mark.width && offset > 0 && old > 0 ? offset * new / old : offset
@@ -134,7 +130,6 @@ nonisolated final class ChatAnchor: Sendable {
     }
 }
 
-/// 排版同 `VStack(alignment: .leading, spacing:)`，排的时候把各段的位置记进 `ChatAnchor`。
 struct ChatStack<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: Content
@@ -155,7 +150,6 @@ struct ChatStack<Content: View>: View {
     }
 }
 
-/// 一条一个子视图，按顺序对上 `ids`；排版同 `VStack(alignment: .leading, spacing:)`。
 struct ChatRows<Content: View>: View {
     let ids: [UUID]
     let spacing: CGFloat

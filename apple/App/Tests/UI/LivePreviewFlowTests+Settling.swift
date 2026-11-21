@@ -5,8 +5,6 @@ import Testing
 
 #if os(macOS)
 extension LivePreviewFlowTests {
-    /// 内容要现问的页面（Mac 应用的那张页：画面里有什么得问应用）：Agent 读它、点它之前先告诉它有人要读了，等它问回来，不读到一张空页、旧页。
-    /// 填的字页面没收下（应用没接住、页面自己改写了），回执里要说，不报成填好了。
     @Test func Agent操作_内容要现问的页面等它问回来再读_填的字没被收下回执里说() async throws {
         let workspace = wide()
         let following = Task { await workspace.follow() }

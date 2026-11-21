@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 开新会话只有这一个输入框（两端同一份，入口都经 `Workspace.openNewSession`）。同记任务的输入框（`NewTaskInput`）一张卡：
-/// 去处胶囊在上、字在中间、圆钮在右下；手机与 iPad 浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewInputPanel`，不套浮层的纸）。
 struct NewSessionInput: View {
     let start: SessionStart
     @Environment(Workspace.self) private var workspace
@@ -42,7 +40,6 @@ struct NewSessionInput: View {
                 Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
-        // 请求在路上时整个停用：这时改的字、换的去处都进不了已发出的那一次，认领到了输入框一收就丢了
         .disabled(launching.inFlight(at: services.speech))
         .confirmsLaunchAgain(launching)
         .onAppear {
@@ -85,13 +82,11 @@ struct NewSessionInput: View {
     }
 }
 
-/// 开新会话的输入框上方那一行：开不了的原因，或发出后的进度与结果。新会话的输入框与手机交给新会话的输入框同一份。
 enum LaunchStatus {
     case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents)
 
     init?(noMac: Bool, phase: LaunchProgress.Phase, agents: MacAgents?) {
         if noMac { self = .noMac } else if phase != .idle { self = .phase(phase) }
-        // 那台一家都不能用：同步通了也开不了，所以要写原因
         else if let agents, agents.agents.isEmpty { self = .noAgents(agents) } else { return nil }
     }
 }

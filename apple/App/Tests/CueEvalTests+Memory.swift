@@ -5,8 +5,6 @@ import Testing
 @testable import CuePad
 
 extension CueEvalTests {
-    /// 钉着三组重复的规矩（每组两三种说法）与两条各不相同的；他先叫它清理并给一条新原则，嫌没收口再追问一句（他的原话）。
-    /// 要看：两轮回复回应整理请求与追问，重复确实合并，条件、范围、例外与原意不变；语义由 memory-judge.py 读实际结果判分。
     @Test func m整理钉着的记忆() async throws {
         try await CueEval.run(
             "m-整理钉着的记忆",

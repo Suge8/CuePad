@@ -8,10 +8,8 @@ import Testing
 
 final class HistoryEventLog: Sendable {
     private let recorded = Mutex<[HistoryEvent]>([])
-    /// 订阅的任务要引用自己，只能在初始化完成后起，所以放在锁里补上。
     private let task = Mutex<Task<Void, Never>?>(nil)
 
-    /// `live` 是在线会话的文件（桥给的，`Bridge.sessionFiles`）；只看回填的不给。
     init(_ indexer: HistoryIndexer, following live: some AsyncSequence<Set<URL>, Never> & Sendable = AsyncStream { $0.finish() }) {
         let stream = indexer.events(following: live, scope: .all)
         task.withLock { $0 = Task { [weak self] in for await e in stream { self?.recorded.withLock { $0.append(e) } } } }
@@ -24,7 +22,6 @@ final class HistoryEventLog: Sendable {
 }
 
 struct HistoryIndexerTests {
-    /// Pi 的会话目录（Codex 的用例把它当 `CODEX_HOME/sessions`）
     let root: URL
     init() throws {
         root = try makeTempDirectory().appending(path: "sessions")
@@ -102,7 +99,7 @@ struct HistoryIndexerTests {
     /// 新用户常见顺序是先开 CuePad、后装 Pi：桥报出会话时它的文件连同会话目录都还不存在（Pi 第一条回答落盘前不建文件）。
     @Test
     func aLiveSessionsFileIsReadOnceItAppearsUnderADirectoryCreatedLater() async throws {
-        let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
+        let sessions = root.appending(path: "agent/sessions")
         let project = sessions.appending(path: "--work-x--")
         let files = [project.appending(path: "a.jsonl"), project.appending(path: "b.jsonl")]
         let log = HistoryEventLog(HistoryIndexer(sessions: sessions), following: AsyncStream { $0.yield(Set(files)) })

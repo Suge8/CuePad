@@ -1,9 +1,6 @@
 import CueStore
 import Foundation
 
-/// 折起时留哪几件（`folded`）：进行中的（它自己或它下面有一步在做）都留着，待办按顺序补到 `limit` 件——正在做的事不该被"还有 N 条"藏住。
-/// 只多一条时直接全列："还有 1 条"那一行与一条任务一样高，折起来不省地方。
-/// 收起其余任务一步到位，"收起"那一行留在原来的屏幕位置（`TaskFoldAnchor`）。页面本地的临时状态，不持久化。
 nonisolated struct TaskFold: Equatable, Sendable {
     var showsAll = false
     var showsDone = false

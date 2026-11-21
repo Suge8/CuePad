@@ -34,7 +34,6 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
     private var pending: UIImage?
     private var aspect: CGFloat?
     private var decoded: UIImage?
-    // 重算只看框与比例：换清晰度不算
     private var fitted: CGSize = .zero
     private var fittedFor: (area: CGSize, aspect: CGFloat)?
 
@@ -49,11 +48,9 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         decelerationRate = .fast
         minimumZoomScale = 1
         maximumZoomScale = Self.maxZoom
-        // 栏后面不垫系统的滚动边缘效果
         topEdgeEffect.isHidden = true
         bottomEdgeEffect.isHidden = true
         imageView.isAccessibilityElement = false
-        // 缩略图按整像素缩，比例与图差一点：照图的比例铺满它的框
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         addSubview(imageView)
@@ -129,7 +126,6 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         setNeedsLayout()
     }
 
-    /// 清楚的到了以后不再换回铺满屏幕的那张；在动时等停下来再换上。
     private func show(_ image: UIImage) {
         guard !(decoded.map { $0.size.width >= image.size.width } ?? false) else { return }
         guard !moving else {
@@ -138,7 +134,6 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         }
         decoded = image
         imageView.image = image
-        // 文件头读不到比例时以解出来的为准（同一张图的几种清晰度比例一样，只有第一张会改它）
         if aspect == nil { aspect = image.size.width / max(image.size.height, 1) }
         setNeedsLayout()
         layoutIfNeeded()

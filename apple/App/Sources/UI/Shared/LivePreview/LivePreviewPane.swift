@@ -2,15 +2,12 @@ import CueStore
 import SwiftUI
 import WebKit
 
-/// 主区会话栏头开合活预览的那颗钮（`HeadTool`）：这个会话有页面可看或预览开着时才在（`Workspace.liveButton`），在本身就是"有服务"；
-/// 没开同栏头别的钮，开着是强调色。来去只是它自己淡入淡出，栏头别的不挪。Mac 与 iPad 宽屏同一颗（手机的在页头，`LivePhoneTool`）。
 struct LivePreviewTool: View {
     let session: SessionRoute
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let button = workspace.liveButton(session.id)
-        // 没有时也占着位置、只是看不见：插进去再拿出来会挤得标题忽而截断、忽而放开
         HeadTool(label: Self.label(button ?? .closed(nil)), icon: .livePreview, on: button?.isShowing == true) { workspace.toggleLivePreview() }
             .opacity(button == nil ? 0 : 1)
             .allowsHitTesting(button != nil)
@@ -28,9 +25,6 @@ struct LivePreviewTool: View {
     }
 }
 
-/// 并排右半的活预览（`BesideColumn`）：网页是浮在桌面上的一块屏（圆角、留边同 Cue 的浮板，`CuePanel`），玻璃栏在它上面的桌面上、同左边的栏头一排；
-/// 手机宽那一档收成 390 宽居中的一块。两档之间是同一块屏连续地变宽变窄，网页不重新载入。贴到窗口边的一整面白页撞在深色界面上，栏还压着页面的头。
-/// 手机上是铺满屏的一页（`LivePhoneCover`），栏换成手机那一排（`LiveBar`）。手机、iPad 上开着时连着 Mac（`LiveLink`），连不上的原因盖在页上。
 struct LivePreviewPane: View {
     let preview: LivePreview
     @Environment(\.palette) private var palette
@@ -45,7 +39,6 @@ struct LivePreviewPane: View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
                 if preview.address == nil {
-                    // 只 Mac 有空着的地址（会话的菜单里手动打开）：手机、iPad 开时就有 Mac 答来的地址
                     #if os(macOS)
                     LiveAddressEntry(preview: preview).frame(maxWidth: .infinity, maxHeight: .infinity)
                     #endif
@@ -66,29 +59,24 @@ struct LivePreviewPane: View {
             .onChange(of: Self.remoteZoom(width: geometry.size.width, remote: workspace.liveFill?.remote == true && preview.viewport != .phone), initial: true) { preview.web.pageZoom = $1 }
             #endif
         }
-        // 手机上不伸进状态栏那一条：那一条铺的是页面的底（`LivePhoneCover`），被这层桌面色盖住，页面就像在栏上沿被一刀切断
         .background(palette.desk, ignoresSafeAreaEdges: workspace.layout == .wide ? .all : [])
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
         #if os(iOS)
-        // 进后台也断开：回来是重新连上、整页重载（`LivePreview.linked`），不靠页面里断掉的热更新连接自己回来
         .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            // 收起时滑出去的那一程按不并排的宽排着：不记它，后台预览（`LiveHost`）按开着时的大小排版
             guard workspace.beside.contains(.preview) else { return }
             LivePreview.paneSize = size
         }
         .onDisappear {
             if preview.picking { preview.cancelPick() }
             #if os(macOS)
-            // 收起才开始算闲置（`Workspace.releaseLivePreviews`）
             preview.agent.used = .now
             #endif
         }
     }
 
-    /// 页面出不来的原因：服务还没起来；手机、iPad 上还有连不上 Mac 的那几种（`LiveLink.State`）。
     private var trouble: LiveTrouble? {
         #if os(iOS)
         if let link = preview.link, let trouble = link.trouble ?? link.taken(preview.address) { return trouble }
@@ -96,8 +84,6 @@ struct LivePreviewPane: View {
         return preview.phase == .waiting ? .starting : nil
     }
 
-    /// 宽屏上网页是栏下面的一块屏：铺满那一档四周留一圈，手机宽那一档居中。两档之间只换位置、大小与圆角：内容不跳。
-    /// 手机上没有屏的边：网页从玻璃栏下沿铺到屏幕下缘，栏那一排铺页面的底、下沿同色渐隐，滚上去的内容淡进栏下。
     private func screen(in size: CGSize) -> some View {
         let framed = workspace.layout == .wide
         let phone = framed && preview.viewport == .phone
@@ -134,14 +120,12 @@ struct LivePreviewPane: View {
 
     private static let fade: CGFloat = 20
 
-    /// 网页视图在这么大的面板里的大小：后台预览（`LiveHost`）也照它排版，用户点开时页面不换一套排版。`framed` 是宽屏上那块留边的屏。
     static func page(in size: CGSize, phone: Bool, framed: Bool = true) -> CGSize {
         if phone { return CGSize(width: min(LivePreview.phoneWidth, size.width - 2 * Spacing.page), height: min(room(in: size), LivePreview.phoneHeight)) }
         guard framed else { return CGSize(width: size.width, height: size.height - Chrome.band) }
         return CGSize(width: size.width - 2 * CuePanel.float, height: size.height - screenTop - CuePanel.float)
     }
 
-    /// 那块屏的上沿：离玻璃栏的下沿一小圈（iPad 的栏占满那一排，从这一排的下沿起就贴上了）。
     private static var screenTop: CGFloat { (Chrome.band + Chrome.control) / 2 + Spacing.item }
 
     /// 手机用 UU 远程看着时页面放大几倍：远程画面是整块屏幕缩到手机上，3008 宽的屏上照原样排的字在手机上只有两三个点高。
@@ -153,12 +137,9 @@ struct LivePreviewPane: View {
 
     private static let remoteWidth: CGFloat = 1024
 
-    /// 手机屏离玻璃栏下沿与离窗口下缘一样远
     private static func room(in size: CGSize) -> CGFloat { size.height - Chrome.band - Spacing.item - Spacing.block }
 }
 
-/// 网页弹的 alert、confirm、prompt（`LivePreview.asks`）：项目的确认卡（`dialog`），标题写哪个网站在说话。面板收着时等它开了再给你看，网页在那一句上等着。
-/// 点外面、Esc 是取消；alert 只有一颗钮。卡关上与按钮动作是先后两下，取消挪到下一拍：按了钮的那一句先答上，取消落空。
 private struct LivePageAsks: ViewModifier {
     let preview: LivePreview
 
@@ -198,36 +179,28 @@ private struct LiveWebView: UIViewRepresentable {
 #endif
 
 extension Workspace {
-    /// 活预览放大到整个窗口的会话（`WideMetrics.fill`：右半盖过主区，会话条收起）。`remote` 是手机请 Mac 亮出来、正用 UU 远程看着
-    /// （Mac 的 `showLive`）：窗口也铺满屏幕，页面放大到手机上读得清（`LivePreviewPane.remoteZoom`）。
-    /// `own` 是你自己点的放大：手机来看又回去了，它还留着。
     struct LiveFill: Equatable {
         let session: UUID
         var own = true
         var remote = false
     }
 
-    /// 预览栏开头那颗：放大到盖过左边的会话，再点放回右半。
     func toggleLiveFill() {
         guard liveFill == nil else { return endLiveFill() }
         guard let session = session(in: .main), showsLivePreview(session.id) else { return }
         liveFill = LiveFill(session: session.id)
     }
 
-    /// 放回右半，手机看着时铺满屏幕的窗口也回到原来的位置。除了那颗钮：手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）、
-    /// 预览不在主区旁了（换了会话、收起了，`navigation`）、点选了元素要去回复框写那一句（`pickElement`）。
     func endLiveFill() {
         guard let fill = liveFill else { return }
         liveFill = nil
         #if os(macOS)
-        // 预览不在主区旁时那一栏不在了，没人替它把放大的页面改回来；Agent 接着在后台用的还是这一页
         livePreviews[fill.session]?.web.pageZoom = 1
         services.windowShell?.restoreFrame()
         #endif
     }
 
     enum LiveButton: Equatable {
-        /// 点开就是这个地址；nil 是空的地址输入。
         case closed(URL?)
         case open(URL?)
 
@@ -235,7 +208,6 @@ extension Workspace {
     }
 }
 
-/// 页面出不来的原因，盖在预览上的那一句。
 nonisolated enum LiveTrouble: Equatable, Sendable {
     case starting, asking, offline, noWiFi, apart, isolated, denied, gone, taken
 
@@ -253,14 +225,11 @@ nonisolated enum LiveTrouble: Equatable, Sendable {
         }
     }
 
-    /// 连不上的是手机到 Mac 的这段路、Mac 本身在线：可以用 UU 远程到 Mac 上看（`Workspace.viewOnMac`）。
     var reachesByRemote: Bool { [.noWiFi, .apart, .isolated, .denied].contains(self) }
 
-    /// 只有 UU 远程是主要出路的才说；没给权限的主要出路是去设置。
     var message: LocalizedStringResource? { reachesByRemote && self != .denied ? "用 UU 远程看 Mac 上的这一页" : nil }
 }
 
-/// 缺本地网络权限时去设置打开；手机到 Mac 的路不通时用 UU 远程到 Mac 上看（没给权限时排在去设置后面）；别的没有可做的，等它自己回来。
 private struct LiveTroubleAction: View {
     let trouble: LiveTrouble?
     let preview: LivePreview
@@ -271,9 +240,7 @@ private struct LiveTroubleAction: View {
 
     var body: some View {
         #if os(iOS)
-        // 没有钮时什么都不出：一排空的也会让所在的 VStack 多留一段间距，那一句跟着上移
         if trouble?.reachesByRemote == true {
-            // 并排放不下（大字号）就上下排，不在钮里折行
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Spacing.item) { buttons }
                 VStack(spacing: Spacing.item) { buttons }
@@ -301,8 +268,6 @@ private struct LiveTroubleAction: View {
     #endif
 }
 
-/// 服务停了、连不上 Mac 了：最后的画面压暗一层留着，上面浮一句；回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
-/// 有可做的（`LiveTroubleAction`）排在那一句下面，点了会怎样（`message`）写在那一句里第二行，同空态。
 private struct LiveStopped<Action: View>: View {
     let text: LocalizedStringResource
     var message: LocalizedStringResource?
@@ -347,7 +312,6 @@ private struct LiveStopped<Action: View>: View {
 }
 
 #if os(macOS)
-/// 还没有地址：面板中间只有一个地址输入，焦点已在里面。
 private struct LiveAddressEntry: View {
     let preview: LivePreview
     @State private var text = ""

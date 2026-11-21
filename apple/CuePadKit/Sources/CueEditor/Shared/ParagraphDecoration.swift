@@ -8,7 +8,6 @@ import UIKit
 #endif
 
 extension NSAttributedString.Key {
-    /// 代码行整行底色（值是 CueColor）；只存在于展示用的段落，由 `CueCodeFragment` 铺底。
     static let cueCodeBand = NSAttributedString.Key("cue.codeBand")
 }
 
@@ -40,7 +39,6 @@ private struct UncheckedBox<Value>: @unchecked Sendable {
     let value: Value
 }
 
-/// 代码行：在文字之前把底色铺满整个行宽（文字自带的底色只覆盖字形）。
 final class CueCodeFragment: NSTextLayoutFragment {
     private let band: CueColor
 
@@ -51,7 +49,6 @@ final class CueCodeFragment: NSTextLayoutFragment {
 
     required init?(coder: NSCoder) { nil }
 
-    /// 以片段原点为坐标原点：从容器左缘到右缘，高度同片段。
     private var bandRect: CGRect {
         let width = textLayoutManager?.textContainer?.size.width ?? layoutFragmentFrame.width
         return CGRect(x: -layoutFragmentFrame.minX, y: 0, width: width, height: layoutFragmentFrame.height)
@@ -78,7 +75,6 @@ extension EditorCore {
         guard title != nil || line.kind != .body || line.markerLength > 0 || !line.inlineCode.isEmpty || !line.links.isEmpty || !line.emphasis.isEmpty else { return nil }
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         if let title {
-            // 标题行不认 Markdown 记号：它就是一件事的名字
             let spacing = NSMutableParagraphStyle()
             spacing.lineSpacing = style.lineSpacing
             spacing.paragraphSpacing = title.spacing
@@ -110,7 +106,6 @@ extension EditorCore {
         }
         for marker in line.emphasis { paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: marker) }
         for link in line.links {
-            // 链接是正文的墨色加下划线，不另上色：签名色只给焦点
             paragraph.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: link.label)
             for syntax in link.syntax { paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: syntax) }
         }
@@ -138,14 +133,12 @@ extension EditorCore {
         storage.edited(.editedAttributes, range: range, changeInLength: 0)
     }
 
-    /// 编辑之后，让受影响的未编辑段落按新上下文重排：围栏奇偶翻转。
     func restyleAfter(_ edits: [NSRange]) {
         let old = flushedDecorations
         flushedDecorations = decorations
         let length = storage.length
         guard edits.count == 1 else { return restyle(NSRange(location: 0, length: length)) }
         let edit = edits[0]
-        // 首段是标题：回车拆出、退格并进来的那一段不在编辑范围里，跟着换样子
         if style.title != nil {
             let first = storage.mutableString.paragraphRange(for: NSRange(location: 0, length: 0))
             if edit.location <= NSMaxRange(first), NSMaxRange(first) < length {

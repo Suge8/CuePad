@@ -120,7 +120,6 @@ struct EvalBrain {
         return CuePad.CueLaunch(executable: script, path: executable.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
     }
 
-    /// 启用、运行在这台 Mac、用这个大脑、模型与强度。不经 `enableCue`：它先探测本机能用的 Agent，测试里的报不出来。
     func enable(_ rig: CueHostTests.Rig) async throws {
         let host = TestApp.hostID
         try await rig.store.updateCueProfile { [runtime, model, effort] profile in

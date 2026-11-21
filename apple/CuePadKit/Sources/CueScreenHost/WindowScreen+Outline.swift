@@ -1,15 +1,10 @@
 #if os(macOS)
 import AppKit
 
-/// 画面里有什么：照应用自己的无障碍树列出来，页面照它在画面上摆一层看不见的元素（`ScreenPage` 的 `mirror`）。
-/// 只读：点与键仍照坐标造事件（`WindowScreen+Input`），这里只多两样照元素做的：给它键盘焦点、换掉输入框里的字。
 extension WindowScreen {
   struct Outlined {
-    /// 等着答的：`since` 是哪一刻问的。
     var asking: [(since: Double, reply: @Sendable (Data?) -> Void)] = []
     var timer: Timer?
-    /// 最近那一份里编号 → 元素。编号跟着元素走：元素还在，下一份里还是这个号，页面那头的元素（连同 Agent 手里的引用）就不换。
-    /// `spot`：它看得见的那一块的正中（屏上），页面那头点它也落在这里。
     var elements: [Int: (element: NSObject, spot: CGPoint)] = [:]
     var ids: [AnyHashable: Int] = [:]
     var next = 0
@@ -26,9 +21,7 @@ extension WindowScreen {
 
   // MARK: 等停下来再答
 
-  /// 画面与输入都停了这么久才答：刚点下去、动画还在走时答出去的是半截的。
   private static let quiet = 0.12
-  /// 最多等这么久：一直在动的画面（转圈、视频）也要答。
   private static let patience = 0.6
 
   @MainActor func ask(_ reply: @escaping @Sendable (Data?) -> Void) {
@@ -43,7 +36,6 @@ extension WindowScreen {
   }
 
   @MainActor private func answer() {
-    // 窗口还没开出来（应用刚起）也算没停：答出去的是一张空的
     let now = CACurrentMediaTime(), still = picture != nil && now - max(changed, input.time, outlined.woke) >= Self.quiet
     let due = outlined.asking.filter { still || now - $0.since >= Self.patience }
     guard !due.isEmpty else { return }
@@ -52,7 +44,6 @@ extension WindowScreen {
       outlined.timer?.invalidate()
       outlined.timer = nil
     }
-    // `points`：画面横着是应用里的多少点。`ms`：走这一遍占了主线程多久，页面照它定画面隔一会儿小动一下时多久再问
     let nodes = nodes()
     let data = try? JSONSerialization.data(withJSONObject: [
       "nodes": nodes, "points": picture.map { $0.window.width / $0.scale } ?? 0, "ms": (CACurrentMediaTime() - now) * 1000,
@@ -62,7 +53,6 @@ extension WindowScreen {
 
   // MARK: 走一遍
 
-  /// 一份里最多这么多个元素：再多页面那头摆不动，Agent 也读不完。
   private static let limit = 600
 
   @MainActor private func nodes() -> [[String: Any]] {
@@ -75,7 +65,6 @@ extension WindowScreen {
       guard window === shown || !inner.isEmpty else { return nil }
       var node: [String: Any] = ["i": walk.id(window, seen: window.frame), "r": window === shown ? "window" : walk.menu ? "menu" : "dialog", "b": walk.box(window.frame)]
       if !window.title.isEmpty { node["n"] = window.title }
-      // 表单开着时底下那扇窗点不动
       if window.sheetParent != nil || window === NSApp.modalWindow { node["modal"] = true }
       node["k"] = inner
       return node
@@ -92,7 +81,6 @@ extension WindowScreen {
     var next: Int
     var elements: [Int: (element: NSObject, spot: CGPoint)] = [:]
     var ids: [AnyHashable: Int] = [:]
-    /// 同一张表里说着同样内容的行见过几条。
     var rows: [AnyHashable: Int] = [:]
     /// 正走在一扇菜单的窗里：它的每一项是表格的一行（实测 macOS 27），列成菜单项。
     var menu = false
@@ -106,8 +94,6 @@ extension WindowScreen {
       return id
     }
 
-    /// 表格的行凭它说的内容认，不凭第几行：插了、删了、重排之后同一个位置上是另一条记录，旧编号（Agent 手里的引用）不能落到它头上。
-    /// 说着同样内容的几行照先后分。
     private mutating func row(_ name: String, _ kids: [[String: Any]], in parent: NSObject) -> AnyHashable {
       func said(_ nodes: [[String: Any]]) -> String {
         nodes.map { ($0["n"] as? String ?? "") + "\u{1F}" + ($0["v"] as? String ?? "") + said($0["k"] as? [[String: Any]] ?? []) }.joined(separator: "\u{1E}")
@@ -117,23 +103,18 @@ extension WindowScreen {
       return AnyHashable(content + [AnyHashable(rows[content] ?? 0)])
     }
 
-    /// 屏上的一块 → 画面里的位置（0…1：左、上、宽、高）。
     func box(_ rect: CGRect) -> [Double] {
       let (x, y) = (picture.scale / picture.window.width, picture.scale / picture.window.height)
       return [(rect.minX - picture.all.minX) * x, (picture.all.maxY - rect.maxY) * y, rect.width * x, rect.height * y].map { ($0 * 10000).rounded() / 10000 }
     }
 
-    /// `clip`：这一层看得见的那一块（窗口，往里是滚动区）。滚出去的元素不列，露出一半的只算露出来的那一半：点它的正中才点得中。
     mutating func children(of parent: NSObject, clip: CGRect, depth: Int) -> [[String: Any]] {
       let role = WindowScreen.text(WindowScreen.read(parent, "accessibilityRole")) ?? ""
-      // 表格的行只要看得见的那些：全要的话上万行的表一行行问过去
       let all = (["AXOutline", "AXTable", "AXList"].contains(role) ? WindowScreen.read(parent, "accessibilityVisibleRows") : nil) ?? WindowScreen.read(parent, "accessibilityChildren")
       return NSAccessibility.unignoredChildren(from: all as? [Any] ?? []).flatMap { node($0, in: parent, clip: clip, depth: depth + 1) }
     }
 
-    /// 这个元素的那一条；它自己不值得列（没有名字的分组、滚动区）时是它里面的那些。
     private mutating func node(_ object: Any, in parent: NSObject, clip: CGRect, depth: Int) -> [[String: Any]] {
-      // 别的窗（表单、弹层）各自在 `stack` 里列
       guard depth < 40, elements.count < WindowScreen.limit, let element = object as? NSObject, !(element is NSWindow),
             let role = WindowScreen.text(WindowScreen.read(element, "accessibilityRole")), !WindowScreen.dropped.contains(role),
             let frame = WindowScreen.frame(element) else { return [] }
@@ -170,14 +151,12 @@ extension WindowScreen {
         node["open"] = value() == "1"
       default:
         guard let known = WindowScreen.roles[role] else {
-          // 没有名字的分组、不认识的：不单列，里面的照样列；有名字的分组留着（Agent 靠它分得清两处同名的钮）
           guard role == "AXGroup", !name.isEmpty, !kids.isEmpty else { return kids }
           node["r"] = "group"
           break
         }
         node["r"] = menu && role == "AXRow" ? "menuitem" : known
         if ["combobox", "slider", "spinbutton"].contains(known) { node["v"] = value() ?? "" }
-        // 说不出是什么的图、菜单里的分隔线：不列
         if known == "img" || known == "menuitem", name.isEmpty { return kids }
       }
       if node["n"] == nil, !name.isEmpty { node["n"] = name }
@@ -191,7 +170,6 @@ extension WindowScreen {
     }
   }
 
-  /// 无障碍的角色 → 页面上用的角色（ARIA 的叫法，Agent 的快照里就是这个词）。没列的不单列。
   private static let roles = [
     "AXButton": "button", "AXMenuButton": "button", "AXColorWell": "button", "AXPopUpButton": "combobox", "AXSlider": "slider", "AXIncrementor": "spinbutton",
     "AXLink": "link", "AXImage": "img", "AXHeading": "heading", "AXRow": "option", "AXOutline": "list", "AXTable": "list", "AXList": "list",
@@ -202,7 +180,6 @@ extension WindowScreen {
   private static let dropped: Set = [
     "AXScrollBar", "AXColumn", "AXGrowArea", "AXSplitter", "AXMenuBar", "AXValueIndicator", "AXCloseButton", "AXMinimizeButton", "AXFullScreenButton", "AXZoomButton",
   ]
-  /// 不往里走的：里面是它自己的零件。
   private static let leaves: Set = ["AXStaticText", "AXTextField", "AXTextArea", "AXComboBox", "AXSlider", "AXPopUpButton", "AXButton", "AXCheckBox", "AXRadioButton", "AXImage"]
 
   // MARK: 问元素
@@ -232,7 +209,6 @@ extension WindowScreen {
     return text.flatMap { $0.isEmpty ? nil : String($0.prefix(limit)) }
   }
 
-  /// 输入框里的字最多说这么长（名字、文字是 400）：`fill` 之后页面那头凭它核对填没填进去，再长的核对不了。
   fileprivate static let longest = 10000
 
   /// 元素在屏上的位置（AppKit 的坐标）。老式的那一种在进程里问到的也是左下原点的（翻成左上原点是给进程外的客户端做的，实测）。
@@ -252,7 +228,6 @@ extension WindowScreen {
     if let view = window.contentView?.superview?.hitTest(window.convertPoint(fromScreen: spot)), view.acceptsFirstResponder { window.makeFirstResponder(view) }
     // 输入框刚拿到焦点时是全选的，接着按的字会把原来的换掉：光标放到末尾，同网页里聚焦一个框
     if window.firstResponder !== before, let field = window.firstResponder as? NSText { field.selectedRange = NSRange(location: field.string.utf16.count, length: 0) }
-    // 键盘跟到它所在的那扇窗，同点了它一下
     input.focus = window
     input.around = Set(stack.map(\.windowNumber))
   }

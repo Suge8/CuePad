@@ -19,7 +19,6 @@ extension SessionTaskTests {
             {"type":"message","id":"a1","parentId":"u1","timestamp":"2026-09-01T08:00:09.613Z","message":{"role":"assistant","content":[{"type":"text","text":"好了"}],"stopReason":"stop","timestamp":2}}
 
             """.write(to: file, atomically: true, encoding: .utf8)
-        // 没有检查点、从头读：首次回填，或升级作废检查点之后
         func backfill() async {
             await services.consumeHistory(AsyncStream { continuation in
                 continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
@@ -33,7 +32,7 @@ extension SessionTaskTests {
         let written = try #require(try await store.sessionItems(sessionIDs: ["old"])["old"]?.state)
         #expect(written.title == "整理发布脚本" && written.lastReply == "好了")
 
-        await nextMillisecond()  // 改写了的话修改时间一定不同
+        await nextMillisecond()
         await backfill()
         #expect(try await store.sessionItems(sessionIDs: ["old"])["old"]?.state == written)
     }
@@ -57,7 +56,7 @@ extension SessionTaskTests {
         let reply = ChatMessage(sessionID: "s1", entryID: "a2", seq: 2, role: .pi, text: "测试全过", at: .now)
         try await store.writeTranscript(SessionTranscript(
             sessionID: "s1", messages: [said(1, "先跑测试", byCue), reply, said(3, "别动登录页样式", byPad)], recap: Recap()))
-        try await recorder.update(sessionID: "s1", state: .thinking, turnOpener: TurnOpener(delivery: byPad, cue: false))  // 他从回复框那句开的这一轮在跑
+        try await recorder.update(sessionID: "s1", state: .thinking, turnOpener: TurnOpener(delivery: byPad, cue: false))
 
         let digest = try await SessionDigest.read(SessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
         #expect(Chat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false])
@@ -84,7 +83,6 @@ extension SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
         var seq: Int64 = 0
-        /// `opener` 为 nil 是不经 CuePad 开的一轮（子代理交回）：记录上的开轮者不变
         func open(_ role: ChatRole, _ text: String, opener: TurnOpener? = nil) async throws -> Int {
             let mark = try await store.lastWrite()
             seq += 2
@@ -130,7 +128,7 @@ extension SessionTaskTests {
             $0.hostID = "mac-b"
             $0.enabledAt = .now
         }
-        try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
+        try await store.recordMacPresence(host: "mac-b") { true }
         let recorder = try await app.runtimeRecorder(on: services.hostID)
         let questions = [("s1", Question(promptID: "p", kind: .confirm, text: "继续？")), ("s2", Question(promptID: nil, kind: .confirm, text: "允许打开浏览器吗？"))]
         for (session, question) in questions {
@@ -150,11 +148,11 @@ extension SessionTaskTests {
 
         let counts = Mutex<[Int]>([])
         let watching = Task { for try await count in store.observe({ try $0.cueTally().waiting.count }) { counts.withLock { $0.append(count) } } }
-        defer { watching.cancel() }  // 订阅一直开着：到期重读靠它登记的计时器
+        defer { watching.cancel() }
         try await eventually("等 Cue 的 1 件") { counts.withLock { $0.last } == 1 }
         try await clock.waitForSleeper()
         clock.advance(.seconds(MacPresence.lifetime - 1))
-        _ = try await app.runtimeRecorder(on: services.hostID)  // Agent 所在的 Mac 仍续期，只让 Cue 那台过期
+        _ = try await app.runtimeRecorder(on: services.hostID)
         clock.advance(.seconds(1))
         try await eventually("Cue 那台过期、等的变 2 件") { counts.withLock { $0.last } == 2 }
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])

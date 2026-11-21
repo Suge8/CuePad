@@ -35,7 +35,6 @@ extension ClaudeCodeRuntime {
         return min(at, window * percent / 100)
     }
 
-    /// `200000`、`200k`、`1M`；别的写法读不懂。
     nonisolated private static func tokens(_ text: String) -> Int? {
         let text = text.trimmingCharacters(in: .whitespaces).lowercased()
         let scale = text.hasSuffix("k") ? 1_000.0 : text.hasSuffix("m") ? 1_000_000.0 : 1

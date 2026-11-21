@@ -2,8 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 一个搜索词出一张表：会话一节在上（先列几个，要看全就只看会话这一类），灵感与任务按项目排在下面。没打字也没设条件时是空的，
-/// 只给几类建议（规则在 `PaletteQuery`）。结果直接落在桌面上，不一条一张纸。
 struct SearchScreen: View {
     @State private var query = PaletteQuery()
     @State private var cards: CardMatches?
@@ -24,7 +22,6 @@ struct SearchScreen: View {
                 if query.isFiltered { ActiveFilters(query: $query, total: query.kind == .sessions ? sessions?.count : cards?.total) }
                 if query.isIdle {
                     SearchSuggestions(query: $query).padding(.top, Spacing.block)
-                // 两份都读到了再排：先到的那份单独排一下，另一份到时整页往下一跳
                 } else if let cards, !query.listsSessions || sessions != nil {
                     let list = query.listsSessions ? sessions : nil
                     if cards.total == 0, list?.isEmpty ?? true {
@@ -40,14 +37,12 @@ struct SearchScreen: View {
         .scrollDismissesKeyboard(.immediately)
         .environment(\.searchHighlight, query.text)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-        // 搜索框只报上屏的字（`SearchCapsule`）：拼音组字时不搜
         .observing(services.store, id: query.cards, into: $cards, onError: workspace.fail) { [query] store in
             try CardMatches.read(query, from: store)
         }
         .observing(services.store, id: sessionKey, into: $sessions, onError: workspace.fail) { [key = sessionKey] store in
             try SessionListData.read(text: key.filter.text, project: key.filter.project, historyLimit: key.limit, at: key.moment, from: store)
         }
-        // 标题给读屏、返回菜单与系统
         .floatingHeader("搜索", center: {
             SearchCapsule(query: $query.text, focusRequests: workspace.searchFocusRequests).frame(width: fieldWidth)
         }) { SearchFilterMenu(query: $query) }
@@ -83,7 +78,6 @@ struct SearchScreen: View {
                     ForEach(run.items) { row($0, in: list) }
                 }
                 if list.hasMore {
-                    // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
                     Spinner(.regular).frame(maxWidth: .infinity).padding(.vertical, Spacing.group)
                         .task(id: list.loaded) { query.sessionPages = list.loaded / SessionListData.pageSize + 1 }
                 }
@@ -97,7 +91,6 @@ struct SearchScreen: View {
                 }
             }
         }
-        // 换搜索词时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）
         .transaction(value: list.filter) { $0.animation = nil }
     }
 
@@ -139,7 +132,6 @@ struct SearchScreen: View {
     }
 }
 
-/// 页头右边那一颗：条件收在菜单里，不在结果上面占一排。设了的条件在结果顶上各一颗（`ActiveFilters`），看得见、点一下就撤。
 private struct SearchFilterMenu: View {
     @Binding var query: PaletteQuery
     @Environment(Workspace.self) private var workspace

@@ -1,15 +1,11 @@
 import SwiftUI
 
-/// 有人在看 Cue 页的规则（算不算在看、读没读）只在这里：这一页在屏上（Mac 页栈里的当前页、人在跟前看得到主窗口 `ViewerKeeper.present`；手机上没被推进的页盖住、App 在前台）。
-/// 在看的期间这一处算一个在看的（`ViewerKeeper.showCue`，Cue 的提示据此不发，手机按节奏拉），并读新消息：哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读。
 struct CueViewing: ViewModifier {
     let thread: CueThread?
     let catchingUp: Bool
     @Binding var seen: [UUID: Date]
     @Binding var follow: ChatFollow
-    /// 舞台开着（`CueStage`）：打开停在对话尽头的它上面，不落到第一条新消息；读到哪照样按末尾在不在屏上算（舞台在屏上时它们在上面）。
     let staged: Bool
-    /// 离开够久（`CueStage.opens`）又回来看：页把舞台重开、回到最新处。离开的时刻记在本机（`AppSettings.cueLeft`），各台设备各算各的来访。
     let revisit: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -23,7 +19,6 @@ struct CueViewing: ViewModifier {
     @State private var appeared = false
     @State private var token = UUID()
 
-    /// 末尾在屏上停这么久才算读到：打开时先停在最新处、跳到第一条新消息之前的那一下，与一路甩过去的都不算。
     static let dwell: Duration = .seconds(1)
 
     private var watching: Bool { active && onScreen && appeared }
@@ -32,9 +27,7 @@ struct CueViewing: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear { appeared = true }
-            // 页拆掉时 onChange 不再来：在这里收回
             .onDisappear {
-                // 已经不在看时拆掉（后台里关了那扇窗）：离开的时刻是当初不看的那一刻，不改写成现在
                 if watching { services.settings.cueLeft = .now }
                 appeared = false
                 services.viewer.showCue(false, by: token)
@@ -89,13 +82,11 @@ struct CueEndProbe: View {
     }
 }
 
-/// 叠在格子上、不占地方：来去不重排。高按第一行字量（一个看不见的字），跟着动态字体走。
 struct CueUnreadDot: View {
     let unread: Bool
     @Environment(\.palette) private var palette
 
     nonisolated static let gap = Spacing.glyph
-    /// 页边距至少这么宽才把点放在气泡外，不然骑在气泡左缘上（`CueRow`）。
     static let room = StatusDot.size + gap + Spacing.item
 
     var body: some View {

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 多个入口共用一个呈现来源；只量实际按钮，结束后的空通话栏不能充当锚点。
 struct CueVoiceDetailButton<Label: View>: View {
     @Binding var source: BubbleSource?
     var activate: (() -> Void)?
@@ -24,9 +23,6 @@ struct CueVoiceDetailButton<Label: View>: View {
 }
 
 #if os(macOS)
-/// Mac 的通话条，在输入框那里：通话中顶替输入框（`CuePage`，同手机），挂断后还有可看的（失败、问题与朗读记录）时缩成输入框上面的一条，都没有就不在。
-/// 真实状态立即更新，只有声纹在图层里连续变形，详情在行尾的"⋯"。
-/// 手机与 iPad 没有单独的条：通话就在"对 Cue 说"里（`CueComposer`、`PhoneCall`）。
 struct CueVoiceView: View {
     let presentation: CueVoicePresentation?
     @Binding var detailsSource: BubbleSource?
@@ -45,7 +41,6 @@ struct CueVoiceView: View {
             }
     }
 
-    /// 没起过通话（`idle`）时不在：起不了的原因在入口的提示里（`CueVoiceEntry`），不另占一条。
     private var showsStatus: Bool {
         guard let presentation, presentation.activity != .idle else { return false }
         return active || hasDetails || presentation.activity == .failed
@@ -55,7 +50,6 @@ struct CueVoiceView: View {
         if showsStatus { bar.transition(.opacity) }
     }
 
-    /// 与手机通话中的输入框同一个摆法：左边静音、右边挂断两颗圆钮，中间声纹与状态居中、点它看通话详情。
     private var bar: some View {
         HStack(spacing: Spacing.item) {
             muteButton
@@ -107,7 +101,6 @@ struct CueVoiceView: View {
 }
 
 private extension View {
-    /// 保留测量与视图身份；退出开始就撤掉点击、键盘与读屏入口，淡去只影响画面。
     func voiceSlot(_ visible: Bool) -> some View {
         opacity(visible ? 1 : 0)
             .animation(Motion.fade, value: visible)

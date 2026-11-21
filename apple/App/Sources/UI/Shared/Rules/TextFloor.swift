@@ -49,7 +49,6 @@ enum TextFloor {
         return lines
     }
 
-    /// 段距（块与块之间的空行，`MarkdownText.attributed`）不算：它比一行矮。
     private static func markdownLines(_ source: String) -> [Line] {
         func prose(_ text: String, lead: String = "") -> [Line] {
             text.split(separator: "\n", omittingEmptySubsequences: false).map { .prose(Font.prose.width(of: lead + MarkdownBlock.plainInline(String($0)))) }
@@ -59,7 +58,6 @@ enum TextFloor {
             case .paragraph(let text), .heading(_, let text): prose(text, lead: block.textIndent)
             case .quote(let text): prose(text, lead: block.textIndent + "▎ ")
             case .code(let code): code.split(separator: "\n", omittingEmptySubsequences: false).map { .code(Font.code.width(of: block.textIndent + String($0))) }
-            // 一行至少上下各 8 的内边距加一行小字（`MarkdownTableView`）
             case .table(let table): [.block(CGFloat(table.rows.count + 1) * (16 + Font.code.size))]
             case .rule: [.prose(0)]
             }
@@ -86,7 +84,6 @@ enum TextFloor {
 
         func wraps(_ run: CGFloat, in width: CGFloat) -> Int { max(1, Int((run / (width + size)).rounded(.up))) }
 
-        // 正文 `Typography.reading` 与代码 `Typography.code` 的最小号（iOS：动态字体最小一档的正文与脚注）
         #if os(macOS)
         static let prose = Font(size: Typography.readingSize, monospaced: false), code = Font(size: Typography.codeSize, monospaced: true)
         #else

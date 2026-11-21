@@ -22,7 +22,6 @@ struct CardPressMonitor: NSViewRepresentable {
 
         required init?(coder: NSCoder) { nil }
 
-        /// ⌘⌫ 删鼠标停着的那张卡，不挂成窗口级快捷键：那样会先于编辑页、输入栏接走 ⌘⌫。
         private func deleteHovered(_ event: NSEvent) -> Bool {
             guard event.keyCode == Self.deleteKey, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
                   !((window?.firstResponder as? NSTextView)?.isEditable ?? false),

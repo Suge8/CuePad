@@ -1,15 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 点外面、Esc、读屏的退出手势怎么关，背后进不进读屏，只在这里一处（`ModalHost`、`ModalScrim`），窗口那一层（`panelHost`）挂一份：
-/// - 开着时铺一层接点按的底，盖在整窗上（会话条、提示横幅、iPad 的别的栏都在它下面）：手指一落在浮出外面就关，
-///   那一下不落到下面（点外面是"关掉它"，不是点了下面那张卡）；收起那一下就撤（`transition(.identity)`），紧接着的点按照常落到下面。
-///   页里长开的面板在这一层下面：它报来自己的框（`ModalHost.hole`），底在那一块开个洞，面板自己接点按。
-/// - 读屏：浮窗开着时背后整窗不进读屏；页里长开的面板由所在的页藏起旁边的（`FloatingHeader`、`NarrowCue`），iPad 上 Cue 那一块以外的由 `SplitRoot` 藏，窗口的气泡由 `panelHost` 藏。
-///   浮出标为模态，开时读屏从它读起，关后焦点回到长出它的那颗钮（#68）。
-/// 气泡（`PanelStyle.bubble`）不是模态：点外面关、那一下照常落到下面（`BubbleLayer`）。
-/// 宽屏两侧的抽屉（Cue 的 `CueDock`、会话条的 `RailDrawer`）点外面关在它们自己的 `DrawerCatcher`，不并进这里：抽屉两端共用（Mac 也是它），这里只编进 iOS；
-/// 抽屉里还会长开名牌，两个同时开着，这里一次只开一个、后开的顶掉先开的，并进来开名牌就会关掉抽屉。名牌开着时两层都在：点抽屉外先由这里接住、只收名牌；Esc 也只有这里一个（抽屉的那颗让位，`escapeTaken`）。
 @Observable
 final class ModalHost {
     private(set) var modal: Modal?
@@ -47,7 +38,6 @@ final class ModalHost {
 }
 
 extension View {
-    /// 同一块实底玻璃从钮的框长到浮窗的框，字按终点排好、玻璃长过三成才淡出来，不缩放字（有字的一块进出场不缩放，理由在 `Bubble.swift`）。
     func popup(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(PopupSlot(isPresented: isPresented, panel: content))
     }
@@ -105,7 +95,6 @@ private struct PopupSlot<Panel: View>: ViewModifier {
             .sensoryFeedback(.impact(weight: .light), trigger: isPresented)
     }
 
-    /// 钮在窗口里的框：记在不触发重算的盒子里，钮随滚动挪动不重算。
     private final class Measured {
         var frame: CGRect?
     }
@@ -122,7 +111,6 @@ struct PopupLayer: View {
             let frame = proxy.frame(in: .global)
             ZStack {
                 if let modal, let popup = modal.popup {
-                    // 钮的框相对浮窗中心（浮窗在这一层正中）：浮窗多高要排出来才知道，长出的形状按排好的框从中心量
                     let source = popup.source.offsetBy(dx: -frame.midX, dy: -frame.midY)
                     popup.content
                         .frame(width: max(min(frame.width - 2 * Spacing.page, Self.widest), 0))
@@ -132,7 +120,6 @@ struct PopupLayer: View {
                         .accessibilityAddTraits(.isModal)
                         .accessibilityAction(.escape) { modal.close() }
                         .id(modal.token)
-                        // 玻璃也画在这个转场里（停着时是它的终态）：减弱动态效果时不长、只淡
                         .transition(.modifier(
                             active: PopupGrow(progress: reduceMotion ? 1 : 0, source: source), identity: PopupGrow(progress: 1, source: source))
                             .combined(with: reduceMotion ? .opacity : .identity))
@@ -144,7 +131,6 @@ struct PopupLayer: View {
     }
 }
 
-/// 每一帧只改一块形状（`GrowShape`，不读几何、不排字）；里面的字按终点排好、裁在这块形状里，玻璃长过三成才淡出来。不开时（`progress` 1）就是浮窗本身的那块玻璃：浮窗只经它画玻璃。
 private struct PopupGrow: ViewModifier, Animatable {
     var progress: CGFloat
     let source: CGRect
@@ -154,7 +140,6 @@ private struct PopupGrow: ViewModifier, Animatable {
         set { progress = newValue }
     }
 
-    /// 字从这一点起淡出来：玻璃还只有钮那么大时字挤在一小块里，读作一团。
     private static let textFrom: CGFloat = 0.3
 
     func body(content: Content) -> some View {
@@ -162,9 +147,7 @@ private struct PopupGrow: ViewModifier, Animatable {
         content
             .opacity(min(max((progress - Self.textFrom) / (1 - Self.textFrom), 0), 1))
             .clipShape(shape)
-            // 玻璃挂在内容本身上（字在玻璃里，lint 查）；字的透明度挂在玻璃之前，只淡字不淡玻璃
             .glass(in: shape)
-            // 收回最后那一截玻璃落在钮上淡掉，钮从它底下露出来，不是一块白板盖着钮等弹簧的尾巴；这一截里字早已淡完（`textFrom` 在它之后）
             .opacity(min(progress / Self.glassFrom, 1))
     }
 

@@ -25,9 +25,9 @@ import Testing
     try await store.setDirectory("/work/app", for: project.id)
     let bound = try await projects()
     #expect(bound["in-folder"] == project.id && bound["in-subfolder"] == project.id)
-    #expect(bound["elsewhere"] == .some(nil) && bound["near-miss"] == .some(nil))  // 按路径分段比，application 不算 app 里的
+    #expect(bound["elsewhere"] == .some(nil) && bound["near-miss"] == .some(nil))
 
-    try await store.setDirectory("/work/other", for: project.id)  // 改绑：旧的放出去，新的归进来
+    try await store.setDirectory("/work/other", for: project.id)
     let moved = try await projects()
     #expect(moved["elsewhere"] == project.id && moved["in-folder"] == .some(nil) && moved["in-subfolder"] == .some(nil))
 
@@ -52,9 +52,9 @@ import Testing
 
     let folders = try await store.sessionFolders()
 
-    #expect(folders.map { "\($0.hostID)/\($0.folder)" } == ["mac-a/app", "mac-a/site", "mac-b/app"])  // 最近的在前
+    #expect(folders.map { "\($0.hostID)/\($0.folder)" } == ["mac-a/app", "mac-a/site", "mac-b/app"])
     #expect(folders.map(\.count) == [3, 1, 1])
-    #expect(folders[0].sessionID == "new" && folders[0].projectID == project.id)  // 代表会话是最近那个
+    #expect(folders[0].sessionID == "new" && folders[0].projectID == project.id)
     #expect(folders[2].sessionID == "other-mac" && folders[2].projectID == nil)
   }
 }

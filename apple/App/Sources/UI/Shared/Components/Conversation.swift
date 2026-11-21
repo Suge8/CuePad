@@ -5,13 +5,11 @@ import CueBridge
 #endif
 
 
-/// Mac 上本机在线的会话（`slot`）在末尾逐字长出正在说的话（`SessionDraft`），说完落库时原位换下：这时对话里的回答都不淡入。
 struct Conversation: View {
     let session: SessionState
     let items: [ChatEntry]
     let messages: [ChatMessage]
     let window: ChatWindow
-    /// 排在对话那一列里，它收起时正在读的不动（`ChatAnchor`）。
     var fetching = false
     #if os(macOS)
     var slot: Bridge.Slot?
@@ -39,8 +37,6 @@ struct Conversation: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         #if os(iOS)
-        // 手机上长按出的是消息菜单，挑字、批注走菜单里的"选择文本""批注"：对话里的字不开行内选择，每行少建一套文字交互。
-        // 挂在弹出预览之内：从这里打开的文件预览照常可选
         .environment(\.inlineTextSelection, false)
         #endif
         .previewPresenter($opened, reply: .session(session))
@@ -59,8 +55,6 @@ struct Conversation: View {
         #endif
     }
 
-    /// 进展的第一行一直占着位置（`ChatLiveSlot`，没有时留白）：一轮开始、结束时对话不跟着跳；进展往下长出的几步是内容。
-    /// 它排在最后：回复框上方的说明（`composerNotice`）落在这段留白里，盖不到上面的内容。
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
@@ -75,7 +69,6 @@ struct Conversation: View {
 
     private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
-    /// 做过的几步在上，此刻在做的是末尾的角色（`LiveFigure`）：回复落库时它碎开让位。
     private var liveStatus: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
             if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty { LiveStatus(session: session).transition(.entry) }
@@ -86,7 +79,6 @@ struct Conversation: View {
 
 
 #if os(macOS)
-/// 草稿落库了（`LiveDraft.landed`）就不再显示：换下是同一帧里的一减一加。这一轮还在跑也不冒出进展（正文已经说完），只列子代理；状态先到时草稿照常留着、等文件。下一条助手消息开始时扩展清掉旧草稿。进展被草稿换下时直接拿掉，不叠着淡出。中途的话转成工具调用时桥清掉草稿，这里就让位给工具那一行。出字时只读草稿的视图重算，对话列表不重算。
 struct SessionDraft: View {
     let slot: Bridge.Slot
     let session: SessionState
@@ -106,7 +98,6 @@ struct SessionDraft: View {
                 }
             }
             ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
-                // 正文已经说完、这一轮还没停（状态晚于草稿落库）：不冒出进展，角色也不回来
                 let said = speaking || landed && session.runtimeState.known?.isTurnRunning == true
                 VStack(alignment: .leading, spacing: Spacing.item) {
                     if said {
@@ -114,7 +105,6 @@ struct SessionDraft: View {
                     } else if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty {
                         LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
                     }
-                    // 开始出字就是回复到了：角色当场让位给草稿
                     LiveFigure(live: said ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
                 }
             }
@@ -124,7 +114,6 @@ struct SessionDraft: View {
 #endif
 
 
-/// 只按内容比较：同样的几条、描圈的那条与批注（只看本段里的）、同一个会话就不重算。
 private struct ChatSegment: View, Equatable {
     let items: [ChatEntry]
     let session: SessionState
@@ -159,7 +148,6 @@ private struct ChatSegment: View, Equatable {
         }
     }
 
-    /// `last`：后面不是又一句还没到的（连着几句还没进对话只最后一句画记号，`UserBubble.marksTransit`）。
     @ViewBuilder private func row(_ entry: ChatEntry, last: Bool) -> some View {
         switch entry.role {
         case .user:
@@ -170,7 +158,6 @@ private struct ChatSegment: View, Equatable {
         case .outgoing(let request):
             outgoing(request, marksTransit: last).padding(.top, Self.turnGap)
         case .answer:
-            // 你答了它的提问：你那一边的一颗气泡，字上面一行答的是哪个问题（问题答完就不在对话里了，引用不能点）
             AnswerBubble(answer: entry.text, quote: entry.question.map { BubbleQuote(text: $0) }, look: .session, highlighted: entry.id == highlight) {
                 MessageActions(text: entry.text, kind: .mine, session: session)
             }
@@ -208,7 +195,6 @@ extension ChatSegment {
     }
 }
 
-/// 不是分隔（上下文没换），刻度滑条上也没有它。
 private struct RoundEndNote: View {
     let notice: ChatNotice
 
@@ -236,7 +222,6 @@ extension Conversation {
 }
 
 
-/// 所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`SessionPlace.menuTitle`）。Mac 的会话栏头只写名字（`WideSessionTitle`）。
 struct SessionSubtitle: View {
     let session: SessionState
     let delivery: DeliveryRequest?
@@ -245,7 +230,6 @@ struct SessionSubtitle: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    /// 会话在别的 Mac 上、本机正在和 iCloud 对：写下的状态可能已经过时，先写"正在同步"（同 Cue 页头）。
     private var syncing: Bool { services.syncing.showsCatchingUp(on: session.hostID) }
 
     var body: some View {
@@ -284,12 +268,9 @@ struct SessionSubtitle: View {
         }
     }
 
-    /// 页头玻璃里标题下面那一行（同 Cue 名牌的数字账）：再大一号，两行就顶到 44 点玻璃的上下沿。
     private static let font = Typography.toolbarSubtitle
 }
 
-/// 正开着的会话（与 Cue 手上那个）此刻的状态：标与一句。状态标换形不重建（不按字换身份），一轮跑完落到哪儿在手机上轻震一下：
-/// 停下等你是提醒、出错是错误、做完歇下是轻轻一下；只在你看着的这一个上震，列表里别的会话不震。
 struct SessionShownLabel: View {
     let shown: SessionShown
     @Environment(\.palette) private var palette
@@ -316,7 +297,6 @@ struct SessionShownLabel: View {
 }
 
 
-/// CuePad 答不了的（问题本身答不了，或这个会话做不到，`SessionState.answerableQuestion`）只放原文，怎么办写在回复框的位置上。
 struct QuestionDock: View {
     let session: SessionState
 

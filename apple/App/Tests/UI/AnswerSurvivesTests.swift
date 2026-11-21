@@ -9,7 +9,6 @@ struct AnswerSurvivesTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    /// 答题部件（会话页、Cue 的等你卡、菜单栏）都从 `LiveSessions.answer(to:)` 找自己的作答请求：找不到，选项就停在「送达中」。
     @Test func 作答后别的请求发进同一会话_作答请求还找得到() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac")
         let question = Question(promptID: "p-1", kind: .select, text: "要覆盖吗？", options: ["覆盖", "另存"])

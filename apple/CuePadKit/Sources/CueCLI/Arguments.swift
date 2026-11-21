@@ -1,4 +1,3 @@
-/// `--` 之后全是位置参数。
 struct Arguments {
   private(set) var positionals: [String] = []
   private(set) var flags: Set<String> = []
@@ -52,7 +51,6 @@ struct Arguments {
     values[name, default: []].append(value)
   }
 
-  /// 恰好这些位置参数（`names` 是它们的说明，用于报错）。
   func expect(_ names: String...) throws {
     guard positionals.count == names.count else {
       let need = names.isEmpty ? "不接受位置参数" : "需要 " + names.map { "<\($0)>" }.joined(separator: " ")

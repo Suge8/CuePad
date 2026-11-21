@@ -7,13 +7,9 @@ import Foundation
 final class ClaudeStream {
     let process: ChildProcess
     var onMessage: ((JSONValue) -> Void)?
-    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`LiveDraft`，拼法见 `DraftParts`）；正常说完的留着，不清。
-    /// 起点是第一段定稿那一行的 `timestamp`，定稿之前是收到 `message_start` 的时刻（`LiveDraft.since`）。
     var onDraft: ((LiveDraft?) -> Void)?
     private var speech = DraftParts()
-    /// 正在说的文字块的块号（`content_block_start` 给的）；不发增量时没有，定稿接在最后一段后面
     private var openBlock: Int?
-    /// 输出读完了（进程退出）；只调一次
     var onClose: (() -> Void)?
     /// 主会话的模型开始回话（流里的 `message_start`）：请求被模型收下了。没登录、模型不可用、额度用完时没有它（`ClaudeDelivery`）
     var onReply: (() -> Void)?
@@ -48,13 +44,11 @@ final class ClaudeStream {
         return .array(content)
     }
 
-    /// 写一条。输入已关或进程已退出时抛 `sessionEnded`。
     func write(_ message: JSONValue) throws {
         guard !inputClosed, !isClosed else { throw BridgeError.sessionEnded }
         process.write(message.data)
     }
 
-    /// 控制请求，返回回应里的 `response`；Claude Code 回错误抛 `rejected`，超时抛 `ackTimeout`。
     func request(_ body: JSONValue) async throws -> JSONValue {
         let requestID = UUID().uuidString
         return try await replies.request(requestID) {

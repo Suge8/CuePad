@@ -21,7 +21,6 @@ struct CueActivityViews {
     }
 
     var lockScreen: some View { CueLockScreen(now: now, stale: stale).withPalette() }
-    /// 锁屏那张卡的底色：系统里由 `activityBackgroundTint` 铺，调试画面自己铺。
     func lockFill(_ palette: Palette) -> Color { CueLockScreen(now: now, stale: stale).fill(palette) }
     var compactLeading: some View { CompactLeading(now: now).island() }
     var compactTrailing: some View { CompactTrailing(now: now).island() }
@@ -29,13 +28,11 @@ struct CueActivityViews {
     var expandedLeading: some View { Reading(now: now).frame(height: Self.head).padding(.leading, Self.inset).island() }
     var expandedTrailing: some View { Clock(now: now).font(IslandType.clock).frame(height: Self.head).padding(.trailing, Self.inset).island() }
     var expandedBottom: some View { Details(now: now).island() }
-    /// 调试画面里展开态的样子：三块照系统摆的位置拼在一起。
     var expanded: some View { ActivityBody(now: now).island() }
     var keyline: Color { now.keyTone.color(Palette(dark: true)) }
 
     static let staleOpacity = 0.55
     static let maxType = DynamicTypeSize.xLarge
-    /// 头一排的高：同摄像头那一条，读数与钟排在它两侧。
     fileprivate static let head: CGFloat = 36
     fileprivate static let inset: CGFloat = 6
 }
@@ -45,7 +42,6 @@ private extension View {
 }
 
 extension CueNow {
-    /// 岛上那只钟从哪一刻起算：有等你的，是等得最久的那件；否则 Cue 这一轮，再否则最早在跑的那件。没有在等、在跑的（歇着、状态未确认）不画钟。
     var clock: Date? {
         func earliest(_ kinds: Set<Item.Kind>) -> Date? { items.filter { kinds.contains($0.kind) }.map(\.since).min() }
         if let waiting = earliest([.asks, .reply]) { return waiting }
@@ -54,7 +50,6 @@ extension CueNow {
     }
 }
 
-/// 所有尺寸共用口径与读屏名称；紧凑位写到 99+，28pt 圆位写到 9+，完整数在展开态。
 private struct ActivityCount {
     let now: CueNow
     init(_ now: CueNow) { self.now = now }
@@ -71,7 +66,6 @@ private struct ActivityCount {
         return String(localized: "活跃 Agent 数未知")
     }
     var tone: CueNow.Tone { waiting ? (now.tally.asks > 0 ? .asks : .reply) : .moving }
-    /// 同会话状态标的图形：有拍板是气泡问号，只剩新回复是信封，没有等你的是 Agent。
     var glyph: Image { (now.tally.asks > 0 ? WidgetIcon.waiting : waiting ? .mail : .agent).image }
 }
 
@@ -93,12 +87,10 @@ private struct Digits: View {
 /// 岛上能一直动的只有它：给图形加循环动画（`symbolEffect` 的 pulse、无限重复）在 iOS 27 模拟器的系统岛上录过，收起与展开都不播。
 struct ActivityElapsed: View {
     let since: Date
-    /// 时间文字会占满给它的宽、字靠左：排在右端的（默认）字要贴右缘。
     var alignment = TextAlignment.trailing
 
     var body: some View { Self.text(since: since).lineLimit(1).multilineTextAlignment(alignment) }
 
-    /// 能嵌进一句里的那只钟（"已等 3:02"）。
     static func text(since: Date) -> Text {
         Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit()
     }
@@ -178,7 +170,6 @@ private struct NarrowCount: View {
     }
 }
 
-/// 展开态头一排左半：紧凑态左位的读数放大，前面是说它数的是什么的图形。Cue 不在这一排：它全身站在右下角（`Details`）。
 private struct Reading: View {
     let now: CueNow
     @Environment(\.palette) private var palette
@@ -206,7 +197,6 @@ private struct Details: View {
     static let room = 3
     /// 这一块的高，也是 Cue 的身高：头一排与系统上下的留白之外，160pt 里只剩这么多，再高下缘被系统裁掉。
     private static let height: CGFloat = 84
-    /// 右边让给 Cue 的宽：行尾的字不排到它身上。
     private static let beside: CGFloat = 104
 
     private var step: String? {
@@ -221,7 +211,6 @@ private struct Details: View {
 
     private var rows: ArraySlice<CueNow.Item> {
         var items = now.items.filter { $0.kind != .resting }
-        // 第一件等你已经写在上面（`first` 与拍板那几行同一个次序）
         if now.first != nil, let shown = items.firstIndex(where: { $0.kind == .asks }) { items.remove(at: shown) }
         return items.prefix(Self.room - (now.first.map { $0.allow == nil ? 2 : 3 } ?? 0) - (step == nil ? 0 : 1))
     }
@@ -239,7 +228,6 @@ private struct Details: View {
                     Spacer(minLength: 0)
                     HStack(spacing: 4) {
                         item.kind.glyph?.image
-                        // 还在动的写做了多久（自己走），停下的写状态词
                         if item.kind.tone == .moving {
                             ActivityElapsed(since: item.since).minimumScaleFactor(0.8).frame(width: IslandType.rowClockWidth, alignment: .trailing)
                         } else {
@@ -263,7 +251,6 @@ private struct Details: View {
 }
 
 extension CueNow.Item.Kind {
-    /// 行尾状态词前的图形，同 App 里会话状态标的那几个；歇着、状态未确认只写字。
     var glyph: WidgetIcon? {
         switch self {
         case .asks: .waiting
@@ -305,7 +292,6 @@ private struct FirstWait: View {
                     if let detail = wait.detail { Text(detail).font(IslandType.row).foregroundStyle(palette.ink2).lineLimit(1) }
                 }
             }
-            // 岛上铺了实色的只有这颗钮：等你那块赭黄，墨色的勾
             if let allow = wait.allow {
                 let signal = palette.signal(.asks)
                 AllowTick(allow: allow, fill: signal.fill, tick: signal.ink, size: CGSize(width: 72, height: 36))

@@ -11,7 +11,6 @@ struct SendTargetTests {
     let workspace: Workspace
     let project: Project
     private var store: CueStore { rig.services.store }
-    /// 假扩展一释放连接就断开（会话就结束了），所以连着的都留在这里，直到测试结束。
     private let opened = Opened()
     private final class Opened { var extensions: [FakeExtension] = [] }
 
@@ -20,7 +19,7 @@ struct SendTargetTests {
         try await rig.services.store.setDirectory("/work", for: project.id)
         try await rig.offersPi()
         workspace = Workspace(services: rig.services)
-        let changes = rig.bridge.changes()  // 先订阅再连上会话：桥的变化写成同步记录
+        let changes = rig.bridge.changes()
         try rig.bridge.start()
         let services: AppServices = rig.services
         Task {
@@ -30,7 +29,6 @@ struct SendTargetTests {
     }
 
     private func open(_ sessionID: String, in directory: String, pid: Int32 = 100) async throws -> FakeExtension {
-        // 说过话的会话才有会话文件：结束后进历史（没有文件的结束时不进历史）
         let file = FileManager.default.temporaryDirectory.appending(path: "send-target-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
         let ext = FakeExtension(directory: rig.socketDirectory, sessionID: sessionID, pid: pid, options: .init(cwd: directory, sessionFile: file.path))
@@ -88,7 +86,6 @@ struct SendTargetTests {
             let request = try #require(try await store.deliveryRequests().first)
             #expect(request.mode == .known(.start) && request.target.name == "修乱序")
 
-            // 认领会话可以先于首句送达；两件都等到才核对正文。
             #expect(try await store.outcome(of: request).status == .known(.succeeded))
             let opened = "new-\(token)"
             _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == opened }
@@ -136,7 +133,6 @@ struct SendTargetTests {
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
     }
 
-    /// 对没托管过的历史会话（没有认领标识）发话，CuePad 在后台接着它；结束后它仍算这台托管过：没接入的那几家按这份名单回填、OpenCode 按它认会话。
     @Test func 接着没托管过的历史会话_结束后仍算这台托管过() async throws {
         let folder = rig.directory.appending(path: "work/history", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

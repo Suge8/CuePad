@@ -8,7 +8,6 @@ extension AppSettings {
         static let viewing = "remoteViewing"
     }
 
-    /// Mac（`hostID`）→ UU 远程的加密设备标识。
     var remoteDevices: [String: String] {
         get { defaults.dictionary(forKey: RemoteKey.devices) as? [String: String] ?? [:] }
         set { defaults.set(newValue, forKey: RemoteKey.devices) }
@@ -19,7 +18,6 @@ extension AppSettings {
         set { defaults.set(newValue, forKey: RemoteKey.lastHost) }
     }
 
-    /// 在等回跳的那一次绑定：为哪台 Mac 绑，是不是为了看哪个会话的活预览（`Workspace.operate(on:viewing:)`）。
     struct RemoteBinding: Equatable {
         let nonce: String
         let host: String
@@ -36,8 +34,6 @@ extension AppSettings {
         set { defaults.set(newValue.map { ["nonce": $0.nonce, "host": $0.host, "viewing": $0.viewing].compactMapValues(\.self) }, forKey: RemoteKey.binding) }
     }
 
-    /// 用 UU 远程到 Mac 上看着活预览的会话 → 那台 Mac：回到 CuePad 时请它把铺满的预览放回去（`LiveRemote.comeBack`）。
-    /// 记在偏好里：看的那段时间系统可能把 CuePad 收掉。
     var remoteViewing: [String: String] {
         get { defaults.dictionary(forKey: RemoteKey.viewing) as? [String: String] ?? [:] }
         set { defaults.set(newValue, forKey: RemoteKey.viewing) }

@@ -1,8 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// 做完了、结果你还没看的那件（Cue 页舞台上的一行）：交给过 Agent、7 天内做完，它的会话停下后你还没看过（`SessionState.isUnread`）；
-  /// 最近做完的那件。看结果就是看那个会话，所以不另记"看过"：从哪里打开它的会话都算。
   public func unseenDone() throws -> Card? {
     let now = timing.now(), window: TimeInterval = 7 * 86_400
     let done = try db.query(

@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 正文读本地已同步来的那一条（`LibraryFileText`），不向 Mac 要，对上快照的哈希才载入、才跟。不点纸飞机就不发：退出这一页时没发的留在 `Workspace.fileDrafts`，回来接着改。
 struct LibraryFileScreen: View {
     let file: LibraryFile
     @Environment(Workspace.self) private var workspace

@@ -1,7 +1,6 @@
 import CueText
 import Foundation
 
-/// 每个块都携带同一份列表路径；块类型不决定归属。路径末项是直接父项，startsItem 只标记该项的首块。
 nonisolated struct MarkdownBlock: Equatable, Sendable {
     enum Content: Equatable, Sendable {
         case paragraph(String), heading(level: Int, text: String), quote(String), code(String), table(MarkdownTable), rule

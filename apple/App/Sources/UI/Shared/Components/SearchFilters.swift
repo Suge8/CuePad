@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 菜单的样式跟外面的环境（Mac 在外面套 `.menuStyle(.button)`）。
 struct SearchFilters: View {
     @Binding var query: PaletteQuery
 
@@ -43,7 +42,6 @@ struct SearchFilters: View {
     }
 }
 
-/// 没打字也没设条件时搜索里只有这几行（三端同一份）：点一行就是设上那个条件。
 struct SearchSuggestions: View {
     @Binding var query: PaletteQuery
     @Environment(\.palette) private var palette

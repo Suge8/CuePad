@@ -1,9 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 空态与启用合成这一处，同一屏不说两遍；输入框上方不另放一块。
-/// 启用前后是同一块（同一个 `EmptyState`，不垫纸）：同步对完、Cue 在别处已启用时只换里面的字与动作，吉祥物的出场不重播、不先空一下。
-/// 说过话后停用的那张小纸只在没启用时出现（`CuePage`）。
 struct CueWelcome: View {
     let intro: Bool
     @Environment(Workspace.self) private var workspace
@@ -24,7 +21,6 @@ struct CueWelcome: View {
                     if hears { CueStarters() } else { steps(settings, hosts) }
                 }
             } else {
-                // 说过话后停用了：页头已写"已停用"，这里只说启用后怎样与那一步，不再自我介绍
                 VStack(spacing: Spacing.item) {
                     Text("启用后 \(name) 接着干活").font(Typography.secondary).foregroundStyle(palette.ink2)
                     steps(settings, hosts)
@@ -64,7 +60,6 @@ struct CueWelcome: View {
     }
     #endif
 
-    /// Mac 上这台总在能启用的几台里（`CueSettings.hosts(here:)`），只有手机要先接上 Mac。
     private func message(_ settings: CueSettings) -> String {
         #if os(iOS)
         if setup(settings).stuck != nil { return String(localized: "我在你的 Mac 上干活，接上 Mac 就能叫我") }
@@ -97,8 +92,6 @@ struct CueWelcome: View {
         model.choose(host, services)
     }
 
-    /// 别的几台收在旁边一颗"选别的 Mac"的菜单里；Mac 上这颗菜单常驻、没有别的时藏起（占着位置）：库里多一台 Mac 时卡片不长高一截（卡片竖直居中，长高就整块上下挪）；
-    /// 不置灰露着：只有一台 Mac 的新用户看到一颗点不了的"选别的 Mac"，不知道该装第二台还是哪里坏了。
     @ViewBuilder private func enableButton(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
         if let host = primary(settings, hosts) {
             VStack(spacing: Spacing.item) {

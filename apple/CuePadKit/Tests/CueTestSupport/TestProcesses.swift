@@ -32,7 +32,6 @@ public enum TestProcesses {
 
   private static let updaterArgument = "pid-update-loop"
 
-  /// 退出由 kqueue 的进程事件得知（先登记再发信号，不会错过）；登记不上的是已经没了。
   private static func terminate(_ pids: [pid_t], grace: Duration) {
     let queue = kqueue()
     defer { close(queue) }

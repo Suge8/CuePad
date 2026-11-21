@@ -38,8 +38,6 @@ final class ActivityPublisher {
         var state: CueActivityState
     }
 
-    /// 这台对一台手机上的岛所知道的：没了的时刻（没见过就从这台启动算）、推不动了的那个令牌（这台结束了那只、或 APNs 说它失效；
-    /// 手机还没来得及删地址。按令牌记不按活动记：同一只活动换了令牌还推得动）、上次远程开的时刻。
     private struct Island {
         var gone: Date
         var dead: String?
@@ -79,7 +77,6 @@ final class ActivityPublisher {
         let publishing: @MainActor @Sendable () async throws -> Void = {
             try await self.publish(changes, retrying: changed, services: services)
         }
-        // 子任务只因取消抛出
         try? await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask(operation: reading)
             group.addTask(operation: publishing)
@@ -123,14 +120,12 @@ final class ActivityPublisher {
         func same(as other: Self) -> Bool { destinations == other.destinations && state.same(as: other.state) }
     }
 
-    /// 订阅只负责叫醒；网络返回时订阅重读未必已送到，不以它缓存的那一份证明问题仍有效。
     private func current(_ services: AppServices) throws -> Publication? {
         let read = try services.store.snapshot { try CueReading.Read.read(from: $0, widget: false) }.value
         guard let activity = read.activity, activity.publisher == services.hostID, let state = try services.activityState(read.digest) else { return nil }
         return Publication(destinations: activity.destinations, state: state, newest: services.activityNewest(read.digest))
     }
 
-    /// 内容在等待期间前进了就交回合并流（返回 true），只追最新一份，不在这里循环追赶。
     private func publishLatest(_ services: AppServices) async throws -> Bool {
         wakeAt = nil
         guard let publication = try current(services) else {
@@ -140,7 +135,6 @@ final class ActivityPublisher {
         let now = publication.state.now
         if now.isLive, !now.hasConfirmedActivity, !now.unconfirmed { wake(now.lingersUntil) }
         let devices = Dictionary(grouping: publication.destinations, by: \.device)
-        // 手机删了地址：那只岛结束了或被划掉了
         for device in seen where devices[device]?.contains(where: { !$0.isStarter }) != true { leave(device) }
         for device in devices.keys.sorted() {
             try Task.checkCancellation()
@@ -149,7 +143,6 @@ final class ActivityPublisher {
                 seen.insert(device)
                 if try await update(destination, publication, services) { return true }
             } else if let starter = devices[device]?.first(where: \.isStarter) {
-                // 没等这台来收就过了系统上限的那只：从上限那一刻算没了
                 if let destination, islands[device]?.dead != destination.token { leave(device, dead: destination.token, at: destination.expiresAt) }
                 if try await start(starter, publication, services) { return true }
             }
@@ -171,7 +164,6 @@ final class ActivityPublisher {
         islands[device] = island
     }
 
-    /// 可作答的提问先让 iCloud 收下（手机按"允许一次"时要找得到它）；等的时候内容前进了返回 nil。
     private func confirmed(_ publication: Publication, _ services: AppServices) async throws -> Publication? {
         guard let allow = publication.state.now.first?.allow else { return publication }
         guard await services.sync?.send(recordNames: [allow.message.uuidString.lowercased()]) == true else { throw URLError(.cannotLoadFromNetwork) }
@@ -200,7 +192,6 @@ final class ActivityPublisher {
         guard let publication = try await confirmed(publication, services) else { return true }
         let now = publication.state.now, before = old?.state.now
         let urgent = !now.isLive || before?.needsYou != now.needsYou || before?.first != now.first || before?.glance != now.glance
-        // false：令牌已被 APNs 确认失效，那只岛不在了
         if try await push(.init(publication.state), priority: urgent ? 10 : 5), now.isLive {
             sent[device] = Sent(destination: destination, state: publication.state)
         } else {
@@ -214,7 +205,6 @@ final class ActivityPublisher {
     private func start(_ starter: ActivityDestination, _ publication: Publication, _ services: AppServices) async throws -> Bool {
         let device = starter.device, island = islands[device] ?? Island(gone: launched)
         guard publication.state.now.hasConfirmedActivity, let newest = publication.newest, newest.since > island.gone else { return false }
-        // 间隔没满：满的那一刻再看，那件事还在就开，不靠别的变化碰巧叫醒
         if let ready = island.started?.addingTimeInterval(Self.startSpacing), ready > .now {
             wake(ready)
             return false
@@ -239,7 +229,6 @@ final class ActivityPublisher {
         return false
     }
 
-    /// false 只表示这个令牌已被 APNs 确认失效；不删手机拥有的同步记录，换令牌后会重试。
     private func send(_ push: ActivityPush) async throws -> Bool {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"

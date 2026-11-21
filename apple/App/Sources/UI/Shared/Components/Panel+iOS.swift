@@ -19,12 +19,9 @@ extension View {
         }
     }
 
-    /// sheet 与全屏是盖在上面的一页新的，不吃挂它那一页的页内环境（呈现的内容照样继承呈现处的环境）。
     fileprivate func modalPage(_ close: ClosePanel) -> some View {
-        // sheet 是另一层呈现，窗口那一层的气泡画不到它上面：里面长出的气泡画在它自己的这一层
         panelHost()
             .environment(\.closePanel, close)
-            // 页顶那一排画在它自己的导航栏里，不吃根页给的让开、长开面板与前台状态
             .environment(\.headerHost, .navigationBar)
             .environment(\.headerGivesWay, false)
             .environment(\.headerGrown, false)
@@ -32,7 +29,6 @@ extension View {
             .environment(\.pagePrefetch, false)
     }
 
-    /// 不拦这一下（任务气泡从这里长出来，`Workspace.pressed`）。
     func watchesTouches(_ pressed: @escaping (CGPoint) -> Void) -> some View {
         background { TouchWatch { point, _ in pressed(point) } }
     }
@@ -51,7 +47,6 @@ final class PanelHost {
     }
 
     private(set) var shown: Shown?
-    /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
     @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
 
     static let largestType = DynamicTypeSize.accessibility1
@@ -92,12 +87,9 @@ private struct PanelHostModifier: ViewModifier {
     func body(content: Content) -> some View {
         let covered = modals.modal != nil
         content
-            // 模态浮出开着时 Esc 归它（`ModalScrim`），抽屉不挂自己的（`DrawerCatcher`）
             .environment(\.escapeTaken, covered)
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
-            // 任何模态浮出开着时，窗口的气泡都不读；浮出外面的页与栏由放它的地方藏（浮窗：`ModalLayers` 整块，名牌：所在的页与 iPad 的 `SplitRoot`）
             .overlay { BubbleLayer(shown: host.shown).readerHidden(covered) }
-            // 模态浮出盖在这一层的最上面：开着的气泡上、iPad 抽屉里长开的名牌外面的一下也由它接住，浮窗开着时气泡一起不进读屏
             .modifier(ModalLayers(host: modals))
             .environment(host)
     }
@@ -150,8 +142,6 @@ private struct ControlBubble<Panel: View>: ViewModifier {
     }
 }
 
-/// 点另一条任务就是换成它的气泡）。键盘升起时（在气泡里写字）气泡收起尾巴、整块往上挪到键盘上沿之上，只挪不重排；
-/// 放不下才矮下去、在里面滚。这一层不让键盘（`ignoresSafeArea(.keyboard)`）：摆法始终对着整个容器算，键盘只给一条下沿（`BubbleStage.floor`）。
 private struct BubbleLayer: View {
     let shown: PanelHost.Shown?
     @State private var keyboardTop: CGFloat?
@@ -179,7 +169,6 @@ private struct BubbleLayer: View {
                 }
             }
         }
-        // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
         .allowsHitTesting(shown != nil)
         .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: shown?.identity)
@@ -248,7 +237,6 @@ private struct TouchWatch: UIViewRepresentable {
         }
     }
 
-    /// 只看不认：落下的那一刻报一下就作废，不延迟、不取消别的手势与触摸。
     final class Watch: UIGestureRecognizer, UIGestureRecognizerDelegate {
         private weak var probe: Probe?
 

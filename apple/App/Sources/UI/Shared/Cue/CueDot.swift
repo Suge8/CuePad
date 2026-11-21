@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// 去 Cue 的入口角上的小点：不在 Cue 页时，Cue 那边有事一眼看得到，不打断。新消息（石绿，有新回复的颜色，`CueWatch.unread`）
-/// 先于等你（赭黄，见 `Palette.waiting`）：刚来的那句是此刻的事，等你一直在、在 Cue 页与会话里各有它的卡；都没有不画。
 struct CueDot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -19,8 +17,6 @@ struct CueDot: View {
     }
 }
 
-/// 挂在一直在的视图上（头像、入口的点）：它自己看新消息的数变多，不另存状态，数只在 `CueWatch.unread`。
-/// 一圈与别的尺寸动效同一条弹簧（`Motion.nudge`）：余光里抓得住的是突然动起来的那一下，不是动多久。
 struct CueArrival: View {
     let color: Color
     var reach: CGFloat = 3.2

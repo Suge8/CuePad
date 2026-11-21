@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 挂全屏页的那一页一份（`previewPresenter`），只记这一页上出现过的缩略图，随页释放。画面只在要用时取一次（`prepare`、`look`）。
 @MainActor final class PreviewSources {
     struct Source {
         let aspect: CGFloat?

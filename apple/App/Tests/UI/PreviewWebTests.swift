@@ -5,8 +5,6 @@ import Testing
 import WebKit
 @testable import CuePad
 
-/// 用本机的监听端口当"外网"：没有拦截规则的对照页面请求能到，装了规则的请求到不了。两页各用各的端口：对照页的请求什么时候到
-/// 都算不到装了规则的那一页头上（共用一个计数时，对照页晚到的图片请求在负载下会被误算成拦截漏了）。
 @Suite(.releasesLibraries)
 struct PreviewWebTests {
     private nonisolated final class Probe: @unchecked Sendable {
@@ -32,7 +30,6 @@ struct PreviewWebTests {
 
     private func page(reaching port: UInt16) throws -> URL {
         let url = FileManager.default.temporaryDirectory.appending(path: "preview-web-\(UUID().uuidString).html")
-        // 两个请求（fetch 与图片）都落定后才写标题，标题就是这一页网络请求的结果
         try """
             <img id="i" src="http://127.0.0.1:\(port)/a.png"><p id="x">内联脚本在跑</p>
             <script>
@@ -60,7 +57,7 @@ struct PreviewWebTests {
 
         let control = WebPage()
         _ = control.load(try Data(contentsOf: try page(reaching: open.port)), mimeType: "text/html", characterEncoding: .utf8, baseURL: URL(string: "about:blank")!)
-        #expect(try await settledTitle(control) == "reached" && open.hits > 0)  // 没有规则：请求到了，说明这种探针有效
+        #expect(try await settledTitle(control) == "reached" && open.hits > 0)
 
         let guarded = try await PreviewWebGuard.page(for: try page(reaching: guardedProbe.port))
         #expect(try await settledTitle(guarded) == "blocked")

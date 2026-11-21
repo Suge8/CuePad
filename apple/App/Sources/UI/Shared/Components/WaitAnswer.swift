@@ -1,11 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// Cue 的提问里"可以"是全件唯一的靛青。
-/// 选项不写进问句，也不给自由回答框（会话页上允许自己写的，提示在底下回复框里写）；长选项折行写全。
-/// 确认题"否 / 是"两颗普通胶囊：确认的常是部署、覆盖这类撤不回的事，不用主色推着人点"是"。
-/// 到哪了读库里答这道题（`promptID`）的那条请求，不记在视图里：切到别的卡再回来照样在，会话换了下一道题就是新的一题。
-/// 同步到不了 Mac 时照样答：作答写下就排着，恢复后自动发出（同回复框）。Mac 的会话页上选择题按 1–9 直接作答（键帽在胶囊里）。
 struct WaitAnswer: View {
     let wait: CueTally.Wait
     var replyElsewhere = false
@@ -66,7 +61,6 @@ private struct SessionAnswer: View {
     private var writeError: String? { unseen?.error }
     private var sent: Speech.Trip? { unseen == nil ? request.map { Speech.trip($0, at: services.speech) } : nil }
 
-    /// 点下即算在答（请求写成前也是），胶囊立刻停用，不重复作答。
     private var answering: Bool { tapped != nil && writeError == nil && sent?.failure == nil }
     private var failure: String? { writeError ?? sent?.failure?.text }
 
@@ -78,7 +72,6 @@ private struct SessionAnswer: View {
                     other: replyElsewhere && question?.allowsOther == true)
         case .text: if !replyElsewhere { WaitReply(session: session) }
         case nil:
-            // 问了应用里答不了的题：只给打开会话
             if !replyElsewhere {
                 chips {
                     Button("打开会话") { workspace.openSession(session.id, sessionID: session.sessionID) }
@@ -101,7 +94,6 @@ private struct SessionAnswer: View {
             }
             .disabled(answering)
             if other { Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3) }
-            // 到哪了那一行一直占着（没有时留白）、只写一行：它一出一收卡就变高变矮，浮在卡上面的对话跟着当帧跳
             Text(note?.text ?? " ").font(Typography.meta).foregroundStyle(note?.failed == true ? palette.failure : palette.ink3).lineLimit(1)
                 .opacity(note == nil ? 0 : 1).readerHidden(note == nil)
         }
@@ -146,7 +138,6 @@ private struct SessionAnswer: View {
         .accessibilityLabel(busy ? String(localized: "\(value.label)，送达中") : value.label)
     }
 
-    /// 胶囊至少这么宽："否""是"这类一个字的不缩成一颗圆点。
     private static let minWidth: CGFloat = 32
 
     private func answer(_ value: AnswerValue) {
@@ -163,7 +154,6 @@ private struct SessionAnswer: View {
     }
 }
 
-/// 草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句）；只发文字，草稿里的卡片与图片留给会话页。
 private struct WaitReply: View {
     let session: SessionState
     private let prompt = String(localized: "回答")
@@ -175,7 +165,6 @@ private struct WaitReply: View {
     private var canSend: Bool { !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
-        // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
         HStack(alignment: .bottom, spacing: Spacing.glyph) {
             TextField(prompt, text: box.text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)

@@ -17,7 +17,6 @@ struct LibraryScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
-        // 标题给读屏、返回菜单与系统
         .floatingHeader("技能与规则", center: { LibraryPanes().padding(PaneMetrics.inset).headerPiece() }) { EmptyView() }
     }
 }

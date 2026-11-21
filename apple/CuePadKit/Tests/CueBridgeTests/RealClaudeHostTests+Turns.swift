@@ -7,7 +7,6 @@ import Testing
 @testable import CueBridge
 
 extension RealClaudeHostTests {
-    /// 停在流式回答中途：假模型的请求停在闸门上，停下后它被断开（闸门上不再有等的），之后的话照常回答。
     @Test func stoppingAnAnswerInProgressLetsTheNextMessageThrough() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()
@@ -33,7 +32,6 @@ extension RealClaudeHostTests {
         }
     }
 
-    /// 说到一半停住的回答（假模型的 `stream(_:until:)`，Anthropic Messages）：这一轮还在跑、回答没落盘，放行后同一条回答说完、这一轮歇下
     @Test func aReplyHeldMidStreamFinishesOnceReleased() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()
@@ -45,7 +43,6 @@ extension RealClaudeHostTests {
             let sending = Task { try await testbed.bridge.send(SessionMessage(text: "说一半"), to: id) }
             try await gate.reached()
             try await eventually("在跑") { testbed.bridge.session(id: id)?.state.isWorking == true }
-            // 会话文件这时可能还没写出来
             #expect((try? testbed.transcript(testbed.bridge.session(id: id)?.sessionFile))?.recap.lastReply == nil)
 
             gate.open()
@@ -80,7 +77,6 @@ extension RealClaudeHostTests {
         }
     }
 
-    /// 命令比等的时限长：没被打断就等不到这句的回答。
     @Test(arguments: [false, true]) func aMessageWhileBusyStopsTheTurnAndStartsANewOne(toolRunning: Bool) async throws {
         try await ClaudeTestbed.run(settings: toolRunning ? #"{"permissions": {"allow": ["Bash"]}}"# : #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
             try testbed.startConnected()
@@ -114,7 +110,6 @@ extension RealClaudeHostTests {
     }
 }
 
-/// 睡 100 秒再建 `never` 的命令，起来先把自己的进程号写进 `pidFile`：停下后看它退没退，不只看 `never` 此刻还没建出来
 private func slowTool(_ pidFile: URL, _ never: URL) -> String {
     #"python3 -c "import os, time; time.sleep(100 + 0 * open('\#(pidFile.path)', 'w').write(str(os.getpid())))" && touch \#(never.path)"#
 }

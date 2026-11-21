@@ -1,15 +1,10 @@
 import CueStore
 import Foundation
 
-/// 会话条唯一的数据口径：从 `cueTally` 同一次读取里取 `works`（即 `CueBoard.active`）的所有未结束会话，加上等你的会话，按 sessionID 去重。
-/// 等你同看板：会话拍板在前、待回复在后，各自等得最久的在前；Cue 自己的提问不列。因此名牌的「拍板」= 会话拍板 + Cue 提问，
-/// 会话条只数会话拍板；「推进中」数会话，不是名牌与看板的工作项数。一项工作有多个会话、一个会话参与多项工作时不能拿两处数字相减。
-/// 从 works 而不是 advancing 展开：一个会话等你会让整项任务被 held 占着，其余并行会话仍要留在推进中。歇着也是 active，不按图形的 rank 偷删。
 nonisolated struct SessionRailData: Equatable, Sendable {
     struct Waiting: Equatable, Sendable {
         let agent: SessionListItem
         let deciding: Bool
-        /// 它最新那条回答带的提示缓存：卡上写还热多久（`SessionRailCell`）。
         let cache: ChatMessage.Tools.Cache?
     }
 
@@ -39,7 +34,6 @@ struct SessionRailRows {
     struct Item: Identifiable {
         let session: SessionState
         let name: String
-        /// 它归的那件任务（`SessionListItem.task`）：菜单里的完成、置顶落在它上面。
         let task: SessionTask?
         let pulse: BoardPulse
         let waiting: SessionShown.Status?

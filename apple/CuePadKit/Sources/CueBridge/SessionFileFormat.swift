@@ -4,7 +4,6 @@ import CueText
 import Foundation
 
 extension UnsafeRawBufferPointer {
-    /// 不拷贝的 `Data` 视图，只在这次 `Ingest` 调用里有效；空行为 nil。
     var borrowedData: Data? {
         guard let base = baseAddress, !isEmpty else { return nil }
         return Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: count, deallocator: .none)
@@ -12,7 +11,6 @@ extension UnsafeRawBufferPointer {
 }
 
 struct SessionFileFormat: Sendable {
-    /// 损坏或不认识的行跳过。
     typealias Ingest = @Sendable (UnsafeRawBufferPointer, inout HistoryCheckpoint, inout History.Transcript) throws -> Void
 
     enum Naming: Sendable {

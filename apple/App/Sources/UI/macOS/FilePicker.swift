@@ -21,7 +21,6 @@ enum FilePicker {
         return await show(panel)
     }
 
-    /// 网页的文件框（`<input type=file>`）：多选、选文件夹按网页的要求；nil 是没选（网页收到取消）。
     static func web(multiple: Bool, folders: Bool) async -> [URL]? {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = multiple

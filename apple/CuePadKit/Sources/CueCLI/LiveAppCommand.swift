@@ -37,7 +37,6 @@ extension Command {
   }
 }
 
-/// 把一个 Mac 应用连同取画面的库（`CueScreenHost`，在 CuePad.app 的 Frameworks 里）一起起来：库在应用自己的进程里起屏的服务。
 enum AppServe {
   static let library = URL(fileURLWithPath: Bundle.main.executablePath ?? "").resolvingSymlinksInPath().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "Frameworks/CueScreenHost.dylib").path
@@ -54,13 +53,9 @@ enum AppServe {
     return hardened && !exempt || info[kSecCodeInfoPlatformIdentifier] as? Int ?? 0 != 0
   }
 
-  /// 起一份新的实例，等它里面屏的服务听上。回来的是服务的口与实例的进程号。
-  /// 口按会话与应用的路径定：重新构建、再起之后还是同一个地址，用户那头的预览自己接回来。口上是这个会话上一次起的这个应用就先退掉它；
-  /// 被别的占着（别的会话起的同一个应用也算）就顺次往后挪。
   static func launch(_ app: URL, executable: URL, arguments: [String], session: String) async throws -> (port: UInt16, pid: pid_t) {
     let name = app.deletingPathExtension().lastPathComponent
     let first = UInt16(48_000 + (session + app.path).utf8.reduce(0) { ($0 &* 31 &+ Int($1)) % 300 })
-    /// 这个口上屏的服务所在的进程：是这个会话起的（`Host` 把 `CUEPAD_SCREEN_OWNER` 写在身份里）这个应用才算。
     func serving(_ port: UInt16) async -> pid_t? {
       let identity = (await ScreenServer.identity(port: port) ?? "").split(separator: " ", maxSplits: 1)
       guard identity.count == 2, identity[1] == session, let pid = pid_t(identity[0]) else { return nil }
@@ -96,7 +91,6 @@ enum AppServe {
     throw CLIError.invalid("起不了「\(name)」的预览：\(first)–\(first + 7) 这几个口都被占着")
   }
 
-  /// 这个口此刻没人在听。
   private static func free(_ port: UInt16) -> Bool {
     let descriptor = socket(AF_INET, SOCK_STREAM, 0)
     defer { close(descriptor) }

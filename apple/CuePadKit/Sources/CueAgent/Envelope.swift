@@ -2,29 +2,22 @@ import CueStore
 import CueText
 import Foundation
 
-/// 交给 Cue 的大脑的一轮输入里的 `<cue>` 块（用户的话若有，由值班的管理器接在块后面）。新会话的第一条输入里，它前面还有记忆视图与对话视图（`CueKeeper`）。信封与系统提示里"你"是 Cue、"他"是用户。
 public enum CueEnvelope {
   public struct Input: Sendable {
     public var now: Date
     public var projects: [Project]
     public var changes: [CueChange]
-    /// 变化说到的那几件事的近况（`CueTools.recaps`，同 peek 给的）：带了的那件，变化那一行不再写截短的回复。
     public var recaps: [Subject: String]
-    /// 看板（`CueStore.cueBoard`）：只写在做的。
     public var board: CueBoard
     public var waiting: [CueMessage]
-    /// 它留给他回的会话（`CueState.left`）：看板上这几个写"待回复"。
     public var left: [CueLeft]
     public var wake: CueWake
     public var fired: [Fired]
-    /// 全部定时（`CueStore.cueSchedules`）：看板上挂着定时的任务写明
     public var schedules: [CueMemoryLine]
     /// 这一轮要写的语言不是中文时它的名字（他这句话的语言，他没开口时是界面语言，App 定）：系统提示是中文，只在系统提示里说一次，
     /// 照着中文句式回的还是中文（实测），所以每一轮在块尾再说一次；中文时为 nil，不写这一行。
     public var language: String?
-    /// 额度（`CueStore.accountQuotas`）：信封里只写吃紧的（`CueQuotaWords.tight`），一个账号一行
     public var quotas: [AccountQuota]
-    /// 这一轮是上一轮出错后的重试：上一轮的错（原文首行），Cue 先核对上一轮做到了哪、不重做
     public var retrying: String?
     public var related: [String]
 
@@ -50,8 +43,6 @@ public enum CueEnvelope {
     }
   }
 
-  /// 一轮信封要的事实从库里一次读齐（信封加一项只改 Kit）；值班只交它自己知道的：醒来原因、这次报给它的变化（`changes`，醒来时读的那一份）、
-  /// 信封上的此刻、这台 Mac（`host`，读额度）、要写的语言、上一轮的错与按他的话查到的相关回复。
   public static func read(
     from store: CueStore, wake: CueWake, changes: [CueChange], now: Date, host: String, language: String?, retrying: String?, related: [String]
   ) async throws -> Input {
@@ -79,7 +70,6 @@ public enum CueEnvelope {
 
     lines.append("项目：" + input.projects.map(\.name).joined(separator: "、"))
 
-    // 近况就是 task peek 给的那一份，写明了少去 peek 一遍（短场景实测：带着近况的那几轮里，不写每遍还 peek 四五次，写了两三次）
     lines.append("变化（上次醒来之后\(input.recaps.isEmpty ? "" : "；缩进的是那件事的近况，同 task peek 的结果")）：" + (input.changes.isEmpty ? "无" : ""))
     var shown = Set<Subject>()
     for change in input.changes {
@@ -113,9 +103,6 @@ public enum CueEnvelope {
     return lines.joined(separator: "\n")
   }
 
-  /// 交给大脑的他的话与回答（`CueStore.cueMessagesToDeliver`），一条一段：他的话是原话，里面的文件在话后各接一行本机路径（`AttachmentFiles.agentLine`，
-  /// 引用照留，Cue 转给会话时原样写进去）；模型看不了图（`imagesAsFiles`）时图片也这样接一行，看得了的图另附；收起了卡（`setAside` 里 `setAsideBy` 是它的）就在后面列出，
-  /// Cue 判断是不是在答它们；回答是他选了哪一项，选的是"以后……不用问"时说明 CuePad 已把它记进重点记忆（免得 Cue 再记一条）。
   public static func delivered(_ pending: [CueMessage], setAside: [CueMessage], files: AttachmentFiles, imagesAsFiles: Bool) -> String {
     pending.map { message in
       guard message.author == .known(.you) else {
@@ -133,12 +120,10 @@ public enum CueEnvelope {
     }.joined(separator: "\n\n")
   }
 
-  /// 交出去的话里他自己说的，一条一句（不含他对卡的回答：回答里转述的提问不是他在问）：`CueTools.related` 一句一句查。
   public static func asked(_ pending: [CueMessage]) -> [String] {
     pending.filter { $0.author == .known(.you) }.map(\.text)
   }
 
-  /// 他的话按词在会话回复里查到的那一节（`CueTools.related`）：信封里与插给在跑那一轮的话后面是同一种写法；没查到为空。
   public static func related(_ found: [String]) -> [String] {
     found.isEmpty ? [] : ["他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）："] + found.map { "- " + $0 }
   }
@@ -155,7 +140,6 @@ public enum CueEnvelope {
     }
   }
 
-  /// "#15 清理过期分支（每周一 9:00）· 任务「清理过期分支」（ab12cd34）· 本该 9:00，错过了，现在补上"。
   private static func fired(_ fired: Fired, now: Date) -> String {
     let line = fired.line
     var parts = ["\(line.id.uuidString.lowercased()) \(line.text)（\(line.repeats.map(CueScheduleWords.repeats) ?? "一次")）"]
@@ -178,7 +162,6 @@ public enum CueEnvelope {
     }
   }
 
-  /// 变化说的是哪件事：任务的按顶层任务，不归没做完的事的会话按会话。近况一件一份。
   public enum Subject: Hashable, Sendable {
     case task(UUID)
     case session(String)
@@ -194,7 +177,6 @@ public enum CueEnvelope {
     }
   }
 
-  /// `reply`：那件事没带近况，写一句截短的回复。
   private static func change(_ change: CueChange, reply: Bool) -> String {
     let label: String =
       switch change.kind {
@@ -211,8 +193,6 @@ public enum CueEnvelope {
     return text
   }
 
-  /// 看板上的一件事（信封与 peek 共用）：在做的只有一个叶子时一行；同时在做几步时，头一行之后每步一行（缩进，带子任务的短 id）。
-  /// 挂着定时的写明几点：重复的每次到点开工一次，做完一次不算这件事做完。
   static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = [], schedules: [CueMemoryLine] = []) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if let line = schedules.first(where: { $0.task == item.task.id }) {
@@ -233,7 +213,6 @@ public enum CueEnvelope {
     }).joined(separator: "\n")
   }
 
-  /// 信封与 peek 共用。
   static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft] = []) -> String {
     var parts = [sessionName(session), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
     if left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
@@ -243,7 +222,6 @@ public enum CueEnvelope {
 
   static let leftNote = "新回复"
 
-  /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
   static func sessionName(_ session: SessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }
 
   private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date, left: [CueLeft]) -> [String] {
@@ -254,15 +232,12 @@ public enum CueEnvelope {
     return parts
   }
 
-  /// 近况只写此刻还开着的：在等的提问、正在做的动作、正在处理的话。做完的回复不写：歇下时已作为变化报过（带那件事的近况），
-  /// 每次醒来再列一遍只是重复；要看就 peek 那件事。
   private static func recent(_ session: SessionState) -> String? {
     if session.state == .known(.waitingForUser), let question = session.question { return question.text }
     if session.state.isWorking, let detail = session.detail { return detail }
     return session.pendingPrompt.map { "在处理：\($0)" }
   }
 
-  /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
   static func state(_ state: Open<WorkState>) -> String {
     switch state.known {
     case .thinking, .tool, .compacting: "工作中"
@@ -278,7 +253,6 @@ public enum CueEnvelope {
 
   private static func where_(_ change: CueChange) -> String {
     guard let task = change.task else { return change.session.map(sessionName) ?? "" }
-    // 已完成的任务的会话再歇下（多是答完你追问的一句）：写明已完成，免得照没做完的标准再核对一遍、去催证据
     let base = "\(task.heading)（\(task.id.shortID)）" + (task.status == .done ? "（已完成）" : "")
     guard let leaf = change.leaf, leaf.id != task.id else { return base }
     return "\(base) › \(leaf.heading)"
@@ -297,14 +271,11 @@ public enum CueEnvelope {
     return "\(minutes / 1440) 天"
   }
 
-  /// "UTC+8""UTC+5:30""UTC-3"：信封里的时刻都是这台 Mac 的本地时间，第一行写明时区，报错原文里的 UTC 时刻（额度几点重置）Cue 才换算得对
-  /// （没写时 Cue 把"00:00 UTC"当成已经过了）。只写这一处：其余的时刻跟着它，不在每个时刻后面再写一遍。
   static func zone(_ date: Date) -> String {
     let offset = TimeZone.current.secondsFromGMT(for: date), minutes = abs(offset) / 60
     return "UTC\(offset < 0 ? "-" : "+")\(minutes / 60)" + (minutes % 60 == 0 ? "" : ":" + String(format: "%02d", minutes % 60))
   }
 
-  /// 按此刻的时区现取（Mac 换了时区，下一次就跟着换）。2026-10-21 周三 09:05
   private static var stamp: Date.VerbatimFormatStyle {
     .init(
       format: "\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) 周\(weekday: .narrow) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",

@@ -1,7 +1,6 @@
 #if DEBUG
 import SwiftUI
 
-/// 内容铺满整张、要看的在上半截（缩略图怎么裁都看得到），不留像截坏了的空白与灰条。
 extension DebugScene {
     static func stagingOrderPNG() -> Data {
         let people: [(name: String, note: String?, joined: String, tint: Color)] = [
@@ -17,7 +16,6 @@ extension DebugScene {
             .padding(.top, 46)
             Text("周会 · 发言顺序", tableName: "Demo").font(.system(size: 24, weight: .bold)).padding(.top, 14)
             Text("6 人 · 按首次加入时间排", tableName: "Demo").font(.system(size: 12)).foregroundStyle(.gray).padding(.top, 4)
-            // 6 行落在正中那一块：缩略图裁成方的也是完整的 6 个人
             VStack(spacing: 6) {
                 ForEach(Array(people.enumerated()), id: \.offset) { index, person in
                     HStack(spacing: 10) {

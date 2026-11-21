@@ -1,11 +1,9 @@
 import CueStore
 import Foundation
 
-/// stdio，一行一个 JSON-RPC 消息。只做握手版，不做 resources、prompts、sampling、tasks。请求按到达顺序一个个处理。
 public struct CueMCPServer: Sendable {
   let tools: CueTools
 
-  /// 接受的协议版本：回客户端请求的那个；别的版本回最新的，由客户端决定是否继续（MCP 的版本协商）。
   static let protocolVersions = ["2025-11-25", "2025-06-18"]
   public static let name = "cuepad"
   /// 模型在这家看到的 CuePad 工具名的前缀，唯一的一处（系统提示照它写工具名，大脑的事件照它去掉）：
@@ -29,21 +27,18 @@ public struct CueMCPServer: Sendable {
 
   public init(store: CueStore, wait: TimeInterval, toolset: CueTools.Toolset = .cue) { tools = CueTools(store: store, wait: wait, toolset: toolset) }
 
-  /// 读到 `input` 结束为止，每条回应交给 `output`（一行，不含换行）；`output` 抛错（对端已关）就结束。
   public func serve(_ input: some AsyncSequence<String, any Error>, output: (String) throws -> Void) async throws {
     for try await line in input where !line.trimmingCharacters(in: .whitespaces).isEmpty {
       if let reply = await handle(line) { try output(reply) }
     }
   }
 
-  /// 处理一行；通知（没有 id）与不需要回应的返回 nil。
   private func handle(_ line: String) async -> String? {
     guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) else {
       return Self.encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32700, "message": "不是 JSON"]])
     }
     guard let message = object as? [String: Any] else { return Self.error(id: NSNull(), code: -32600, "不支持批量") }
     guard let method = message["method"] as? String else {
-      // 客户端回给我们的响应不处理（我们不发请求）
       let isResponse = message["result"] != nil || message["error"] != nil
       return isResponse ? nil : Self.error(id: message["id"] ?? NSNull(), code: -32600, "不是 JSON-RPC 请求")
     }

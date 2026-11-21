@@ -10,7 +10,6 @@ extension DebugScene {
         let turns = TurnLog(), frames = FlightFrames()
         let instructions = instructionsMillions(), energy = energyMillijoules()
         #if os(macOS)
-        // 主窗口关着（`-CuePadClosed`）时没有可挂 display link 的窗口：只量指令、CPU 与能量
         if let view = NSApp.windows.first(where: \.isVisible)?.contentView { frames.start(in: view) }
         #else
         frames.start()
@@ -39,7 +38,6 @@ extension DebugScene {
     }
 }
 
-/// 接力的帧探针保留全部间隔：60Hz 的正常帧也超过 16ms，不能拿掉帧次数冒充它。
 private final class FlightFrames: NSObject {
     private var link: CADisplayLink?
     private var stamps: [CFTimeInterval] = []

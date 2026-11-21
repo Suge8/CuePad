@@ -10,7 +10,6 @@ extension Workspace {
         handOff(leaf.id, fresh: false)
     }
 
-    /// 经 `speak` 写出就提示，不等送达。返回写库与上传的那个任务（测试等它）。
     @discardableResult
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) -> Task<Void, Never> {
         let (listener, handed) = sendState.destination(to: target, card: card)

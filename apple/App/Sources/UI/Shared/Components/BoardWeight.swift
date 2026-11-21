@@ -1,8 +1,5 @@
 import SwiftUI
 
-/// 轻重只在这里定，各组件只问列要它那一样，不自己判断哪列轻：
-/// 否决过：轻的两列去掉纸只留一层淡底（读成不可用的按钮）、轻的两列各带一档淡灰淡绿的纸（和桌面太近，读成一排空心框）、
-/// 列身后垫托盘（只垫两列、四列都垫都试过，`BoardLane`）。
 extension TaskBoard.Column {
     var light: Bool { self == .todo || self == .done }
 
@@ -31,6 +28,5 @@ extension TaskBoard.Column {
         }
     }
 
-    /// 列宽的份数：待办与已完成是清单，地方让给正在发生的两列。固定的比例，不随列里有几张卡变（按内容分宽否决过，见 `BoardWidths`）。
     var share: CGFloat { light ? 0.85 : 1.15 }
 }

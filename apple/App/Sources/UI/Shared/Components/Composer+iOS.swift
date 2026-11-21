@@ -61,7 +61,6 @@ nonisolated enum PhotoData {
 }
 
 struct CameraPicker: UIViewControllerRepresentable {
-    /// 拍了却转不成 JPEG 时交 nil：调用方要说出来，不能当没拍。
     let onPick: (Data?) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -91,7 +90,6 @@ struct CameraPicker: UIViewControllerRepresentable {
     }
 }
 
-/// 走 `MenuButton`（菜单开着时输入框不随键盘跳），所以长按不浮起全文预览：点一下就是全文。
 struct AttachmentButton<Label: View>: View {
     let label: LocalizedStringResource
     let menu: [ChoiceMenu.Section]

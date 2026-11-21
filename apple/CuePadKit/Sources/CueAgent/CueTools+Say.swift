@@ -17,13 +17,11 @@ extension CueTools {
     return try await spoken(request, what, tail: target.short, from: host)
   }
 
-  /// 作答的话比认出的那个选项多（"B. Redis，多实例共享"按 B 答了）：多出的部分没送到会话，要在结果里告诉 Cue。
   private static func saidMore(_ text: String, than option: String) -> Bool {
     let value = CueFormat.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
     return Int(value) == nil && value.caseInsensitiveCompare(option) != .orderedSame
   }
 
-  /// 认法在 `place`；`label` 是工具结果里对它的称呼。
   func speaker(_ args: Args) async throws -> (session: String, card: UUID?, label: String, short: String) {
     let leaf: Card
     switch try await references.place(args) {
@@ -34,7 +32,6 @@ extension CueTools {
     return (try await store.leafSession(leaf.id), leaf.id, "「\(leaf.heading)」的会话", leaf.id.shortID)
   }
 
-  /// 只把明确拒绝标成出错；等待窗口结束不授权 Cue 重说，也不保证之后一定收到结果。
   func spoken(_ request: DeliveryRequest, _ what: String, tail short: String, from host: String) async throws -> Result {
     let latest = try await settled(request)
     let tail = "（\(short)）\n\(CueToolReceipt(.request, request.id).mark)"
@@ -51,8 +48,6 @@ extension CueTools {
     }
   }
 
-  /// 等请求有结果，至多到写下后 `wait`；到点还没结果返回此刻的记录。等的是别的进程（执行它的 Mac 上的 App）写回的结果：
-  /// 库的变化订阅跨进程（`CueStore.outcome`），不轮询；到点用一次可取消的睡眠——等多久本身就是这里的规则。
   private func settled(_ request: DeliveryRequest) async throws -> DeliveryRequest {
     let left = request.createdAt.addingTimeInterval(wait).timeIntervalSinceNow
     let done = try await withThrowingTaskGroup(of: DeliveryRequest?.self) { group in
@@ -68,7 +63,6 @@ extension CueTools {
     return try await store.latest(of: request) ?? request
   }
 
-  /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补，不在它的模型表里当场退回。都没带为 nil。
   private func config(_ args: Args, of session: String, host: String) async throws -> SessionConfig? {
     let effort = try Self.effort(args)
     guard let raw = args.string("model") else { return effort.map { SessionConfig(thinking: $0) } }

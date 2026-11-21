@@ -7,7 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 按流量计费的网络上手机不自动取，这里测不到（路径监视器是系统的）。
 @MainActor
 @Suite(.releasesLibraries)
 struct FileSyncTests {

@@ -83,7 +83,6 @@ extension TaskFlowTests {
         case "project": try await store.trashProject(project.id)
         default: try await workspace.complete(task.id)
         }
-        // 收尾的那次结束当它已执行、请求已清理；会话随后被你的话恢复起来（这里一直连着）
         let end = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
         try await store.deleteDelivery(end.id)
         try await Task.sleep(for: .milliseconds(5))
@@ -94,7 +93,6 @@ extension TaskFlowTests {
         try await eventually("送达") { try await store.deliveryRequest(request.id)?.status == .known(.succeeded) }
         #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
         if action == "done" {
-            // 做完的回到进行中，这个会话重新有任务在用：之后挪动它也不收
             #expect(try await store.card(task.id)?.status == .inProgress)
             try await store.moveCard(task.id, to: .top(project: Project.defaultID), after: nil)
             #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
@@ -102,8 +100,6 @@ extension TaskFlowTests {
         await rig.services.executor.beginStop()()
     }
 
-    /// 为一步开的会话随它做完结束、这一步改用了别的会话；你又对它说话把它恢复起来，它就是你自己接着用的：
-    /// 之后上级被删（这一步提成顶层），或把它借给另一件事、那件做完，都不再结束它。
     @Test(arguments: ["promote", "borrow"])
     func 你恢复使用的会话_别的任务删除时不结束_借给的那件你点完成才休眠(path: String) async throws {
         let workspace = Workspace(services: rig.services)
@@ -119,7 +115,6 @@ extension TaskFlowTests {
         try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         try await workspace.complete(step.id)
-        // 收尾的那次结束当它已执行、请求已清理
         try await store.deleteDelivery(try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) }).id)
         try await recorder.update(sessionID: "s2", state: .settled, hosted: true)
         try await store.bindSession("s2", to: step.id)
@@ -144,7 +139,6 @@ extension TaskFlowTests {
         await rig.services.executor.beginStop()()
     }
 
-    /// Mac 上"在做"读桥上的实时状态：确认框说完成会让会话休眠，不问它是不是为这件事开的；还有话正送进去的说不会。
     @Test func 完成前确认_说会话会休眠_还有话正送进去的说不会() async throws {
         let workspace = Workspace(services: rig.services)
         let following = Task { await workspace.follow() }

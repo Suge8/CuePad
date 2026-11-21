@@ -20,7 +20,6 @@ extension DebugScene {
     }
 
     private static func cycleWideReverse(_ workspace: Workspace) async {
-        // 两次之间停多久是录屏的节奏，不是在等别的事
         await Task.wait(for: .seconds(1.5))
         guard let window = mainWindow else { return }
         let size = window.contentLayoutRect.size

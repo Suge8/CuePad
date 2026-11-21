@@ -1,16 +1,13 @@
 import Foundation
 
-/// 明文只在两端内存中存在，服务器只接触路由头与密文。业务命令独立于媒体生命周期，不能因原媒体已结束而丢掉合法恢复。
 nonisolated enum VoiceSignalPayload: Equatable, Codable, Sendable {
     case media(signal: VoiceMediaSignal)
     case command(command: VoiceCommand)
     case commandResult(result: VoiceCommandResult)
     case projection(value: VoiceCallProjection)
-    /// 手机、iPad 看 Mac 会话的活预览（`LiveSignal`），与通话无关，借这条端到端加密的信令。
     case live(signal: LiveSignal)
 }
 
-/// 拒绝只能结算原发送的归属；结果帧与请求帧分开，回执发送失败不能误伤同 UUID 的本地请求。
 nonisolated enum VoiceSignalPurpose: Equatable, Codable, Sendable {
     case media
     case command(id: VoiceCommand.ID)
@@ -23,8 +20,6 @@ extension VoiceSignalPayload {
         case .media, .projection: .media
         case .command(let command): .command(id: command.id)
         case .commandResult(let result): .commandResult(id: result.command)
-        // 不另加 purpose：路由头在中转连接上整帧解码（`Relay.frame(from:)`），旧版遇到不认识的 purpose 整条中转连接断开重连、门铃一起断；
-        // 认识的 purpose 配上解不开的正文，旧版只当一帧解不开（`VoiceRelayEvent.unreadable`）。问记作命令、答记作结果，拒收照旧按 id 归属。
         case .live(let signal): signal.answers ? .commandResult(id: .init(signal.request)) : .command(id: .init(signal.request))
         }
     }
@@ -35,17 +30,9 @@ nonisolated enum VoiceMediaSignal: Equatable, Codable, Sendable {
     case answer(value: VoiceAnswer)
     case event(value: VoiceMediaEvent)
     case hangup(reason: VoiceEndReason)
-    /// 同一通（header.session）"我在 header.sender 这个租约上"（`VoiceLink`、`VoiceLeg`）。
-    /// 正在等对端的一方每秒发 ask=true；另一方收到就回 ask=false，回的丢了下一秒的问会再问；
-    /// Mac 换绑时（不论哪种帧引起）另补发当前投影。
-    /// 两端各凭收到对方的一帧确认对方还在（换绑只认 `VoiceService.rebind` 一处），不靠自己发没发出去推断。
     case resume(ask: Bool)
 }
 
-/// 每帧的 AEAD 认证头。session 对媒体指当前通话，对业务命令指原通话来源，不限制命令必须在原通话存活时执行。
-/// sequence 由唯一 Relay 发送者按双方租约对从 1 单调分配，跨通话和命令共用，不能按 session 重置；耗尽前换连接。
-/// 序号与防重放记在本机这一条中转连接上（`VoiceSignalConnection`）：通话接到新租约后从 1 重新数，旧租约的帧因收件租约不符、发件租约已退役一律不认。
-/// 期限使用发端时钟的 Unix 毫秒，只由收端判定（容差见 `clockSkewMilliseconds`），中转不判；不续期、不排队。
 nonisolated struct VoiceSignalHeader: Equatable, Codable, Sendable {
     let version: UInt8
     let sender: VoiceEndpoint
@@ -58,37 +45,25 @@ nonisolated struct VoiceSignalHeader: Equatable, Codable, Sendable {
     func authenticationData() throws -> Data { try VoiceSignalFormat.canonicalJSON(self) }
 }
 
-/// sealed 为 AES.GCM combined（12 字节 nonce + ciphertext + 16 字节 tag），Codable 按 base64 编码。
-/// AAD 是 header 的 JSONEncoder sortedKeys + withoutEscapingSlashes 编码；无 Date/浮点数，自定义编码不得另造字段。
-/// 接收必须先检查 wire 大小/版本/当前双方租约，再验 AEAD、期限及单调序号，最后解码有界 payload；失败绝不能先推进最高序号。
 nonisolated struct VoiceSealedSignal: Equatable, Codable, Sendable {
     let header: VoiceSignalHeader
     let sealed: Data
 }
 
-/// 只能由原生 Relay 在完成认证、AEAD、期限、序号和租约检查后发给 AppServices；此类型不携带 bearer/account header/server call ID。
 nonisolated struct VoiceReceivedSignal: Equatable, Sendable {
     let header: VoiceSignalHeader
     let payload: VoiceSignalPayload
 }
 
-/// 双方实现共用的协议常量；这里没有加解密或运输的假实现。
 nonisolated enum VoiceSignalFormat {
-    /// 中转认的那一层：登记、解析与信令外层（路由头）。中转据它决定登记不登记，升它要先部署中转，所以帧里装什么与它无关。
     static let version: UInt8 = 1
-    /// 两端 App 之间的信令版本，只在拨号（`VoiceOffer`）与接听（`VoiceAnswer`）里互报，中转不看。手机与 Mac 不是同一时刻更新的（TestFlight 与 Sparkle 各自装），
-    /// 版本不同就各自说"请更新"（`VoiceIssue.relayUnsupported`）：Mac 回失败投影；手机挂断（`otherVersion`），帧解不开（`VoiceRelayEvent.unreadable`）同样处理。
-    /// 帧的形状或含义改了就升。
     static let callVersion: UInt8 = 3
     static let maximumWireBytes = 64 * 1024
     static let maximumPlaintextBytes = 32 * 1024
     static let maximumDeviceIDBytes = 128
     static let replacedCloseCode = 4409
     static let lifetimeMilliseconds: Int64 = 30_000
-    /// 期限由发端时钟写、收端时钟查，两台设备的时钟并不一致；零容差时发端快几十毫秒就整帧被拒。
-    /// 取 JWT 校验常用的 60 秒（RFC 7519 §4.1.4 允许"几分钟以内"的余量），收端在两侧都放宽这么多。
     static let clockSkewMilliseconds: Int64 = 60_000
-    /// 从现有 RelaySecret 经 HKDF-SHA256（空 salt、此 UTF-8 info、32 字节输出）派生 AES-256-GCM 密钥。
     static let keyContext = "cuepad-voice-signal-v1"
     static let registrationContext = "cuepad-relay-voice-v1"
 

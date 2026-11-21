@@ -48,7 +48,6 @@ extension Command {
       }
       let copy = try await call.card(call.args.positionals[0])
       try await call.store.resolveConflict(copy: copy.id, keep: keep)
-      // 原卡已不存在时 Store 保留副本（转为普通卡）。
       var survivor = try await call.store.card(copy.id)
       if survivor == nil, let original = copy.conflictOf { survivor = try await call.store.card(original) }
       guard let survivor else { throw CLIError.notFound("原来那条已不存在") }

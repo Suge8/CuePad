@@ -16,7 +16,6 @@ struct CueRelayStage: ViewModifier {
 
     @State private var stage = Stage()
 
-    // 窗口根上只放一个不变的引用：接力只在背景里那个小视图里看（`Watcher`），Cue 的现状怎么变根都不重算
     func body(content: Content) -> some View {
         content.environment(\.relayStage, stage).background(Watcher(workspace: workspace, stage: stage))
     }
@@ -53,9 +52,7 @@ struct CueRelayStage: ViewModifier {
 
         func register(_ rail: SessionRailReveal) { rails.add(rail) }
 
-        /// `since`：这次接力的起点（叫醒是 `CueWatch.Wake.seen`），光照它排时刻，晚到的从中途画起；交给从此刻起。
         func play(_ flight: CueFlight, since: Date = .now, reduceMotion: Bool) {
-            // 与新会话那一行同一次更新里就藏起来，不先露一帧
             let id = UUID()
             flightID = id
             arriving = Set(flight.ends.filter(\.opens).map(\.session))
@@ -63,12 +60,10 @@ struct CueRelayStage: ViewModifier {
             let readyRails = rails.allObjects.filter(\.canReveal)
             playback = Task {
                 if flight.direction == .relay {
-                    // 会话条与 flight 来自同一快照；先让新格挂载，再滚入，最后量锚。缺席目标不等待。
                     await NextFrame.drawn()
                     guard !Task.isCancelled else { return }
                     for rail in readyRails { rail.prepare(flight.ends) }
                 }
-                // 在接力的那几处这一刻才挂上锚：等这一次更新排好、提交了再量
                 await NextFrame.drawn()
                 guard !Task.isCancelled, self.flightID == id else { return }
                 guard let window = host?.window, let root = RelayAnchorView.rootLayer(of: window), let color else {
@@ -88,7 +83,6 @@ struct CueRelayStage: ViewModifier {
             }
         }
 
-        /// 刚开出的会话那一行正透明着等光落下（`relayArrival`），量它时不看透明度。
         private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> RelayFlight.Landing? {
             anchors.compactMap { anchor -> (rank: Int, landing: RelayFlight.Landing)? in
                 guard case .end(let spot) = anchor.role, let rank = spot.rank(for: end),
@@ -111,16 +105,12 @@ struct CueRelayStage: ViewModifier {
     }
 }
 
-/// 发出（"对 Cue 说"的发送钮 → Cue 的头像）：钮上挂一个锚（`relayLaunch`），发出的那一刻量出机头与头像在窗口里的位置，
-/// 交给 `RelayFlight.launch` 当场起飞（不等下一帧：钮在这一帧换成发送中，光要接上正飞走的机头）。头像落在哪处同接力（`CueSpot`）。
 final class RelayLaunch {
     fileprivate weak var pad: RelayAnchorView?
     fileprivate var color: CGColor?
 
-    /// 机头在钮心右上方多远（钮宽、钮高的比例）：对着录屏逐帧对准，光的第一帧正落在正飞走的机头上。
     private static let nose = CGSize(width: 0.2, height: 0.2)
 
-    /// 只画光；头像什么时候露"在听"由 `CueWatch.sent` 按同一个到点时刻推出。
     func fly(since: Date, reduceMotion: Bool) {
         guard let pad, let window = pad.window, let root = RelayAnchorView.rootLayer(of: window), let color,
               let from = pad.frame(in: root) else { return }

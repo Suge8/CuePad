@@ -52,7 +52,6 @@ extension DebugScene {
                 return request.port == 0 ? .probe : .open(host: "127.0.0.1", port: request.port)
             }
             let port = try await server.start()
-            // 127.0.0.2 本机没有、不在手机的任何网段里：连上去立刻失败，说不在同一个网络（`LiveLink.reach`）
             let addresses = args.layoutOpts.liveApart ? [.init(host: "127.0.0.2", prefix: 32)] : LiveTunnel.localAddresses().filter { !$0.host.contains(":") }
             mac.door = LiveSignal.Door(addresses: addresses.isEmpty ? [.init(host: "127.0.0.1", prefix: 8)] : addresses, port: port, ticket: ticket)
             liveMac = (mac, server)

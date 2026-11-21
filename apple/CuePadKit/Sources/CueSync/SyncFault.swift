@@ -13,7 +13,6 @@ enum SyncFault: Equatable, Sendable {
 
   init(_ error: any Error) {
     guard let error = error as? CKError else {
-      // 请求被取消（时限、赛跑输了的那路）同 CloudKit 的 operationCancelled：再试就是
       self = Self.isURLError(error) ? .offline(nil) : error is CancellationError ? .wait(nil) : .rejected
       return
     }
@@ -49,7 +48,6 @@ enum SyncFault: Equatable, Sendable {
     }
   }
 
-  /// 写进日志的归类（只进日志、不上界面，不译）。
   var label: String {
     switch self {
     case .offline: "连不上 iCloud"
@@ -66,7 +64,6 @@ enum SyncFault: Equatable, Sendable {
     }
   }
 
-  /// 连不上压过其余（整批都会这样），其次账号、要等，最后才是单条的问题。
   static func merge(_ merged: SyncFault?, _ next: SyncFault) -> SyncFault {
     guard let merged else { return next }
     let given = [merged.retryAfter, next.retryAfter].compactMap { $0 }.max()

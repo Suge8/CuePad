@@ -17,7 +17,6 @@ private struct ReplyNoteLayer: ViewModifier {
     @State private var prose = ProseCache()
     @State private var float: Floating?
 
-    /// 新的批注记下时才进草稿：回复框不在写的时候长高、把对话顶走。
     enum Floating: Equatable {
         case offer(ReplyNote, at: Spot)
         case editing(ReplyNote.Edit, at: Spot)
@@ -110,8 +109,6 @@ private extension ReplyNoteLayer.Floating {
     }
 }
 
-/// 字先留在这里、记下时才写进草稿：打字时对话里的高亮与回复框不跟着重算。
-/// `done` 只调一次（收起时还会失去焦点）：给字是记下，nil 是不要这条。
 private struct NoteEditor: View {
     let note: ReplyNote
     let done: (String?) -> Void
@@ -165,7 +162,6 @@ private struct NoteEditor: View {
     }
 }
 
-/// 默认在这一行下面：拖选多是从上往下，松手处是选区末尾，往下放不遮住选中的字。
 private struct Anchored: Layout {
     let spot: Spot
 
@@ -187,7 +183,6 @@ private struct Anchored: Layout {
     }
 }
 
-/// 每条回答渲染出的可选文字（`MarkdownText.proseTexts`）：只在松开鼠标有选区时按需算，按消息记住（回答写完就不变，变了按字重算）。
 private final class ProseCache {
     private var texts: [UUID: (source: String, prose: [String])] = [:]
 

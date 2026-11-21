@@ -2,13 +2,9 @@ import SwiftUI
 
 /// 否决的方案：`TimelineView(.explicit(时刻))`——iOS 27 模拟器实测只在头一次画时调用内容（给的日期是时刻表里第一个时刻，还没到就按已到画），到了那一刻并不重画。
 struct Moments<Content: View>: View {
-    /// 此刻之后下一次要重画的时刻，必须严格晚于给它的此刻（不晚于的话睡醒时它还是同一个时刻，任务不再重起，内容停住）。
     let next: (Date) -> Date?
     @ViewBuilder let content: (Date) -> Content
-    /// 睡到的那个时刻：读数不早于它（醒来与重画之间读 `.now` 不会还差一丝没到）
     @State private var reached = Date.distantPast
-    /// 挂着看不见的页（Mac 留着的页、先挂上的 Agent 页）不睡也不醒：醒来换字要连带整页重排（额度栏的倒计时曾每约 15 秒排一次 10–16ms）；
-    /// 回到前台时它变了、这里重画，按那一刻的字排。
     @Environment(\.pageActive) private var active
 
     var body: some View {

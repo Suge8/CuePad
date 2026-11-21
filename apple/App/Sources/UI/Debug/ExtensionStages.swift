@@ -73,7 +73,6 @@ struct DebugActivityStage: View {
     }
 }
 
-/// 分享扩展的界面（`ShareViews`，主 App 也编进了它）像在分享面板里那样以表单弹出；保存不会被点，只看长相。
 struct DebugShareStage: View {
     let location: LibraryLocation
     @State private var model: ShareModel?

@@ -1,11 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 发消息只有这一条路（全 App 所有入口）：按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录（同步层马上传）。
-/// 界面从不等上传或执行结果，到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。
-/// 落库与全 App 的发送顺序归 AppServices，语音和多个窗口共用。
 extension Workspace {
-    /// `keeping` 是发出后输入框里留下的（斜杠命令留着批注跟下一句发）。返回写库的那个任务（测试等它）。
     @discardableResult
     func speak(
         to listener: Listener, from box: Binding<ComposerDraft>, keeping: (ComposerDraft) -> ComposerDraft = { _ in ComposerDraft() },
@@ -48,14 +44,12 @@ extension Workspace {
         replyFocus = session.id
     }
 
-    /// 不是从输入框说的（任务的正文、压缩按钮）：写不进库时只提示，原文还在原处。
     @discardableResult
     func speak(_ stored: String, to listener: Listener, saying: Dotted? = nil) -> Task<Void, Never> {
         if let saying { say(saying) }
         return write(stored, to: listener) {}
     }
 
-    /// 撤不回（Mac 已领取、Cue 已收到）就不重发，免得说两遍；撤回之后写不进库时，原文放进 `box`（这个去处的输入框），文字不丢。
     @discardableResult
     func resend(_ said: Said, restoringInto box: Binding<ComposerDraft>) -> Task<Void, Never> {
         let services = services
@@ -69,7 +63,6 @@ extension Workspace {
         }
     }
 
-    /// 用户确认可能重复后明确再说一次：新建意图，保留原请求的未知，不把它删除后伪装成安全重投。
     @discardableResult
     func sayAgain(_ said: Said, restoringInto box: Binding<ComposerDraft>) -> Task<Void, Never> {
         write(said.content, to: said.listener) { box.wrappedValue.append(stored: said.content) }
@@ -88,7 +81,6 @@ extension Workspace {
         to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
     ) -> Task<Void, Never> {
         let services = services
-        // 同一个去处的话按按下的先后落库：前一句在等附件存好时，后一句也等它（只等落库，不等上传）
         return services.sendOrder.enqueue(listener.orderKey) { [self] in
             let (sent, body) = await taking()
             do {
@@ -116,14 +108,12 @@ extension Listener {
 }
 
 extension ComposerDraft {
-    /// 去掉还留在输入框（`kept`）里的在存附件编号：它们存好后接给输入框，不随取走的这份发出。
     func withImports(notIn kept: ComposerDraft) -> ComposerDraft {
         var draft = self
         draft.importing.removeAll { kept.importing.contains($0) }
         return draft
     }
 
-    /// 发出时就留在输入框里的（`kept`）本来就在取走的里，不算新打的。
     func followed(by later: ComposerDraft, keeping kept: ComposerDraft) -> ComposerDraft {
         var merged = self
         let typed = later.text == kept.text ? "" : later.text

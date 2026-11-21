@@ -40,8 +40,6 @@ extension CodexRuntime {
         publish(session)
     }
 
-    /// 线程里的一项：你说的话收起不挡着这一轮的提问，Codex 登记了的这种提问、压缩、派出的子代理（任务名是 `agentPath` 的末段，同认出后名册里的名字 `owner`；
-    /// 已认出的同名线程不再等：早到的推送，或前几轮派过同名的）。
     private func item(_ item: JSONValue, started: Bool, in session: Tracked) {
         switch (item["type"]?.string, started) {
         case ("userMessage", true):
@@ -64,7 +62,6 @@ extension CodexRuntime {
         }
     }
 
-    /// 托管会话的一轮（它的驱动报的）接到桥上。以一句话开新一轮时（`deliver`），这一轮开始就是那句开出的，之后的结束照常歇下。
     func event(_ event: TurnEvent, in session: Tracked) {
         guard tracked[session.id] === session else { return }
         if case .exited = event { return detach(session.id) }
@@ -83,10 +80,6 @@ extension CodexRuntime {
         publish(session)
     }
 
-    /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到），或这一轮派出的子代理还没露面（推送还没到，`spawned`）时先不歇下：
-    /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍、等派出的认出，至多 `AgentTimeouts.settleAsk`：认出的进名册，
-    /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。
-    /// 换轮中（`HostedTurns.handingOver`）被停下的那一轮不等，直接交给下一轮。
     func endTurn(_ session: Tracked) {
         session.reply = nil
         session.sentAt = nil
@@ -101,7 +94,6 @@ extension CodexRuntime {
                 await withTaskGroup { group in
                     for thread in unknown { group.addTask { await self.resolve(thread, in: session) } }
                 }
-                // 读不到的线程认不出名字：派出的算在其中，照上面的规则先歇下；还在问的等它问完
                 while session.spawned.count > session.threads.values.count(where: { if case .unreadable = $0 { true } else { false } }) {
                     try await recognized.next()
                 }
@@ -114,7 +106,6 @@ extension CodexRuntime {
         }
     }
 
-    /// `start` 是这一轮开始的时刻，早于它可能的结束。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {
         session.sentAt = nil
         session.ending?.cancel()
@@ -176,7 +167,6 @@ extension CodexRuntime {
             return unresolved(child, in: session)
         }
         let running = last?["status"]?.string == "inProgress"
-        // 同一线程同时在问的另一次（推送触发的与歇下前的再问）先没读到时，这次读到的照样算
         guard let queued = session.threads[child]?.pending else { return }
         session.threads[child] = owner
         if case .child(let name, _) = owner, session.spawned.remove(name) != nil { session.recognized?.happened() }
@@ -194,7 +184,6 @@ extension CodexRuntime {
         for (method, params) in queued { self.child(method, params, thread: child, in: session) }
     }
 
-    /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。沿父线程到顶也不是这个会话才是别人的；中途读不到抛出（认不清）。
     private func owner(of thread: JSONValue, on rpc: CodexRPC, in session: Tracked) async throws -> Owner {
         let spawn = thread["source"]?["subAgent"]?["thread_spawn"]
         let role = thread["agentRole"]?.string ?? spawn?["agent_role"]?.string ?? "default"
@@ -281,7 +270,6 @@ extension CodexRuntime {
             if delivered, let file { last = await CodexHistory.lastTurn(in: file) }
             guard tracked[session.id] === session, !session.turns.facts.running, session.turns.facts.inFlight == batch else { return }
             if delivered, last?.plan != true, last?.interrupted != true, await session.turns.open({ try await turnStart(session, []) }) { return }
-            // 不补，或没开成（已带着原因歇下）：这一批不再等。补开路上开跑的不在这一批里，照等；其间已做完的，它那次补开见批次变了不开，由这里补
             session.unread = session.unread.filter { !batch.contains($0.key) }
             session.turns.facts.inFlight.subtract(batch)
             if !session.unread.isEmpty { wake(session) }

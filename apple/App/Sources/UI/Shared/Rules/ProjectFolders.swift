@@ -1,18 +1,14 @@
 import CueStore
 import Foundation
 
-/// 项目与文件夹的规则（iOS 与 Mac 共用）。绑定是 Mac 本机的事（`CueStore.setDirectory`，路径因设备而异）；
-/// 手机能看到的只有各 Mac 同步来的目录绑定（`DirectoryBinding`），要绑时经投送请求（`BindRequest`）让那台 Mac 解析成完整路径。
 nonisolated enum ProjectFolders {
     struct LaunchPlace: Identifiable, Equatable, Sendable {
         let id: String
         let project: Project
-        /// 没绑的是建工作区的那台（Mac 上是本机，手机上是 `CueStore.workMac`）。手机上一台 Mac 都没有为 nil。
         let host: String?
         let detail: String?
     }
 
-    /// `host` 是 Mac 上本机的标识：新会话只在本机开，只认本机的绑定；手机传 nil，看全部，没绑的交给 `workMac`。
     static func launchPlaces(projects: [Project], bindings: [DirectoryBinding], host: String?, workMac: String?) -> [LaunchPlace] {
         projects.flatMap { project -> [LaunchPlace] in
             let own = bindings.filter { $0.projectID == project.id && (host == nil || $0.hostID == host) }
@@ -25,7 +21,6 @@ nonisolated enum ProjectFolders {
 
     static var pending: String { String(localized: "开工时建好") }
 
-    /// 只写文件夹名：同步来的绑定只有末段（完整路径不出那台 Mac）。
     static func place(of project: Project, bindings: [DirectoryBinding], workMac: MacAgents?) -> Dotted {
         let own = bindings.filter { $0.projectID == project.id }
         guard own.isEmpty else { return Dotted(own.map { String(localized: "\($0.macName) 上的 \($0.folder)") }) }
@@ -63,7 +58,6 @@ nonisolated enum ProjectFolders {
         let items: [Candidate]
     }
 
-    /// 按设备分组：显示名可相同，设备标识（`hostID`）才是稳定的组标识。
     static func candidateGroups(_ candidates: [Candidate]) -> [CandidateGroup] {
         let byHost = Dictionary(grouping: candidates, by: \.hostID)
         return byHost.map { host, items in
@@ -71,7 +65,6 @@ nonisolated enum ProjectFolders {
         }.sorted { $0.id < $1.id }
     }
 
-    /// 同一台 Mac 上同名的只列一个（手机分不出同名的两个文件夹）；`excluding` 项目在那台 Mac 上已绑着的不再列。
     static func candidates(folders: [SessionFolder], bindings: [DirectoryBinding], projects: [Project], excluding project: UUID?) -> [Candidate] {
         let own = Set(bindings.filter { $0.projectID == project }.map { "\($0.hostID)/\($0.folder)" })
         let owners = Dictionary(

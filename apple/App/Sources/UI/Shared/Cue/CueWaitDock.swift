@@ -1,16 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// Cue 的提问只在这里答（进展页等你列只看，点了来这里；会话在问的也可在会话页答），与进展页等你列里的拍板同一份（`CueThread.waiting`，出自 `CueStore.cueTally`；待回复不进来）。
-/// 露哪件只记在 `Workspace.cueAsking`（滑卡与小箭头换的写它），不在等了露第一件。
-/// 问句是代码按 Cue 写的动作短语写出的（`CueAsking.question`），不靠 Cue 的措辞；要看细节点眉题进任务或会话。对话里不另挂还在等你的提问：同一问同屏只一处。
-/// 卡上只能答：别的话在 Cue 页底下的输入框说，一开口 Cue 的提问就收起（Cue 判断不是在答它会放回）；在挂着它的会话里说也当场收起（见 `CueQuestionEnd`）。没有关掉。答了等库里那件结束才换下一件。
 struct CueWaitDock: View {
     let waiting: [CueWait]
     let asking: String?
     let shots: [UUID: [CueShown]]
     let open: (PreviewOpening) -> Void
-    /// 卡正在升起、沉回或淡入淡出：这期间对话不另外往上滑（`ChatColumn` 的 `holding`），只跟着它让出的高挪，停了再滑一次。
     @Binding var moving: Bool
     #if os(iOS)
     @Environment(Workspace.self) private var workspace
@@ -24,12 +19,8 @@ struct CueWaitDock: View {
     @State private var exit: CGFloat = 0
     @State private var shown: CueWaitPick?
     @State private var level: CGFloat
-    /// 这一页从什么时候起在前台：在这之前就在等的不算"来了"，不升起。Mac 上挂着不看的页不跟着库变（`pageActive`），
-    /// 回到前台时才读到的那几件当场就在、不再从输入框后面升起（升起的这一段对话跟着每帧重排）。
     @State private var watching = Date.now
 
-    /// 页打开时已经在等的那张随页一起排出来、不升起（同 `follow` 的头一次）：等 `onChange` 再放的话卡晚一次更新才排，
-    /// 对话按它让出的高又要重排一遍。
     init(waiting: [CueWait], asking: String?, shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
         self.waiting = waiting
         self.asking = asking
@@ -69,7 +60,6 @@ struct CueWaitDock: View {
                         removal: .offset(x: exit).combined(with: .opacity)))
             }
         }
-        // 叠边按卡的整高垫在后面：滑卡时露出的是后一件的纸，不跟着卡动、不随换卡进出
         .background { if shown != nil { deck } }
         .opacity(floats ? level : 1)
         .modifier(RiseBehind(shown: floats ? (waiting.isEmpty ? 0 : 1) : level, floats: floats))
@@ -79,17 +69,13 @@ struct CueWaitDock: View {
     }
 
     static let below = Spacing.item
-    /// 叠边比卡往下多露这么多、两边各收这么多。只露一层：第几件已写在眉题行，叠边只说后面还有。
-    /// 否决两层：卡下沿要按最多层数一直让着，只有一件时卡离输入框也空出一大截。
     private static let peek: CGFloat = 8
     private static let tuck: CGFloat = 12
 
-    /// 卡下沿让出的那一截一直留着（`card`，没有时留白）：按件数让的话，来一件、答掉一件拍板卡就变高变矮，浮在上面的对话当帧跳一下。
     private var deck: some View {
         let behind = waiting.count > 1
         return Color.clear
             .dockedPaper()
-            // 不透明：对话滚到卡后面（`FloatingReply` 不铺底），半透的叠边会透出后面的字
             .opacity(behind ? 1 : 0)
             .padding(.horizontal, Self.tuck)
             .padding(.top, Self.peek)
@@ -98,7 +84,6 @@ struct CueWaitDock: View {
             .readerHidden(true)
     }
 
-    /// 整张卡接这一拖（`contentShape`）：只挂在内容上的话卡里的空白处接不住。卡里的按钮照样先接自己的点按。
     private func card(_ pick: CueWaitPick) -> some View {
         let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, counter: $counter, open: open)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -113,12 +98,10 @@ struct CueWaitDock: View {
 
     private var floats: Bool { reduceMotion }
 
-    /// 升起用无回弹弹簧、从卡排进去的下一帧起播：卡插进来那一帧排版重，从这一帧起算的话前几十毫秒被吃掉。
     private func follow(animated: Bool) {
         guard let next = current else {
             guard shown != nil else { return }
             guard animated else { return leave() }
-            // 沉到一半又来了一件时这一段被接走（`move` 的收尾看 `level`），不把它拿掉
             move(to: 0, Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { leave() }
             return
         }

@@ -1,6 +1,5 @@
 import Foundation
 
-/// 存成 RFC 5545 RRULE 的子集（`rule`，如 `FREQ=WEEKLY;BYDAY=MO,TH;BYHOUR=9;BYMINUTE=0`）：Cue 的 memory remind 收的也是这一种写法，时刻缺省取第一次的那个时刻。读不出的写法（别的版本写的）当作不重复。
 public struct CueRepeat: Hashable, Sendable {
   public enum Cycle: Hashable, Sendable {
     case daily
@@ -12,7 +11,6 @@ public struct CueRepeat: Hashable, Sendable {
   public var hour: Int
   public var minute: Int
 
-  /// 读 RRULE 也经它，建成的都写得出 `rule`。
   public init?(_ cycle: Cycle, hour: Int, minute: Int) {
     let days =
       switch cycle {
@@ -28,7 +26,6 @@ public struct CueRepeat: Hashable, Sendable {
 
   private static let days = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
 
-  /// 每种频率认的字段：别的（INTERVAL、COUNT、UNTIL……）照不了它的意思，整条不认，不悄悄丢掉
   private static let fields: [String: Set<String>] = [
     "DAILY": ["FREQ", "BYHOUR", "BYMINUTE"], "WEEKLY": ["FREQ", "BYDAY", "BYHOUR", "BYMINUTE"],
     "MONTHLY": ["FREQ", "BYMONTHDAY", "BYHOUR", "BYMINUTE"],
@@ -77,7 +74,6 @@ public struct CueRepeat: Hashable, Sendable {
   }
 
   public func next(after date: Date, calendar: Calendar = .current) -> Date {
-    // 每月几号要逐字匹配（没有 31 号的月份跳过）；时刻落在夏令时跳过的那一段时取之后最近的时刻
     let (matches, policy): ([DateComponents], Calendar.MatchingPolicy) =
       switch cycle {
       case .daily: ([DateComponents(hour: hour, minute: minute, second: 0)], .nextTime)

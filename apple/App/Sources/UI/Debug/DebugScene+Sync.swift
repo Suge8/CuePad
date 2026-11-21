@@ -26,7 +26,6 @@ extension DebugScene {
     /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
         #if os(iOS)
-        // 手机刷新额度先等请求确认上传，才等 Mac 写回（`AccountQuotas`）；隔离库没有同步会当场报"尚未确认上传"，轮不到演示 Mac 答
         if args.quotaOpts.fails && args.sync == nil { return .custom(StandInSync()) }
         #endif
         let issues = [
@@ -61,7 +60,6 @@ extension DebugScene {
 
     protocol StandInSyncing: SyncControlling {}
 
-    /// 演示画面里在路上的文件（`-CuePadFileArrives`、灵感图片到达）：替身同步从这里报出。
     nonisolated static let transfers = AsyncStream<[String: FileTransfer]>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated final class OfflineSync: StandInSyncing {
@@ -118,7 +116,6 @@ extension DebugScene {
         }
     }
 
-    /// 话直接写进本机库：界面看到的与应用远端变更是同一种变化。
     nonisolated final class ArrivingSync: StandInSyncing {
         static let pages = 3
         static let perPage = 6
@@ -159,7 +156,6 @@ extension DebugScene {
         }
     }
 
-    /// 往库里写"同步带回的"事实的替身要的资料库：它在服务建好后才有（替身先建），摆画面时交过来（`presetSync`）。
     private static let library = AsyncStream<CueStore>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     private static func standInLibrary() async -> CueStore? {
@@ -167,7 +163,6 @@ extension DebugScene {
         return await stores.next()
     }
 
-    /// 同真实的第一遍同步先应用记录、再报对过。
     nonisolated final class NewMacSync: StandInSyncing {
         let seconds: Double
         init(seconds: Double) { self.seconds = seconds }
@@ -225,7 +220,6 @@ extension DebugScene {
         }
     }
 
-    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。
     private static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
         var handle: OpaquePointer?
         defer { sqlite3_close(handle) }

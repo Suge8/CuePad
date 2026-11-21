@@ -2,14 +2,12 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// 两路输出原样，不追加换行。
 struct CLIResult {
   var code: Int32
   var out: String
   var err: String
 }
 
-/// 读 stdin 全文；交互终端（没有管道输入）返回 nil。
 typealias StdinReader = @Sendable () -> String?
 
 enum CLI {
@@ -24,14 +22,11 @@ enum CLI {
     var hint = "cuepad --help"
     var json = arguments.contains("--json")
     do {
-      // 隐藏入口：Cue 的工具（MCP，stdio），由 Cue 的大脑启动，不在任何帮助里；--wait <秒> 是说话工具等结果的时限（App 的 CueTiming.sayWait）；
-      // --dream 是后台整理记忆的大脑用的那一组（merge、said、ask）
       if arguments.first == "mcp" {
         let wait = arguments.count == 3 && arguments[1] == "--wait" ? TimeInterval(arguments[2]) : nil
         let dream = arguments == ["mcp", "--dream"]
         guard arguments.count == 1 || wait != nil || dream else { throw CLIError.usage("用法：cuepad mcp [--wait <秒> | --dream]") }
         let server = CueMCPServer(store: try openStore(environment: environment), wait: wait ?? Speech.cueWait, toolset: dream ? .dream : .cue)
-        // 大脑可能在工具还没答完时就退了（班次结束、换新）：写不进去就结束这次服务（同 main 的 emit）
         try await server.serve(FileHandle.standardInput.bytes.lines) { line in
           try FileHandle.standardOutput.write(contentsOf: Data((line + "\n").utf8))
         }
@@ -53,7 +48,6 @@ enum CLI {
     }
   }
 
-  /// 真实库必须已由 App 建好，CLI 不凭空造一个；隔离目录按需创建（同 App）。
   private static func openStore(environment: [String: String]) throws -> CueStore {
     let location: LibraryLocation
     do { location = try .resolve(environment: environment) } catch {
@@ -71,7 +65,6 @@ enum CLI {
 
   private static func route(_ tokens: [String]) throws -> Route {
     guard let first = tokens.first, !["--help", "-h", "help"].contains(first) else { return .help(Help.root) }
-    // 单词命令也可以有动词（`live` 与 `live snapshot`）：两个词对得上动词的先当动词
     if tokens.count > 1, let verb = Command.all.first(where: { $0.path == [first, tokens[1]] }) {
       return .command(verb, Array(tokens.dropFirst(2)))
     }

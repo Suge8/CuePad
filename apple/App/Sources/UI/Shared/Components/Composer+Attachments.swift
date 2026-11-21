@@ -3,7 +3,6 @@ import CueText
 import SwiftUI
 
 extension Composer {
-    /// "＋"，或调用方换上的那一颗（`lead`）：同一颗钮，换的只是字形、底与点了做什么，换时字形原地替换、底渐变。
     var plus: some View {
         let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
         let files = accepts.contains(.files) ? ComposerSource.fileChoices.map { choice in
@@ -20,7 +19,6 @@ extension Composer {
         }
         .disabled(lead?.enabled == false)
         .fixedSize()
-        // 格子撑在钮外面：撑在标签里时悬停的底是整格那么大
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
     }
 
@@ -33,8 +31,6 @@ extension Composer {
             ChoiceMenu.Choice(title: "展开编辑", image: .icon(.expandEdit)) { expand(outbox) },
             ChoiceMenu.Choice(title: "不带了", image: .icon(.remove), destructive: true) { drop(outbox) },
         ])] : []
-        // 整条是一颗钮（点开看全文），悬停的底铺满整条；拿掉的那颗叠在右端，自己另有一圈悬停的底。
-        // 否决过：左右并排两颗——悬停的底只盖到左边那颗，右端空着一截；拿掉的那颗的点按区写在钮外面，实际只有图标那么大，几乎点不到。
         return AttachmentButton(label: "带上：\(name)", menu: menu, open: { previewing = outbox }) {
             HStack(spacing: Spacing.item) {
                 Image(.pickCards).foregroundStyle(palette.ink3)
@@ -60,7 +56,6 @@ extension Composer {
                 .padding(.trailing, (Self.chipHeight - ComposerMetrics.glyphTarget) / 2)
             }
         }
-        // 交出去的那件任务本身（去不掉的那条）是这块面板的标题，不铺底：面板已经是一张卡。带上的别的才是一块块能拿掉的东西
         .background(removable ? palette.fill : .clear, in: shape)
     }
 
@@ -89,10 +84,8 @@ extension Composer {
     }
 
     static var stripSide: CGFloat { 64 }
-    /// 带上的那一条的高：手指点得准的一行
     static var chipHeight: CGFloat { 44 }
 
-    /// 存的途中发出的话，附件随这句发出（`Workspace.importFiles`）。
     func add(_ incoming: [IncomingFile]) { workspace.importFiles(incoming, into: $draft) }
 
     func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
@@ -113,7 +106,6 @@ private struct AttachmentPop: ViewModifier {
     }
 }
 
-/// 不接受卡片的（随手记）不挂，Mac 上也就不需要浮层宿主（菜单栏面板没有）。`on` 对一个输入框是定值，不会来回换结构。
 struct CardPanels<Picker: View, Preview: View>: ViewModifier {
     let on: Bool
     let picking: Binding<Bool>

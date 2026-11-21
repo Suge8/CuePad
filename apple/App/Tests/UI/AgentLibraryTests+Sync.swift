@@ -9,7 +9,6 @@ import Testing
 @testable import CueBridge
 
 extension AgentLibraryTests {
-    /// 这里的"手机"是第二个 Mac 进程：Mac 上的工作区只看本机的快照，手机那样读（`agentLibrary(host: nil)`）由测试自己读库。
     @Test func 手机经云看到Mac的快照_发往Mac改规则与合并_结果回到手机() async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
@@ -29,7 +28,6 @@ extension AgentLibraryTests {
         func phoneSees(_ what: String, _ condition: @escaping @Sendable (AgentLibrary) -> Bool) async throws -> AgentLibrary {
             try #require(try await eventually(phone.services.store, { try $0.agentLibrary(host: nil) }) { $0.map(condition) ?? false })
         }
-        // 没有门铃：两边按节奏拉取的那一下由这里来
         let pulling = Task {
             while !Task.isCancelled {
                 await macApp.services.syncing.syncNow()

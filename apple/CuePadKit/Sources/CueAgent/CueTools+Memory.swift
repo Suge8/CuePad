@@ -3,8 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 命中的那一段，至多 `excerptLimit` 字。不从开头截：长回复的开头多半不是要找的。不只认最少见的那个词：问的说法常与原文对不上（问"停止维护"，原文写"结束维护"），
-  /// 只认一个词就落到别处（长程评测里查 Node 的建议，落到了 ESLint 那一行），几个词凑在一起的地方才是要找的。
   static func excerpt(_ text: String, around words: [String]) -> String {
     let flat = CueEnvelope.clip(text, Int.max)
     var hits: [(word: Int, at: Int, end: Int)] = []
@@ -78,7 +76,6 @@ extension CueTools {
         return repeats
       }
       let task = try await args.string("task").asyncMap { try await self.references.task($0) }
-      // 回收站里的 `task(_:)` 已不认；完成、归档的挂上去不会再被收掉（`endCueSchedules`）
       if let task, task.completedAt != nil || task.archivedAt != nil {
         throw Failure("「\(task.heading)」已完成或已归档：定时只挂在没完成的任务上")
       }
@@ -111,21 +108,18 @@ extension CueTools {
     }
   }
 
-  /// 做梦查他以前在会话里说过没有（`CueStore.recallSaid`）。
   func said(_ args: Args) async throws -> Result {
     let query = try args.required("query")
     let found = try await store.recallSaid(query), words = CueStore.recallWords(query)
     return .ok(found.isEmpty ? "没找到。" : found.map { replyLine($0, around: words) }.joined(separator: "\n"))
   }
 
-  /// 做梦问他一次要不要把常交代的做法记成重点（`CueAsk.habit`）：他答了交给 Cue 记。
   func ask(_ args: Args) async throws -> Result {
     let asking = try CueAsking(habit: args.string("rule"))
     try await store.addCueMessage(.cue, text: try args.required("text"), ask: asking)
     return .ok("已问他。")
   }
 
-  /// range 来自生成摘要的同一份输入；存储层在事务内核对输入，不重新给旧文本绑定当前指纹。
   func merge(_ args: Args) async throws -> Result {
     let range = try Self.range(args)
     try await store.setCueSummary(range: range, text: try args.required("text"))
@@ -152,7 +146,6 @@ extension CueTools {
     return line
   }
 
-  /// UUID 数组，去重并保持给定顺序；拒绝整数与已忘掉的记忆。
   private func lines(_ args: Args, _ key: String, allowEmpty: Bool = false) async throws -> [CueMemoryLine] {
     guard args.raw[key] != nil else {
       if allowEmpty { return [] }

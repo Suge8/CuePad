@@ -1,6 +1,5 @@
 import Foundation
 
-/// 工具返回的真实写入身份。只认工具生成的末尾标记，不在标题、用户正文或时间窗口里猜关联。
 public struct CueToolReceipt: Sendable {
   public enum Kind: String, Sendable { case request = "请求", reply = "回复" }
   public let kind: Kind

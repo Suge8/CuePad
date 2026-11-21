@@ -1,7 +1,6 @@
 import CueText
 import Foundation
 
-/// 这一行给 Agent 读，不进界面字目录（apple/App/AGENTS.md）：固定这一种中文写法，读回也只认它。
 extension AttachmentFiles {
   public func agentLine(key: String, name: String) -> String? {
     fileURL(for: key).map { Self.label + name + "（" + $0.path(percentEncoded: false) + "）" }
@@ -24,7 +23,6 @@ extension AttachmentFiles {
     }
   }
 
-  /// 不认目录（别的 Mac 写下的、会话自报的首条消息都可能是）；末行被截断、路径不全的也认。
   public static func namingAgentLines(in text: String) -> String {
     guard text.contains(label) else { return text }
     return mapLines(text) { line, last in agentLine(line).flatMap { $0.path != nil || last ? $0.name : nil } }

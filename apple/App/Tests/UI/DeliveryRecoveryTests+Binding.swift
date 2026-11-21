@@ -79,7 +79,6 @@ extension DeliveryRecoveryTests {
         try await remote.updateCard(task.id) { $0.body = "检查发布\n手机补充" }
         var edited = try #require(try await remote.syncRow(recordName: task.id.uuidString.lowercased()))
         let acknowledged = try #require(try await store.syncRow(recordName: task.id.uuidString.lowercased()))
-        // 手机时钟较快：正文新版本必须获胜，不能连带抹掉同一意图已兑现的会话。
         edited.fields["modifiedAt"] = .int(acknowledged.modifiedAt + 1_000)
         #expect(try await store.applyRemote([.save(edited, systemFields: Data())]).isEmpty)
         #expect(try await store.card(task.id)?.body == "检查发布\n手机补充")

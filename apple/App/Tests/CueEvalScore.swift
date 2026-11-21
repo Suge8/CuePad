@@ -12,8 +12,6 @@ enum CheckKind: String, CaseIterable {
     case memory = "记忆"
 }
 
-/// 一条判定。`label` 是它的身份（成绩单按它比两组之间的翻转），这一遍才有的细节写进 `note`；
-/// `counted` 为假是这一遍没测到（前提没出现，如那件事没收尾、埋点与考题之间没换新），不计入通过数。
 struct Check {
     let kind: CheckKind
     let label: String
@@ -36,7 +34,6 @@ enum EvalSuite: String {
     case bench = "记忆基准"
 }
 
-/// 认法是对工具结果的原文做正则：跟着 CueTools 与 CueStoreError 的报错措辞走，那边改了措辞这里要一起改（工具结果不另带机器可读的类别）。
 enum CallFailure: String, CaseIterable {
     case invalid = "参数校验退回"
     case missing = "对象找不到"
@@ -59,7 +56,6 @@ enum CallFailure: String, CaseIterable {
 }
 
 extension CueEval {
-    /// 这一遍（一个场景）的量化指标；轮不含刚启用那一轮（预热），开销含预热（同 .md 的合计）。
     func metrics() async -> [String: Any] {
         let counted = rounds.filter { $0.wake != .enabled }
         let calls = counted.flatMap(\.calls)
@@ -72,13 +68,11 @@ extension CueEval {
         let his = conversation.filter { $0.author == .known(.you) }
         let toldTexts = Set(spoken.compactMap { $0.args["text"] as? String })
         let answering = counted.filter { $0.wake == .message }
-        // 消息的时刻入库时四舍五入到毫秒（Date.stamp）：回复写下后不到半毫秒这一轮就收尾，回复的时刻会进位到收尾之后，所以收尾放宽 1 毫秒
         let isReply = { (message: CueMessage) in
             answering.contains { round in message.createdAt >= round.startedAt && message.createdAt <= (round.finishedAt ?? .distantFuture).addingTimeInterval(0.001) }
         }
         let otherPushes = messages.filter { $0.urgent && $0.choices == nil && !toldTexts.contains($0.text) && !isReply($0) }
         let replies = messages.filter { $0.choices == nil && $0.taskID == nil && !toldTexts.contains($0.text) && isReply($0) }
-        // 他问进展的那一轮：系统提示要的是逐件一句，不受两句的限——上限是两句与件数（非空的行）里大的那个
         let asksProgress = { (reply: CueMessage) in
             let round = answering.first { reply.createdAt >= $0.startedAt && reply.createdAt <= ($0.finishedAt ?? .distantFuture) }
             return round.flatMap { round in his.last { $0.createdAt <= round.startedAt } }?.text.contains(Self.progressQuestion) == true
@@ -109,15 +103,11 @@ extension CueEval {
         ]
     }
 
-    /// 回他的话与 tell 至多几句（系统提示：回复至多两句，tell 至多两句）
     static let sentenceLimit = 2
-    /// 他在问进展（系统提示："问进展时逐件一句，不受这个限"）：问进展的几种常见说法
     static let progressQuestion = /做到哪|到哪了|进展|进度|怎么样了|开工了吗/
 
-    /// `prompt` 是这一遍的系统提示：记下估算的 token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）。
-    /// Pi 用 Anthropic 的模型当大脑时另记模型请求带没带 Claude 订阅的计费标识（`EvalBrain` 的只读扩展记下的）。
     func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, prompt: String, to output: URL) async throws {
-        guard suite != .bench else { return }  // 记忆基准自己判分（bench.py），它的目录里 .json 都是题
+        guard suite != .bench else { return }
         let wide = prompt.unicodeScalars.count { !$0.isASCII }, ascii = prompt.unicodeScalars.count { $0.isASCII }
         var score: [String: Any] = [
             "name": name, "suite": suite.rawValue, "brain": EvalBrain.current.label, "error": failure.map { "\($0)" } ?? NSNull(),

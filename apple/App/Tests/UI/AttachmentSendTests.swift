@@ -24,7 +24,7 @@ struct AttachmentSendTests {
         let arrive = AsyncStream<Void>.makeStream()
         app.sync.fetching.withLock {
             $0 = { [files = services.store.files, arrived = arrive.stream] wanted in
-                for await _ in arrived { break }  // 在路上，直到放行
+                for await _ in arrived { break }
                 _ = try files.store(fileAt: source)
                 guard let url = files.fileURL(for: wanted) else { throw FileFetchFailure.damaged }
                 return url

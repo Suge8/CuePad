@@ -1,14 +1,10 @@
 import Foundation
 
-/// 项目在哪台 Mac 上绑定了代码目录（Mac 写、手机读）：每个 (项目, Mac) 一条，只有文件夹名（末段），
-/// 完整路径只在那台 Mac 本机。
-/// 手机据此列出能开新会话的项目，并知道发给哪台 Mac。由 Mac 从本机的目录绑定推导（`CueStore.publishDirectoryBindings`）。
 public struct DirectoryBinding: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var projectID: UUID
   public var hostID: String
   public var folder: String
-  /// 那台 Mac 给人看的名字（`MacAgents.shownName`，读出时取，不存不同步）。
   public var macName: String
   public var createdAt: Date
   public var modifiedAt: Date

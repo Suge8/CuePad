@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话文件的形状照各家真机写下的（Claude Code 2.1、Grok 1.0、Codex 0.16x 的本机会话目录）。
 @MainActor
 @Suite(.releasesLibraries)
 struct SessionTitleTests {

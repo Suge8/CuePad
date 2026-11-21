@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 推入页和系统返回都绑定 `Workspace.path`，不另存返回来源。
 struct NarrowRoot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -57,7 +56,6 @@ private struct NarrowCue: View {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
-                // 安全区让出页头与输入框，胶囊在中间那段居中；展开时点外面收起的那一层铺过安全区、盖满整屏
                 .safeAreaPadding(.top, CueHeader.height + Bars.contentGap)
                 .safeAreaPadding(.bottom, ComposerMetrics.slot + Spacing.block)
                 .opacity(panelOpen ? 0 : 1)
@@ -99,7 +97,6 @@ private struct NarrowSidebar: View {
 
 }
 
-/// 位移的读数只影响最外面的两层；两页正文不读取每帧进度。读屏只给开合值指着的那层，不随拖动与动画中途变。
 private struct NarrowPlacement: ViewModifier {
     let slide: NarrowSlide
     let width: CGFloat

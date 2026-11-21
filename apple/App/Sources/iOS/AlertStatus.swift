@@ -3,8 +3,6 @@ import CueSync
 import Foundation
 import UserNotifications
 
-/// 三步缺一不可，任何一步不通锁屏都收不到提示，所以每一步的失败都要写明，不能静默。
-/// `detail` 是给人看的说明；底层原因（错误码、服务端说明）只放 `diagnostics`，界面折叠着给，排查时再展开。
 struct AlertStatus: Equatable {
     enum State { case on, pending, problem }
     enum Action { case allow, openSettings, retry }
@@ -34,7 +32,6 @@ struct AlertStatus: Equatable {
         }
     }
 
-    /// 连不上 iCloud 时的样子：设置里按它的说明留高（`StatusText`）。
     static let offline = AlertStatus(authorization: .authorized, registration: .registered, subscription: .offline)
 
     private static let retrying: LocalizedStringResource = "锁屏通知暂时收不到。回到前台时会自动重试，也可以现在重试。"

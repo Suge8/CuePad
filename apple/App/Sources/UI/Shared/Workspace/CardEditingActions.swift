@@ -16,7 +16,6 @@ extension Workspace {
         perform { try await $0.updateCard(id) { $0.variableValues = values } }
     }
 
-    /// 任务列表新的在上，倒着建，列表里的先后才与原文一致。
     func convertToTasks(_ stored: String, in project: UUID) {
         let lines = CueLines.taskLines(stored), store = services.store
         attempt {

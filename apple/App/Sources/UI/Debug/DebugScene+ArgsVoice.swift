@@ -57,7 +57,6 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
 }
 
 extension DebugScene {
-    /// 照 `-CuePadVoiceDropRelay` 在通话进入"在听"后断这台的中转连接；没给就不起。
     static func dropRelay(note: @escaping (String) -> Void) -> Task<Void, Never>? {
         window(args.voiceOpts.dropRelay, "-CuePadVoiceDropRelay") { seconds in
             note("relay-drop \(seconds)")
@@ -65,7 +64,6 @@ extension DebugScene {
         }
     }
 
-    /// `DebugHooks.voiceProjectionSend` 读它。
     static var projectionFailsUntil: ContinuousClock.Instant?
 
     static func failProjection(note: @escaping (String) -> Void) -> Task<Void, Never>? {
@@ -75,7 +73,6 @@ extension DebugScene {
         }
     }
 
-    /// `<在听后秒>,<多久秒>`：到点做 `start`（参数是多久）；没给就不起。
     private static func window(_ spec: String?, _ name: String, start: @escaping (Double) -> Void) -> Task<Void, Never>? {
         guard let spec else { return nil }
         let parts = spec.split(separator: ",").compactMap { Double($0) }

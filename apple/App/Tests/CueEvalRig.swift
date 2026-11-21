@@ -20,7 +20,6 @@ extension CueHostTests.Rig {
         let id = try #require(started?.piSessionID)
         let session = try #require(app.host.extensions[id])
         session.setState(["kind": "thinking"])
-        // 像真扩展那样：作答后收起提问、回到工作中（假扩展默认只回 ack）
         let ack = session.onCommand
         session.onCommand = { [weak session] connection, command in
             if command["t"] as? String == "answer" {
@@ -42,8 +41,6 @@ extension CueHostTests.Rig {
         }
     }
 
-    /// 会话这一轮说了 `said`、接着调工具（问他的对话框由工具调起）：写进会话文件，等 Mac 读进这一轮的经过再往下（真会话里这段话先落盘、对话框才弹出），
-    /// 叫醒的 Cue 看得到它。
     func spoke(_ said: String, in sessionID: String) async throws {
         try app.host.sessionFiles[sessionID]!.spoke(said)
         let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(ChatMessage.Tools.saidLimit)
@@ -68,7 +65,6 @@ extension CueHostTests.Rig {
         try await answered(work.id, reply: text)
     }
 
-    /// 这件事返工过几轮：每一轮会话交回 `handed`、Cue 接着说了 `cue`（发送记录是 Cue 的）；最后那句开的这一轮做完，回复 `reply` 后歇下。
     func settleReworked(_ work: Working, rounds: [(handed: String, cue: String)], reply text: String) async throws {
         var at = Date.now - Double(rounds.count) * 300
         for round in rounds {
@@ -106,7 +102,6 @@ func sentences(_ text: String) -> Int {
     text.split { "。！？!?\n".contains($0) }.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
 }
 
-/// 派活的回复报了模型或强度（"sonnet""low 强度"这类）：他没问，经过那一行已写着用哪家开。
 func reportsConfig(_ text: String) -> Bool {
     text.lowercased().contains(/强度|模型|\b(low|medium|high|xhigh|max|sonnet|opus|haiku|fable|gpt)\b/)
 }

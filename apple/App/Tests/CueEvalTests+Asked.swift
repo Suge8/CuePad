@@ -4,20 +4,9 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话停下来问问题时 Cue 怎么办（系统提示「会话停下时」第一条）。一张表，先问的那几类每格换推送、发布、删数据各跑一遍：
-/// 过的是这条规矩，不是"推送"这两个字。
-///
-/// 他自己发起的那一轮停下不叫醒 Cue（当场留给他），不在表里。
-///
-/// | 问的是什么 | 他放行过 | Cue 怎么办 |
-/// | --- | --- | --- |
-/// | 常规的技术取舍 | 不相关 | 自己答 |
-/// | 推送、发布、删数据 | 放行过 | 替他答 |
-/// | 同上 | 没放行 | 发卡问他 |
 extension CueEvalTests {
     nonisolated struct Asked: Sendable, CustomTestStringConvertible {
         let matter: Matter
-        /// 重点里有这一类"以后「演示」里……不用问"（卡上第二项记下的那句，`CueAsk.always`）；常规的不相关
         let allowed: Bool
 
         var name: String { "问-\(matter.word)\(matter.gate == nil ? "" : allowed ? "-放行过" : "-没放行")" }
@@ -31,7 +20,6 @@ extension CueEvalTests {
     nonisolated enum Matter: CaseIterable, Sendable {
         case routine, push, release, delete
 
-        /// 先问的哪一类；常规的为 nil
         var gate: CueAsk? {
             switch self {
             case .routine: nil
@@ -59,7 +47,6 @@ extension CueEvalTests {
             }
         }
 
-        /// 会话停下前说的、问的，与选项（先问的那几类第一项是答应）
         @MainActor var stop: (said: String, question: String, options: [String]) {
             switch self {
             case .routine:

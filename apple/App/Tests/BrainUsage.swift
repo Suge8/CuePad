@@ -22,16 +22,14 @@ nonisolated struct BrainUsage {
     }
 
     static func directory(in root: URL) -> URL { root.appending(path: "usage", directoryHint: .isDirectory) }
-    /// 后台整理记忆（做梦）的大脑的 stdout 副本：逐轮开销与换新只读 Cue 的，不读这里
     static func dreamDirectory(in root: URL) -> URL { directory(in: root).appending(path: "dream", directoryHint: .isDirectory) }
 
     struct Dream {
         let started, finished: Date
         let usage: BrainUsage
-        func contains(_ date: Date) -> Bool { started <= date && date <= finished.addingTimeInterval(1) }  // 摘要入库取整到毫秒，收尾放宽
+        func contains(_ date: Date) -> Bool { started <= date && date <= finished.addingTimeInterval(1) }
     }
 
-    /// 每个做梦进程一次，按起进程的先后；开销是整个进程的（一次性进程只做一轮，收掉时不一定报完一轮的结束）
     static func dreams(in root: URL) -> [Dream] {
         files(in: dreamDirectory(in: root)).map { file in
             let dates = try? file.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
@@ -48,7 +46,6 @@ nonisolated struct BrainUsage {
         }
     }
 
-    /// 大脑在哪几轮开了新的对话（轮的序号同 `rounds`）：第一个进程之后每个进程的第一轮，和 Pi 回应过 new_session、Codex 开了第二个对话之后的那一轮
     static func renewed(in root: URL) -> [Int] {
         var index = 0, out: [Int] = []
         for (number, file) in files(in: directory(in: root)).enumerated() {

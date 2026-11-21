@@ -7,11 +7,9 @@ import Testing
 
 private let longCommand = "echo " + String(repeating: "a", count: 200)
 
-/// 端到端：真实 Pi（钉住的版本）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `Bridge`。
 @MainActor
 @Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealPiTests {
-    /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
     func withRig(_ body: (PiProcess, Bridge, Session) async throws -> Void) async throws {
         let pi = try await PiProcess()
         let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
@@ -72,20 +70,20 @@ struct RealPiTests {
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
-        #expect(bridge.sessions[0].availableModels.map(\.key.id).sorted() == ["echo", "echo-think"])  // echo 是当前模型，不在范围内也列出
+        #expect(bridge.sessions[0].availableModels.map(\.key.id).sorted() == ["echo", "echo-think"])
     }
 
     @Test func displayNameFollowsPisSessionListAndUpdatesOnRename() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
-            #expect(s.displayName == pi.cwd.lastPathComponent)  // 还没有名字，也没有消息
+            #expect(s.displayName == pi.cwd.lastPathComponent)
 
             try pi.prompt("修好登录\n顺便看看日志")
             try await eventually("首条消息成为显示名") {
                 bridge.sessions.first?.displayName == "修好登录 顺便看看日志"
             }
 
-            try pi.send(["type": "set_session_name", "name": "登录修复"])  // 与 /name 同一路径
+            try pi.send(["type": "set_session_name", "name": "登录修复"])
             try await eventually("改名后显示名跟上") { bridge.sessions.first?.displayName == "登录修复" }
             try await eventually("日志记下了") { log.changes.contains { if case .infoChanged(let renamed) = $0 { renamed.displayName == "登录修复" } else { false } } }
         }
@@ -185,7 +183,7 @@ struct RealPiTests {
         let gate = model.gate()
         model.on("hello", .held(gate, then: .say("hi")))
         let pi = try await PiProcess(socketDirectory: socketDirectory, oneShotPrompt: "hello", model: model)
-        try await gate.reached()  // 假模型停住：扩展早已加载过，要开 socket 此刻已开
+        try await gate.reached()
         #expect(try FileManager.default.contentsOfDirectory(atPath: socketDirectory.path).filter { $0.hasSuffix(".sock") }.isEmpty)
         gate.open()
         await pi.waitUntilExit()

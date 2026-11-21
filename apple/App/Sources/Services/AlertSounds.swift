@@ -4,12 +4,9 @@ import CueStore
 import UserNotifications
 import os
 
-/// 每种提示开没开：关掉 = 系统横幅与声音都没有。本机、不同步。
 nonisolated struct AlertPreferences: Equatable, Sendable {
     private var off: Set<AlertKind>
 
-    /// 做完了与新回复是同一个开关（设置里一行"有新回复"）：都是"有个 Agent 做完了、该你看了"，只差 Cue 值不值班（`CueStore.push`），
-    /// 两种从不同时响。做完了读写新回复那一格。
     subscript(kind: AlertKind) -> Bool {
         get { !off.contains(Self.toggle(kind)) }
         set { if newValue { off.remove(Self.toggle(kind)) } else { off.insert(Self.toggle(kind)) } }
@@ -19,7 +16,6 @@ nonisolated struct AlertPreferences: Equatable, Sendable {
 
     private static let on = "on"
 
-    /// 存成 `[种类: [on: 开没开]]`（里面那层是每种提示还能各挑一段提示音时的形状，留着是为了读得出那时关掉的）；没存过的开着。
     init(stored: [String: Any]? = nil) {
         off = Set(AlertKind.allCases.filter { (stored?[$0.rawValue] as? [String: Any])?[Self.on] as? Bool == false })
     }
@@ -35,8 +31,6 @@ nonisolated struct AlertPreferences: Equatable, Sendable {
 actor AlertSounds {
     private let directory = UserHome.directory.appending(path: "Library/Sounds", directoryHint: .isDirectory)
     private var checked: Set<Sound> = []
-    /// 能各挑一段提示音时装过的四段（名字与内容的 SHA-256；那四段只发过这一版）：留着会一直挂在系统设置的提示音列表里。
-    /// 内容对不上的是用户自己放的同名文件，不动。
     private static let retired = [
         "Chime": "ac3c26072dc04bbf33e6ad3a7bbdd35e82728c7235ced85accad614fea0dd875",
         "Tap": "5a615e4a9c0bd742b277337c72aac0cbcda76cb5ea33d5e1aa888899d34d011b",
@@ -44,7 +38,6 @@ actor AlertSounds {
         "Drop": "23ecfaae70fd240da9923e4c0947249e2b85c627ed13ad99291c6a9611eb650f",
     ]
 
-    /// 装好后的文件名就是通知用的声音名：带品牌前缀，在系统设置的提示音列表里不撞名。
     func prepare(_ sound: Sound) -> UNNotificationSoundName {
         let file = "CuePad \(sound.rawValue.capitalized).caf"
         let name = UNNotificationSoundName(file)

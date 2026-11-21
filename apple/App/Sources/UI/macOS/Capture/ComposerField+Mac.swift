@@ -3,8 +3,6 @@ import AppKit
 import CueEditor
 import SwiftUI
 
-/// 焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点（点进来、Esc）时再报回 `focus`。
-/// ↩ 发送、⇧↩ 换行在文字区自己接（`doCommandBy`）；带 ⌘ 的回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
 struct ComposerField: NSViewRepresentable {
     @Binding var text: String
     let prompt: String
@@ -12,18 +10,13 @@ struct ComposerField: NSViewRepresentable {
     let maxLines: Int
     let ink: Color
     let focus: FocusState<Bool>.Binding
-    /// 返回 true 表示已处理，不再按文本视图的默认行为走。
     var keys: (ComposerKey) -> Bool = { _ in false }
-    /// nil 是此刻用不了（菜单项停用）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// nil 是不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
-    /// 整个输入框被停用时（开会话的请求在路上）字也不能改：那时改的进不了已发出的请求。
     @Environment(\.isEnabled) private var enabled
 
-    /// Mac 的字号不跟系统的动态字号走。
     static func lineHeight(_: DynamicTypeSize) -> CGFloat { GrowingTextView.lineHeight }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -84,12 +77,10 @@ struct ComposerField: NSViewRepresentable {
         view.placeholder = prompt
         if view.isEditable != enabled { view.isEditable = enabled }
         view.placeholderColor = NSColor(palette.ink3)
-        // 只在颜色真的变了时设：设一次就给整篇文字重铺颜色。
         if ink != context.coordinator.ink {
             context.coordinator.ink = ink
             view.textColor = NSColor(ink)
             view.typingAttributes = GrowingTextView.attributes(ink)
-            // 光标用主色：墨色的细线在浅底上、尤其空着时几乎看不出
             view.insertionPointColor = NSColor(palette.signatureFill)
         }
         view.setAccessibilityLabel(label)
@@ -101,7 +92,6 @@ struct ComposerField: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: ComposerScrollView, context: Context) -> CGSize? {
         guard let width = proposal.width, let view = scroll.documentView as? GrowingTextView else { return nil }
         let ideal = view.fittingHeight(width: width - 2 * GrowingTextView.caretRoom)
-        // 受限视口至少保留一行；让原生文字框负责滚动到光标，外层不裁掉正在编辑的行。
         let height = proposal.height.map { max(GrowingTextView.lineHeight, min(ideal, $0)) } ?? ideal
         return CGSize(width: width, height: height)
     }
@@ -117,7 +107,6 @@ struct ComposerField: NSViewRepresentable {
             guard !writing, let view = notification.object as? NSTextView else { return }
             let text = String(native: view.textStorage?.string as NSString? ?? "")
             sent = text
-            // 高度跟着文字一起走动画：换行、删行每次都差一整行
             withAnimation(Motion.spatial(Motion.nudge, reduceMotion: parent.reduceMotion)) { parent.text = text }
         }
 
@@ -132,7 +121,6 @@ struct ComposerField: NSViewRepresentable {
                 case #selector(NSResponder.cancelOperation(_:)): .dismiss
                 default: nil
                 }
-            // 输入法组字期间的按键属于输入法
             if let key, !view.hasMarkedText(), parent.keys(key) { return true }
             // ↩ 与 ⇧↩ 系统都记成 insertNewline:，按修饰键分：不带 ⇧ 的发送（空着时什么都不做，不留空行），带的照常换行
             if selector == #selector(NSResponder.insertNewline(_:)), !view.hasMarkedText(), NSApp.currentEvent?.modifierFlags.contains(.shift) != true {
@@ -145,7 +133,6 @@ struct ComposerField: NSViewRepresentable {
         }
 
         func focusChanged(_ view: NSTextView) {
-            // 两个回复框会在同一次更新里申请焦点；窗口换完后读取真实响应者，不能回报中途的 true 或排队的旧 false。
             Task { @MainActor [weak view] in
                 guard let view else { return }
                 self.report(view.window?.firstResponder === view)
@@ -169,9 +156,7 @@ final class ComposerScrollView: NSScrollView {
 }
 
 final class GrowingTextView: NSTextView {
-    /// 与气泡里的字同一号：写下的这句发出去就是对话里的那颗气泡
     static let bodyFont = Typography.readingFont
-    /// 行距也同气泡（`Typography.readingLineSpacing`）：多行时不比对话挤，发出去节奏不突变。
     static let paragraph = Typography.readingParagraph
     private static let metrics: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
     static func attributes(_ ink: Color) -> [NSAttributedString.Key: Any] { metrics.merging([.foregroundColor: NSColor(ink)]) { $1 } }
@@ -183,7 +168,6 @@ final class GrowingTextView: NSTextView {
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     var files: (([IncomingFile]) -> Void)?
     var revealsEnd = false
-    /// 排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
     var maxHeight: CGFloat {
         if let cached = Self.maxHeights[maxLines] { return cached }
         let height = Self.height(of: Array(repeating: "国", count: maxLines).joined(separator: "\n"), width: .greatestFiniteMagnitude)
@@ -191,7 +175,6 @@ final class GrowingTextView: NSTextView {
         return height
     }
     static let lineHeight = height(of: "国", width: .greatestFiniteMagnitude)
-    /// 量用的字体 `bodyFont` 是进程内不变的常量，所以只按行数记。
     private static var maxHeights: [Int: CGFloat] = [:]
 
     func fittingHeight(width: CGFloat) -> CGFloat {
@@ -211,12 +194,9 @@ final class GrowingTextView: NSTextView {
         layout.addTextContainer(container)
         storage.addLayoutManager(layout)
         layout.ensureLayout(for: container)
-        // 用到的范围含末尾换行后那一行空行
         return ceil(layout.usedRect(for: container).height)
     }
 
-    /// 主菜单"回复"里的项（`MainMenu`，菜单项的 tag 是 `ReplyShortcut` 的值）：文字区是第一响应者时才找得到这里，
-    /// 所以只在回复框聚焦时可用。
     @objc func performReplyShortcut(_ sender: NSMenuItem) {
         ReplyShortcut(rawValue: sender.tag).flatMap(shortcut)?()
     }
@@ -230,7 +210,6 @@ final class GrowingTextView: NSTextView {
         files == nil ? super.readablePasteboardTypes : NSPasteboard.fileTypes + super.readablePasteboardTypes
     }
 
-    /// 有附件（规则在 `NSPasteboard.files`）就交出去，否则按文字的种类照常插：附件的种类排在前面，传进来的可能是它们。
     override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
         let found = pboard.files
         guard let files, !found.isEmpty else {

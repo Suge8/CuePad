@@ -1,10 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 对话排成的格子与刻度滑条的刻度在读的时候一起推好（不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
-    /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
-    /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。
     let messages: [CueMessage]
     let waiting: [CueWait]
     let shots: [UUID: [CueShown]]
@@ -12,10 +9,8 @@ nonisolated struct CueThread: Equatable, Sendable {
     let joined: Set<UUID>
     let stamps: [UUID: Date]
     let marks: [ChatMark]
-    /// 还没读的 Cue 的话（Kit 的 `cueUnread` 是唯一的规则）。
     let unread: Set<UUID>
 
-    /// 读最近这么多条对话（更早的不在 Cue 页里翻：要找旧事问 Cue）。
     static let limit = 200
 
     init(
@@ -62,10 +57,8 @@ nonisolated struct CueThread: Equatable, Sendable {
             lines: Dictionary(try store.cueLines(fired).map { ($0.id, $0) }) { first, _ in first })
     }
 
-    /// 还在等你的提问不在对话里，都在输入框上方的拍板卡里（同一问同屏一处），结束了回到 Cue 的一句；你答了的，答的那一刻另有一格你的回答（`answer`）。
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
-        /// 问的那句紧挨在上面时不带引用（`quoted` 为 false，问句同屏只留一份），隔开了才在字上面引一行它问的是什么。
         case answer(CueMessage, quoted: Bool)
         case cue(CueMessage, task: UUID?)
         case result(CueMessage, task: UUID)
@@ -88,7 +81,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
-        /// 醒来的几轮排成一块，不管隔了多久（`CueNoteLog`）：下一格离它多远从最后那一轮算。
         var end: Date {
             if case .notes(let rounds) = self { rounds[rounds.count - 1].date } else { date }
         }
@@ -131,8 +123,6 @@ nonisolated struct CueThread: Equatable, Sendable {
         return stamps
     }
 
-    /// 回答按答的那一刻插进对话，与会话里的作答、预览卡同一条规则（`Chat.entries`）。
-    /// 结果卡只挂点名的那几张图，这件活发到手机的其余文件在它的会话里。
     private static func rows(
         _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: CueMemoryLine]
     ) -> [Row] {
@@ -161,7 +151,6 @@ nonisolated struct CueThread: Equatable, Sendable {
                 let task = message.taskID.flatMap { shown.insert($0).inserted ? $0 : nil }
                 rows.append(.cue(message, task: task))
             case .note:
-                // 一轮的经过（为什么醒、做了什么）；有正文的是旧版本写下的动态，不再显示
                 guard message.text.isEmpty else { continue }
                 var group: [CueNoteRound] = []
                 if case .notes(let open) = rows.last {
@@ -173,12 +162,10 @@ nonisolated struct CueThread: Equatable, Sendable {
             case .round:
                 let touches = CueActivity.touches(message.tools)
                 if !touches.isEmpty { rows.append(.process(message, touches: touches)) }
-            // 认不出的（旧版本写下的交接备忘、更新版本的新种类）不列
             case nil: break
             }
         }
         placeAnswers(before: nil)
-        // 旧版本写下的经过（没有醒来原因）又没说话的那一节什么都不剩
         return rows.compactMap { row in
             guard case .notes(let rounds) = row else { return row }
             let shown = rounds.filter { !$0.isEmpty }

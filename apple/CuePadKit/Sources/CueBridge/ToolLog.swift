@@ -19,12 +19,10 @@ struct ToolLog: Codable, Equatable {
 
     mutating func start(id: String, name: String, arguments: ToolArguments, cwd: String?) {
         let call = Call(name: name, arguments: arguments, cwd: cwd)
-        // `cuepad show` 的结果就是对话里那张预览卡：清单里不再列一遍，也不算进命令数
         guard call.kind != .command || call.target.prefixMatch(of: Self.preview) == nil else { return }
         pending[id] = call
     }
 
-    /// 发预览的命令行：`cuepad show …`，cuepad 可以带路径（技能里写的是 App 内的绝对路径，含空格时整段加单引号）。
     private static var preview: Regex<Substring> { /(?:'[^']*\/|[^\s']*\/)?cuepad'?\s+show(?:\s|$)/ }
 
     mutating func finish(id: String, failed: Bool, images: [String] = []) {
@@ -32,7 +30,6 @@ struct ToolLog: Codable, Equatable {
         settle(call, id: id, failed: failed, images: images)
     }
 
-    /// 一次模型请求的缓存读写：`recached` 是没接上缓存、原价重送的量（接上了为 0）。
     mutating func requested(context: Int, recached: Int, warmUntil: Date, estimated: Bool) {
         let missed = (activity.cache?.recached ?? 0) + recached
         activity.cache = Tools.Cache(recached: missed > 0 ? missed : nil, context: context, warmUntil: warmUntil, estimated: estimated ? true : nil)
@@ -108,7 +105,6 @@ struct ToolArguments: Decodable {
 
     init() {}
 
-    /// 参数不是对象、或任一项类型不对就当没有：摘要不能因为一个怪参数丢掉整行消息（它可能是这一轮的回答）。
     init(from decoder: any Decoder) throws {
         guard let c = try? decoder.container(keyedBy: Keys.self) else { return }
         func string(_ key: Keys) -> String? { try? c.decodeIfPresent(String.self, forKey: key) }
@@ -121,7 +117,6 @@ struct ToolArguments: Decodable {
         if let old = string(.oldText) ?? string(.old_string), let new = string(.newText) ?? string(.new_string) { changes.append((old, new)) }
     }
 
-    /// 替换的新增、删除行数（按行比较，只改了一行里的字就是 +1 −1）。
     var lineChange: (added: Int, removed: Int)? {
         guard !changes.isEmpty else { return nil }
         return changes.reduce((0, 0)) { total, change in
@@ -146,13 +141,11 @@ private extension ToolLog.Call {
         case .search: arguments.pattern ?? file ?? name
         default: name
         }
-        // 改文件带从参数算出的增删行数（整文件写入只有新增）
         let change = kind == .edit ? arguments.lineChange : nil
         let written = kind == .edit ? arguments.content.map { ToolArguments.lines($0).count } : nil
         self.init(kind: kind, target: target.clipped(Tools.targetLimit), added: change?.added ?? written, removed: change?.removed)
     }
 
-    /// 相对工作目录；工作目录之外的家目录路径写成 ~/…（完整路径不同步）。
     private static func relative(_ path: String, to cwd: String?) -> String {
         if let cwd, path.hasPrefix(cwd + "/") { return String(path.dropFirst(cwd.count + 1)) }
         let home = UserHome.directory.path

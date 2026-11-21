@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 启用入口只列几台，选了就在那台启用；设置里打勾此刻运行的那台，选了另一台才改。没有"不启用"：停用只经开关（`CueSettingsModel.turn`）。
 struct CueHostMenu<Label: View>: View {
     let hosts: [CueSettings.Host]
     let use: Use

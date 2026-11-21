@@ -15,7 +15,6 @@ extension CueLiveActivity {
         ProcessInfo.processInfo.operatingSystemVersionString,
     ].joined(separator: " / ")
 
-    /// 在原决策点记序号，异步写文件、上传；不在业务的 guard 与动作之间插入 await。
     func trace(
         _ action: ActivityDiagnosticReport.Event.Action, activityID: String? = nil,
         reason: String? = nil, sourceAt: Date? = nil, content: CueActivityState? = nil,

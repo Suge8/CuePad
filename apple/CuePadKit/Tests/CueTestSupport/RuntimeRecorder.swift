@@ -7,9 +7,6 @@ public enum TestBoot {
 }
 
 extension CueStore {
-  /// 替 `host` 那台 Mac 写下"醒着、这次开机"并返回它的会话状态记录器：会话状态只在宿主在线、同一次开机报的才算数
-  /// （`runtimeIsConfirmed`）。
-  /// 不在历史回填时调用；要演重启或离线的用例自行改在线记录。
   public func runtimeRecorder(
     on host: String, boot: String = TestBoot.id, minInterval: Duration = StateRecorder.detailInterval, timing: Timing = .system
   ) throws -> StateRecorder {

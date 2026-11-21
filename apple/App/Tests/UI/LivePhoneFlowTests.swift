@@ -5,20 +5,16 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机这头看 Mac 会话的活预览，从工作区的方法走（页头那颗钮、铺满的那一页调的就是它们）。
-/// Mac 是替身：中转上收到"看着"就答这个会话的页面，开着预览时另给隧道的入口；隧道口是真的（`LiveTunnel.Server`），后面是本进程里的一个网页服务。
 @MainActor @Suite(.releasesLibraries)
 struct LivePhoneFlowTests {
     let app = TestApp()
     static let mac = "mac-live"
-    /// 会话页看得见时的那一问（`SessionPage` 的 task）：`phone` 里起，进后台的用例自己停它。
     private let page = Asking()
 
     private final class Asking {
         var task: Task<Void, Never>?
     }
 
-    /// 手机开着这个会话页、Mac 替身接在中转上、在线；Mac 的隧道口放行这一页的端口。跑完 `body` 拆掉。
     private func phone(page html: String = "<html><body>手机上的页面</body></html>",
                        _ body: (Workspace, Mac, URL, SessionRoute, Page) async throws -> Void) async throws {
         let mac = Mac()
@@ -50,7 +46,6 @@ struct LivePhoneFlowTests {
         app.services.liveSignaling = nil
     }
 
-    /// 打开的那一页（铺满的那一页挂上时它的两个 task：探页面在不在、连 Mac）。
     private func shown(_ preview: LivePreview, in workspace: Workspace) -> Task<Void, Never> {
         Task {
             async let watching: Void = preview.watch()
@@ -99,7 +94,6 @@ struct LivePhoneFlowTests {
             var open = shown(preview, in: workspace)
             try await eventually("页面载出") { preview.phase == .live && preview.revealed }
 
-            // 进后台：预览断开、会话页不问了；回来时场景先是不活动，预览这就连，会话页要等活动了才问
             await open.stop()
             await page.task?.stop()
             open = shown(preview, in: workspace)
@@ -118,7 +112,6 @@ struct LivePhoneFlowTests {
             #expect(page.loaded == 1)
             _ = try await preview.run("window.before = true")
 
-            // Mac 重开了隧道口（换票据、换端口，旧的连接全断）：手机续问拿到新入口、重新连上
             try await mac.openDoor(to: page.port)
             app.services.liveRemote.renew("live")
             try await eventually("再通后整页重新载入") { page.loaded == 2 && preview.phase == .live && preview.revealed }
@@ -143,7 +136,6 @@ struct LivePhoneFlowTests {
             try await eventually("页面载出、事件流连着") { preview.phase == .live && preview.revealed && page.streaming == 1 }
             #expect(page.loaded == 1)
 
-            // 没有新请求去撞断了的路：只有连着的那条事件流断了
             network.cut()
             try await eventually("同一个入口重新连上、整页重新载入") { page.loaded == 2 && preview.phase == .live && preview.revealed }
             await quietPeriod(.seconds(2))
@@ -190,12 +182,10 @@ struct LivePhoneFlowTests {
             let open = shown(preview, in: workspace)
             try await eventually("页面载出") { preview.phase == .live && preview.revealed }
 
-            // 地址栏里填的（`LiveBar`、地址框提交调的就是它）
             let typed = url.appending(path: "pricing")
             preview.retarget(.init(url: typed, source: .typed))
             try await eventually("载出填的那一页") { preview.url?.path() == "/pricing" && preview.phase == .live && preview.revealed }
 
-            // Mac 又认出一个服务：答复变了
             let other = try await vacant()
             mac.allow(other)
             mac.pages = [url, other]
@@ -217,7 +207,6 @@ struct LivePhoneFlowTests {
             workspace.toggleLivePreview()
             await open.stop()
 
-            // Agent `cuepad live` 了同一个服务上的另一页：Mac 把它排在最前，认出的服务照旧
             let sent = url.appending(path: "pricing")
             mac.sent = LiveAddress(sessionID: "live", url: sent, found: false, sentAt: .now)
             mac.found = [url]
@@ -244,7 +233,6 @@ struct LivePhoneFlowTests {
 
             workspace.pickElement()
             try await eventually("点选开着") { preview.picking }
-            // 触屏点一下就是选中：经点选脚本的句柄点在标题上（同调试场景）
             try await eventually("点上了") {
                 try await preview.run("const handle = window[Symbol.for('cuepad.pick')]; if (!handle) return false; handle.pick('body'); return true") as? Bool == true
             }
@@ -258,7 +246,6 @@ struct LivePhoneFlowTests {
 
     @Test func 和Mac不在同一个网络_点在Mac上操作_先请Mac亮出这个会话再拉起UU远程_回来了请它放回去_发不出也照样拉起() async throws {
         try await phone { workspace, mac, _, route, _ in
-            // 拉起 UU 的链接与拉起那一刻 Mac 收到过几次"亮出"
             var opened: [(url: URL, revealed: Int)] = []
             workspace.apps = ExternalApps { url in
                 opened.append((url, mac.revealed.count))
@@ -278,7 +265,6 @@ struct LivePhoneFlowTests {
             await workspace.returnFromMac()
             #expect(mac.returned.isEmpty, "选完电脑回来不算看完回来")
             let nonce = try #require(app.services.settings.remoteBinding?.nonce)
-            // 回跳由 iPad 的另一个窗口接到也一样
             let other = Workspace(services: app.services)
             other.apps = workspace.apps
             await other.remoteBound(device: "enc-x", error: nil, nonce: nonce)
@@ -291,7 +277,6 @@ struct LivePhoneFlowTests {
             await workspace.returnFromMac()
             #expect(mac.returned == ["live"], "只请一次")
 
-            // 放回还在重试（Mac 一时找不到）时又去看：旧的那一遍停下，不排到新的"亮出"后面把刚铺满的放回去
             await workspace.viewOnMac(preview)
             mac.present = false
             let returning = Task { await workspace.returnFromMac() }
@@ -319,7 +304,6 @@ struct LivePhoneFlowTests {
     @Test func 连不上Mac的口说可能是Wi_Fi不让设备互连_手机自己没连上中转不改口_Mac走了说不在线() async throws {
         try await phone { workspace, mac, _, route, _ in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
-            // Mac 报的是手机自己所在网段里一个不通的口：同网段却连不上
             let mine = try #require(LiveTunnel.localAddresses().first { !$0.host.contains(":") })
             mac.door = ([mine], 9)
             workspace.toggleLivePreview()
@@ -328,7 +312,6 @@ struct LivePhoneFlowTests {
             try await eventually("说这个 Wi-Fi 可能不让设备互相连接") { preview.link?.trouble == .isolated }
             #expect(preview.phase != .live)
 
-            // 刚回到前台时手机自己的中转还在重连：续问发不出去，不算那台 Mac 不在线
             mac.connected = false
             app.services.liveRemote.renew("live")
             await quietPeriod(.milliseconds(500))

@@ -4,7 +4,6 @@ import Foundation
 import UIKit
 
 extension AppServices {
-    /// 幂等。
     func start() {
         guard !tasks.isRunning else { return }
         startCaptureIngest()
@@ -23,9 +22,6 @@ extension AppServices {
         follow { for await ready in Observations({ self.knowsActivityState }) where ready { await self.cueActivity?.syncReady() } }
     }
 
-    /// 整个 App 只订这一份，iPad 开几个窗口都只做一次。立即同步排最前：它的拉取当场在主线程之外开始，不排在别的事的主线程工作后面。
-    /// 不等上一次回前台的做完：一次立即同步拉得久时，下一次回前台照样当场记时刻、开拉。
-    /// 启动那次由各自的启动路径做，这里订上之前的那次激活收不到也不缺。
     private func startForeground() {
         let active = ActiveSince()
         follow {
@@ -52,13 +48,11 @@ extension AppServices {
         }
     }
 
-    /// 用户可能在系统设置里改过通知权限；不在前台时别处看过的通知回来收（通知中心接上晚于看过的观察，`startLiveSessions`）。
     private func refreshAlerts() async {
         await alerts?.refresh()
         await alerts?.dismissSeen(liveSessions.marks)
     }
 
-    /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `AlertCenter`）。
     private func startSessionAlerts(since active: ActiveSince) {
         follow {
             var tracker = SessionAlertTracker()
@@ -73,7 +67,6 @@ extension AppServices {
     }
 }
 
-/// 这次回到前台的时刻（启动即算一次）：前台提示只报它之后的转换（`SessionAlertTracker`）。
 private final class ActiveSince {
     var date = Date()
 }

@@ -5,7 +5,6 @@ public enum AlertSubject: Hashable, Sendable {
   case cue
 }
 
-/// 到得了你的出那种提示的可见通知（同时叫醒 App 拉一次）；该你接、你却正在 Mac 上开着它的只静默叫醒 App 拉一次，灵动岛与小组件照样跟上：一件事进了等你，手机总会被叫醒，到不到你只定出不出通知。
 public enum AlertPush: Hashable, Sendable {
   case alert(AlertKind)
   case wake
@@ -25,7 +24,6 @@ public enum AlertPush: Hashable, Sendable {
 }
 
 extension CueStore {
-  /// Cue 消息的推送标志、Mac 的通知与手机前台的会话横幅都只问这里，会话的推送标志问同一条规则的 `push`。会话记录已不在为不到。
   public func reaches(_ subject: AlertSubject) throws -> Bool {
     switch subject {
     case .cue: try !watchedOnMac(\.cue)
@@ -33,7 +31,6 @@ extension CueStore {
     }
   }
 
-  /// 不该你接的不推；你没在看（没在哪台在线的 Mac 上开着这个会话页）才出通知，开着就只叫醒。做完了只在 Cue 不值班时算；值班时留给你回的另按待回复提示（`flagLeftToYou`），其余归 Cue 接。
   func push(_ alert: AlertKind, _ state: SessionState) throws -> AlertPush? {
     let cue = try cueDuty()
     let yours = switch alert {
@@ -45,7 +42,6 @@ extension CueStore {
     return try watchedOnMac { $0.sessionIDs.contains(state.sessionID) } ? .wake : .alert(alert)
   }
 
-  /// 这次停下刚留给你（`CueLeft`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、这次停下还在，就置手机推送标志，返回置上的那条会话记录的 id。
   @discardableResult
   public func flagLeftToYou(_ left: CueLeft, host: String) throws -> UUID? {
     try write {

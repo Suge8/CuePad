@@ -1,20 +1,13 @@
 import MetalKit
 import SwiftUI
 
-/// 一张照片按屏幕上的格子抖出网点（有序抖动，8×8 Bayer）：每个颜色通道各自抖到几级，照片的颜色与层次都留着，凑近才看到格子。
-/// 否决过：整张映到三四种墨上抖（像套色海报，照片的层次没了，蓝天成了色块）。
-/// 格子对齐设备像素才清楚：按要画出来的那块当场算一张一格一像素的静止小图，整倍放大、不插值贴上（一格 `cell` 点），
-/// 不预先烤好再缩放（缩放过的网点糊、起摩尔纹），也不逐帧算；小图是整块按设备像素算的几十分之一。
-/// 尺寸变了（Mac 拖窗口、底下的卡长高）先把上一张拉伸着顶着，停下来再算。上沿 `fade` 那一截按同一张阈值表散成透明：融进后面的底，不画一条边。
 struct DitherImage: View {
     let asset: String
-    /// 图在这块里的位置与大小（点）；图外的格子取图边上的颜色（下沿以下越远越糊，不把边上那一行拉成竖纹）。
     let placement: CGRect
     let size: CGSize
     var fade: CGFloat = 0
     @Environment(\.displayScale) private var scale
     @State private var image: CGImage?
-    /// 画着的是哪一份：截图的就绪等新的一份画上（`debugSettling`）。
     @State private var drawn: DitherGPU.Job?
 
     var body: some View {
@@ -40,7 +33,6 @@ struct DitherImage: View {
         }
     }
 
-    /// 一格多少设备像素：取整，格子才对得齐像素。
     private var cellPx: CGFloat { DitherGPU.cell * max(1, scale.rounded()) }
 
     private var job: DitherGPU.Job {
@@ -56,7 +48,6 @@ struct DitherImage: View {
 /// 显卡那一份，全 App 共用：着色器第一次用时在运行时编（同 `FigureGPU`，项目不装 Metal 编译工具链），只留最近用的那张原图（带 mip 约 8 MB）：一天里会换着用八张，全留着就是几十 MB。
 final class DitherGPU {
     static let shared = DitherGPU()
-    /// 一格多少点：一点一格在 Retina 上细得看不出是网点，三点一格就成了马赛克。
     static let cell: CGFloat = 2
 
     struct Job: Hashable {
@@ -69,7 +60,6 @@ final class DitherGPU {
         let fade: Float
     }
 
-    /// 与着色器里的 `Job` 逐字段对齐。
     private struct Uniforms {
         var origin, extent, texel: SIMD2<Float>
         var width, height: UInt32

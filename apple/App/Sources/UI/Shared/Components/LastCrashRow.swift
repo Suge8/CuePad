@@ -24,7 +24,6 @@ struct LastCrashRow: View {
 }
 #endif
 
-/// 复制的是每种只留要点的摘要（`DiagnosticSummary`），完整原文作文件分享，不进剪贴板。
 struct CrashReportView: View {
     let report: CrashReport
     @Environment(AppServices.self) private var services
@@ -76,7 +75,6 @@ struct CrashReportView: View {
     private var facts: [(LocalizedStringResource, Dotted)] {
         var facts: [(LocalizedStringResource, Dotted)] = [("时间", Dotted(report.shownDate))]
         if let exception = report.exception { facts.append(("异常", Dotted(exception + (report.signal.map { "（\($0)）" } ?? "")))) }
-        // 有人话的不再列原文（终止原因原文一长段，占满整页）：原文在导出的摘要里
         if let explanation = report.explanation { facts.append(("含义", Dotted(explanation))) } else if let reason = report.reason { facts.append(("原因", Dotted(reason))) }
         if let app = report.app { facts.append(("版本", app)) }
         return facts

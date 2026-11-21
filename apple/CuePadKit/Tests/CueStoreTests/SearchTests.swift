@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 按名字、短的中文词与多个词的过滤见 CueCLITests 的 `searchMatchesAllTermsAndAppliesFilters`。
 @Suite struct SearchTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -29,7 +28,7 @@ import Testing
 
     _ = try await store.createCard(body: "1000 items")
     let percent = try await store.createCard(body: "达成 100% 完成")
-    #expect(try await store.search("100%").cards.map(\.id) == [percent.id])  // 通配符按字面匹配
+    #expect(try await store.search("100%").cards.map(\.id) == [percent.id])
   }
 
   @Test func projectFilterAppliesBeforeThePageLimitAndPagesCoverEveryMatchOnce() async throws {
@@ -37,7 +36,7 @@ import Testing
     let q = try await store.createProject(name: "Q", color: "#222")
     for index in 0..<25 { _ = try await store.createCard(in: q.id, body: "needle \(index)") }
     let wanted = try await store.createCard(in: p.id, body: "needle wanted")
-    try setModified(wanted, 0)  // 排在所有卡片之后
+    try setModified(wanted, 0)
     let hit = try await store.search(SearchQuery(text: "needle", projects: [p.id]), limit: 20)
     #expect(hit.cards.map(\.id) == [wanted.id] && hit.totalCards == 1)
 

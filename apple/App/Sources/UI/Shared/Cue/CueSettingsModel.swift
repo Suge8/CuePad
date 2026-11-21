@@ -2,8 +2,6 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// 停用只经开关：它是唯一的停用入口，在哪台运行的菜单里没有"不启用"。
-/// 没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。能不能启用、改 Mac 要不要先确认只读 `CueGate`。
 @Observable
 final class CueSettingsModel {
     var settings: CueSettings? {
@@ -11,13 +9,11 @@ final class CueSettingsModel {
     }
     private(set) var failure: String?
     private(set) var enabling: String?
-    /// 开关按下、还没写进库的那一态：开关先翻过去，写完由库里的接上，不弹回再翻。
     private(set) var turning: Bool?
     var moving: CueMove?
 
     var isOn: Bool { turning ?? (settings ?? .empty).isOn }
 
-    /// `here` 是这台 Mac（手机为 nil）。
     func turn(_ on: Bool, here: String?, _ services: AppServices) {
         turning = on
         run(.turn) { try await services.turnCue(on, here: here) } finished: { self.settle() }
@@ -37,7 +33,6 @@ final class CueSettingsModel {
         }
     }
 
-    /// 确认框的确认：改在那台运行，原来那台停下。带着确认框问的那一次：按下按钮时确认框先收起（`moving` 已清掉）。
     func confirm(_ move: CueMove, _ services: AppServices) {
         enable(on: move.to.id, moving: true, services)
     }
@@ -59,13 +54,11 @@ final class CueSettingsModel {
         turning = nil
     }
 
-    /// 库里已是按下的那一态：开关交回给库。写完时库可能还没读回来（读回来时 `settings` 再来一次）。
     private func settle() {
         if turning == settings?.isOn { turning = nil }
     }
 
     private enum Action: Hashable { case turn, enable, rename, voice }
-    /// 每种动作最新的一代：连续按时只有最新的一次改界面状态，先到的旧结果（完成或失败）不清掉后来那次的忙与乐观翻转。
     @ObservationIgnored private var generations: [Action: Int] = [:]
 
     private func run(_ action: Action, _ work: @escaping @MainActor () async throws -> Void, finished: @escaping @MainActor () -> Void) {
@@ -104,7 +97,6 @@ struct CueNameField: View {
 }
 
 extension View {
-    /// 能启用的入口都经它，确认框只有这一个。
     func cueSettings(_ model: CueSettingsModel) -> some View { modifier(CueSettingsReader(model: model)) }
 }
 
@@ -126,7 +118,6 @@ extension CueSettings {
 
     static var hostTitle: String { String(localized: "在哪台 Mac 上运行") }
     #if os(iOS)
-    /// 只写标题：面板里这一块定高放不下说明，设置里说明与出路就在紧下面的同步那一组。同步到不了 Mac 时写同步那一行的标题：手机只经 iCloud 和 Mac 连上，那时去 Mac 上打开也连不上。
     @MainActor static func noHost(_ services: AppServices) -> String {
         services.syncing.macAlert?.title ?? String(localized: "先在 Mac 上打开 CuePad")
     }

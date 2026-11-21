@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 项目：id 或名称（不分大小写）；对象：完整 id 或唯一前缀。
 extension Call {
   func project(_ ref: String) async throws -> Project {
     let live = try await store.projects()
@@ -19,7 +18,6 @@ extension Call {
     throw CLIError.notFound("找不到项目「\(ref)」。现有项目：\(live.map(\.name).joined(separator: "、"))（cuepad project list）")
   }
 
-  /// 含回收站里的卡片，也含随项目进回收站的卡片。
   func card(_ ref: String) async throws -> Card {
     if let id = UUID(uuidString: ref) {
       guard let card = try await store.card(id) else { throw CLIError.notFound("找不到灵感或任务 \(ref)（cuepad search 查找）") }
@@ -28,7 +26,6 @@ extension Call {
     return try await unique(ref, kind: "灵感或任务", lister: "cuepad search", describe: { $0.body }) { try await store.cards(idPrefix: ref) }
   }
 
-  /// 任务（要做的卡片）：id 或唯一前缀，只在可见任务里找。
   func task(_ ref: String) async throws -> Card {
     let all = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
     if let id = UUID(uuidString: ref) {
@@ -38,7 +35,6 @@ extension Call {
     return try await unique(ref, kind: "任务", lister: "cuepad task list --all", describe: { $0.body }) { all.filter { matches(ref, $0.id) } }
   }
 
-  /// 前缀至少 4 位才查；`candidates` 给出以它开头的全部对象，`lister` 是找不到时让 Agent 去查 id 的命令。
   private func unique<T: Identifiable>(
     _ ref: String, kind: String, lister: String, describe: (T) -> String, candidates: () async throws -> [T]
   ) async throws -> T where T.ID == UUID {
@@ -57,7 +53,6 @@ extension Call {
 enum Scope {
   case any, project(Project)
 
-  /// 新建的落点：没指定项目（也不在绑定了目录的项目里）的进默认项目。
   var target: UUID {
     if case .project(let project) = self { return project.id }
     return Project.defaultID
@@ -72,7 +67,6 @@ enum Scope {
 }
 
 extension Call {
-  /// `--project 项目` 与 `--all-projects` 二选一；都没给时，`implicit` 为真则用绑定了当前目录的项目，没有就不限。
   func scope(implicit: Bool = true) async throws -> Scope {
     let ref = args.value("project")
     if ref != nil, args.has("all-projects") { throw CLIError.usage("--project 与 --all-projects 只能选一个") }
@@ -81,7 +75,6 @@ extension Call {
     return try await store.project(containing: URL(filePath: directory)).map(Scope.project) ?? .any
   }
 
-  /// 正文：`--body` 优先，否则 stdin。stdin 为空视为误操作（没接管道的 agent 会得到空串）。
   func bodyInput() throws -> String {
     if let body = args.value("body") { return body }
     guard let piped = stdin() else {

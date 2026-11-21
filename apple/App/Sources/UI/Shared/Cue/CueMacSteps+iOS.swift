@@ -3,8 +3,6 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 每一步都只按同步来的事实算，不另记"做过哪步"。
-/// 卡住的只有一步（`stuck`）：同步不通时一定是 iCloud（装没装 Mac 这时看不出），不然按顺序第一个没成的。同步不通的说法与出路只用设置里同步那一行的（`SyncSummary`）。
 nonisolated struct CueMacSetup: Equatable {
     enum Step: Int, CaseIterable { case install, iCloud, agents }
 
@@ -13,7 +11,6 @@ nonisolated struct CueMacSetup: Equatable {
     let waiting: String?
 
     var installed: Bool { !macs.isEmpty }
-    /// 到得了 Mac 且和 iCloud 对过一遍，库里才有 Mac 可信：同一个账户才看得到它。
     var reaches: Bool { status.reachesMac && waiting == nil }
     var agents: [AgentKind] { AgentKind.allCases.filter { kind in macs.contains { $0.kinds.contains(kind) } } }
 

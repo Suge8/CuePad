@@ -40,7 +40,6 @@ extension AgentLibraryTests {
         draft.takeFile()
         #expect(draft.body == "别处又改\n" && !draft.dirty)
 
-        // 不等快照：照编辑页收到快照那一下直接跟，整段在自动存的停顿之内做完
         draft.changed(body: "排着没存的\n")
         try write("别处再改\n", file)
         draft.follow("别处再改\n")
@@ -152,7 +151,6 @@ extension AgentLibraryTests {
     }
 }
 
-/// 只让出执行权、不睡：状态在主线程上同步翻转、转眼又翻走时，轮询睡眠会错过那一刻。
 private func yieldUntil(_ what: String, _ condition: () -> Bool) async throws {
     let deadline = ContinuousClock.now + conditionBudget
     while !condition() {

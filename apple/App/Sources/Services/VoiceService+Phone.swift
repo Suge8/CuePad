@@ -3,7 +3,6 @@ import Foundation
 import Observation
 import UIKit
 
-/// 本次手机媒体及异步操作的所有权；会话身份固定，结束后不复用。拨号时的租约是 `dialed`，解析到 Mac 后链路只看 `leg.link`。
 @Observable final class VoicePhoneSession {
     let leg: VoiceLeg
     let dialed: VoiceEndpoint
@@ -53,7 +52,6 @@ extension VoiceService {
         }
     }
 
-    /// 换上新一通的媒体所有者、清掉上一通的痕迹并起接通期限；`start` 与调试回放（没有信令）共用这一处。
     func adopt(_ owner: VoicePhoneSession) {
         preview.stop()
         phone = owner
@@ -108,9 +106,6 @@ extension VoiceService {
         return cleanup
     }
 
-    /// 不属于 owner.scope：结束可能正由该作用域的期限或发送失败触发，取消输入不能取消资源回收与挂断通知。
-    /// 结束原因就是触发结束的那个：挂断没送到不改它（Mac 那边由中转的离开事件或投影送不到收尾）。
-    /// 正在等 Mac 回来时本机照样当场结束，挂断留到中转连回来再送（至多到宽限期满），Mac 收到才按真实原因结束而不是等到"对方离开"。
     private func finish(_ owner: VoicePhoneSession, reason: VoiceEndReason, notify: Bool) async {
         await owner.media.close()
         if notify, case .bound(_, let peer)? = owner.leg.link, let signaling {
@@ -138,7 +133,6 @@ extension VoiceService {
                 }
             }
         }
-        // 在后台结束的：补上进后台时为通话留着的那段收尾（断开中转等）
         if UIApplication.shared.applicationState == .background {
             leftover.append { await self.services.prepareForBackground() }
         }
@@ -156,7 +150,6 @@ extension VoiceService {
         await owner.leg.closed(reason, signaling: signaling)
     }
 
-    /// 同一 Mac、同一通话来的一帧（等着时同一租约的也算）：链路、投影来源与这一通还在等结果的命令都换到这对租约上。
     func rebind(_ header: VoiceSignalHeader) {
         guard let owner = phone, !owner.scope.ended, owner.leg.rebind(header) else { return }
         phoneBinding = (owner.id, header.recipient, header.sender)
@@ -166,13 +159,11 @@ extension VoiceService {
         AppServices.log.notice("Voice signaling relinked")
     }
 
-    /// 这一通正在等 Mac 回来：它的命令接着等结果（换绑后由 Mac 按原命令身份补送），不当作失败。
     func waitsForRelink(_ session: VoiceSessionID) -> Bool {
         guard let owner = phone, owner.id == session, case .relinking? = owner.leg.link else { return false }
         return true
     }
 
-    /// 撤下这条中转连接上的投影来源：之后同一租约迟到的投影不再认。
     func revokeProjection(local: VoiceEndpoint? = nil, peer: VoiceEndpoint? = nil) {
         guard local == nil || phoneBinding?.local == local, peer == nil || phoneBinding?.peer == peer else { return }
         phoneBinding = nil
@@ -183,7 +174,6 @@ extension VoiceService {
             guard let binding = phoneBinding, binding.session == session, binding.session == received.header.session,
                   binding.local == received.header.recipient, binding.peer == received.header.sender else { return }
         }
-        // 本机已结束：Mac 的投影只更新业务，结束原因以本机先落定的为准（Mac 那时的投影是它收到挂断后的回声）
         if phone == nil, case .projection(let value) = received.payload, value.session == session {
             setProjection(value)
             return
@@ -220,7 +210,6 @@ extension VoiceService {
         }
     }
 
-    /// 这一通的 Mac 说的是另一版信令（接听报别的版本，或帧解不开）：挂断这一通，说"请更新"。
     func otherVersion(_ session: VoiceSessionID) async {
         guard let owner = phone, owner.id == session else { return }
         AppServices.log.notice("Voice call \(session.rawValue, privacy: .public): the Mac speaks another signal version")

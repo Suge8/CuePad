@@ -3,7 +3,6 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// 一个窗口的界面状态；数据不放这里，界面直接订阅 Store。
 @Observable
 final class Workspace {
     struct Notice: Identifiable, Equatable {
@@ -16,7 +15,6 @@ final class Workspace {
         var sound: Sound?
 
         var isError: Bool { tone == .failure }
-        /// 只是报个结果的（没有钮、没有去处、不是出错）不接点按，点穿到下面。
         var takesHits: Bool { link != nil || action != nil || isError }
 
         enum Tone: Equatable {
@@ -24,14 +22,12 @@ final class Workspace {
             case gone
             case paused
             case failure
-            /// 等你挑一样东西（边聊边看挑会话）：挑着时一直在，不按时收（`holdNotice`）。
             case pick
 
             var icon: Icon {
                 switch self {
                 case .done: .done
                 case .pick: .session
-                // 不用对勾：对勾只表示完成与记下
                 case .gone: .gone
                 case .paused: .syncPaused
                 case .failure: .failure
@@ -41,12 +37,9 @@ final class Workspace {
     }
 
     struct NoticeAction: Equatable {
-        /// 身份，也是它在系统撤销里的那一条的主人（`Workspace+Notice` 的 `remember`）。
         let token = NSObject()
         let title: String
-        /// 撤的是什么（"归档"）：有它的才记进系统撤销，菜单写"撤销归档"。
         var undoes: String?
-        /// 提示挂在工作区上、可能一直不收（读屏开着时）：工作区作为参数给，闭包里别去攥着它，不然两者互相攥着都放不掉。
         let run: @MainActor (Workspace) async throws -> Void
         static func undo(_ what: LocalizedStringResource, _ run: @escaping Undo) -> Self {
             Self(title: String(localized: "撤销"), undoes: String(localized: what)) { _ in try await run() }
@@ -55,7 +48,6 @@ final class Workspace {
     }
 
     let services: AppServices
-    /// 只保留当前布局的导航值；尺寸切换经 `setLayout` 转换，不缓存另一套去处。
     var navigation: Navigation {
         didSet {
             MainThreadWatch.shared.page(navigation.trail)
@@ -66,11 +58,9 @@ final class Workspace {
         }
     }
     var projectForm: ProjectFormRequest?
-    /// 请求聚焦 Cue 的输入框，输入框接下后清掉。不用计数：从别的页过来时输入框是新建的，看不到数变过。
     var cueFocusPending = false
     let cue: CueWatch
     private(set) var catalog: ProjectCatalog?
-    /// 读取失败时写资料库的入口都应隐藏或禁用。
     var isLibraryReady: Bool { catalog != nil }
     private(set) var catalogFailure: String?
     private(set) var catalogAttempt = 0
@@ -80,7 +70,6 @@ final class Workspace {
     let presses = CardPresses()
     let sendState: SendState
     #endif
-    /// 宽屏盖在主区上的一页（卡片编辑、技能与规则的文件）：主区那一页留着，收起回到它（`Workspace.present`）。窄屏是推入的页。
     var overlay: Overlay? {
         didSet {
             #if os(macOS)
@@ -115,11 +104,8 @@ final class Workspace {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
     }
     var sessionAsk: SessionAsk?
-    /// 看板上放下的卡在等的、还没办完的事（`answer`）。
     var answering = 0
-    /// 放下的卡问的那一句被取消了几回（`declineDrop`）。
     var dropDeclines = 0
-    /// 正显示某张卡完成圈（或看板卡）的视图，后出现的在后（`completionAsks(claiming:)`）。
     @ObservationIgnored var completionClaims: [UUID: [UUID]] = [:]
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
     @ObservationIgnored var press = PressPoint()
@@ -129,9 +115,7 @@ final class Workspace {
     #endif
     var voiceDetails: BubbleSource?
     var confirmsEmptyTrash = false
-    /// 开着的记任务输入框（`NewTaskInput`）。
     var newTask: TaskStart?
-    /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
         didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }
     }
@@ -150,36 +134,28 @@ final class Workspace {
             handOffDraft = ComposerDraft(attachments: [outbox])
         }
     }
-    /// 放在这里而不在输入框里：交给已有会话的发出即收起，写库失败时还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
-    /// 计数而不是布尔：已在搜索页时再触发也要聚焦。
     var searchFocusRequests = 0
     #endif
     var projectScope: UUID?
     var scopedProject: UUID? { catalog?.project(projectScope)?.id }
     var libraryPane = LibraryPane.rules
-    /// 放得下时恒为假（由 `fit` 保证）；`railDrawer` 同。
     var cueDrawer = false
     var railDrawer = false
     @ObservationIgnored var wideFits: WideMetrics.Fits?
     var cueAsking: String?
-    /// 挑会话的那条提示（`Notice.Tone.pick`）怎么没的都算不挑了（甩走、读屏关掉、被下一条顶掉）：挑着的状态只跟着它看得见的那段。
     var notice: Notice? {
         didSet { if oldValue?.tone == .pick, notice?.tone != .pick, pickingDock { setDock(nil) } }
     }
     var preview: PreviewOpening?
-    /// 拖着经过宽屏主区时放下会怎样（`WideDrop`），占位按它画；不拖时为 nil。
     var dropTarget: WideDropTarget?
-    /// 这个窗口里此刻拖起的是哪一块（`reportsWideDrag`，iPad 的落点读）；没在拖或拖的不是这个窗口报的为 nil。
     @ObservationIgnored var dragging: WideNavigation.Beside??
-    /// 一次性：该会话的回复框聚焦后清掉。
     var replyFocus: UUID?
     var folderPicker: Project?
 
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
     private(set) var library: AgentLibrary?
     #if os(macOS)
-    /// 本机能开哪几家 Agent："开始"的悬停提示写新会话会用哪家、哪个模型。
     private(set) var localAgents: MacAgents?
     #endif
     @ObservationIgnored private var libraryStart: Snapshot<AgentLibrary?>?
@@ -195,40 +171,26 @@ final class Workspace {
         }
     }
 
-    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只留会话页还开着的（`keepLivePreviews`）。
     var livePreviews: [UUID: LivePreview] = [:]
-    /// 活预览放大到盖过主区的会话（`toggleLiveFill`、Mac 的 `showLive`）。
     var liveFill: LiveFill?
     #if os(iOS)
-    /// 手机上铺满屏开着活预览的会话（`LivePhoneCover`）：导航最上面换了别的页就不算开着。
     var liveCover: UUID?
     #endif
     #if os(macOS)
     let overlayHeader = OverlayHeader()
     weak var openCardEditing: CardEditing?
-    /// Agent 发来、还没开过预览的地址（`cuepad live`）：开预览时用掉。
     var liveSent: [UUID: LivePreview.Target] = [:]
-    /// 认出的各个会话的服务（按会话记录 id），最近起来的在前；认不出的会话不在里面（`watchLiveServers`：窗口有人看着时扫全部，手机看着时扫它看的）。
     var liveFound: [UUID: [URL]] = [:]
-    /// 问过答不答网页的监听口（`LiveServers` 记着，不每遍重问）。
     @ObservationIgnored var liveScanner = LiveServers()
-    /// 排在最后的那一遍扫描（`scanLive`）。
     @ObservationIgnored var liveScanning: Task<Void, Never>?
-    /// 收过的 `cuepad live` 每个会话最后一条（`take`）：也答给手机（`answerLivePhones`）。
     @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
-    /// 每个会话在做的那一条 Agent 请求（`answerLive`）：下一条等它做完。
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
-    /// 闲置被释放了的预览（`releaseLivePreviews`）：重建后第一条回执说明页面是重新载入的。
     @ObservationIgnored var liveReleased: Set<UUID> = []
-    /// 手机、iPad 开着的本机会话页（`receiveLive`）：它们看着的会话也要扫（`watchLiveServers`）。
     var livePhones: [LivePhone.Key: LivePhone] = [:]
-    /// 给手机的隧道口（`openLiveDoor`）：有手机开着预览时才开。
     @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?
     @ObservationIgnored var liveServerStarting: Task<UInt16?, Never>?
-    /// 隧道放行的端口（`admitLive`），按会话记一秒：网页一次开几条连接，不各扫一遍进程表。
     @ObservationIgnored var livePorts: [String: (ports: [Int: String], at: ContinuousClock.Instant)] = [:]
     #endif
-    /// 并排几块之间的分界拖到了哪（`WideMetrics.Shares`）：每个窗口一份，只在内存里。
     var paneShares = WideMetrics.Shares()
 
     let launching = Launching()
@@ -238,12 +200,9 @@ final class Workspace {
 
     @ObservationIgnored var noticeTask: Task<Void, Never>?
     @ObservationIgnored var noticeDue = ContinuousClock.now
-    /// 响过声的那一条：提示换了地方（会话条收起）是同一条，不再响一遍。
     @ObservationIgnored var soundedNotice: UUID?
-    /// 窗口的系统撤销，根视图给（`followsUndo`）；没有窗口时（测试、菜单栏面板）为空，撤销只在提示上。
     @ObservationIgnored weak var undoManager: UndoManager?
 
-    /// 目录与资料库当场读，不留“还没读到”这一态：第一帧就是读到的样子。
     init(services: AppServices) {
         self.services = services
         #if os(macOS)
@@ -262,7 +221,6 @@ final class Workspace {
     }
 
     #if os(macOS)
-    /// 当前页要补进来：首屏、目录纠正出来的页没经过 `select`，不在 `pages.kept` 里。
     var mountedPages: [Route] { pages.kept.contains(mainRoute) ? pages.kept : pages.kept + [mainRoute] }
 
     func finishClosingCard() {
@@ -271,8 +229,6 @@ final class Workspace {
     }
     #endif
 
-    /// 工作区的全部订阅，直到所在任务取消。Mac 的工作区随 App 常驻、主窗口与面板共用一个，由 App 启动时跟：不挂在视图上，窗口关上面板也照常更新；
-    /// iOS 每个窗口一份，由窗口的根视图跟。
     func follow() async {
         async let catalog: Void = followCatalog()
         async let links: Void = followAgentLinks()
@@ -351,7 +307,6 @@ final class Workspace {
         }
     }
 
-    /// 读取失败时清空目录并记下原因：资料库读不出来时不能接着显示过时的项目。
     private func observeCatalog() async {
         guard let start = catalogStart else { return }
         reconcileNavigation(projects: Set(start.value.projects.map(\.id)))
@@ -391,7 +346,6 @@ final class Workspace {
         #endif
     }
 
-    /// 看着的东西没了就离开（`leave`），由这里发现，页面不各自盯：项目看目录，卡（编辑页与开着的任务气泡）看它本身，文件看技能与规则的快照。
     private var shownRoutes: [Route] {
         let routes: [Route] = switch navigation {
         case .narrow(let state): state.path
@@ -404,12 +358,10 @@ final class Workspace {
         Set(shownRoutes.compactMap { if case .card(let id) = $0 { id } else { nil } } + [openTask?.task].compactMap(\.self))
     }
 
-    /// 进了回收站、并进了别的卡（行被删）都算没了；看着的卡一换就换一份订阅。
     private func followShownCards() async {
         var watching: Task<Void, Never>?
         var watched: Set<UUID> = []
         defer { watching?.cancel() }
-        // 气泡里翻子任务也算一次变化：同一组卡不重订
         for await ids in Observations({ self.shownCards }) where ids != watched {
             watched = ids
             watching?.cancel()
@@ -434,7 +386,6 @@ final class Workspace {
         }
     }
 
-    /// 快照还没读到（nil）时不算没了。
     private var goneFiles: [LibraryFile] {
         guard let library else { return [] }
         return shownRoutes.compactMap { if case .libraryFile(let file) = $0, library.file(file) == nil { file } else { nil } }

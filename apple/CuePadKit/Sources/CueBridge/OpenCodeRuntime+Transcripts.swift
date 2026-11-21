@@ -16,7 +16,6 @@ extension OpenCodeRuntime {
         return try await OpenCodeHistory.read(connection.client, info, from: nil, files: files).transcript
     }
 
-    /// 会话在服务的库里：把各页消息的原文取来找。一页一行，找法与读会话文件同一处（`ToolCallDetail.read`）。
     public func stepDetail(_ calls: [String], of session: IndexedSession) async throws -> ToolCallDetail {
         let client = try await ensureService().client
         var pages = Data(), cursor: String?
@@ -33,12 +32,11 @@ extension OpenCodeRuntime {
 
     private struct Skipped: Decodable, Sendable {}
 
-    /// `gone`：托管过、服务里已没有的会话，它们的索引删掉。
     func backfill(_ infos: [OpenCodeSessionInfo], gone: Set<String>, _ connection: Connection) async {
         do {
             let stored = Dictionary(
                 try await store.indexedSessions().filter { $0.agent == .opencode }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            guard self.connection === connection else { return }  // 读的时候停下了（断开接入）：索引已删，不再写回
+            guard self.connection === connection else { return }
             var summaries: [SessionUpsert] = []
             let recent = Date().addingTimeInterval(-transcriptWindow)
             for info in infos {
@@ -64,7 +62,6 @@ extension OpenCodeRuntime {
             lastActivityAt: info.updatedAt, agent: .opencode)
     }
 
-    /// 只删这几个会话的索引：索引里还有升级前留下的非托管会话，它们不在服务的托管列表里，也留着不动。
     func dropIndex(_ gone: Set<String>) async {
         do {
             let kept = try await store.indexedSessions().filter { $0.agent == .opencode && !gone.contains($0.id) }.map(\.path)
@@ -87,7 +84,7 @@ extension OpenCodeRuntime {
                 let next = self.ingestQueue.removeFirst()
                 await self.ingest(next)
             }
-            if !Task.isCancelled { self?.ingesting = nil }  // 取消的是被 stop 换下的，不清掉新起的
+            if !Task.isCancelled { self?.ingesting = nil }
         }
     }
 
@@ -101,7 +98,6 @@ extension OpenCodeRuntime {
         do {
             let info = try await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data
             let (next, transcript) = try await OpenCodeHistory.read(connection.client, info, from: try await checkpoint(of: sessionID), files: store.files)
-            // 读的时候会话被删了：删除时已对过账，这里再写就把索引写回来了
             guard self.connection === connection, sessions[sessionID] != nil else { return }
             checkpoints[sessionID] = next
             try await store.upsertSessions(
@@ -114,7 +110,7 @@ extension OpenCodeRuntime {
                 publish(sessionID)
             }
         } catch let error as OpenCodeAPIError where error.status == 404 {
-            return  // 读的时候会话被删了：删除事件会对账
+            return
         } catch {
             Self.log.error("读 OpenCode 会话 \(sessionID, privacy: .public) 的对话失败：\(String(describing: error), privacy: .public)")
         }

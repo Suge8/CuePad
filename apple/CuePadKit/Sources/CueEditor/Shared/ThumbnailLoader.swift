@@ -7,14 +7,10 @@ import AppKit
 import UIKit
 #endif
 
-/// 按需提供附件要画的图，两种附件一套：内联图片按显示尺寸后台降采样、画好圆角（`image`），文件牌左边是系统快速查看的缩略图（`chip`）。
-/// 主线程只贴现成的位图；没画好之前画占位，好了请求重画这个键的附件。只在附件被绘制（进入视口）时才要，视口外的文件不读。
-/// 尺寸或屏幕缩放比例变了（拖窗口、移到另一块屏）先沿用这张图上一份画好的，按新的尺寸与比例在后台重画，不闪占位。
 @MainActor
 final class ThumbnailLoader {
     private unowned let core: EditorCore
     private var inFlight = Set<NSString>()
-    /// 出不了的（按文件，不按尺寸）：不再试。图片画"图片缺失"，文件牌画类型记号。
     private var failed = Set<NSString>()
     private let rendered = NSCache<NSString, CueImage>()
     private let chips = NSCache<NSString, CGImage>()
@@ -41,7 +37,6 @@ final class ThumbnailLoader {
         return latest[url] ?? CueImageRendering.placeholder(size: size, style: core.style, label: nil)
     }
 
-    /// 文件牌左边的缩略图；还没出好或出不了为 nil（此时开始出，牌子先画类型记号）。
     func chip(key: String, at url: URL) -> CGImage? {
         let scale = core.displayScale
         let id = "\(url.path)@chip@\(scale)x" as NSString
@@ -75,7 +70,6 @@ final class ThumbnailLoader {
     }
 }
 
-/// 缩略图按显示的像素尺寸画成圆角位图（在后台调用）：主线程每次绘制只是贴图，不再缩放大图、裁圆角。
 nonisolated enum RoundedThumbnail {
     static func render(_ image: CGImage, size: CGSize, cornerRadius: CGFloat, scale: CGFloat) -> CGImage? {
         let width = Int((size.width * scale).rounded()), height = Int((size.height * scale).rounded())

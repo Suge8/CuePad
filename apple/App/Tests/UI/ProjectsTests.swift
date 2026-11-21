@@ -100,7 +100,6 @@ struct ProjectsTests {
         let live = try await store.createProject(name: "B", color: "#000000")
         #expect(try await workspace.createCard(body: "想法", in: live.id).projectID == live.id)
 
-        // 竞态：选中项目之后、写入之前项目被删——Store 在写事务里回落，入口按实际落点提示
         workspace.show(.project(live.id))
         let target = workspace.currentProject
         try await store.trashProject(live.id)
@@ -176,10 +175,10 @@ struct ProjectsNavigationTests {
         let workspace = Workspace(services: app.services)
 
         let phone = navigation()
-        phone.select(.shelf)  // 侧栏的“项目”
-        phone.push(.project(project.id))  // 书架上的项目卡
+        phone.select(.shelf)
+        phone.push(.project(project.id))
         #expect(try await workspace.createTask("补重连用例", in: try #require(phone.currentProject)).projectID == project.id)
-        phone.select(.progress)  // 侧栏的"进展"：不在哪个项目里
+        phone.select(.progress)
         #expect(phone.currentProject == nil)
         phone.open(DeepLink.project(project.id))
         #expect(phone.currentProject == project.id)

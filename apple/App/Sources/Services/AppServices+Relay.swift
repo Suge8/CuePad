@@ -5,11 +5,6 @@ import Foundation
 import UIKit
 #endif
 
-/// Mac 不收推送，不在等时别的设备的改动原本要等下一次被叫醒才拉，所以 App 在跑就连着；手机只在前台连着，整个进后台时在本机改动传完、门铃按完后断开（`Relay.pause`、`settle`）。
-/// 门铃随时可能响：`pull` 合并同一时刻的拉取，同步还在启动时先等启动，所以与按节奏的拉取、立即同步、冷启动的第一拉不冲突。
-/// 只在真连着 iCloud（同步来源是 `.iCloud`、`makeSync` 建了 `CloudSync`）时有：测试与调试画面的替身云（`.built`、`.custom`）不连中转，
-/// 除非测试给了中转替身（`.built(_, relay:)`）。
-/// 同步测量的隔离实例连的是 CloudKit 开发环境，密钥（`CloudSync.relaySecret`）从开发容器取，派生的房间与正式用户的不会重合。
 extension AppServices {
     static func makeRelay(_ source: SyncSource, _ sync: (any SyncControlling)?, device: String?) -> Relay? {
         let endpoint: URL
@@ -27,7 +22,6 @@ extension AppServices {
         let voiceEvents = relay.voiceEvents
         follow {
             for await event in voiceEvents {
-                // 活预览的帧只给它；连接与对端的去留两边都要
                 if case .received(let signal) = event, case .live = signal.payload {
                     self.liveEvents.continuation.yield(event)
                     continue
@@ -36,7 +30,6 @@ extension AppServices {
                 await self.voice.receive(event)
             }
         }
-        // 当场订阅：同步一启动就可能有一批被收下、账号就可能变，那时跟随者还没跑起来
         let accepted = sync.acceptedUpdates, accountChanged = NotificationCenter.default.notifications(named: .CKAccountChanged)
         follow {
             for await _ in accepted { relay.ring() }
@@ -57,7 +50,6 @@ extension AppServices {
 
     var doorbellFallback: Duration? { relay?.isLive == true ? Relay.silenceLimit : nil }
 
-    /// 中转的主机：唯一定义是 `Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`，经 Info.plist 的 `CuePadRelayHost` 给 App（发布脚本核对过它在包里）。
     static var relayHost: String {
         guard let host = Bundle.main.object(forInfoDictionaryKey: "CuePadRelayHost") as? String, !host.isEmpty else {
             preconditionFailure("Info.plist 缺 CuePadRelayHost（Signing.xcconfig 的 CUEPAD_RELAY_HOST）")

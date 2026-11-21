@@ -1,7 +1,6 @@
 import Foundation
 import MachO
 
-/// 原始 JSON 不进这段字（一份就有几十 KB，复制不完），要完整原文就分享存档里的文件（`DiagnosticArchive.url`）。
 nonisolated enum DiagnosticSummary {
     static let shownTimes = 5
     static let shownReasons = 3
@@ -12,7 +11,6 @@ nonisolated enum DiagnosticSummary {
         return ([head] + groups.map(block)).joined(separator: "\n\n")
     }
 
-    /// 版本不算：同一个毛病跨了几个构建仍是一种。
     private static func signature(_ report: CrashReport) -> String {
         [report.kind.rawValue, report.exception ?? "", report.signal ?? "", report.cause, report.trail.first ?? ""]
             .joined(separator: "|") + report.frames.map(\.text).joined(separator: "|")

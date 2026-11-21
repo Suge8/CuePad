@@ -91,8 +91,6 @@ struct ACPSteers {
         return waiting.remove(at: index).id
     }
 
-    /// Agent 以这句原话自己开了一轮：原话就是它的、最早插进的那一句归那一轮；先在已搁浅的里找，再在还等着的里找——
-    /// 后一种是这一轮头一回报搁浅，那句之后插进、不报收下的一并挪进已搁浅。都对不上不认（不猜是哪一句）。
     mutating func strand(_ text: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let same = { (steer: Steer) in steer.text.trimmingCharacters(in: .whitespacesAndNewlines) == text }

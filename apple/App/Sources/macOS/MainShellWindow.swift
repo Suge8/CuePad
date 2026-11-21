@@ -11,9 +11,7 @@ import AppKit
 /// 主线程就为看板的卡片查约 700 次字体显示名（`AccessibilityViewGraph` → `NSFont.displayName`），与按节奏的拉取抢主线程。
 class MainShellWindow: NSWindow, NSWindowDelegate {
     private var parked: NSViewController?
-    /// 铺满屏幕之前的位置（`fillScreen`）；铺满着时窗口的位置不记进偏好（`WindowFrameKeeper`）。
     private(set) var unfilled: NSRect?
-    /// 铺满之后人又进了系统全屏，这时要放回：等出了全屏再放（`windowDidExitFullScreen`）。
     private var restoresAfterFullScreen = false
 
     /// 铺满所在的屏幕（菜单栏与程序坞之外），`restoreFrame` 放回原来的位置。不用系统的全屏：它另开一个桌面，
@@ -53,8 +51,6 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
         park()
     }
 
-    /// 只盖住而人在用别的 App 时不摘：挪开盖着的窗口那一刻要立刻有内容，挂回后的第一次排版会晚一帧露出空窗。
-    /// 人回来的第一下输入（或解锁）就挂回，那时窗口多半还在锁屏或别的窗口后面。脚本起的实例窗口排在最后，不摘。
     func parkWhileUnseen(_ services: AppServices) async {
         guard !DebugHooks.scripted else { return }
         for await unseen in Observations({ services.viewer.unseen }) where isVisible {
@@ -92,7 +88,6 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
     }
 }
 extension NSWindow {
-    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）；本机构建排在后面（`DebugHooks.keepsBehind`）。
     func present(activating: Bool = false, overOthers: Bool = false) {
         guard !DebugHooks.keepsBehind(self) else { return }
         if activating { NSApp.activate() }

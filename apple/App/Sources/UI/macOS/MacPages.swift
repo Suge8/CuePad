@@ -4,10 +4,8 @@ import SwiftUI
 @Observable
 final class MacPages {
 
-    /// 会话页不留：带着输入焦点与实时对话，挂着不看会抢键盘。
     private(set) var kept: [Route] = []
 
-    /// 刚离开的页：切页的那一帧它已经看不见，但"不在前台"（暂停订阅、停读实时状态）晚两帧才生效——页面重新求值要几十毫秒，不放在点击的回合里。
     private(set) var leaving: Route?
 
     @ObservationIgnored private var current: Route?
@@ -35,11 +33,9 @@ final class MacPages {
         lastSeen[page] = visits
         guard !kept.contains(page) else { return }
         kept.append(page)
-        // 多出来的页不在这次点击里卸：卸一整页的视图树要几十毫秒，等切页的那一帧出去、安静下来再卸；连着去了很多页时先卸
         if kept.count > Self.keptPages + 2 { trim() } else { scheduleTrim() }
     }
 
-    /// 启动后空闲时先挂上一页（`Prewarm`）：先读一份数据把整页建好，第一次点开就是回访，现建整页（Agent 页十几行会话要几十毫秒）不落在点击的回合里。
     func premount(_ page: Route) {
         if !kept.contains(page) { kept.append(page) }
     }

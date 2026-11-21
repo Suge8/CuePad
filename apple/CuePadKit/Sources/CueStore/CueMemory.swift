@@ -1,14 +1,9 @@
 import Foundation
 
-/// `you` 是他的原话（他在 CuePad 里记的、提问卡上选“以后……不用问”记下的、Cue 照他的原话记的），`cue` 是 Cue 自己记的。
 public enum CueLineSource: String, Sendable, CaseIterable {
   case you, cue
 }
 
-/// Cue 的一条记忆。UUID 是身份；按 (`createdAt`, `id`) 排列只用于视图分块（含忘掉的）。
-/// 只有 `pinned`、定时（`remindAt`、`repeats`）、`deletedAt` 会变；忘掉是软删，UUID 不变；追加与迟到同步都可能改变排序位置。
-/// 有下一次（`remindAt`）的是定时：界面上在定时页（`CueSchedulePage`），不进记忆页（`recentCueMemory`）。
-/// 到点后承接它的一轮好好做完，值班的 Cue 才把重复的推到下一次、一次性的忘掉（`CueStore.fireCueSchedules`，不留成普通记忆）：做完之前这一行一直过点，它就是还欠着的那一次；不再定时也是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
 public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var text: String
@@ -23,8 +18,6 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
 
   public static let maxBytes = 280
 
-  /// 重点（每个班次都在系统提示里）合计多少字节（各条正文的 UTF-8）的上限：过了系统提示里叫 Cue 自己合并（`CueMemoryView.pinnedText`）；
-  /// 记忆页的用量按它画。重点只归 Cue 整理（他说的规矩，并错了他看得见、能纠正），后台做梦不碰。
   public static let pinnedHard = 8192
 
   public static func bytes(_ lines: some Sequence<CueMemoryLine>) -> Int { lines.reduce(0) { $0 + $1.text.utf8.count } }
@@ -48,9 +41,6 @@ public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 记忆的版本读数：行数与各行改动时刻之和。任一行变了它就变——记、忘、钉、提醒，本机写的或别的设备同步来的，迟到的也算：
-/// 那一行的改动时刻变了和就变（只看最晚那一刻会漏掉改动时刻早于它的同步）。管理器的对账与后台整理都订阅它，不必每次读整份记忆；
-/// 摘要不在内：写摘要不叫醒它们。
 public struct CueMemoryVersion: Equatable, Sendable {
   var lines: Int
   var stamps: Int64
@@ -71,8 +61,6 @@ extension CueMemoryLine: Record, SyncedColumns {
   }
 }
 
-/// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。底层行或生成时读取的子摘要依赖变化就作废；
-/// `CueStore.cueMemory` 从小块到大块验证，读出时只保留有效摘要。
 public struct CueMemorySummary: Equatable, Sendable {
   public var lo: Int
   public var hi: Int
@@ -80,7 +68,6 @@ public struct CueMemorySummary: Equatable, Sendable {
   public var createdAt: Date
 }
 
-/// 记忆里最近记下的几条（没忘掉、不是定时的，新的在前）与一共几条：手机 Cue 面板与记忆页只读它，不读整份记忆与摘要（那是 Cue 的视图要的）。
 public struct CueMemoryRecent: Equatable, Sendable {
   public var lines: [CueMemoryLine]
   public var count: Int

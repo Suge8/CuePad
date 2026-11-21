@@ -2,11 +2,8 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 的工具与后台整理记忆的工具（`DreamTool`）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
-/// 返回一两句人话加 id，只有正文（各家大脑给模型看的都是这一份）；出错给出路（`isError`）。
 public struct CueTools: Sendable {
   let store: CueStore
-  /// 说话类请求写下后等结果多久（`Speech.cueWait`；测试给短的）。
   let wait: TimeInterval
   let toolset: Toolset
 
@@ -14,7 +11,6 @@ public struct CueTools: Sendable {
     case cue, dream
   }
 
-  /// 清掉一项的写法（task edit 的 body、setup project 的 intro 与 folder）：空值是没写（`Args.given`）。
   static let cleared = "none"
 
   public init(store: CueStore, wait: TimeInterval = Speech.cueWait, toolset: Toolset = .cue) {
@@ -30,23 +26,18 @@ public struct CueTools: Sendable {
     static func ok(_ text: String) -> Result { Result(text: text, isError: false) }
   }
 
-  /// 给 Cue 看的出错：说清楚、给出路。
   struct Failure: Error {
     let message: String
     init(_ message: String) { self.message = message }
   }
 
-  /// 一个工具只在 `catalog` 登记一次：给模型的定义（`definitions`）、调用的分派（`call`）与系统提示里的名单（`CuePrompt`）都从它出。
   struct Tool {
     let name: String
-    /// 系统提示的工具名单里那几个字；做梦的工具不进系统提示
     let gist: String
-    /// 说明、参数与提示（名字由 `name` 补上）
     let definition: () -> [String: Any]
     let run: (CueTools, Args) async throws -> Result
   }
 
-  /// 做梦的工具：登记（`catalog(.dream)`）与做梦的提示词（`CuePrompt.dream`）都按它取名
   enum DreamTool: String {
     case merge, said, ask
   }
@@ -70,7 +61,6 @@ public struct CueTools: Sendable {
     }
   }
 
-  /// 调用一个工具；工具名不认识返回 nil（协议层报参数错）。业务上的失败是 `isError` 的结果。
   public func call(_ name: String, _ arguments: [String: Any]) async -> Result? {
     guard let tool = Self.catalog(toolset).first(where: { $0.name == name }) else { return nil }
     do {
@@ -80,7 +70,6 @@ public struct CueTools: Sendable {
     }
   }
 
-  /// 出错给 Cue 看的那句：Store 的报错说事实，接上该怎么办（`CueStoreError.cueAdvice`）。
   static func message(_ error: any Error) -> String {
     if let failure = error as? Failure { return failure.message }
     let text = (error as? LocalizedError)?.errorDescription ?? "\(error)"

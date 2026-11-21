@@ -1,13 +1,11 @@
 import CryptoKit
 import Foundation
 
-/// 中转看到的只有由门铃的密钥（`CloudSync.relaySecret`）派生的这两样：房间号（Ed25519 公钥）与对它出的随机数的签名。协议见 `relay/server.ts` 的头注释。
 struct RelayCredentials: Sendable {
     static let context = "cuepad-relay-v1"
     let room: String
     private let key: Curve25519.Signing.PrivateKey
     let voiceKey: SymmetricKey
-    /// 活预览隧道的 TLS-PSK（`LiveTunnel.parameters`）。
     let tunnelKey: SymmetricKey
 
     init(secret: Data) throws {

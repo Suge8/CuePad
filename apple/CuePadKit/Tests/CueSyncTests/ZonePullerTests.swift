@@ -36,13 +36,13 @@ import Testing
 
     let keys = await zone.calls.map { Set($0.keys ?? []) }
     #expect(keys.count == 3)
-    #expect(!keys[0].contains("body") && !keys[1].contains("body"))  // 对账那两页只要版本
-    #expect(keys[2].contains("body") && !keys[2].contains("file"))  // 补取要正文，不带附件文件
+    #expect(!keys[0].contains("body") && !keys[1].contains("body"))
+    #expect(keys[2].contains("body") && !keys[2].contains("file"))
     #expect(await zone.calls.last?.token == Data("v2".utf8))
-    #expect(Set(await zone.fetches.flatMap { $0 }) == [newer.recordID, fresh.recordID])  // 已同步的那条不取
+    #expect(Set(await zone.fetches.flatMap { $0 }) == [newer.recordID, fresh.recordID])
     #expect(Set(try await store.cards(in: Project.defaultID).map(\.body)) == ["已同步", "别处改过", "别处新建"])
     #expect(try await store.syncState(ZonePuller.tokenKey) == Data("t1".utf8))
-    #expect(await rig.coordinator.state.reconciled)  // 对过一遍：别的设备写下的事实都到了
+    #expect(await rig.coordinator.state.reconciled)
   }
 
   @Test func recordsPushedBeforeButGoneFromTheServerAreDeletedAndUnpushedOnesKept() async throws {
@@ -57,7 +57,7 @@ import Testing
     try await ZonePuller(source: zone, coordinator: rig.coordinator).pull()
 
     #expect(Set(try await store.cards(in: Project.defaultID).map(\.id)) == [kept.id, unpushed.id])
-    #expect(!(try await rig.reconcileDelta().deletes.contains(rig.id(goneElsewhere.id))))  // 不再向服务器删一遍
+    #expect(!(try await rig.reconcileDelta().deletes.contains(rig.id(goneElsewhere.id))))
   }
 
   @Test func anExpiredTokenIsDroppedAndTheZoneIsCaughtUpAgain() async throws {

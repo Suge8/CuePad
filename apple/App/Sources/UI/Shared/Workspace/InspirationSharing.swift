@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-/// 一次分享从准备到系统消费结束只占一个状态；菜单据此禁用新分享，系统完成才释放入口。
 @Observable
 final class InspirationSharing {
     private enum Phase {
@@ -40,7 +39,6 @@ final class InspirationSharing {
     }
 }
 
-/// 每个系统分享协调器只持有这一份交付物；旧回调只能结束自己的会话，不能接触下一份文件。
 final class InspirationShareSession: Identifiable {
     let id = UUID()
     let payload: InspirationPayload

@@ -29,7 +29,7 @@ import Testing
     #expect(alert == nil && back.notify == nil)
     #expect(back.alert(since: compacting) == nil && back.alert(since: settled) == nil)
 
-    try await write(recorder, .compacting)  // 一轮里的压缩：压完歇下是新的起点
+    try await write(recorder, .compacting)
     try await write(recorder, .settled)
     #expect(try await current().alert(since: back) == .settled)
   }
@@ -45,7 +45,7 @@ import Testing
     let now = try await current()
 
     #expect(now.alert(since: seen) == .settled)
-    #expect(now.alert(since: now) == nil)  // 同一版本读两遍不重复提示
+    #expect(now.alert(since: now) == nil)
     #expect(seen.alert(since: nil) == nil)
   }
 }

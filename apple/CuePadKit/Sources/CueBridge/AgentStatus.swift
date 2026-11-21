@@ -43,18 +43,15 @@ public struct AgentVersion: Sendable, Equatable, Comparable, CustomStringConvert
     }
 }
 
-/// 状态只有这一份。
 public struct AgentStatus: Sendable, Equatable {
     public enum Presence: Sendable, Equatable {
         case notFound
-        /// 找到了它的程序，问版本时没有回应（机器很忙、程序卡住）：不知道装没装好，不当成没装
         case unresponsive
         case tooOld(AgentVersion)
         case found(AgentVersion?)
     }
 
     public var presence: Presence
-    /// 开会话、起大脑、问模型都用这一个，不另找。
     public var executable: URL?
     public var lacking: InstallPrerequisite?
 

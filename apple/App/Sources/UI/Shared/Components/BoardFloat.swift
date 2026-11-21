@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 拖着的卡原处的空位，与空列那一格同一种虚线框。
 struct BoardWell: View {
     @Environment(\.palette) private var palette
 
@@ -9,7 +8,6 @@ struct BoardWell: View {
     }
 }
 
-/// 浮在手里的那张卡，画在看板最上面一层（`boardStage`）：原处的那张换小列时会被重建，手势与卡都不能长在它身上。
 struct BoardFloat: View {
     @Environment(\.boardMoves) private var moves
     @Environment(\.cardDrags) private var drags
@@ -22,7 +20,6 @@ struct BoardFloat: View {
                 float.face
                     .environment(\.boardRow, float.row)
                     .frame(width: held.size.width, height: held.size.height)
-                    // 落下的一路裁成落点那张的大小。只裁、不按插值的宽高重排：重排的话字逐帧挪（`boardFlight`）
                     .mask {
                         RoundedRectangle(cornerRadius: TaskMetrics.cardRadius)
                             .frame(width: (held.home?.size ?? held.size).width, height: (held.home?.size ?? held.size).height)
@@ -31,7 +28,6 @@ struct BoardFloat: View {
             }
         }
         .allowsHitTesting(false)
-        // 系统拖放放下后换上的那一张不算拎起来
         .sensoryFeedback(.impact(weight: .medium), trigger: moves?.float != nil && moves?.held?.phase == .dragging) { _, lifted in lifted }
         .sensoryFeedback(.selection, trigger: moves?.making)
         .sensoryFeedback(.selection, trigger: moves?.over) { _, over in over != nil }
@@ -41,7 +37,6 @@ struct BoardFloat: View {
         .onChange(of: workspace.dropDeclines) { moves?.decline() }
     }
 
-    /// 只这一层读手指的位置：每挪一下重算的是位移，不是卡。
     private struct Floating: ViewModifier {
         let moves: BoardMoves
         let settling: Bool
@@ -57,7 +52,6 @@ struct BoardFloat: View {
             content
                 .elevation(up ? .lifted : nil)
                 .scaleEffect(up && !reduceMotion ? Self.scale : 1)
-                // 与滑过去同一个事务（`BoardMoves.land`）：一路淡掉，露出底下已经排成新样子的那张；离开看板的就地淡掉（`leave`）
                 .opacity(fading ? 0 : 1)
                 .position(moves.point)
                 .animation(Motion.release, value: settling)

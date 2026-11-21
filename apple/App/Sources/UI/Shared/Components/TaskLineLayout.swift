@@ -83,7 +83,6 @@ struct TaskLineLayout: Layout {
 }
 
 extension View {
-    /// 量自己时是本来的大小，让掉时给零大小、裁掉不画；不让的不裁（等你确认的波纹画在标外面）。
     @ViewBuilder func yields(first: Bool, ever: Bool = true) -> some View {
         if ever {
             fixedSize()

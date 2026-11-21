@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import SwiftUI
 
-/// 都只写库，由同步层马上传（`Table.live`）。
 extension Workspace {
     func followCue() async {
         let services = services
@@ -14,14 +13,12 @@ extension Workspace {
         }
     }
 
-    /// Cue 没启用时它听不到，这句记成一条灵感（同 `note`）。
     @discardableResult
     func sayToCue(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
         guard cue.canHear else { return note(from: box) }
         return speak(to: .cue, from: box) { $0.stored }
     }
 
-    /// 这句不交给 Cue，记成灵感（`asTask` 时是任务）；写不进库时文字与图片放回输入框（期间新打的接在后面）。
     @discardableResult
     func note(from box: Binding<ComposerDraft>, asTask: Bool = false, in project: UUID = Project.defaultID) -> Task<Void, Never>? {
         let taken = box.wrappedValue
@@ -31,7 +28,6 @@ extension Workspace {
         return Task {
             let taken = await claim.settled()
             let note = CaptureDraft(text: taken.text, files: taken.files)
-            // 附件都没存成（已提示导入失败）又没有字：不建空的
             guard !note.isEmpty else { return }
             do {
                 try await note.save(in: project, asTask: asTask, workspace: self)

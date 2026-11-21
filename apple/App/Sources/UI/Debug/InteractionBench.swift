@@ -18,12 +18,6 @@ import os
 /// 每行的 `foreground` 记这次在不在前台；量完退出，退出时把前台还回去。
 enum InteractionBench {
     static let signposter = OSSignposter(logHandle: OSLog(subsystem: AppIdentity.id, category: .pointsOfInterest))
-    /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
-    /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
-    /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
-    /// 会话页单独给 90ms（人对 100ms 内的回应感知为即时）：它的第一帧必须带标题与最新的对话，晚一帧出内容的空白闪动比慢一点更差，
-    /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 `SessionPage`）。
-    /// Cue 收起、放回同会话条开合（右边那一栏换可见、主区按新的宽排一次）：Cue 一直挂着，不重建。
     static let budgets: [String: (clickMs: Double, hitches: Int)] = [
         "页面回访": (14, 1),
         "页面首访": (28, 2),
@@ -45,7 +39,6 @@ enum InteractionBench {
         "侧栏展开": (28, 2),
         "Cue 收起": (28, 2),
         "Cue 放回": (28, 2),
-        // 看板这一页上的几下（`measureBoard`）：开会话同"会话页"，回看板同"进进展页"，Cue 面板同任务气泡
         "看板→会话": (90, 2),
         "会话→看板": (28, 2),
         "展开 Cue 面板": (28, 2),
@@ -54,19 +47,15 @@ enum InteractionBench {
         "收起任务": (14, 2),
         "发送·会话页": (14, 1),
         "发送·Cue 页": (14, 1),
-        // 和 Cue 通话：输入框原地换成通话条与变回来同发送（一次提交，其余是渲染端的过渡）
         "接通·Cue 页": (14, 1),
         "在听·Cue 页": (14, 1),
         "挂断·Cue 页": (14, 1),
-        // 设置是另一扇窗：打开同首访要建内容，收起同收编辑页
         "开设置": (28, 2),
         "关设置": (14, 2),
     ]
 
     private static let turns = TurnLog()
-    /// 记下行的位置（`benchSpot`）：只在单次交互的测量里。
     static let locatesRows = DebugScene.args.driveOpts.bench == "interact"
-    /// 报了位置的行在窗口里的位置（左上为原点，`benchSpot`）：任务行按任务，看板卡、对话里的一条按各自的身份。
     static var rows: [AnyHashable: CGRect] = [:]
 
     static func run(_ workspace: Workspace) async {
@@ -88,14 +77,12 @@ enum InteractionBench {
         else { return }
         let borrowed = DebugForeground.borrow(window)
         await Task.wait(for: .seconds(1))
-        // 真到了前台才算前台量的（借了却被别的应用占着时，帧与掉帧照样偏乐观）
         let foreground = borrowed && NSApp.isActive
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = try await store.sessionPage(SessionQuery(limit: 3)).items.map(\.state.sessionID)
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
-            // 每一项在 trace 里是一段区间（CUEPAD_TRACE 录的掉帧、采样按它对到是哪一项）
             let interval = Self.signposter.beginInterval("交互", id: Self.signposter.makeSignpostID(), "\(name, privacy: .public)")
             var row = await measure(name, in: view, action)
             Self.signposter.endInterval("交互", interval)
@@ -120,7 +107,6 @@ enum InteractionBench {
         }
         await SettingsBench.run(workspace, only: only, step: step)
         let a = projects.indices.contains(1) ? projects[1] : nil, b = projects.indices.contains(2) ? projects[2] : nil
-        // 页面：第一次去是首访，之后来回是回访
         if let a { await step("页面首访") { workspace.show(.project(a)) } }
         if let b { await step("页面首访") { workspace.show(.project(b)) } }
         if let a, let b {
@@ -130,8 +116,6 @@ enum InteractionBench {
             }
         }
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
-        // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下。
-        // 大库在最长的那段对话里发，演示库在最近的会话里发；Cue 页先写好一段对话（库里没有时）
         let longest = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
         if let id = longest?.state.sessionID ?? sessions.first, only.map({ $0.contains("发送·会话页") }) ?? true {
             workspace.show(.session(id))
@@ -153,7 +137,6 @@ enum InteractionBench {
                 await step("收编辑页") { workspace.overlay = nil }
             }
         }
-        // 任务气泡：第一条顶层任务（演示库里是"发言轮次乱序"那样有子任务的），在它的项目页上开：前台量时真实地点那一行，后台直接开
         let tasks = try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { $0.parentID == nil }
         if let task = tasks.first {
             if only?.contains("任务气泡开") ?? true, workspace.currentProject != task.projectID {
@@ -175,7 +158,6 @@ enum InteractionBench {
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
         }
-        // 进展页与项目页来回，与进展页上换项目范围：量栏头跟着换页、换范围的开销
         if let a {
             workspace.show(.progress)
             await Task.wait(for: .seconds(1))
@@ -186,8 +168,6 @@ enum InteractionBench {
                 await step("清项目范围") { workspace.projectScope = nil }
             }
         }
-        // 看板上一件待办做完、再打开：卡从待办整张飞到已完成、再飞回来（隔着两列，最远的一趟），量飞行那段的帧。
-        // 写库是异步的：动作只是发出写入，画面在库变了、看板重读之后才动，800ms 的窗口盖得住写入加飞行
         if only.map({ $0.contains("卡换列") || $0.contains("卡回待办") }) ?? true, let task = tasks.first(where: { $0.status == .todo }) {
             workspace.show(.progress)
             await Task.wait(for: .seconds(1))
@@ -196,7 +176,6 @@ enum InteractionBench {
                 await step("卡回待办") { Task { await DebugScene.running("卡回待办") { try await store.setStatus(task.id, .todo) } } }
             }
         }
-        // 项目页任务区点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         if only.map({ $0.contains("展开任务") || $0.contains("收起任务") }) ?? true,
            let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key {
             workspace.show(.project(busiest))
@@ -206,7 +185,6 @@ enum InteractionBench {
                 await step("收起任务") { DebugScene.toggleTaskFold() }
             }
         }
-        // 会话条开合（256 与藏起）与 Cue 收起、放回在卡最多的项目页上量：主区整页按新的宽重排。会话条走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
         if let big = workspace.catalog?.summaries.max(by: { $0.value.cardCount < $1.value.cardCount })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
@@ -222,10 +200,8 @@ enum InteractionBench {
         NSApp.terminate(nil)
     }
 
-    /// 发送时回复框里的话：三行，发出后输入框收回一行。
     private static let sample = "把重连的用例补上，跑一遍全量测试\n失败的贴给我看，别自己改断言\n做完把覆盖率报一下"
 
-    /// ⌘↩：回复框聚焦时主菜单"回复"的发送项交到文字区（`GrowingTextView.performReplyShortcut`）。按读屏标签的开头挑文字区（离开的页面还挂着）。
     private static func sendShortcut(in window: NSWindow, field label: String) {
         guard let field = textViews(in: window.contentView).first(where: { $0.accessibilityLabel()?.hasPrefix(label) == true }) else { return }
         let item = NSMenuItem()
@@ -249,8 +225,6 @@ enum InteractionBench {
         return await finish(name, instructions: instructions, recorder: recorder)
     }
 
-    /// 真实地点 `point`（全局坐标，主屏左上为原点）：指针先放到那里（退出时还回原位），写 `AWAIT click` 等 `perf.py` 经 HID 点下去，
-    /// 从松开的那一下起量（手势在松开时认出点按）。10 秒内没点到是 nil。
     private static func measureClick(_ name: String, at point: CGPoint, in view: NSView) async -> [String: Any]? {
         await Task.wait(for: .milliseconds(900))
         let recorder = FrameRecorder()
@@ -282,10 +256,8 @@ enum InteractionBench {
         return await finish(name, instructions: instructions, recorder: recorder)
     }
 
-    /// 等真实点击的上限（指针移过去、停稳、按下松开约半秒）。
     private static let clickLimit: Duration = .seconds(10)
 
-    /// 那一下松开时的指令数（还没松开为 nil），与等它的那一处：松开或到了上限，先到的那个叫醒它。
     private final class Release {
         var instructions: Double?
         var waiter: CheckedContinuation<Void, Never>?
@@ -298,13 +270,11 @@ enum InteractionBench {
 
     private static func root(of view: NSView) -> CALayer? { view.window?.contentView?.superview?.layer ?? view.layer }
 
-    /// 窗口里的一行（左上为原点）落到屏幕上的哪一点：标题上（让开左边的完成圈），行高的正中。
     private static func screenPoint(of row: CGRect, in window: NSWindow) -> CGPoint {
         let top = (NSScreen.screens.first?.frame.maxY ?? 0) - window.frame.maxY
         return CGPoint(x: window.frame.minX + row.minX + TaskMetrics.ringColumn + Self.titleInset, y: top + row.midY)
     }
 
-    /// 点在标题上离完成圈这么远。
     private static let titleInset: CGFloat = 30
 
     private static func finish(_ name: String, instructions: Double, recorder: FrameRecorder) async -> [String: Any] {

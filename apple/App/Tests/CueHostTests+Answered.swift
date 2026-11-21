@@ -28,7 +28,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 规矩不插进这一轮：插了模型会回应它、盖掉回复。
     @Test func 收尾那一刻改规矩又追问_这句换班次后只答一次_规矩照样生效() async throws {
         let rig = try await Rig(settleGate: true)
         let held = try rig.armSettle()
@@ -69,7 +68,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 崩溃留下的样子用正常停用后改回去摆出来：那句再记成已送达、没有答它的话；进度文件也删掉（换到另一台 Mac 接手，那台没有这台的本机记录）。
     @Test func 一轮没答完App就崩溃_换到另一台接手时那句答上() async throws {
         let rig = try await Rig()
         try await rig.say("请等我放行")
@@ -90,7 +88,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 触发器拦库写入，同磁盘满、库坏这类真实失败。
     @Test func 退回那句时库写不进_库好了自己再退回_答上一次() async throws {
         let rig = try await Rig(timing: { $0.returnRetry = .milliseconds(300) })
         let first = try #require(rig.brainPIDs.first)
@@ -100,7 +97,7 @@ extension CueHostTests {
         try db.exec("CREATE TRIGGER no_return BEFORE UPDATE OF deliveredAt ON cueMessages WHEN new.deliveredAt IS NULL BEGIN SELECT RAISE(ABORT, '写不进'); END;")
         kill(first, SIGKILL)
         try await eventually("新的大脑起好") { !rig.brainPIDs.isEmpty && !rig.brainPIDs.contains(first) && rig.health?.phase == .running }
-        try await rig.reconciled()  // 再试退回，又撞上写不进
+        try await rig.reconciled()
         #expect(try await rig.count("收到：请慢慢想") == 0)
         try db.exec("DROP TRIGGER no_return;")
         try await rig.message(.cue, containing: "收到：请慢慢想")

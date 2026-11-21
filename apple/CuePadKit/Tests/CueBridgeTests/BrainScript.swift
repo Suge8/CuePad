@@ -2,8 +2,6 @@
 import CueTestSupport
 import Foundation
 
-/// 大脑与开工用例的话写成真模型也照做的英文；假模型照这几句演，各家共用（`RealBrainTests`、`RealCueStartTests`）。
-/// 一串 echo 调用的第二次请求停在 `chain` 上：插话在下一次请求才进对话，测试在插话交出去之后放行。
 extension FakeModel {
     func playBrain(chain: FakeGate) {
         on({ Self.word(in: $0.prompt) != nil }) { .say(Self.word(in: $0.prompt)!) }

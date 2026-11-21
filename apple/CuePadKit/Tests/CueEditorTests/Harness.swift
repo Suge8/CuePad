@@ -17,7 +17,6 @@ func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0, color: NSColo
 }
 
 extension CueEditorTheme {
-    /// App 的纸页主题在 App 里，不在这个包。
     static let test = CueEditorTheme(
         font: .systemFont(ofSize: 15),
         headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
@@ -50,7 +49,6 @@ final class EditorHarness {
         window.displayIfNeeded()
     }
 
-    /// 让出主线程一小段：分片布局、异步缩略图都排在主队列里，同步测试体里推进不了它们。
     func pump(_ seconds: TimeInterval = 0.05) async {
         try? await Task.sleep(for: .seconds(seconds))
     }

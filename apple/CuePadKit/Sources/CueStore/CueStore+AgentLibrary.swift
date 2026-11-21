@@ -1,7 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// 快照和库里的一样就不写；各份文件的正文只写内容变了的，这台的、不在 `texts` 里的删掉，同一个事务。
   public func recordAgentLibrary(_ library: AgentLibrary, texts: [String: String]) throws {
     try write {
       let host = library.hostID
@@ -21,8 +20,6 @@ extension CueStore {
     }
   }
 
-  /// 要看的那台 Mac 的技能与规则：Mac 上 `host` 给本机，只认它（还没扫完、碰不得 `~/.agents` 时为 nil，不拿别台的充数）；
-  /// 手机上给 nil，看 Cue 运行的那台，那台没写过就是最近写过的一台，一台都没写过为 nil。
   public func agentLibrary(host: String?) throws -> AgentLibrary? {
     if let host { return try find(AgentLibrary.self, AgentLibrary.recordID(host: host)) }
     if let cue = try cueProfile()?.hostID, let library = try find(AgentLibrary.self, AgentLibrary.recordID(host: cue)) { return library }

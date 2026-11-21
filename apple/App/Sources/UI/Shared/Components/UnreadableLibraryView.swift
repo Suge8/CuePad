@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 没有任何写入入口：库没读出来，这时写进去的东西没有可靠的去处。
 struct UnreadableLibraryView: View {
     let failure: LibraryFailure
     let retry: () -> Void
@@ -9,7 +8,6 @@ struct UnreadableLibraryView: View {
 
     private static let margin = Spacing.page
 
-    /// 整窗只有这一张（Mac 主窗口、iPad）时不铺满，同启动时打不开库那一扇窗的宽。
     private static let widest: CGFloat = 520
 
     var body: some View {

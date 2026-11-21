@@ -3,10 +3,6 @@ import CueSync
 import Foundation
 import os
 
-/// 让云上这台设备的诊断（`DeviceDiagnostic`）与本机存档（`DiagnosticArchive`）一致：存档里新有的传上去，存档整理掉的云上也删。
-/// 传过哪些（连同传时的修改时刻：卡住记录恢复后原地改写，要再传）记在存档目录的 `sent.json`，按资料所属账号记：换了账号就当一份都没传过（旧账号那边的不去删）。
-/// 一次只对一遍；对的途中又有变化（`reconcile` 再被调），这一遍完了接着再对一遍。没对成的（断网、被限流）自己隔一阵再对，
-/// 从 `firstRetry` 起按退避加长、至多 `lastRetry`，对成为止：恢复连接后不必等存档再变。不看同步的状态：诊断没传成时同步可能一直是好的。
 actor DiagnosticOutbox {
     struct Sent: Codable, Equatable {
         var account: String
@@ -35,7 +31,6 @@ actor DiagnosticOutbox {
 
     private var sentFile: URL { archive.directory.appending(path: "sent.json") }
 
-    /// 返回时这一遍（及其间要求的再一遍）对完；没对成的抛出这一遍的错误，并排上自己重试。账号还没认好时等它认好（`CloudSync.diagnosticsAccount`）。
     func reconcile() async throws {
         do { try await pass() } catch {
             retryLater()
@@ -86,7 +81,6 @@ actor DiagnosticOutbox {
             try await running.value
             return
         }
-        // 收尾（清 running）与最后一次看 again 在同一段里：其间来的 reconcile 要么并进这一遍，要么另起一遍，不会等一个已经完了的
         let task = Task<Void, any Error> {
             defer { running = nil }
             repeat {
@@ -107,7 +101,6 @@ actor DiagnosticOutbox {
         let deleting = sent.keys.filter { here[$0] == nil }.map { DeviceDiagnostic.Key(device: device, file: $0) }
         guard !new.isEmpty || !deleting.isEmpty else { return }
         if !saving.isEmpty || !deleting.isEmpty { try await sync.sendDiagnostics(saving: saving, deleting: deleting) }
-        // 太大不传的也记作对过：不然每对一遍都再读一次、再记一条
         try JSONEncoder().encode(Sent(account: account, files: here)).write(to: sentFile, options: .atomic)
         Self.log.notice("诊断送进 iCloud：传 \(saving.count) 份、删 \(deleting.count) 份")
     }

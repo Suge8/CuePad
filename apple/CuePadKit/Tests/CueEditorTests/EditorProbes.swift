@@ -14,7 +14,6 @@ extension EditorHarness {
 
     var stored: String { textView.storedText }
 
-    /// 让出主线程直到条件成立。上限只是"确实不会来了"的兜底。
     func wait(until condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(TimeInterval(conditionBudget.components.seconds))
         while !condition() {

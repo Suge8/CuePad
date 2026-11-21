@@ -1,13 +1,9 @@
 import CueStore
 import Foundation
 
-/// Cue 的记忆视图（OptMem 的读法）：重点全部列出（在系统提示里，`pinnedText`）；其余铺成对齐的 2 的幂块，越新越细、总行数固定在预算内，放在新会话的第一条输入里（`viewText`）。
-/// 缺摘要的块里输入已就绪的列成"待合并"（`merges`），视图里不列，由后台整理记忆的一次性大脑写（`CuePrompt.dreamInput`）；重点只归 Cue 整理，做梦不碰。
-/// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public typealias Entry = CueMemoryInput
 
-  /// 待合并的一块：区间与原文（小块是原行，不含忘掉的与重点；大块是已经就绪的两半输入）。
   public struct Merge: Equatable, Sendable {
     public let range: CueMemoryRange
     public var source: String
@@ -17,14 +13,11 @@ public struct CueMemoryView: Equatable, Sendable {
   public var entries: [Entry]
   public var merges: [Merge]
   public var pinnedBytes: Int
-  /// 重点过了硬线（`CueMemoryLine.pinnedHard`）：系统提示里叫 Cue 合并
   public var pinnedOverBudget: Bool { pinnedBytes > CueMemoryLine.pinnedHard }
   private let memory: CueMemory
   private var lines: [CueMemoryLine] { memory.lines }
 
-  /// 预算：视图最多这么多行（约 8k token）。
   public static let budget = 96
-  /// 不超过这么多行的块直接从原行合并；更大的从两半的摘要合并。
   private static let rawMax = CueMemory.rawMax
 
   public init(_ memory: CueMemory) {
@@ -34,7 +27,6 @@ public struct CueMemoryView: Equatable, Sendable {
     pinned = lines.filter { $0.pinned && $0.deletedAt == nil }
     pinnedBytes = CueMemoryLine.bytes(pinned)
     var entries: [Entry] = [], merges: [Merge] = []
-    // 只发布输入已经就绪的块；子块完成后，工具回执发布新就绪的父块。
     func pending(_ lo: Int, _ hi: Int) {
       guard !memory.summaries.contains(where: { $0.lo == lo && $0.hi == hi }), memory.expanded(lo: lo, hi: hi).count > 1 else { return }
       if hi - lo > Self.rawMax {
@@ -68,14 +60,12 @@ public struct CueMemoryView: Equatable, Sendable {
     (Double(bytes) / 1024).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US_POSIX"))) + "KB"
   }
 
-  /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
   public var viewText: String? {
     guard !entries.isEmpty else { return nil }
     return (["<memory>", "你的记忆（重点在系统提示里；其余从早到晚，越早越粗。一条是 UUID 记下的日期 [他] 正文，[他] 是他的原话；#a-b 是摘要的位置标签，展开时把 range 原样交给 memory zoom；读取当前视图用 memory zoom 不带 line 或 range）："] + entries.map(\.text) + ["</memory>"])
       .joined(separator: "\n")
   }
 
-  /// 展开快照中的区间；迟到插入或区间内事实变化时拒绝，避免旧范围指向另一批内容。
   public func zoom(range: CueMemoryRange) throws -> String {
     guard memory.range(lo: range.lo, hi: range.hi) == range else { throw CueStoreError.staleMemoryRange }
     let mid = range.lo + (range.hi - range.lo) / 2
@@ -100,7 +90,6 @@ public struct CueMemoryView: Equatable, Sendable {
     return merges.map { "\($0.range.label) range=\($0.range.reference)\n\($0.source)" }.joined(separator: "\n\n")
   }
 
-  /// 用对齐的 2 的幂块铺满 [0, T)：块的大小不超过它年龄的 alpha 倍就整块保留。alpha 越大越粗、行越少。
   private static func cover(_ total: Int, alpha: Double) -> [(Int, Int)] {
     var root = 1
     while root < total { root *= 2 }
@@ -119,7 +108,6 @@ public struct CueMemoryView: Equatable, Sendable {
     return out.sorted { $0.0 < $1.0 }
   }
 
-  /// 至多 `budget` 块、越新越细：全放得下就一条一块；否则二分 alpha 取最细的、行数不超预算的铺法，余下的预算花在最新的块上。
   private static func cover(_ total: Int, budget: Int) -> [(Int, Int)] {
     guard total > 0 else { return [] }
     if total <= budget { return (0..<total).map { ($0, $0 + 1) } }
@@ -138,7 +126,6 @@ public struct CueMemoryView: Equatable, Sendable {
 }
 
 extension CueMemoryInput {
-  /// 范围引用也属于模型读取的子块输入，随依赖一起更新。
   var text: String {
     switch self {
     case .line(let line): line.shown()
@@ -148,10 +135,6 @@ extension CueMemoryInput {
 }
 
 extension CueMemoryLine {
-  /// Cue 看到的一条记忆（记忆视图、重点、zoom、recall 与待合并的原文只有这一种写法）：UUID 日期 [他] 定时 正文。
-  /// 日期是记下的那天（本机时区，今年 10-21、往年 2025-10-21），[他] 只在他的原话（`source` 是 `you`）时有；摘要行不带。
-  /// 定时写到点的时刻（一次的）或怎么重复：正文是写给到点那时的（"今天 15:00 的飞机"），只挂在记下的日期下面会被读成记下那天
-  /// （长程评测里问行程，答成记下那天的 15:00）。
   func shown(now: Date = .now) -> String {
     "\(id.uuidString.lowercased()) \(Self.day(createdAt, now: now)) " + (source == .known(.you) ? "[他] " : "") + schedule(now: now) + text
   }

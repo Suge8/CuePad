@@ -5,7 +5,6 @@ import CueText
 import SwiftUI
 
 extension CardEditing {
-    /// 任务先写下没保存的字，再把库里此刻的正文交给 Agent；灵感没有这一下。
     func submit() {
         let workspace = workspace
         Task {
@@ -40,7 +39,6 @@ extension CardEditing {
 }
 
 struct EditorBar: View {
-    /// 变量胶囊的高度加上下留白，末行可完整滚到胶囊上方。
     static let clearance: CGFloat = 44 + Spacing.block * 2
     let card: Card
     let editing: CardEditing
@@ -103,7 +101,7 @@ private struct VariablesForm: View {
         .frame(width: 320)
         .onAppear { values = card.variableValues }
         .onDisappear { workspace.saveVariables(values, of: card) }
-        .onSubmit(close) // ↩ 提交并关闭（关闭时保存），与 ⌘K 一致
+        .onSubmit(close)
     }
 }
 

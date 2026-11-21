@@ -2,7 +2,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 两端灵感编辑页的更多菜单。分享在点击时读取编辑器正文与变量快照，系统消费结束前持有文件。
 struct InspirationEditorActions: View {
     let card: Card
     let editing: CardEditing
@@ -10,7 +9,6 @@ struct InspirationEditorActions: View {
 
     var body: some View {
         Group {
-            // 三种分享收成一项：摊开在最上面，把置顶、移动这些更常点的挤到了菜单下半截
             Menu("分享", icon: .share) {
                 Button("排成图片") { share(originals: false) }
                 Button("原图") { share(originals: true) }
@@ -36,7 +34,6 @@ struct InspirationShareRequest: Identifiable {
     let originals: Bool
 }
 
-/// 页面持有唯一分享状态；离页取消准备与未选服务的浮层，系统消费继续持有自己的文件。
 struct InspirationSharePresentation: ViewModifier {
     let sharing: InspirationSharing
     let editing: CardEditing?

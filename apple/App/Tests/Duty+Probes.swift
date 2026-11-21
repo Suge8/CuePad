@@ -13,7 +13,6 @@ extension Duty {
         let loginTask: UUID
     }
 
-    /// 每次换新与它的方式：前一轮做完到这一轮醒来超过缓存时长为"冷"（缓存过期换的），否则"热"（到了换新线）
     var renewalModes: [(round: CueRound, mode: String)] {
         let all = eval.rounds
         return eval.renewals.map { round in
@@ -29,7 +28,6 @@ extension Duty {
         return renewalModes.filter { $0.round.startedAt > from && $0.round.startedAt <= to }.map(\.mode)
     }
 
-    /// 埋点与考题之间没换新的，这一遍没测到换新，不计
     func probe(_ check: Check, _ plant: Step, _ exam: Step) -> Check {
         let modes = crossed(plant, exam)
         var probed = check
@@ -59,7 +57,6 @@ extension Duty {
         let startsSendGrid = { (step: Step) in self.calls(step, "task", ["start"]).contains { !$0.call.failed && ($0.call.result ?? "").localizedCaseInsensitiveContains("SendGrid") } }
         let early = steps[..<finishIndex].contains(where: startsSendGrid), onTime = steps[finishIndex...].contains(where: startsSendGrid)
         return [
-            // 停止维护的日子模型自己也知道，考的是清单的建议（22）：凭常识答成 24 的是答错
             probe(try await recalled("(P1 细节) 依赖清单里的 Node：建议升 22", p.node, fabricated: { $0.contains(Self.recommends24) }) {
                 $0.contains(/(建议|升到)[^。；，]{0,6}22/) && !$0.contains(Self.recommends24)
             }, p.depsListed, p.node),

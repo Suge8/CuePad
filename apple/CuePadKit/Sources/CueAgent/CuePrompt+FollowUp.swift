@@ -1,7 +1,6 @@
 import CueStore
 
 extension CuePrompt {
-  /// 系统提示里会话停下时谁接手与跟进核对那两节（`system` 照原位置嵌入）。leave、take 怎么用在工具说明里，这里只写什么时候用。
   static var stopsAndFollowUp: String {
     """
     # 会话停下时

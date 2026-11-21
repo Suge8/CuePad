@@ -1,10 +1,8 @@
 import Foundation
 
-/// 时间与休眠的来源。后台任务（状态合并、投送清理）只经它取时间与休眠，测试可换成手动推进的时钟。
 public struct Timing: Sendable {
   public var now: @Sendable () -> Date
   public var sleep: @Sendable (Duration) async throws -> Void
-  /// 睡到这一刻：等的是某个时刻（时限、到期）时用它。否决先算好时长再 `sleep`：任务晚一点才真正睡下，晚的那段又睡一遍，过点才醒。
   public var sleepUntil: @Sendable (Date) async throws -> Void
 
   public init(

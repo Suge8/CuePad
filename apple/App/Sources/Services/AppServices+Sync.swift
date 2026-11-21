@@ -30,7 +30,6 @@ extension AppServices {
         #endif
     }
 
-    /// 回到前台的唯一入口；已经在做的不重开。
     func handleActivation() async {
         syncing.startPolling()
         relay?.resume()
@@ -38,8 +37,6 @@ extension AppServices {
         await syncing.syncNow()
     }
 
-    /// nil：不拉。"是否在等"只在这里定义；门铃通着（`doorbellFallback`）时降为兜底。
-    /// Mac 以桥上连着的会话为准，资料库里的状态记录可能是没来得及标为结束的旧会话；Mac 不收推送。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
         DebugHooks.pollsLikePhone
@@ -50,7 +47,6 @@ extension AppServices {
         #endif
     }
 
-    /// 同步通断变了时要跟着做的、不归同步管的事。
     func syncStatusChanged(to new: SyncStatus) {
         #if os(macOS)
         if new == .outdated { updates.checkInBackground() }

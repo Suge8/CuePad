@@ -7,14 +7,11 @@ import Network
 import Testing
 @testable import CuePad
 
-/// 手机、iPad 看这台 Mac 上会话的活预览：手机问、Mac 答（同一条"有没有页面"的规则），开着预览时经隧道取到的就是那个会话的服务、别的一概不放。
-/// Mac 这头是真的工作区；手机这头是它的 `LiveRemote` 与给网页视图的代理（`LiveTunnel.Proxy`），取页面用带同一份代理配置的 URLSession。
 @Suite(.releasesLibraries)
 struct LivePhoneTests {
     let flow = LivePreviewFlowTests()
     let phoneApp = TestApp(host: "phone-side")
 
-    /// Mac 的工作区与手机这头的问询接好、Mac 按节奏扫着，跑完 `body` 拆掉（两头互相攥着，不拆资料库放不掉）。
     private func paired(_ body: (Workspace, LiveRemote, LiveSignalPair) async throws -> Void) async throws {
         let workspace = flow.wide()
         let pair = LiveSignalPair(macHost: flow.services.hostID)
@@ -60,7 +57,6 @@ struct LivePhoneTests {
             }
         }
 
-        /// 在这条连接上取一页，返回正文（服务答完就关，HTTP/1.0）。
         func get(_ path: String) async throws -> String {
             try await connection.write(Data("GET /\(path) HTTP/1.0\r\nHost: localhost\r\n\r\n".utf8))
             var received = Data()
@@ -84,7 +80,6 @@ struct LivePhoneTests {
         proxy.use(.init(key: key, ticket: ticket ?? door.ticket, mac: .hostPort(host: "127.0.0.1", port: .init(rawValue: door.port)!), addresses: []))
     }
 
-    /// 等到读得出值。
     private func awaited<T>(_ what: String, _ read: () -> T?) async throws -> T {
         try await eventually(what) { read() != nil }
         return try #require(read())
@@ -126,7 +121,6 @@ struct LivePhoneTests {
         func back(_ sessionID: String) async throws {
             try await pair.phone.sendVoice(.live(signal: .back(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: pair.mac.local)
         }
-        // 预览占窗口多宽（窗口画它时问的 `spans`）：铺满是整个窗口
         @MainActor func previewWidth() -> CGFloat { WideMetrics(width: 1600, workspace: workspace).spans[.preview]?.width ?? 0 }
 
         try await show("plain")
@@ -241,7 +235,6 @@ struct LivePhoneTests {
         let port = try #require(url.port)
         var scanner = LiveServers()
         #expect(await scanner.find(for: owners)["live"]?.compactMap(\.port) == [port])
-        // 问得到它的地址从 localhost 换成了 127.0.0.1，还没再问过：答没答过 HTTP 是记在这个进程的这个口上的
         let (other, _) = try await flow.serve(in: theirs, bind: "::1", port: port)
         defer { other.terminate() }
         #expect(await scanner.ports(for: owners, only: ["live"])["live"] == [port: "127.0.0.1"])
@@ -252,7 +245,6 @@ struct LivePhoneTests {
         let directory = try flow.folder()
         _ = try await flow.session("live", .settled, in: directory)
         let (page, url) = try await flow.serve(in: directory)
-        // 同一个会话起的另一个服务：接了连接，回这一句（空的就一个字不答）再关
         func serve(_ answer: String) async throws -> (Process, URL) {
             let server = Process(), out = Pipe()
             server.executableURL = URL(filePath: "/usr/bin/python3")
@@ -278,7 +270,6 @@ struct LivePhoneTests {
             return (server, try #require(port.flatMap { URL(string: "http://localhost:\($0)") }))
         }
         let (silent, database) = try await serve("")
-        // 接口服务的 / 常把人转去别处；转去的那一处连不上（1 号口没人听），它自己还是答了 HTTP
         let (redirecting, api) = try await serve("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/\r\nContent-Length: 0\r\n\r\n")
         defer { page.terminate(); silent.terminate(); redirecting.terminate() }
         try "页面".write(to: directory.appending(path: "index.html"), atomically: true, encoding: .utf8)
@@ -301,7 +292,6 @@ struct LivePhoneTests {
         try await paired { workspace, remote, pair in
         let directory = try flow.folder(), elsewhere = try flow.folder()
         _ = try await flow.session("live", .settled, in: directory)
-        // 不在会话名下的服务：只因 Agent 发来这个地址才放行
         let (server, url) = try await flow.serve(in: elsewhere)
         defer { server.terminate() }
         try "页面".write(to: elsewhere.appending(path: "index.html"), atomically: true, encoding: .utf8)
@@ -345,7 +335,6 @@ struct LivePhoneTests {
         await watching.stop()
         await workspace.receiveLive(.peerClosed(endpoint: pair.phone.local, reason: .disconnected))
         #expect(workspace.livePhones.isEmpty && workspace.liveServer == nil)
-        // 网页视图早先连好、还攥着的那条也不再通
         await #expect(throws: (any Error).self) { try await held.get("index.html") }
         }
     }

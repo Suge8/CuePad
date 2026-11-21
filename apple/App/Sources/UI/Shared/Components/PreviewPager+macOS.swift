@@ -17,7 +17,6 @@ private struct PreviewPresenter: ViewModifier {
         content
             .environment(\.openPreview, PreviewOpener(owner: ObjectIdentifier(flight)) { opened = $0 })
             .environment(\.previewFlight, flight)
-            // 关法（Esc、点外面、关闭钮、说完）都经这里：先让翻到的那一份飞回去
             .panel(item: Binding { opened } set: { next in
                 if next == nil { flight.land() }
                 opened = next
@@ -28,7 +27,6 @@ private struct PreviewPresenter: ViewModifier {
     }
 }
 
-/// 翻页原地交叉淡（同快速查看与"预览"）：Mac 上换一张不滑，滑动要逐帧挪整页。
 private struct PreviewPager: View {
     let opening: PreviewOpening
     let reply: PreviewReply?
@@ -45,8 +43,6 @@ private struct PreviewPager: View {
     private var index: Int { opening.index(of: current) }
     private var preview: PreviewItem { batch[index] }
     private var title: String { opening.title(of: preview) }
-    /// 图片与网页铺满整页、两条栏的玻璃浮在上面（同"照片"）：让出栏的话，高图的上沿齐着顶栏切一刀，网页顶上多一条桌面色的空带。
-    /// 别的页是从头读的字，让出栏。
     private var chrome: EdgeInsets {
         [.image, .web].contains(preview.kind) ? EdgeInsets() : EdgeInsets(top: Self.headerHeight, leading: 0, bottom: barHeight, trailing: 0)
     }
@@ -61,15 +57,12 @@ private struct PreviewPager: View {
         .environment(\.previewInsets, chrome)
         .environment(\.previewFlight, flight)
         .opacity(landed ? 1 : 0)
-        // 飞来的那一小页是淡成内容的，内容也淡着出来；别的在飞的那张底下当场换
         .animation(preview.kind.thumbnail == .page ? Motion.fade : nil, value: landed)
         .background {
             PreviewFlight.Stage(
                 flight: flight, key: PreviewZoomKey(group: opening.group, preview: preview.id), kind: preview.kind,
                 page: preview.kind == .web && file(of: preview) != nil ? preview.key : nil, chrome: chrome, landed: $landed)
         }
-        // 读屏先读顶栏（标题、第几份、关闭）与翻页钮，再读内容，最后是底栏：它们是叠在内容上的，不排的话排在内容后面
-        // 这几样浮在内容上的钮等画面飞到了才淡出来：飞的那张在最上面，先露出来的话被它盖过去、等它化掉又冒出来
         .overlay {
             ZStack {
                 header.frame(maxHeight: .infinity, alignment: .top).accessibilitySortPriority(1)
@@ -119,7 +112,6 @@ private struct PreviewPager: View {
             .glass(in: .capsule)
     }
 
-    /// 翻页钮在内容的左右两侧、竖直居中（同快速查看与"照片"）：往哪边翻钮就在哪边，不挤在右上角那一排小字旁边。到头的那一侧没有钮。
     private var turns: some View {
         HStack {
             if index > 0 {
@@ -134,7 +126,6 @@ private struct PreviewPager: View {
         .padding(.horizontal, Self.edge)
     }
 
-    /// 还没落地就翻走：飞来的这一页不再等它画好（它的视图随翻页撤掉，等不到了）。
     private func step(_ offset: Int) {
         guard let next = opening.neighbor(of: current, step: offset) else { return }
         if !landed { flight.pagePainted() }
@@ -150,10 +141,6 @@ private struct PreviewPager: View {
     private static let titleRoom: CGFloat = 200
 }
 
-/// 全屏页开着时本窗口的翻页输入（本地事件监听，先于页里的视图）：
-/// - ←→：焦点在输入框里（回复栏打字）时归输入框；
-/// - 触控板横扫：一次横扫开始时看指针下的内容往那边还滑不滑得动（放大了的图、放大了的 PDF），滑得动就整次归它，滑到边也只回弹；
-///   滑不动的（没放大、已滑到那一边、视频、网页）整次归翻页，扫过 `swipe` 点翻一页、一次至多一页，之后的几下与惯性都吞掉。看图和翻页不抢。
 private struct PageInput: NSViewRepresentable {
     let step: (Int) -> Void
 
@@ -219,7 +206,6 @@ private struct PageInput: NSViewRepresentable {
                     swipe = .paging(moved)
                     return true
                 }
-                // 手指往左（内容往左走）是下一份
                 step?(moved < 0 ? 1 : -1)
                 swipe = .paging(nil)
                 return true

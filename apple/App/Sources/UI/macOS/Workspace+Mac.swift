@@ -19,7 +19,6 @@ extension Workspace {
         NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)])
     }
 
-    /// 只有记录 id 的入口（通知）从记录里取；记录已经没了（会话删了）就不去。
     func sessionRoute(_ id: UUID, sessionID: String?) -> Route? {
         if let sessionID { return .session(id, sessionID: sessionID) }
         do {

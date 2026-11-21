@@ -1,8 +1,6 @@
 #if os(macOS)
 import SwiftUI
 
-/// 归档与回收站里的一行，同项目页"更早"的那一行（`OlderRow`）一个样子：直接落在桌面上、不装进纸里，一行定高，
-/// 指针停着才在行尾露出操作（只有图形的小钮，同会话条里悬停才露的那种）。行尾只写日期：这一页是归档还是回收站栏头已经说了。时间不让位：标题再长也是标题省略，不把时间挤成一字一行。
 struct StoredRow<Mark: View, Actions: View>: View {
     let title: String
     let detail: String
@@ -35,7 +33,6 @@ struct StoredRow<Mark: View, Actions: View>: View {
 }
 
 extension View {
-    /// 归档、回收站那一列行的外框：同项目页的任务区，不宽过阅读栏，靠左。
     func storedList() -> some View {
         frame(maxWidth: Spacing.reading, alignment: .topLeading).frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.section)

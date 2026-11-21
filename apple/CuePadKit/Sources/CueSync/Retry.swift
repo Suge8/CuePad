@@ -1,9 +1,7 @@
 import Foundation
 import Synchronization
 
-/// 一半固定、一半随机：同一阵子失败的设备不在同一刻一起重来。
 public struct Backoff: Sendable {
-  /// 断了久了恢复后至多再晚这么久（连通的证据另会当场叫醒），每台设备约 15 秒试一次，代价可以忽略。
   public static let waitingCap = Duration.seconds(15)
   private let first: Duration
   private let cap: Duration
@@ -30,7 +28,6 @@ enum RequestLimits {
   static let hedge = Duration.seconds(3)
 }
 
-/// 至多等 `limit`：到点抛 `URLError(.timedOut)`（归为连不上），请求取消、不等它真的结束。
 func withDeadline<T: Sendable>(_ limit: Duration, _ request: @escaping @Sendable () async throws -> T) async throws -> T {
   try await race([
     Race.Leg(run: request),
@@ -38,8 +35,6 @@ func withDeadline<T: Sendable>(_ limit: Duration, _ request: @escaping @Sendable
   ])
 }
 
-/// 同一个读请求：先发一次，`after` 还没回音就再发一次（同一个令牌、同一批 ID，结果一样），先成功的那次胜出，另一次取消、结果不用。
-/// 第二次还没发出时第一次就失败了，直接抛出（那是真的失败，不是挂住）。
 func hedged<T: Sendable>(after delay: Duration, _ request: @escaping @Sendable () async throws -> T) async throws -> T {
   try await race([Race.Leg(run: request), Race.Leg(delay: delay, run: request)])
 }
@@ -104,7 +99,6 @@ private final class Race<T: Sendable>: Sendable {
     if ends { finish(.failure(error)) }
   }
 
-  /// 交出结论：只有在锁里把"比完了"翻过来的那一次答复，后到的（被取消的那路抛出的错、调用方的取消）直接返回，不跟胜出的抢答。
   func finish(_ result: Result<T, any Error>) {
     let tasks = state.withLock { state -> [Task<Void, Never>]? in
       guard !state.over else { return nil }

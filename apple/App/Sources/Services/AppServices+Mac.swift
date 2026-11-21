@@ -6,14 +6,13 @@ import Foundation
 import os
 
 extension AppServices {
-    /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
         guard !tasks.isRunning else { return }
         Self.raiseFileLimit()
         register(hotkey)
         startDiagnostics()
-        let sessionChanges = bridge.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
-        retireLegacySkill()  // 在建会话索引之前：它记着的接入先进设置，索引不先当没接入删掉
+        let sessionChanges = bridge.changes()
+        retireLegacySkill()
         do {
             try bridge.start()
         } catch {
@@ -22,7 +21,6 @@ extension AppServices {
         follow { [timing] in await self.historyStore.keepPruned(timing: timing) }
         startStrayFileCleanup()
         startDeliveryCleanup()
-        // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`Bridge.carryOver`）
         startRuntimes()
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             try await self.consumeSessionChanges(sessionChanges)
@@ -62,8 +60,6 @@ extension AppServices {
         follow { await self.indexAgents() }
     }
 
-    /// 睡眠期间的推送可能没收到。
-    /// 返回时已经订上：订阅放进任务里，任务跑起来之前的唤醒就丢了。
     func startWakeSync() {
         let wakes = wakeNotifications.notifications(named: NSWorkspace.didWakeNotification)
         follow {
@@ -80,7 +76,6 @@ extension AppServices {
         let hostedExit: @Sendable () async -> Void = { for exit in hosted { await exit() } }
         bridge.stop()
         hotkey.unregister()
-        // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步前等它传完
         let signingOff = Task.detached { [presence] in try await presence.signOff() }
         let leaving = Task.detached { [viewer] in try await viewer.signOff() }
         let halted = halt()
@@ -117,7 +112,6 @@ extension AppServices {
     }
 
 
-    /// 脚本起的实例不注册：全局快捷键全机只有一份，会和用户在用的 CuePad 抢同一个键。
     func register(_ hotkey: GlobalHotkey) {
         if !hotkeys.contains(where: { $0 === hotkey }) { hotkeys.append(hotkey) }
         guard !DebugHooks.scripted else { return }
@@ -134,13 +128,11 @@ extension AppServices {
 
     func resumeHotkeys() { hotkeys.forEach(register) }
 
-    /// 换键；撞上自己另一个快捷键抛 `taken`（让出期间后端里查不到它），其余同 `GlobalHotkey.set`。
     func rebind(_ hotkey: GlobalHotkey, to accelerator: String) throws {
         if let other = hotkeys.first(where: { $0 !== hotkey && $0.accelerator == accelerator }) { throw HotkeyError.taken(other.label) }
         try hotkey.set(accelerator)
     }
 
-    /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
     nonisolated func loadHistoryStart(for file: URL) async -> HistoryStart? {
         do {
             return try await historyStore.start(for: file)
@@ -150,8 +142,6 @@ extension AppServices {
         }
     }
 
-    /// 没接入的只有这台 Mac 托管过的会话（托管的会话没接入也开得出，`AgentProbe`）；
-    /// 没接入（关掉开关）时先删掉范围外会话的本机索引，会话的同步记录与对话不动。
     private func indexAgents() async {
         var indexing: [AgentKind: (connected: Bool, task: Task<Void, Never>)] = [:]
         defer { for entry in indexing.values { entry.task.cancel() } }
@@ -191,7 +181,6 @@ extension AppServices {
             agent: agent, paths: paths, transcriptWindow: Chat.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
-            // 从历史确认送达的那一家（`AgentKind.confirmsFromHistory`）还要跟着未收尾投送的文件：确认只靠它写下的送达
             let events = agent.confirmsFromHistory
                 ? indexer.events(following: deliveryHistoryFiles(), scope: scope)
                 : indexer.events(following: bridge.sessionFiles, scope: scope)
@@ -209,7 +198,6 @@ extension AppServices {
         await runtime.stop()()
     }
 
-    /// 读不出来就只跟在线的。
     private func hostedScope(of agent: AgentKind) async -> HistoryScope {
         do {
             return try await historyStore.hostedScope(of: agent)
@@ -219,10 +207,8 @@ extension AppServices {
         }
     }
 
-    /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）。
     static let backfillBatch = 200
 
-    /// 先落检查点再写会话行；读到的会话名也交给桥上在线的同一会话（`Bridge.read`）。
     func consumeHistory(_ events: AsyncStream<HistoryEvent>, agent: AgentKind) async {
         await historyStore.beginBackfill()
         var pending: [HistoryUpdate] = []
@@ -244,7 +230,6 @@ extension AppServices {
                 await flush()
                 backfilling = false
                 do {
-                    // 只回填了托管过的会话：不知道其余会话文件还在不在，不对账
                     guard try await historyStore.backfillFinished(files, of: agent) else { continue }
                     try await stateRecorder.dropUnindexedHosted(of: agent)
                 } catch {

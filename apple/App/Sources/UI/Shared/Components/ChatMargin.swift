@@ -1,10 +1,6 @@
 import SwiftUI
 
-/// 对话里除了谁对谁说的话（气泡、回答）以外的东西只有两种样子，没有底色块、没有边框，与说的话一眼分开：
-/// - 旁注（`NoteLine`）：属于一边的一行小字；Cue 页的经过与醒来那几轮是同一种行（`CueNoteRow`）。你的话到哪了不是一行，是气泡左下角外的记号（`BubbleTrip`）。贴着哪一边、离边多远由所在的页面给。
-/// - 居中的标记（`ChatMarker`）：不属于哪一边的一行——几点、哪天（`ChatTime`），上下文从这里换了，上面还有更早的。
 enum Note {
-    /// 随动态字体放大，只经 `noteGlyph`。
     static let glyphWidth: CGFloat = 14
     static let spacing = Spacing.glyph
     static let lineHeight: CGFloat = 24
@@ -75,7 +71,6 @@ struct ChatLiveSlot<Content: View>: View {
 }
 
 extension View {
-    /// 宽随动态字体放大：图标跟着字放大，定宽的位在大字号下放不下，图标压到后面的字上。
     func noteGlyph(_ use: NoteGlyph.Use = .column) -> some View { modifier(NoteGlyph(use: use)) }
 }
 

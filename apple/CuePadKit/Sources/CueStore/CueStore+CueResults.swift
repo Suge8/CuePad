@@ -1,8 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// 结果与完成写在同一个事务里、不早于完成的时刻（`completedAt`），所以只认这一次完成之后的：改回没做完再做完、这次没点名的，
-  /// 不拿上一次的图冒充；你自己点圈做完的没有结果，也就没有图。每件取最近的一条，没点名的不在其中。
   public func cueResultShots(of tasks: [Card]) throws -> [UUID: [CueShot]] {
     let since = Dictionary(uniqueKeysWithValues: tasks.compactMap { task in task.completedAt.map { (task.id, $0) } })
     guard !since.isEmpty else { return [:] }

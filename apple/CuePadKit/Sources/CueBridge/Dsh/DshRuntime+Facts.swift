@@ -21,7 +21,6 @@ extension DshRuntime {
         },
         releasesIdleHosted: true, probe: askDsh, brain: { ACPSession(dialect: DshDialect()) }, sharedSkills: .topLevel, projectFolder: ".dsh")
 
-    /// CuePad 托管的会话的存储根（在 DSH_HOME 下，明文；理由见 `DshRuntime` 头注释；补丁里的存储根也由它推出，见 `DshLaunch`）
     nonisolated static let storage = "cuepad"
     nonisolated static let sessions = storage + "/sessions"
 
@@ -52,7 +51,6 @@ enum DshLaunch {
     }
 
     static let plugin = Bundle.module.url(forResource: "dsh-cuepad", withExtension: "mjs")!
-    /// 按插件的位置分开：同时开着的两份 App（本机构建与正式版）各用各的
     private static let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-dsh-" + uuid(plugin.path), directoryHint: .isDirectory)
 
     private static func uuid(_ text: String) -> String {
@@ -81,7 +79,6 @@ enum DshLaunch {
 
     private static func file(_ patch: Patch) -> URL { directory.appending(path: patch.rawValue + ".yml") }
 
-    /// 托管会话另插上提问工具（acp profile 里没有它）：它问的经插件转给 CuePad（`DshDialect+Ask`）。
     private static var hosted: String {
         common(prompt: false, brief: true, storage: "dshHomePath('\(DshRuntime.storage)')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
     }

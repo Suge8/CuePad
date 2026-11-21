@@ -2,108 +2,57 @@ import Foundation
 
 public enum CueStoreError: Error, Equatable {
   case notFound
-  /// 撤销前发现目标在回执之后又被改过：不撤，免得盖掉后来的改动（`CueStore.undo`）。
   case changedSinceUndo
   case blankTaskContent
   case blankProjectName
-  /// 单个文件超过上限（`AttachmentFiles.maxBytes`）。
   case fileTooLarge(limit: Int)
-  /// 卡片或任务只能归属存在且未在回收站的项目。
   case invalidProject
-  /// 默认项目不能删除（`Project.defaultID`）。
   case defaultProjectUndeletable
-  /// `resolveConflict` 的目标不是冲突副本。
   case notAConflictCopy
-  /// 下载的附件内容与其哈希不符。
   case attachmentHashMismatch
-  /// 附件记录声明的哈希格式不对（不是 SHA-256 十六进制）。
   case invalidAttachmentHash
-  /// 旧请求可能已经交出，不能以安全重试替换。
   case deliveryAlreadyHanded
   case blankDeliveryContent
-  /// 永久删除已完成，但这些键的附件文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
-  /// 启动清理做完了能做的（删掉 `removed` 个附件文件），`failed` 里的运行目录与附件文件没能删（各带原因）。只进日志，不进界面文字的目录。
   case strayFilesNotRemoved(removed: Int, failed: [String])
-  /// 库文件是更新版本建的，不打开。
   case unsupportedSchemaVersion(Int)
-  /// 库文件是更早版本建的，这个版本不再升级旧结构，不打开。
   case schemaTooOld(Int)
-  /// 只能挂到存在的任务下，不能挂到自己或自己的下级下。
   case invalidParent
-  /// 挂上去后任务会超过 `Card.maxTaskDepth` 级。
   case taskTooDeep
-  /// 只能绑在叶子（没有子任务的任务）上；有子任务的任务绑到它的某个子任务上。
   case notALeaf
-  /// 要的是任务、给的是灵感：灵感没有状态，不能改状态、开工、绑会话，也不能当别的灵感接进去的落点。
   case notATask
-  /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
   case previewUnreadable(String)
-  /// 预览的文件超过 `PreviewItem.maxBytes`（参数是它的路径与字节数）。
   case previewTooLarge(String, bytes: Int)
-  /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
-  /// 发到手机的一份标题不合 `PreviewItem.titleRule`（参数是文件名与哪里不合）。
   case previewTitle(String, PreviewTitleProblem)
-  /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
   case readOnlyLibrary
-  /// 手机上要开新会话，而一台 Mac 都还没打开过 CuePad（没写过 `macAgents`、也没有目录绑定）。
   case noMac
-  /// 会话正在结束，结果尚未明确时不能再关联或发送。
   case sessionEnding
-  // 以下多是 Cue 经 MCP 会碰到的，界面与命令行也可能碰到其中几条：这里只说事实，不提 Cue 的工具；该用哪个工具、哪个动作由 CueAgent 补上（`cueAdvice`）。
-  // 这些与上面预览那几条（只有 Agent 经命令行会碰到）不进界面文字的目录。
-  /// 叶子还没有会话（参数是叶子标题）。
   case noSession(String)
-  /// 叶子已有会话，开工无事可做：话在会话里说（参数是叶子标题）。
   case alreadyStarted(String)
-  /// 叶子还没绑会话，它的话正送进上一步的会话（参数是叶子标题）。
   case sending(String)
-  /// 有子任务的任务还有这么多子任务没完成，不能整件完成。
   case stepsRemaining(Int)
-  /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
   case launching(String)
-  /// 开会话的那台 Mac 记着这家不能用（参数是"Agent 名 原因"）。
   case agentUnavailable(String)
-  /// 开会话的那台 Mac 一家能用的都没有（参数是 `MacAgents.whyNone`）。
   case noAgent(String)
-  /// model 不是这家的写法（参数是 Agent 名）。
   case invalidModel(String)
-  /// 会话此刻停不了这一轮（参数是会话名）。
   case cannotStop(String)
-  /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
   case sessionInUse(String)
-  /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮。
   case cannotSpeakNow(String, String)
-  /// 会话所在的 Mac 此刻不在线，对它说话、停止都送不到（参数是会话名与那台 Mac 的名字，`SessionState.offlineMac`）。
   case macOffline(String, String)
-  /// 会话此刻在做什么还没确认：那台 Mac 这次开机后没报过它、或报的状态这个版本不认识（参数是会话名）。
   case sessionUnconfirmed(String)
-  /// 会话正在跑的这一轮查不到是谁开的，说话会打断它（参数是会话名）。
   case turnSourceUnconfirmed(String)
-  /// 会话没停着，没有可留给他回的停下（参数是会话名）。
   case notStopped(String)
-  /// model 不在这家能选的里面（参数是 Agent 名、Cue 写的 model 与能选的，`CueStore.cueModelKey`）。
   case unknownModel(agent: String, model: String, choices: [String])
-  /// 会话的记录还没到，换不了模型（参数是会话名）。
   case cannotChangeModel(String)
-  /// 答案不在可选的里面（参数是可选的答案）。
   case invalidAnswer([String])
-  /// 一条记忆超过 `CueMemoryLine.maxBytes` 字节。
   case memoryLineTooLong(Int)
-  /// 范围引用中的输入已变化；旧摘要不能绑定当前事实，旧范围不能展开成另一批记忆。
   case staleMemoryRange
-  /// Cue 没启用（没有 `cueProfile`、停用了或没选运行在哪台 Mac）。
   case cueNotEnabled
-  /// 这条提问已经结束了（答了或撤回了），或放不回（不是你开口收起的）。
   case questionEnded
-  /// 回答不是这条提问的选项（参数是那句话）：不选的话在对话里直接说。
   case notAChoice(String)
-  /// Cue 写的短语（提问的动作、规矩，图看什么）缺了、超长或不止一行（`CueAsking`、`CueShot.checked`）。
   case phrase(field: String, hint: String, limit: Int)
-  /// 点名的图多于 `limit` 张或有重复（`CueShot.checked`）。
   case shots(limit: Int)
-  /// 点名的那一份不在发到手机的里（参数是 id）。
   case shotMissing(String)
 }
 

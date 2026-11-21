@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Observation
 
-/// 界面（`ShareViews`）只画它。
 @MainActor @Observable
 final class ShareModel {
     enum State: Equatable {
@@ -14,7 +13,6 @@ final class ShareModel {
 
     private(set) var state = State.loading
     private(set) var content: ShareContent?
-    /// 主 App 写的项目列表；缺快照时为 nil，仍可存进默认项目。
     let projects: [ProjectsSnapshot.Entry]?
     var selectedProject = Project.defaultID
 
@@ -36,7 +34,6 @@ final class ShareModel {
         }
     }
 
-    /// 存进待入库目录并通知主 App；成功返回 true，由调用方关闭扩展。
     func save() async -> Bool {
         guard let content, state == .ready else { return false }
         state = .saving

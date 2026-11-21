@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 短代码片段作为一个排版单元，仍然是真实文字；不向复制内容塞入不换行空格或零宽字符。
 struct MarkdownInlineText: View {
     let text: AttributedString
 

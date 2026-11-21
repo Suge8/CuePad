@@ -1,9 +1,6 @@
 import CloudKit
 import Foundation
 
-/// 连着时账号变了不能当作没事：此刻可能已是另一个账号，本机数据会传进去。所以通知一到就关上闸门（`AccountGate`）不拉不传，
-/// 认清了才放开或停下等你决定；认不清的界面显示账号暂不可用，按退避再认。
-/// 每一次认都从闸门领凭据：认的途中账号又变了就另起一次，旧的那次取消，它晚到的答复不写协调器、不改连接（`AccountGate.Check`）。
 extension CloudSync {
   enum Outcome {
     case confirmed, retry, accountChange, paused
@@ -13,7 +10,6 @@ extension CloudSync {
     case networkReturned, activated
   }
 
-  /// 连上了为 true。调用方被取消就当场返回 false，不等认账号的请求到时限。
   @discardableResult
   func connectNow() async -> Bool {
     while let run = running {
@@ -31,7 +27,6 @@ extension CloudSync {
     return false
   }
 
-  /// 那一拉在本代后台起、不等：账号变化按到达先后处理，下一次不排在一拉（可能挂到请求超时）后面。
   func recheck(_ generation: SyncGeneration) {
     let wasConnected = connected
     guard let task = startCheck(generation), let cloud = running?.cloud else { return }
@@ -74,7 +69,6 @@ extension CloudSync {
     }
   }
 
-  /// 那一代已经结束的不起。
   @discardableResult
   func startCheck(_ generation: SyncGeneration) -> Task<Bool, Never>? {
     update(generation) { run in
@@ -92,7 +86,6 @@ extension CloudSync {
 
   func isLatest(_ check: AccountGate.Check) -> Bool { running?.gate.admits(check) == true }
 
-  /// 返回是否认清、能接着拉；拉取由调用方接着发起（`syncNow`、`recheck`）。每个 await 之后先看自己还是不是最新的一次。
   func checkAccount(_ check: AccountGate.Check, _ cloud: any SyncCloud, _ generation: SyncGeneration) async -> Bool {
     do {
       let status = try await withDeadline(RequestLimits.request) { try await cloud.accountStatus() }
@@ -115,16 +108,16 @@ extension CloudSync {
     if connected { return await conclude(check, generation, .confirmed) }
     guard isLatest(check) else { return false }
     let parts = makeParts(cloud, generation)
-    update(generation) { $0.link = .connected(parts) }  // 先于下面的 await：其间停下的由 `stop` 停这些部件
+    update(generation) { $0.link = .connected(parts) }
     await conclude(check, generation, .confirmed)
     await parts.sender.start()
     guard !generation.isOver else { return false }
-    spawn(generation) {  // 文件那一路（接上一个进程交给系统的上传、看哪些文件要取）：第一拉不等它
+    spawn(generation) {
       await parts.fileFetcher.start()
       await parts.fileSender.start()
     }
-    update(generation) { $0.alertsAttemptedAt = .now }  // 立即同步不另起一遍
-    spawn(generation) { await self.ensureAlertSubscriptions(cloud, generation) }  // 第一拉不等订阅
+    update(generation) { $0.alertsAttemptedAt = .now }
+    spawn(generation) { await self.ensureAlertSubscriptions(cloud, generation) }
     return true
   }
 
@@ -156,18 +149,15 @@ extension CloudSync {
     return outcome == .confirmed
   }
 
-  /// 门铃的密钥（`RelaySecret`）：认过账号、能同步时才去 iCloud 取。
   public func relaySecret() async throws -> Data {
     try await usableCloud(for: .pull).relaySecret()
   }
 
-  /// 业务同步区以外的请求（门铃密钥、诊断）用的连接：没登录、要你决定时一直等到账号认好，不发请求；被取消、或同步停下了就抛出。
-  /// 同步被限流时不另发请求、抛 `RetryHeld`：调用方按自己的节奏再来。
   func usableCloud(for request: SyncCoordinator.Request) async throws -> any SyncCloud {
-    let checks = accountChecks.stream()  // 先订阅：看条件时跨了 actor，其间认完的那一次不漏
+    let checks = accountChecks.stream()
     if !stopped, await !accountUsable() {
       for await _ in checks {
-        if stopped { break }  // `stop` 给一个，让在等的醒来
+        if stopped { break }
         if await accountUsable() { break }
       }
     }

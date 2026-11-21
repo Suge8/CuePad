@@ -72,7 +72,6 @@ extension SyncBench {
                 guard let key = words.dropFirst().first else { mark("bench-error", ["what": "watch-file 要 key"]); return true }
                 guard let sync = workspace.services.sync else { mark("bench-error", ["what": "没有同步"]); return true }
                 Task {
-                    // 文件取完、放进附件目录之后它才离开在路上的那一张
                     for await _ in sync.fileTransfers where store.files.fileURL(for: key) != nil {
                         return mark("file-arrived", ["key": key])
                     }

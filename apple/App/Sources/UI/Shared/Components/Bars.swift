@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 首行距栏的留白只有 `contentGap`：系统导航页由 `RouteView` 给，自绘页头由 `FloatingHeader` 给。
 enum Bars {
     static let contentGap = Spacing.group
     static let fade: CGFloat = 16
@@ -23,7 +22,6 @@ private struct HeadFade: ViewModifier {
                 #if os(macOS)
                 .clipped()
                 #else
-                // 这一栏已有栏头渐隐，不能再叠原生顶部边缘效果。
                 .scrollEdgeEffectHidden(true, for: .top)
                 #endif
                 .overlay {
@@ -85,7 +83,6 @@ extension View {
 }
 
 extension EnvironmentValues {
-    /// 窗口的根视图（还没有导航栏，上安全区就是状态栏）量出来往下传。
     @Entry var statusBarBottom: CGFloat = 0
 }
 

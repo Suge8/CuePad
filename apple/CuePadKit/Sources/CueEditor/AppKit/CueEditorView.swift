@@ -17,7 +17,6 @@ public final class CueEditorView: NSScrollView {
 
     public override func layout() {
         super.layout()
-        // 文本视图至少铺满可视区，点击文末空白处也能定位光标
         textView.minSize = NSSize(width: 0, height: contentSize.height)
     }
 }

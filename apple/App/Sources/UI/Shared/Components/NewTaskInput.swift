@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 看板上记任务只有这一个输入框（待办的"＋"），同新会话的输入框一张卡、一种呈现（`NewSessionInput`）：去处胶囊在上，
-/// 字在中间（第一行是标题，其余是正文，同任务正文），右下是记下的那颗勾。记下一条就清空、留着接着记；收起只有 Esc 与点外面。
 struct NewTaskInput: View {
     let start: TaskStart
     @Environment(Workspace.self) private var workspace
@@ -49,7 +47,6 @@ struct NewTaskInput: View {
             do {
                 _ = try await workspace.createTask(text, in: project)
             } catch {
-                // 没记下：字放回去，这期间新打的接在后面
                 draft.text = draft.text.isEmpty ? text : text + "\n" + draft.text
                 throw error
             }
@@ -57,7 +54,6 @@ struct NewTaskInput: View {
     }
 }
 
-/// 开着的记任务输入框（`Workspace.newTask`）：记到哪个项目，打开时取看板的项目范围，没有范围取当前项目。
 struct TaskStart: Identifiable {
     let id = UUID()
     let project: UUID

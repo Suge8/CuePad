@@ -10,7 +10,6 @@ struct OpenCodeServiceInfo: Equatable, Sendable {
     var pid: Int32
     var password: String
 
-    /// 没有登记（服务没开）为 nil；登记文件不安全、读不懂、或服务是 v1（接口不同）也当没有——这时 CuePad 不连它。
     static func read(_ file: URL) -> OpenCodeServiceInfo? {
         struct Registration: Decodable { var version: String; var url: URL; var pid: Int32; var password: String }
         var st = stat()
@@ -25,7 +24,6 @@ struct OpenCodeServiceInfo: Equatable, Sendable {
         return (try? JSONDecoder().decode(Handshake.self, from: handshake)).map { OpenCodeServiceInfo(url: $0.url, pid: pid, password: password) }
     }
 
-    /// 服务进程的启动时刻：会话在线的规则以它为界（见 `OpenCodeRuntime`）。进程已不在为 nil。
     var startedAt: Date? { SessionProcess.running(pid: pid)?.startDate }
 }
 
@@ -281,7 +279,6 @@ struct OpenCodeData<Item: Decodable & Sendable>: Decodable, Sendable {
     var data: Item
 }
 
-/// 可选的模型（`GET /api/model`）：`variants` 是它的思考强度，`capabilities.input` 是它收得下的输入（`text`、`image` 等）。
 struct OpenCodeModel: Decodable, Sendable {
     var id: String
     var providerID: String
@@ -299,7 +296,6 @@ struct OpenCodeModel: Decodable, Sendable {
 
     var key: ModelKey { ModelKey(provider: providerID, id: id) }
 
-    /// 强度只认 Pi 那几档的名字；没有强度可选的模型只有 `off`（与 Pi 的规则一致）。
     var thinkingLevels: [ThinkingLevel] {
         let levels = (variants ?? []).compactMap { ThinkingLevel(rawValue: $0.id) }
         return levels.isEmpty ? [.off] : levels
@@ -311,7 +307,6 @@ struct OpenCodeModel: Decodable, Sendable {
         ModelOption(key: key, name: name, thinkingLevels: thinkingLevels, acceptsImages: seesImages)
     }
 
-    /// 这档强度在这个模型上的写法（`variant`）：夹到它有的档，夹到 `off`（含没有强度可选的模型）就不带。
     func variant(for level: ThinkingLevel) -> String? {
         let level = level.clamped(to: thinkingLevels)
         return level == .off ? nil : level.rawValue

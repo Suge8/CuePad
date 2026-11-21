@@ -43,7 +43,6 @@ public struct PinnedAgent: Sendable {
   public var executable: URL { bin.appending(path: command) }
   public var installed: Bool { FileManager.default.isExecutableFile(atPath: executable.path) }
 
-  /// 跳过它的用例时的原因；装了或完整矩阵时为 nil（照跑）
   public var uncovered: String? {
     installed || Self.fullMatrix ? nil : "未覆盖：\(name) \(version)：没装（apple/scripts/xc.sh agents install \(name)）"
   }
@@ -52,12 +51,10 @@ public struct PinnedAgent: Sendable {
     public let description: String
   }
 
-  /// 起它之前调：没装时抛错（完整矩阵时走到这里）
   public func require() throws {
     guard installed else { throw Missing(description: "完整矩阵缺 \(name) \(version)：apple/scripts/xc.sh agents install \(name)") }
   }
 
-  /// 起它用的环境：不继承跑测试的环境（那里可能有用户的密钥、代理、CuePad 变量），HOME 是给的临时目录，PATH 只有 `bin` 与系统目录。
   public func environment(home: URL, _ extra: [String: String] = [:]) -> [String: String] {
     let base = ["HOME": home.path, "PATH": "\(bin.path):/usr/bin:/bin:/usr/sbin:/sbin", "TMPDIR": NSTemporaryDirectory(),
                 "LANG": "en_US.UTF-8", "USER": NSUserName(), "SHELL": "/bin/sh", "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"]

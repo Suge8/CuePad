@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 
 extension AppServices {
-    /// 草稿文字里的引用（跨启动留着的）也算引用。
     func startStrayFileCleanup() {
         let drafts = settings.draftTexts
         follow { [store] in

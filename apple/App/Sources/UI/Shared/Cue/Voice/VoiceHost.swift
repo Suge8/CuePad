@@ -4,8 +4,6 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 通话详情的宿主，Mac 与手机同一个：只读投影（Mac 是自己的完整投影，手机是 Mac 发来的最近一份），
-/// 请求与回复的正文按投影里的身份从库读，不受聊天页面最近 200 条的限制；未落库请求只有投影带的摘要。
 struct VoiceHost<Content: View>: View {
     @Environment(Workspace.self) private var workspace
     @State private var messages: [CueMessage]?
@@ -45,7 +43,6 @@ struct VoiceViewState {
     var requests: [Request] = []
     var replies: [Reply] = []
 
-    /// 投影里提到的消息：请求落库后的原话与回复。
     var recordIDs: [UUID] {
         let requests = projection?.requests.compactMap { request -> UUID? in
             if case .recorded(let id) = request.reference { return id }
@@ -54,7 +51,6 @@ struct VoiceViewState {
         return Array(Set(requests + (projection?.replies.map(\.message) ?? []))).sorted { $0.uuidString < $1.uuidString }
     }
 
-    /// 投影里的身份换上库里读到的消息；messages 为 nil（不开详情的通话条）时只有身份。
     func reading(_ messages: [CueMessage]?) -> Self {
         var state = self
         let byID = Dictionary(uniqueKeysWithValues: (messages ?? []).map { ($0.id, $0) })
@@ -117,7 +113,6 @@ struct VoiceViewState {
 }
 
 extension Workspace {
-    /// 通话的此刻：阶段与回应来自投影，静音、电平与能不能发起来自本机。不读库，详情里的正文由 `VoiceHost` 补。
     var voiceViewState: VoiceViewState {
         let voice = services.voice
         return .init(phase: voice.phase, response: voice.response, muted: voice.isMuted, canMute: voice.canMute, canRepeat: voice.canRepeat,
@@ -125,10 +120,8 @@ extension Workspace {
                      samples: { voice.samples }, projection: voice.projection)
     }
 
-    /// 此刻起不了通话的原因（Cue 没启用、正忙、连不上 Mac）：通话条、Mac 的发起、输入框的通话钮与"重新接通"都只读这一个。
     var voiceStartBlock: VoiceIssue? { cue.canHear ? services.voice.startUnavailableReason : .cueUnavailable }
 
-    /// 命令结果原样返回，包括拒绝原因；调用方展示结果或传输失败，不自动重发。每次调用一个新的命令身份。
     @discardableResult
     func performVoice(_ action: VoiceAction) async throws -> VoiceCommandResult.Outcome? {
         let voice = services.voice
@@ -148,7 +141,6 @@ extension Workspace {
         return nil
     }
 
-    /// 发出通话的一个动作（静音、挂断、详情里的各项）：结果原样用提示条说，被拒的另交给 `rejected`；不自动重发。
     func runVoice(_ action: VoiceAction, rejected: @escaping (VoiceCommandResult.Rejection) -> Void = { _ in }) {
         Task {
             do {
@@ -180,13 +172,11 @@ extension Workspace {
     }
 }
 
-/// 详情里最近一次被拒的动作（详情另写一行），提示条已当场说过。
 @Observable final class VoiceFeedback {
     var rejection: VoiceCommandResult.Rejection?
 }
 
 extension VoiceIssue {
-    /// 结束的原因只写原因：下一步是旁边的"重新接通"（提示条、通话详情里都带着它，`recovery`）。
     var message: LocalizedStringResource {
         switch self {
         case .ended(let reason):

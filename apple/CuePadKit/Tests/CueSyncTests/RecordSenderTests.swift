@@ -34,7 +34,7 @@ import Testing
 
     #expect(await sender.send([rig.id(card.id)]))
     #expect(await server.zonesSaved == 1)
-    #expect(try await !rig.reconcileDelta().saves.contains(rig.id(card.id)))  // 别的待推送（默认项目）在后台通道，不随它返回
+    #expect(try await !rig.reconcileDelta().saves.contains(rig.id(card.id)))
     await sender.stop()
   }
 
@@ -78,17 +78,16 @@ import Testing
     await sender.stop()
   }
 
-  /// 回答随本机提交在合并窗口后就发，不等会话状态细节的节流：这时还挂着一条工作中的细节，节流走手动时钟、永不到点，等它就会等到测试时限。
   @Test func aNewReplyIsUploadedRightAfterItIsWritten() async throws {
     let server = FakeUploader()
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)  // 节流的定时器不会自己到点
+    let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     try await recorder.update(sessionID: "s1", state: .thinking, title: "修登录")
     let state = SessionState.recordID(sessionID: "s1").uuidString.lowercased()
     try await server.uploaded(state)
-    try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")  // 挂起的细节
-    await sender.flush()  // 发送者闲下来：回答从提交触发开始算
+    try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")
+    await sender.flush()
 
     let reply = ChatMessage(sessionID: "s1", entryID: "a1", seq: 1, role: .pi, text: "改好了，测试全过", at: .now)
     try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [reply], recap: Recap(lastPrompt: "修登录", lastReply: "改好了，测试全过")))

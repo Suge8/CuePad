@@ -36,7 +36,6 @@ import SwiftUI
         #endif
     }
 
-    /// 挂到窗口上时层还没建，到挪的时候再找。
     #if os(iOS)
     private var downIsPositive: Bool { true }
     private var layer: CALayer? {

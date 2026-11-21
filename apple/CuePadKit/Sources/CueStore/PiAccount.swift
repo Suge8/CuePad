@@ -1,13 +1,10 @@
 import Foundation
 
-/// 宿主认证事实与不泄密的授权分区。分区缺失时不能关联任何数值额度；令牌轮换也开始新观测。
 public struct PiAccount: Sendable, Equatable, Hashable, Codable {
   public enum Kind: String, Sendable, Codable { case oauth, apiKey }
   public let kind: Kind
   public let scope: String?
-  /// 实际网关地址与请求授权的不可逆分区；原生订阅为 nil。
   public let source: String?
-  /// 网关额度的完整上游 provider（可含远端前缀）；模型的请求身份不填。
   public let route: String?
   public let name: String?
 

@@ -14,7 +14,6 @@ extension Typography {
         RoundedFace.ready ? .custom(RoundedFace.name, size: size).weight(weight) : .system(size: size, weight: weight, design: .rounded)
     }
     #else
-    /// 按 `style` 在默认字号下的大小起，随动态字体放大。
     static func ui(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> Font {
         RoundedFace.ready
             ? .custom(RoundedFace.name, size: RoundedFace.size(style), relativeTo: style).weight(weight)

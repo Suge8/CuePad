@@ -3,7 +3,6 @@ import AppKit
 import UniformTypeIdentifiers
 
 extension NSPasteboard {
-    /// 文本视图把粘贴、拖入当附件收时，要排在 `readablePasteboardTypes` 前面的种类（菜单的"粘贴"按它判断能不能用）。
     public static let fileTypes: [PasteboardType] = [.png, .tiff, .fileURL]
 
     /// 这里的附件，粘贴与拖入共用这一条规则（卡片编辑器与输入框都是）：有文件时就是这几个文件（任意类型，文件夹不收）——访达复制文件还附带

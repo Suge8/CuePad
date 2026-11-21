@@ -1,9 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目列表页：项目卡。归档、回收站与设置不在这一页里：宽屏在栏头（`WideShelfHeading`），手机在页头左边那颗"更多"里（`NarrowSidebarBar`）。
 struct ProjectShelf: View {
-    /// 手机：定成两列。
     var paired = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize

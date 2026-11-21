@@ -4,16 +4,12 @@ import CueTestSupport
 import Foundation
 @testable import CueBridge
 
-/// 后台的子代理与命令的剧本：主线程（有 Agent 工具）、子代理（有 SubagentHandback，交报告靠它）、后台完成的通知（`<task-notification>` 作为你的话进来）
-/// 三种请求各演各的。话本身只是触发剧本的暗语。
 extension ClaudeTestbed {
     static let backgroundWork = "BACKGROUND-WORK now"
     static let earlyReport = "EARLY-REPORT now"
     static let longSubagent = "LONG-SUBAGENT now"
     static let stopSubagent = "Stop the background subagent now with the TaskStop tool"
 
-    /// 后台命令等 `finishBackgroundWork` 放行才做完：先后不靠时长拉开（子代理睡 3 秒、后台命令睡 6 秒时，慢机器上子代理连同它的几次请求超过 6 秒，
-    /// 后台命令先交回，最后一轮答的是 SUB_DONE，等不到 BG_DONE）。
     func playBackgroundWork() {
         let background = gated(on: backgroundRelease, then: "BG_DONE")
         on("BACKGROUND-WORK") { request in
@@ -27,7 +23,6 @@ extension ClaudeTestbed {
         on("<task-notification>") { .say($0.prompt.contains("Background command") ? "BG_DONE" : "SUB_DONE") }
     }
 
-    /// 交回子代理结果的那一轮做完、只剩后台命令在跑时，放它做完。
     func finishBackgroundWork(_ id: Session.ID) async throws {
         try await eventually("交回子代理的那一轮做完，只等后台命令") {
             guard let session = bridge.session(id: id), session.state == .delegating else { return false }
@@ -39,7 +34,6 @@ extension ClaudeTestbed {
     private var backgroundRelease: URL { root.appending(path: "background-release") }
     private var nestedRelease: URL { root.appending(path: "nested-release") }
 
-    /// 子代理的后台命令等 `finishEarlyReport` 放行：先交回 WAITING、主线程答完，命令才做完（睡 5 秒时，慢机器上命令先做完，子代理不会先交回 WAITING）。
     func finishEarlyReport(_ id: Session.ID) async throws {
         try await eventually("子代理交回 WAITING，只等它的后台命令") {
             guard let session = bridge.session(id: id), session.state == .delegating else { return false }
@@ -95,13 +89,11 @@ private func launch(_ description: String, task: String) -> FakeReply {
 
 private func handback(_ message: String) -> FakeReply { .call("SubagentHandback", ["message": message]) }
 
-/// 子代理有 SubagentHandback 就靠它交报告，没有时最后一句话就是报告
 private func report(_ message: String, in request: FakeRequest) -> FakeReply {
     request.tools.contains("SubagentHandback") ? handback(message) : .say(message)
 }
 
 private extension FakeRequest {
-    /// 对话里最后一条你的话的原文（JSON；之后可能还跟着 system 消息）
     var lastUserMessage: String {
         let last = (json["messages"] as? [[String: Any]])?.last { $0["role"] as? String == "user" }
         return last.flatMap { try? JSONSerialization.data(withJSONObject: $0) }.map { String(decoding: $0, as: UTF8.self) } ?? ""

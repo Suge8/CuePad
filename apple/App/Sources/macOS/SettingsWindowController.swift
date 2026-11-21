@@ -2,7 +2,6 @@
 import AppKit
 import SwiftUI
 
-/// 不记窗口位置与大小（`WindowFrameKeeper`）：高度随页变，记下的是另一页的高度，摆回去再改一次就是一次多余的缩放动画。
 final class SettingsWindowController {
     private let makePane: (SettingsPane) -> NSViewController
     private var built: (window: NSWindow, tabs: NSTabViewController)?

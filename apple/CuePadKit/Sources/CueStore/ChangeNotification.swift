@@ -30,7 +30,6 @@ extension Sequence<UInt8> {
   }
 }
 
-/// 订阅每张表的 Darwin 通知：收到的表攒进 `drain`，`events` 只说"有新的"（突发合并为一次）；释放时注销。
 final class ChangeListener: Sendable {
   let events: AsyncStream<Void>
   private let posted = Posted()

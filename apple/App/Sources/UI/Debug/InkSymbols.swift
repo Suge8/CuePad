@@ -1,7 +1,5 @@
 #if DEBUG
-// 由 design/tools/cue-symbols.py 生成。
 
-/// 全部自定义符号的资源名，按生成器里的顺序：只给图标总览（`IconSheet`）列全；产品代码按意思经 `Icon` 取图。
 enum InkSymbols {
     static let names = [
         "cue.mascot",

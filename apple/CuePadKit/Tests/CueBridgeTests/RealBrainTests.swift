@@ -5,10 +5,7 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// MCP 是 Fixtures/mcp-echo.mjs 替身。
-/// 各家连钉住的真 Agent 与本用例的假模型（`RealAgents`）；模型、强度用下面的变量换。
 private let environment = ProcessInfo.processInfo.environment
-/// Pi、Codex、OpenCode、dsh、Claude Code 连本用例的假模型（`FakeModel`，剧本 `playBrain`），Grok 同（`playGrokBrain`）
 private let cheapModels: [AgentKind: String] = [
     .pi: "fake/echo", .codex: codexTestModel, .claudeCode: "haiku", .opencode: AgentKind.opencode.modelRef(openCodeTestModel),
     .grok: "grok-4.6", .dsh: "deepseek-official/deepseek-flash",
@@ -29,7 +26,6 @@ struct RealBrainTests {
     @MainActor
     final class Rig {
         let runtime: AgentKind
-        /// 随机：好在进程树与各家的历史里认出这一次
         let marker = "cue-\(UUID().uuidString.prefix(8).lowercased())"
         let directory: URL
         let echoLog: URL
@@ -37,13 +33,11 @@ struct RealBrainTests {
         let codename = "ZEBRA-4821"
         /// OpenCode 的隔离家目录与库：每个大脑一台（并行的几台 OpenCode 头一次同起一个库会撞上建表）
         let sandbox: OpenCodeSandbox?
-        /// 连本进程假模型的家（Pi、Codex，`playBrain`）；一串 echo 调用的第二次请求停在 `chain` 上
         let model: FakeModel?
         let chain = FakeGate()
         let brain: any HostedSession
         private(set) var events: [TurnEvent] = []
 
-        /// `executable`：换掉钉住的那份（包在 Agent 外面的壳）
         init(_ runtime: AgentKind, executable: URL? = nil) async throws {
             self.runtime = runtime
             let root = try makeTempDirectory().resolvingSymlinksInPath()
@@ -58,8 +52,6 @@ struct RealBrainTests {
             sandbox = runtime == .opencode ? try await OpenCodeSandbox(model: model) : nil
             if runtime == .pi, let model { try PiProcess.writeModels(model, into: root.appending(path: "pi-agent")) }
             if runtime == .codex, let model { try CodexHome.write(provider: model, into: root.appending(path: "codex")) }
-            // Grok 的家目录与配置目录在这里，不碰真实的 ~/.grok，模型指到假模型；dsh 的家目录也在这里（模型地址与假 key 见 `DshRig.environment`）；
-            // Pi 的 agent 目录也在这里，不读用户的 ~/.pi（设置、提供方各人不同）
             let agentHome = switch runtime {
             case .pi: ["PI_CODING_AGENT_DIR": root.appending(path: "pi-agent").path]
             case .claudeCode: try ClaudeSandbox.environment(model: #require(model), root: root)
@@ -74,7 +66,6 @@ struct RealBrainTests {
                 systemPrompt: "You are Cue, a test assistant. Your codename is \(codename). Keep answers to one short sentence. When asked to echo something, call the echo tool.",
                 workingDirectory: directory,
                 mcp: [try #require(ExecutableLocator.standard.candidates("node").first).path, echoServer.path, marker],
-                // Pi 的会话落盘位置指到这里：`--no-session` 生效的话它一直是空的（不去翻用户的 ~/.pi）
                 environment: ["MCP_ECHO_LOG": echoLog.path, "PI_CODING_AGENT_SESSION_DIR": sessions.path].merging(sandbox?.environment ?? agentHome) { $1 })
             brain = try await config.startBrain()
             let events = brain.events

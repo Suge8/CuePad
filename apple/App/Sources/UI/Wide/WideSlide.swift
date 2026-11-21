@@ -22,7 +22,6 @@ import UIKit
 /// 主区按新宽排一次大库仍要 8.5～11ms、放不进一帧；
 /// 页内一个 SwiftUI 布局动画——每帧照样重摆懒加载列表、按插值的尺寸重画文字，开头几帧被终点那一次排版堵住，SwiftUI 画的部分一帧跳完。
 enum WideSlide {
-    /// 一次滑动多久滑完（`SlideCurve`）：滑出去的那一块等到这时才拆掉里面的页。
     static var duration: Duration { .seconds(SlideCurve.duration) }
 
     static func translate(_ layer: CALayer, by distance: CGFloat, key: String) {
@@ -47,8 +46,6 @@ enum WideSlide {
         #endif
     }
 
-    /// 握着层本身：这一圈里它们不会被释放、地址不会给了新层而认错。
-    /// 页不一定一次排齐（`WideColumnSlide.layoutPasses`）：补第二遍时只补这一遍新挪的那一截，每层自己已叠上多少记在 `own`，收放宽度、遮罩与淡入每层只做一次。
     struct Positions {
         private var lefts: [ObjectIdentifier: (layer: CALayer, x: CGFloat, width: CGFloat)] = [:]
         private var own: [ObjectIdentifier: CGFloat] = [:]
@@ -72,7 +69,6 @@ enum WideSlide {
             layer.contents == nil && !(layer is CAShapeLayer) && !(layer is CATextLayer)
         }
 
-        /// 排完之后：每一层从记下的旧处滑到此刻的新处，扣掉上一层已经叠上的那段（偏移随层树相加）与自己前几遍叠上的；没记过的层随上一层走。
         mutating func follow(in root: CALayer, key: String) {
             guard !WideSlide.reduceMotion else { return }
             pass += 1
@@ -85,7 +81,6 @@ enum WideSlide {
             CATransaction.commit()
         }
 
-        /// 画了内容、变宽了的层：挂一层从旧宽长到新宽的遮罩（左缘对齐，同一条曲线）。已经有遮罩的不动（那是页自己的）。
         private static func reveal(_ layer: CALayer, from width: CGFloat, key: String) -> CALayer? {
             let growth = layer.bounds.width - width
             guard growth >= SlideCurve.rest, layer.mask == nil else { return nil }
@@ -112,7 +107,6 @@ enum WideSlide {
                 WideSlide.slide(sublayer, "position.x", by: wanted - carried - (own[id] ?? 0) + sublayer.anchorPoint.x * grows, key: key)
                 own[id] = wanted - carried
                 if resizes, let before, !Self.stretches(sublayer), let mask = Self.reveal(sublayer, from: before.width, key: key + ".reveal") { masked.append((sublayer, mask)) }
-                // 新层只在最外那一层淡入，里面的随它
                 if before == nil, !fading, appeared.insert(id).inserted { WideSlide.appear(sublayer, key: key + ".fade") }
                 follow(sublayer, at: left, carried: wanted, fading: fading || before == nil, key: key, masked: &masked)
             }
@@ -120,16 +114,6 @@ enum WideSlide {
     }
 }
 
-/// 宽屏的一块（主区、并排的右半、Cue 栏）怎么滑：Mac 的 `WideColumnView`、iPad 的 `WideColumnController` 各持一份，交给它块的图层与托管的页的根图层。
-/// 会话条开合、Cue 收起或放回时，块这一下就到了终点的位置与宽（页按新的宽排一次），看得见的滑动是渲染端的叠加动画（`WideSlide`，主线程不逐帧挪）：
-/// 整块从旧位置平移回来，右缘从旧宽收放到新宽；块里各层再按自己在页里挪了多少补齐（`WideSlide.Positions`：居中的、靠右的、让出开合钮的栏头字），
-/// 页里每样东西都从自己的旧位置连续走到新位置。几块平移的距离不同（主区随会话条的边，并排的右半随两半的分界），只平移的话主区已按终点排宽、
-/// 又多平移了一截，滑动途中右缘压进右边那一块；按终点的框裁又在两块之间露出一道缝。
-/// 图层的宽按同一条曲线从旧宽走到新宽（只动右缘：按图层的锚点补上位置；页的排版不跟着变）：相邻两块的边每一帧都对齐。
-/// 会话条自己一直不动（藏起时也照原宽画在主区下面，`WideRail`），看得见的只有主区像一张纸从它上面滑过：
-/// 放回时主区从旧边起往右滑开、露出它；藏起时主区的左边往左滑回来盖住它——图层的左缘就停在终点、只把里面的页（铺满桌面色）按同一条曲线从旧处挪回来
-/// （`bounds.origin.x`），左边还没盖到的那截透出的就是下面的会话条本身，行、字、选中的底都在，不是一块空的底色。
-/// 收起的 Cue 栏排在窗口右缘外（`CueDock`）：收起、放回、跨过临界宽、抽屉开合同是一段平移，左缘每一帧贴着主区的右缘，滑出去落定才藏起（`park`）。
 final class WideColumnSlide {
     private let slot: WideSlot
     private let apply: (_ hidden: Bool) -> Void
@@ -153,8 +137,6 @@ final class WideColumnSlide {
         self.apply = apply
     }
 
-    /// `spans` 是主区此刻画出来的每一块在哪（`WideMetrics.spans`）：这一块换了放的东西时，挪来的（插进一块、两块对调）从它原来那一块的位置与宽滑过来，
-    /// 新放进来的在原地淡入——不在原处先淡出旧的、再淡入新的。
     func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, spans: [WideNavigation.Beside: WideMetrics.Span] = [:]) {
         let pane = slot.column.flatMap { shape.order.indices.contains($0.index) ? shape.order[$0.index] : nil }
         defer { previous = (origin, width, shape, pane, spans) }
@@ -181,18 +163,14 @@ final class WideColumnSlide {
         }
         WideSlide.slide(layer, "bounds.size.width", by: edge, key: "wide.edge.\(turn)")
         WideSlide.slide(layer, "position.x", by: layer.anchorPoint.x * edge, key: "wide.edge.anchor.\(turn)")
-        // 并排的右半从窗口外滑进来时页是这一下才挂上的（`BesideColumn`），层全是新的：随块一起平移进来，不当作新露出的层等落定再淡入
         let entering = hidden && slot.column.map { $0 != .main } == true
         if swapped {
-            // 换了放的东西，页的层全是新的，没有旧位置可补
             if from == nil, !entering { WideSlide.appear(layer, key: "wide.appear.\(turn)") }
-        // 主区压在 Cue 浮板下面时块的宽不随 Cue 开合变，页照样按让出后的宽重排（`underCue`）
         } else if !entering, previous.width != width || slot == .main {
             pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses)
         }
     }
 
-    /// 页按新宽排完（托管视图排版之后调）：各层从记下的旧处滑到此刻的新处，同一次提交里起步；第二遍只补新挪的（`Positions`）。没排齐就滑完了的作废（`landed`）。
     func laidOut(_ page: CALayer) {
         guard var pending else { return }
         pending.positions.follow(in: page, key: pending.key)
@@ -218,19 +196,13 @@ final class WideColumnSlide {
     }
 }
 
-/// 一段偏移怎么回到 0：曲线是 `Motion.nudge` 那条弹簧（`Motion.Spring.nudge`）。
-/// 离终点的比例只随时间走、与距离无关，几段都一样长（`duration`）：同一次换宽里的几段（各块的平移、右缘的宽、块里各层的补位）每一帧按同样的比例收敛、
-/// 同一刻收住，彼此对得上——按各自的距离定长短的话，各段在不同的时刻甩掉最后那不到半点，相加出来停下前会来回抖一点。
 private struct SlideCurve {
     let distance: CGFloat
 
     static let rest: CGFloat = 0.5
-    /// 一次换宽里最远的一段（会话条与 Cue 一起变）离终点不到半点要多久：到这时就算滑完。
-    /// 弹簧按比例收敛到 `settlingDuration` 要多等 0.1 秒左右，那时早已看不出在动。
     fileprivate static let duration = settles(over: Chrome.rail + WideMetrics.cue)
 
     private static let omega = 2 * Double.pi / Motion.Spring.nudge.duration
-    /// 关键帧每秒取样多少次：比 144Hz 密，帧之间按直线插值看不出折线。
     private static let samplesPerSecond = 240.0
 
     private static func remaining(_ time: Double) -> Double { (1 + omega * time) * exp(-omega * time) }

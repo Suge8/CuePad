@@ -5,10 +5,8 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 中转的替身：收下每份实时活动推送，按主机名分开记（用例并行）。
 private nonisolated final class RelayStub: URLProtocol, @unchecked Sendable {
     static let received = Mutex<[String: [Data]]>([:])
-    /// APNs 说已失效的令牌（各用例的令牌不重名）。
     static let dead = Mutex<Set<String>>([])
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -49,7 +47,6 @@ struct ActivityPublisherTests {
         }
     }
 
-    /// 同真的 App：这台是发布方、同步对过。
     private func recording() async throws -> StateRecorder {
         app.services.startSync()
         try await app.syncs()
@@ -57,7 +54,6 @@ struct ActivityPublisherTests {
         return try await app.runtimeRecorder(on: app.hostID)
     }
 
-    /// 发布任务跟着服务跑，从这一刻算"这台启动"。
     private func publish() -> Task<Void, Never> {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RelayStub.self]
@@ -68,7 +64,6 @@ struct ActivityPublisherTests {
     @Test func 手机上没有岛_新开工的远程开一只_登记了地址接着推_没活了结束并清掉() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let recorder = try await recording()
-        // 这台启动前就在跑的不为它开：不知道手机上那只是几时没的
         try await recorder.update(sessionID: "old", state: .thinking, title: "old", projectID: project.id)
         try await store.recordActivityStarter(device: "phone", token: "aa11", environment: "production")
         await nextMillisecond()
@@ -85,12 +80,10 @@ struct ActivityPublisherTests {
         #expect(start.aps["attributes-type"] as? String == "CueActivityAttributes" && start.aps["input-push-token"] as? Int == 1)
         #expect((start.aps["attributes"] as? [String: Any])?["remoteUpdates"] as? Bool == true)
 
-        // 手机被唤醒、登记了那只的地址：之后的内容推给它
         try await store.recordActivityDestination(device: "phone", activityID: "A", token: "bb22", environment: "production", startedAt: .now)
         try await eventually("第一份内容") { pushes.count == 2 }
         #expect(pushes[1].event == "update" && pushes[1].token == "bb22" && pushes[1].priority == 10)
 
-        // 又一件开工：一眼看得出的变化，高优先级；岛在，不再开一只
         try await recorder.update(sessionID: "ship", state: .thinking, title: "ship", projectID: project.id)
         try await eventually("多了一件") { pushes.count == 3 }
         #expect(pushes[2].event == "update" && pushes[2].token == "bb22" && pushes[2].priority == 10)
@@ -128,7 +121,6 @@ struct ActivityPublisherTests {
         let recorder = try await recording(), task = publish()
         defer { task.cancel() }
         try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom", projectID: project.id)
-        // 再过两秒才到该收的时刻：先照常推内容
         try await store.recordActivityDestination(
             device: "phone", activityID: "A", token: "cc33", environment: "production",
             startedAt: .now.addingTimeInterval(ActivityDestination.retireLead + 2 - ActivityDestination.lifetime))

@@ -14,9 +14,7 @@ struct CueTaskButton<Label: View>: View {
     private func open() { workspace.openTask(id: task) }
 }
 
-/// 是记录，不读这件活此刻的状态与它交给的会话：之后改名、做完、删掉都不变（删了、归档了点它提示去向，`Workspace.openTask`）。
 struct CueTaskLine: View {
-    /// 可点的高；Cue 页数格子时按它算那一行至少多高（`CuePage.floor`）。
     static let lineHeight: CGFloat = 24
 
     let task: UUID

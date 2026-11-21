@@ -33,13 +33,11 @@ extension DebugScene {
             _ = try await store.requestDelivery(
                 String(localized: "排序改完后把 scheduler 的测试全跑一遍，结果贴给我", table: "Demo"), to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "demo-mac", cue: true)
 
-            // 接下来写的比之前的晚这么多分钟（之前的都挪早）：对话里的时刻像真的一样错开
             func later(_ minutes: Double) async throws { try await store.seedAgeCueMessages(by: minutes * 60) }
             func you(_ text: String) async throws {
                 let message = try await store.addCueMessage(.you, text: text)
                 try await store.markCueMessagesDelivered([message.id])
             }
-            // 记忆先写：定时到点的那一轮指着其中一条
             try await store.seed(cueLines: demoMemory)
             if args.longChat { try await seedLongCueChat(you: you, store: store) }
             try await you(String(localized: "圆桌那个 5 人以上乱序的 bug 交给你，修好之后部署到预发", table: "Demo"))
@@ -76,7 +74,6 @@ extension DebugScene {
                 step(.read, String(localized: "看「README 截图」的近况", table: "Demo"), panel), step(.talk, String(localized: "对「README 截图」说：换成 Swift 版的样子，按你给的参考图拍", table: "Demo"), panel),
                 step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing), step(.read, String(localized: "看「发言轮次乱序」的近况", table: "Demo"), order)))
             _ = try await store.addCueMessage(.cue, text: String(localized: "交给 notes 会话按参考图重拍了。", table: "Demo"))
-            // Cue 确认做完了：结果的正文与 Cue 的 done 同一个拼法（`CueReport.text`）
             if let panel {
                 _ = try await store.finishTask(
                     panel.id, evidence: [String(localized: "浅色深色各一张，都按你给的参考图", table: "Demo"), String(localized: "README 里的旧截图都换掉了", table: "Demo")],
@@ -98,7 +95,6 @@ extension DebugScene {
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
                     """, table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把发言顺序的修复推送到 origin/main", table: "Demo")), shots: try await deployShots(store), task: order?.id)
-            // 第二张"等你"（答完第一张接着露出来）只在要各种等你时写：默认的演示里拍板是这一张与 notes-edit 在编辑器里问的那个，共两个
             if !cueFlows, args.driveOpts.waitKinds, let billing = task(String(localized: "清理旧的计费脚本", table: "Demo")) {
                 _ = try await store.addCueMessage(
                     .cue, text: String(localized: "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？", table: "Demo"),
@@ -134,7 +130,6 @@ extension DebugScene {
             _ = try await store.leaveToYou("notes")
             if args.driveOpts.waitKinds {
                 for id in ["homepage", "deploy", "rename"] { _ = try await store.leaveToYou(id) }
-                // 已完成列里一件带成果图的
                 if let done = try await store.tasks(.done).flatMap(\.tasks).first(where: { $0.parentID == nil }) {
                     _ = try await store.addCueMessage(.cue, text: String(localized: "做完了，预发上是这个样子。", table: "Demo"), shots: try await deployShots(store), task: done.id)
                 }
@@ -143,7 +138,6 @@ extension DebugScene {
             try await seedReplies(args.replies, store: store)
             try await atlasIfAsked(store)
             try await taskLinesIfAsked(store)
-            // 流程演示里"等你"只有它自己出的那一条：演示的这条先答掉，看得到那张卡出现与消失（`DebugScene+CueFlow.swift`）
             if cueFlows { _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once)) }
             try await seedPresence(presence, store: store, asked: asked, order: order, panel: panel, importing: importing, context: context, you: you)
         } catch {

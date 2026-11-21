@@ -20,34 +20,28 @@ extension Int: SQLBindable { var sqlValue: SQLValue { .int(Int64(self)) } }
 extension Int64: SQLBindable { var sqlValue: SQLValue { .int(self) } }
 extension Data: SQLBindable { var sqlValue: SQLValue { .blob(self) } }
 extension Bool: SQLBindable { var sqlValue: SQLValue { .int(self ? 1 : 0) } }
-/// 库里 UUID 一律存小写文本（CKRecord 的 recordName 也用这个字符串）。
 extension UUID: SQLBindable { var sqlValue: SQLValue { .text(uuidString.lowercased()) } }
 extension Date {
-  /// 当前时间，精度截到毫秒：返回给调用方的值与落盘后读回的值相等。用作版本时比旧版大由库保证（`CueStore.guards`）。
   static var stamp: Date { Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000) }
 }
 
 extension Date: SQLBindable {
   var sqlValue: SQLValue { .int(stored) }
 
-  /// 库里存的样子（毫秒）：同一时刻经库、经 JSON、或从桥上直接来的值，按它比是不是同一刻。
   public var stored: Int64 { Int64((timeIntervalSince1970 * 1000).rounded()) }
 }
 extension Optional: SQLBindable where Wrapped: SQLBindable {
   var sqlValue: SQLValue { map(\.sqlValue) ?? .null }
 }
 
-/// SQL `IN (…)` 里的字面量列表：枚举的原始值（只来自代码里的枚举，不来自输入）。
 func sqlList<Value: RawRepresentable>(_ values: some Sequence<Value>) -> String where Value.RawValue == String {
   values.map { "'\($0.rawValue)'" }.joined(separator: ", ")
 }
 
-/// 提示里只给 SQLite 的原因；连同出错的语句记进日志（`SQLite.error`）。
 struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
   let sql: String
   var code: Int32 = SQLITE_ERROR
-  /// 库此刻的处境（写满、读写出错、被别的连接占着）出的错，不是写的内容不对：过一会儿再写同样的可能就成。
   var isTransient: Bool { [SQLITE_FULL, SQLITE_IOERR, SQLITE_BUSY, SQLITE_LOCKED, SQLITE_NOMEM, SQLITE_CANTOPEN].contains(code & 0xff) }
   var description: String { "SQLite: \(message) [\(sql)]" }
   var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
@@ -60,7 +54,6 @@ struct Row {
     (0..<sqlite3_column_count(statement)).first { String(cString: sqlite3_column_name(statement, $0)) == name }
   }
 
-  /// 按存储类读出（同步表只有整数与文本两类）。
   func value(_ column: Int32) -> SQLValue {
     switch sqlite3_column_type(statement, column) {
     case SQLITE_NULL: .null
@@ -103,7 +96,6 @@ final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
   private let compiling = Compiling()
-  /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
   private static let log = Logger(subsystem: AppIdentity.id, category: "sqlite")
@@ -195,7 +187,6 @@ final class SQLite {
 
   var changes: Int { Int(sqlite3_changes(handle)) }
 
-  /// 提交后返回本事务改动过的行；回滚则丢弃。
   func transaction<T>(_ body: () throws -> T) throws -> (result: T, changes: Changes) {
     try exec("BEGIN IMMEDIATE")
     changeLog.changes = Changes()
@@ -209,7 +200,6 @@ final class SQLite {
     }
   }
 
-  /// 取出缓存的语句；没有就编译，同时由授权回调记下它读哪些表（只在编译时回调，缓存命中不再付出）。
   private func checkOut(_ sql: String) throws -> Compiled {
     if let cached = statements.removeValue(forKey: sql) { return cached }
     compiling.reads = []
@@ -229,7 +219,6 @@ final class SQLite {
     if let existing = statements.updateValue(compiled, forKey: sql) { sqlite3_finalize(existing.statement) }
   }
 
-  /// 执行 `body`，并给出它经 `query` 读到的表（含子查询、连接）。读一次是在持有连接的 actor 上同步完成的，期间没有别的写入。
   func tracking<T>(_ body: () throws -> T) rethrows -> (value: T, reads: Set<Table>) {
     tracked = []
     defer { tracked = nil }
@@ -237,8 +226,6 @@ final class SQLite {
     return (value, tracked ?? [])
   }
 
-  /// 执行 `body`，其间读到 `table` 不记进正在进行的 `tracking`：调用方自己按行登记依赖（`CueStore.narrow`）。
-  /// 这之前或之后的读也碰了 `table` 的，照常记下。
   func untracked<T>(_ table: Table, _ body: () throws -> T) rethrows -> T {
     let had = tracked?.contains(table) ?? true
     defer { if !had { tracked?.remove(table) } }
@@ -255,13 +242,11 @@ final class SQLite {
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-/// 授权回调只在持有连接的 actor 上、编译语句期间被调用，无并发访问。`reads` 为 nil 时不在记（exec 编译的语句）。
 private final class Compiling: @unchecked Sendable {
   var reads: Set<Table>?
   var drops = false
 }
 
-/// 更新钩子只在持有连接的 actor 上、语句执行期间被调用，无并发访问。
 private final class ChangeLog: @unchecked Sendable {
   var changes = Changes()
 

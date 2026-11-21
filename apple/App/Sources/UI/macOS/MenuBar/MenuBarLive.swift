@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 区头只写"在做"：几件推进中已写在面板顶上的数字账（`CueLedger`），不另按会话数一遍。
 struct MenuBarLive: View {
     let rows: [SessionState]
     let open: (Route) -> Void
@@ -27,7 +26,6 @@ struct MenuBarLive: View {
     private var sessions: some View {
         let hidden = max(rows.count - Self.limit, 0)
         let shown = hidden > 0 && !showsAll ? Array(rows.prefix(Self.limit)) : rows
-        // 在线的按会话 id 区分：状态变化时那一行不被重建
         return VStack(alignment: .leading, spacing: Self.spacing) {
             ForEach(shown) { row($0) }
             if hidden > 0 { LiveMoreFold(hidden: hidden, expanded: $showsAll, style: Self.style) }

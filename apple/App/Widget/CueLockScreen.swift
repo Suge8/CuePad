@@ -3,8 +3,6 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// 锁屏那张卡此刻的主角与其余几行。主角只有一个：有拍板是第一件拍板，没有而有新回复是那个会话，再没有而有件在推进是那个数，
-/// 都没有是刚做完的那件或 Cue 的那一句。颜色跟主角走（`Palette.signal`）；过时的那一份没有哪种状态还作数，回到纸。
 private struct Poster {
     enum Head {
         case wait(CueNow.Wait)
@@ -15,9 +13,7 @@ private struct Poster {
 
     let tone: CueNow.Tone
     let head: Head
-    /// 数下面 Cue 自己此刻那一步或不在的原因，占一行。
     let step: String?
-    /// 至多这几行，排得下几行画几行（`CueLockScreen.body`）。
     let rows: [CueNow.Item]
 
     init(_ now: CueNow, stale: Bool) {
@@ -29,7 +25,6 @@ private struct Poster {
         var step: String?
         var tone = now.keyTone
         if let first = now.first {
-            // 第一件拍板已经写成主角（`first` 与拍板那几行同一个次序）
             _ = take(.asks)
             head = .wait(first)
         } else if let reply = take(.reply) {
@@ -53,7 +48,6 @@ private struct Poster {
         rows = Array(items.prefix(4))
     }
 
-    /// 主角是哪种状态，写在它上面那一小行；数与 Cue 的那一句自己说了，不写。
     var eyebrow: CueNow.Item.Kind? {
         switch head {
         case .wait: .asks
@@ -71,7 +65,6 @@ struct CueLockScreen: View {
     /// 系统给锁屏这一块封顶 160pt。
     private static let height: CGFloat = 158
     private static let pose: CGFloat = 140
-    /// 标题下面右边让给 Cue 的宽：字不排到它身上。标题那一行在它头顶上面，占满。
     private static let beside: CGFloat = 109
 
     func fill(_ palette: Palette) -> Color { palette.signal(Poster(now, stale: stale).tone).fill }
@@ -79,14 +72,12 @@ struct CueLockScreen: View {
     var body: some View {
         let poster = Poster(now, stale: stale)
         let signal = palette.signal(poster.tone)
-        // 排得下几行画几行：问题折成两行、多了 Cue 那一步或过时那一行，都占掉一行的高
         ViewThatFits(in: .vertical) {
             ForEach((0...poster.rows.count).reversed(), id: \.self) { content(poster, signal, rows: $0) }
         }
         .padding(.top, 13).padding(.bottom, 6).padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(height: Self.height)
-        // 从右下角探出来，脚和半只手被卡的圆角裁掉
         .background(alignment: .bottomTrailing) {
             Image(decorative: "cue-pose-\(now.beat.pose)").resizable().scaledToFit().frame(width: Self.pose)
                 .rotationEffect(.degrees(-5)).offset(x: 14, y: 30)
@@ -147,7 +138,6 @@ struct CueLockScreen: View {
         }
     }
 
-    /// 主角下面那一行：等了、过了多久的大钟；能"允许一次"的拍板是那颗钮，等了多久写在钮旁。
     @ViewBuilder private func under(_ poster: Poster, _ signal: Palette.Signal) -> some View {
         switch poster.head {
         case .wait(let wait):
@@ -177,7 +167,6 @@ struct CueLockScreen: View {
     }
 }
 
-/// 其余几行：名字、行尾还在动的写做了多久（自己走），停下的写状态词。整块上了色，行里不再分颜色，靠行首的图形分。
 private struct PosterRow: View {
     let item: CueNow.Item
     let signal: Palette.Signal

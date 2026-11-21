@@ -52,10 +52,8 @@ nonisolated extension SessionShown {
         }
     }
 
-    /// 新回复（没看的与 Cue 留给你回的同一个样子）：名字加粗、整行着回复的淡绿。
     var isNewReply: Bool { status == .unread || status == .awaitsReply }
 
-    /// 空闲：做完了、没有要你看的。不画状态标、不写状态字，只留多久以前。
     var isQuiet: Bool { status == .idle || status == .resting }
 
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
@@ -68,7 +66,6 @@ nonisolated extension SessionShown {
         }
     }
 
-    /// 拍板在前同看板的等你列（在问的会话卡着 Agent），待回复紧随。
     var rank: Int {
         switch status {
         case .asking: 0

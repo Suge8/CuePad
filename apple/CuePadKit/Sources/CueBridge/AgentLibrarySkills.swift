@@ -93,7 +93,6 @@ struct LibrarySkillScan {
         texts[skill.textPath] = found.text
     }
 
-    /// 旧目录里的链接不碰（Claude Code 的技能链接、指到别处的）。
     private mutating func walk(_ root: URL, scope: LibraryScope, recursive: Bool, inOldDirectory: Bool) -> (found: [Found], empties: [String]) {
         var found: [Found] = [], empties: [String] = []
         watched.insert(root.path)
@@ -103,11 +102,10 @@ struct LibrarySkillScan {
                 if inOldDirectory, RelativeLink.isLink(item) { continue }
                 var isDirectory: ObjCBool = false
                 guard FileManager.default.fileExists(atPath: item.path, isDirectory: &isDirectory), isDirectory.boolValue else { continue }
-                watched.insert(item.path)  // 各家自管的目录也盯着：里面多了少了，计数跟着变
+                watched.insert(item.path)
                 if inOldDirectory, group.isEmpty, Self.isManaged(name, in: root) { continue }
                 let skillFile = item.appending(path: AgentSkill.fileName)
                 if FileManager.default.fileExists(atPath: skillFile.path) {
-                    // 读不出（不是 UTF-8、没权限）的也是技能，格式不对；同改文件时的读法（`AgentLibraryFiles.write`），哈希才对得上
                     let text = LibraryFileReading.read(skillFile) ?? ""
                     watched.insert(skillFile.path)
                     found.append(Found(
@@ -124,7 +122,6 @@ struct LibrarySkillScan {
         return (found, empties)
     }
 
-    /// 超过 6 层的技能也要找到、报出来（`SkillProblem.tooDeep`），再深的不找。
     private static let walkLimit = 8
 
     private static func entries(_ directory: URL) -> [String] {
@@ -174,7 +171,6 @@ struct LibrarySkillScan {
 }
 
 extension SkillDocument {
-    /// 取各家最严的那条。
     func problem(directory: String, depth: Int) -> SkillProblem? {
         guard let name, !name.isEmpty else { return .unreadable }
         if directory.count > 64 || !directory.allSatisfy({ $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "-") }) { return .badName }

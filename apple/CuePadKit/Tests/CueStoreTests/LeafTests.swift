@@ -40,7 +40,6 @@ import Testing
     #expect(try await store.card(codex.id)?.status == .done)
   }
 
-  /// 一个会话绑好几个叶子、做完才结束会话，见 App 的流程测试（`TaskFlowTests`）；这里是绑定本身的规则。
   @Test func 绑定_只绑叶子_改绑后原来的会话留作用过的_解绑不改任务状态() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)
@@ -53,7 +52,6 @@ import Testing
 
     try await store.bindSession("s2", to: first.id)
     #expect(try await store.card(first.id)?.piSessionID == "s2")
-    // 两次绑定常落在同一毫秒（开始时刻相同时按 id 排），只比是哪几件
     #expect(Set(try await store.tasks(boundTo: "s1").map(\.task.id)) == [first.id, second.id])
     try await store.unbindSession(from: second.id)
     #expect(try await store.tasks(boundTo: "s1").map(\.task.id) == [first.id])

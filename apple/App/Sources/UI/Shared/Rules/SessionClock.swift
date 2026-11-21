@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import SwiftUI
 
-/// 怎么写只在这里。界面里经 `LiveText`（`live`）：只在文字会变的时刻重画。
 nonisolated enum SessionClock: Hashable, Sendable, Codable {
     case running(since: Date)
     case waiting(since: Date)
@@ -11,7 +10,6 @@ nonisolated enum SessionClock: Hashable, Sendable, Codable {
 
     enum Style: Hashable, Codable, Sendable { case list, header, span }
 
-    /// 工作中的记录总带着这段处理的起点（`busySince`，Mac 的状态记录器写入时保证）；万一没有就不写计时，不拿别的时刻冒充。
     static func reading(_ state: Open<WorkState>, stateSince: Date, busySince: Date?) -> SessionClock? {
         if state == .known(.waitingForUser) { return .waiting(since: stateSince) }
         if state.isWorking { return busySince.map(SessionClock.running(since:)) }
@@ -57,7 +55,6 @@ nonisolated enum SessionClock: Hashable, Sendable, Codable {
 
     func live(_ style: Style) -> Live { Live(clock: self, style: style) }
 
-    /// 文字就是 `text(now:style:)`，并告诉系统下一次在什么时刻会变。
     struct Live: DiscreteFormatStyle {
         let clock: SessionClock
         let style: Style
@@ -118,8 +115,6 @@ nonisolated extension SessionClock {
 }
 
 nonisolated extension Date {
-    /// 从这一刻起每隔 `step` 一格（往前往后都排），严格晚于 `now` 的第一格。按倍数算出来的那格因浮点误差不晚于 `now` 时取下一格：
-    /// 按时刻重画的文字（`LiveText`）睡到这一刻，给出的时刻不晚于此刻就再也醒不过来。
     func tick(every step: TimeInterval, after now: Date) -> Date {
         var count = (now.timeIntervalSince(self) / step).rounded(.down) + 1
         while addingTimeInterval(count * step) <= now { count += 1 }

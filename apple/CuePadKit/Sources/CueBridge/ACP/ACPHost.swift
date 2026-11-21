@@ -2,21 +2,18 @@
 import CueStore
 import Foundation
 
-/// 接着一个会话时先看桥上：已经在线就用它；请退出后还没走的旧进程先收完（`HostedProcesses`）。
 @MainActor
 final class ACPHost {
     struct Launching {
         var executable: URL
         var environment: [String: String]
         var dialect: any ACPDialect
-        /// 开新会话时 `session/new` 的 `_meta`
         var meta: JSONValue?
     }
 
     private let agent: AgentKind
     private let bridge: Bridge
     private let timing: Timing
-    /// 起进程要的（`model` 是开会话时要的模型，`AgentKind.modelRef` 的写法；接着旧会话时为 nil）；没装抛 `notInstalled`
     private let launching: (_ model: String?) async throws -> Launching
     private let sessionFile: (_ cwd: URL, _ sessionID: String) -> URL
     private let processes: HostedProcesses
@@ -39,7 +36,6 @@ final class ACPHost {
         }
     }
 
-    /// `admit` 在这个会话的旧进程收完之后、起新进程之前跑：这家要先核对的（会话正开在别处）在这里抛。
     func resume(_ session: IndexedSession, admit: @escaping @MainActor () throws -> Void = {}) async throws -> Session.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
@@ -78,7 +74,6 @@ final class ACPHost {
             throw error
         }
         let process = connection.process
-        // 回完开会话就退出了：连接已关、它的收尾已走过，挂上桥就是一个没有进程的会话
         guard !connection.isClosed else {
             throw AgentRuntimeError.launchFailed(agent, await process.exited()?.text ?? String(localized: "开好会话就退出了"))
         }

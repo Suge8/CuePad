@@ -2,7 +2,6 @@ import CueText
 import CueStore
 import SwiftUI
 
-/// 圆角、内边距只在这里定。
 enum CueBubble {
     #if os(macOS)
     static let padding = EdgeInsets(top: Spacing.group, leading: Spacing.block, bottom: Spacing.group, trailing: Spacing.block)
@@ -10,7 +9,6 @@ enum CueBubble {
     static let padding = EdgeInsets(top: Spacing.group, leading: Spacing.inset, bottom: Spacing.group, trailing: Spacing.inset)
     #endif
     static let joinedGap = Spacing.tight
-    /// Cue 的话最宽占所在一栏的比例：回答常带列表与代码，比你的话（`UserBubble.widthFraction`）宽（手机上窄，再宽一点）。
     #if os(macOS)
     static let cueWidth: CGFloat = 0.86
     #else
@@ -30,8 +28,6 @@ enum CueBubble {
     static let arrival = AnyTransition.opacity.animation(Motion.fade.delay(Motion.Glide.duration))
 }
 
-/// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定），不是气泡而是一张纸。
-/// 结束了的提问回到对话里时字与拍板卡上同一句（代码写的问句 `CueAsking.question`），Cue 的原话收着、点"原话"展开：答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
 struct CueSays: View {
     let message: CueMessage
     var task: UUID?
@@ -80,7 +76,6 @@ struct CueSays: View {
         }
     }
 
-    /// 问句底下只一排小字：没记成的结局、它关于的任务、看原话，不各占一行。
     private var foot: some View {
         HStack(spacing: Spacing.group) {
             if message.asking?.ask == .habit, message.answer == nil, message.setAsideBy == nil {
@@ -188,7 +183,6 @@ private struct OriginalToggle: View {
                 Chevron(.expand).rotationEffect(.degrees(open ? 180 : 0))
             }
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            // 不另占一行高：按得到的范围往外扩一圈，不撑高气泡
             .contentShape(.rect.inset(by: -Self.reach))
         }
         .buttonStyle(PressStyle(.inline))

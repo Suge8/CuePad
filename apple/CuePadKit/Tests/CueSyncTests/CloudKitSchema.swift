@@ -11,25 +11,18 @@ import Foundation
 enum CloudKitSchema {
   static let retiredFields: [String: [(name: String, declaration: String)]] = [
     "sessionViewers": [("sessionID", "STRING")],
-    // seenAt、shelvedUntil：看过与今天先不做改记进 marks（`Mark`）
     "cards": [("cueFollows", "INT64"), ("isFavorite", "INT64"), ("numbering", "STRING"), ("seenAt", "INT64"), ("shelvedUntil", "INT64")],
     "projects": [("goalCardID", "STRING"), ("sortKey", "STRING")],
     "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
-    // 没送到的原因改存句式与参数（failure），各端按自己的语言显示
     "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING"), ("resultDetail", "ENCRYPTED STRING")],
     "piMessages": [("toolCount", "INT64")],
     "cueMessages": [("acceptance", "INT64")],
-    // 叫醒的那一下改读这一轮经过那一行上的 `cueMessages.wake`
     "cueState": [("woke", "STRING")],
-    // Mac 的名字只在 macAgents
     "directoryBindings": [("hostName", "ENCRYPTED STRING")],
-    // 可换的模型与斜杠命令拆进了 agentCatalogs
     "piSessionStates": [("models", "ENCRYPTED STRING"), ("commands", "ENCRYPTED STRING")],
-    // 不用先问的例外并进了记忆（cueLines）
     "cueProfile": [("allows", "ENCRYPTED STRING")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
-    // Cue 页读到哪并进了 marks（`Mark.cueRead`）
     ("cueRead", [("modifiedAt", "INT64")]),
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),
     ("cardTags", [("cardID", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("tagID", "STRING")]),
@@ -40,7 +33,6 @@ enum CloudKitSchema {
         ("peerFetchStartedAt", "INT64"), ("run", "STRING"), ("sentAt", "INT64"), ("seq", "INT64"),
       ]
     ),
-    // 任务并进了卡片（要做的卡片）；还没升级的设备仍会写它，客户端跳过
     (
       "tasks",
       [

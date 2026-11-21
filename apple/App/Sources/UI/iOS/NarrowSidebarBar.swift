@@ -55,8 +55,6 @@ struct NarrowSidebarBar: View {
     }
 }
 
-/// 不常去的几处收在一颗钮里：搜索，与原先排在项目列表最底下、要滚到头才见得着的归档、回收站、设置。
-/// 已结束的会话不另设一页：一个项目的在它的项目页里，全部的在搜索的"会话"那一段。
 private struct PlacesMenu: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -68,7 +66,6 @@ private struct PlacesMenu: View {
             Button("归档", icon: .archive) { workspace.push(.archive) }
             Button("回收站", icon: .trash) { workspace.push(.trash) }
             Divider()
-            // 设置里有要处理的事（Mac 没连上）写在这一项下面：钮上不挂点，角上一个点挤着那三个点
             Button { workspace.push(.settings) } label: {
                 Label("设置", icon: .settings)
                 if let alert = services.syncing.macAlert { Text(alert.title) }

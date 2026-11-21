@@ -3,8 +3,6 @@ import CueStore
 import Foundation
 
 extension OpenCodeRuntime {
-    /// 在线会话的命令入口：事件流断开期间（`ready` 为假）会话还在线，只是状态不是最新的，命令等重连并拉完快照（至多 `AgentTimeouts.launch`，同开会话），
-    /// 不当成会话已结束。
     private func live(_ id: Session.ID) async throws -> (Connection, Tracked, String) {
         guard let current = connection else { throw BridgeError.sessionEnded }
         if !current.ready { _ = try await ensureService() }
@@ -33,7 +31,6 @@ extension OpenCodeRuntime {
         try await connection.client.call("POST", "/api/session/\(sessionID)/prompt", body: prompt)
     }
 
-    /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
     public func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws {
         let (connection, tracked, sessionID) = try await live(id)
         let slash = try SlashLine(line)
@@ -116,10 +113,8 @@ extension OpenCodeRuntime {
             struct Switch: Encodable { var model: OpenCodeModelRef }
             try await connection.client.call("POST", "/api/session/\(sessionID)/model", body: Switch(model: target.ref(variant)))
         }
-        // 桥上的名字与模型只随服务自己的事件（改名、选模型）更新，不在这里先写
     }
 
-    /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——CuePad 接着它——就重新上线）。
     public func end(_ id: Session.ID) async throws {
         let (connection, _, sessionID) = try await live(id)
         try await interrupt(sessionID, connection)
@@ -143,7 +138,6 @@ extension OpenCodeRuntime {
             let id = try await host(info, connection, launchToken: launchToken)
             return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
         } catch {
-            // 挂不上指令、配不上时结束只让它下线，会话还在服务里：开会话失败的不留，从服务里删掉
             _ = try? await connection.client.call("DELETE", "/api/session/\(sessionID)")
             throw error
         }
@@ -167,7 +161,6 @@ extension OpenCodeRuntime {
         try await connection.client.call("PUT", "/api/experimental/session/\(sessionID)/instructions/entries/cuepad", body: Entry(value: brief))
     }
 
-    /// 开的、接着的会话从此托管：上线，此后它的事件、子代理与对话都收。
     private func host(_ info: OpenCodeSessionInfo, _ connection: Connection, launchToken: String?) async throws -> Session.ID {
         guard self.connection === connection else { throw BridgeError.sessionEnded }
         var tracked = track(info)
@@ -185,7 +178,6 @@ extension OpenCodeRuntime {
             try await launchService()
             refresh()
         }
-        // 起服务期间登记文件的变化可能已经让它连上、拉完快照
         if let connection, connection.ready { return connection }
         let id = UUID()
         let timeout = Task { [weak self] in
@@ -214,7 +206,6 @@ extension OpenCodeRuntime {
     private func launchService() async throws {
         guard let executable = await opencode() else { throw AgentRuntimeError.notInstalled(.opencode) }
         let locator = await locate()
-        // 服务常驻，它起的工具也用这个 PATH
         let environment = locator.environment(launching: executable, overrides: paths.environment.merging(Self.serviceEnvironment(attachments: store.files.directory)) { $1 })
         guard let result = await ChildProcess.run(executable, ["service", "start"], environment: environment, timeout: AgentTimeouts.launch, timing: timing, collect: false)
         else { throw AgentRuntimeError.launchTimedOut(.opencode) }

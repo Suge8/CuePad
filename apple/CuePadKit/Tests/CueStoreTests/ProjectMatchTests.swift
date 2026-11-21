@@ -16,7 +16,7 @@ import Testing
     let project = try await store.createProject(name: "project", color: "#333")
     try await store.setDirectory("/a/proj", for: proj.id)
     try await store.setDirectory("/a", for: outer.id)
-    try await store.setDirectory("/a/project/", for: project.id)  // 末尾斜杠不影响
+    try await store.setDirectory("/a/project/", for: project.id)
     return World(proj: proj, outer: outer, project: project)
   }
 
@@ -30,7 +30,7 @@ import Testing
     ("/a/project", "project"),
     ("/a/project/x", "project"),
     ("/a/other", "outer"),
-    ("/a/proj/../project/x", "project"),  // 先规整路径再比较
+    ("/a/proj/../project/x", "project"),
   ])
   func matchesByPathSegmentsAndPrefersTheDeepestBinding(path: String, expected: String) async throws {
     _ = try await world()

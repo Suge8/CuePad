@@ -1,9 +1,6 @@
 #if os(macOS)
 import CueStore
 
-/// 同一会话同时只有一次恢复（`AgentRuntime.resume` 起进程的几家各持一份）：进行中再来的等同一个结果、拿到同一个 id，
-/// 不会两个进程同写一个会话文件。取消只放走这一个调用方（立即抛 `CancellationError`）；都放弃了才取消这次恢复，
-/// 它照没连上的规则收掉自己起的进程，收完之前再来的恢复等它收完、另起一次。
 @MainActor
 final class Resumptions {
     private final class Pending {
