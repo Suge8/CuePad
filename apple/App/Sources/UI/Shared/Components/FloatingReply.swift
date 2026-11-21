@@ -26,7 +26,7 @@ struct FloatingReply<Chat: View, Reply: View>: View {
                 reply
                     .padding(.bottom, Spacing.replyBottom)
                     // 对话区可见的高：透到上安全区里（页头、状态栏底下也是对话）的那段连同算；下边不算，键盘弹出时那是键盘，盖住的不可见。
-                    // 与键盘高同在这一遍排版里定，不写回状态
+                    // 回复区拿的与键盘高同在这一遍排版里定；对话那边的要经状态（`visible`）传过去，晚一遍排版
                     .environment(\.chatHeight, visible)
                     .frame(maxWidth: .infinity)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }

@@ -202,7 +202,7 @@ struct SessionSpine: View {
         var splits: Bool { !waiting.isEmpty && !advancing.isEmpty }
         private static var edge: CGFloat { Chrome.pad + Spacing.tight }
 
-        /// 收着时一行就是一颗标的间距；展开时一行写名字与它在做的那句，放不下就压矮、只留名字，再放不下也排前面的、末尾 +N。
+        /// 收着时一行就是一颗标的间距；收着放不下时排前面的、末尾 +N；展开时一行写名字与它在做的那句，放不下就压矮、只留名字，再放不下全列出来滚着看。
         init(_ rows: SessionRailRows, band: CGSize, expanded: Bool, pitch: CGFloat, tall: CGFloat, short: CGFloat) {
             let total = rows.waiting.count + rows.advancing.count
             // 展开的面板上下离页头与输入框各留一道缝，不贴着它们

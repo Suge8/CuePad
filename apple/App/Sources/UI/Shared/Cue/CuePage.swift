@@ -164,11 +164,13 @@ struct CuePage: View {
 
     private func stageView(_ thread: CueThread) -> some View {
         let replies = cue.now.items.filter { $0.kind == .reply }, said = CueBrief.said(thread)
+        let room = CueBrief.limit - (said == nil ? 0 : 1)
         return CueStage(
-            beat: cue.beat, status: cue.now.quietLine, brief: brief?.lines ?? [], period: CueStage.Period(at: stagedAt, dark: palette.dark), open: openBrief)
+            beat: cue.beat, status: cue.now.quietLine, brief: (said.map { [$0] } ?? []) + (brief?.lines ?? []),
+            period: CueStage.Period(at: stagedAt, dark: palette.dark), open: openBrief)
             .onScrollVisibilityChange(threshold: 0.4) { stageInView = $0 }
-            .observing(services.store, id: [said?.detail, said?.title] + replies.map(\.id), into: $brief, onError: workspace.fail) { [replies, said] in
-                try CueBrief.read(replies: replies, said: said, from: $0)
+            .observing(services.store, id: [String(room)] + replies.map(\.id), into: $brief, onError: workspace.fail) { [replies] in
+                try CueBrief.read(replies: replies, room: room, from: $0)
             }
             .transition(.opacity)
     }

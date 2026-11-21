@@ -20,7 +20,8 @@ struct CueStage: View {
     @Environment(\.chatBottomInset) private var below
     @Environment(\.chatHeight) private var visible
     @State private var shown = false
-    /// 气泡里除去各行的高（那一句与边距），量出来的。
+    /// 气泡里除去各行的高（那一句与边距），列着行时量出来的。只剩那一句时它换大字、边距也不同，那时量的不算：
+    /// 算进来的话，放不放得下第一行要看上一轮是列着还是没列，同一个高从两头调过来结果不一样。
     @State private var base: CGFloat = 0
     /// 各行一样高：放得下几行按它算，不等排出来再删。
     @ScaledMetric(relativeTo: .body) private var row: CGFloat = 56
@@ -86,7 +87,7 @@ struct CueStage: View {
     private func words(_ sky: Sky, lines: [CueBrief.Line]) -> some View {
         CueBriefBubble(beat: beat, status: status, lines: lines, row: row, open: open)
             .frame(maxWidth: CueBriefBubble.width)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { base = $0 - CGFloat(lines.count) * row }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if !lines.isEmpty { base = $0 - CGFloat(lines.count) * row } }
             .padding(.horizontal, margin)
             .padding(.top, sky.perch + Sky.wordsGap - SpeechShape.tail)
             .offset(y: shown || reduceMotion ? 0 : Sky.rise)
@@ -137,7 +138,8 @@ extension CueStage {
             self.size = size
             let cover = (chat / Self.step).rounded(.up) * Self.step
             depth = cover + Self.overscroll
-            let wide = size.width > size.height
+            // 横竖按整个对话区定，不按这一格：拍板卡升降时这一格变矮变高，按它定的话近方形的栏里天会换成另一张图
+            let wide = size.width > chat
             asset = "cue-stage-sky-\(period.rawValue)-\(wide ? "wide" : "tall")"
             let line = Self.line
             let aspect: CGFloat = wide ? 941 / 1672 : 1.5

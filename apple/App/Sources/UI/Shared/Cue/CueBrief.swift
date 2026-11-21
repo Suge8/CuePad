@@ -23,17 +23,17 @@ nonisolated struct CueBrief: Equatable, Sendable {
     static let limit = 3
     var lines: [Line] = []
 
-    /// 新消息那一行由页按对话给（`said`），这里读要另查库的两种。
-    static func read(replies: [CueNow.Item], said: Line?, from store: isolated CueStore) throws -> CueBrief {
-        var lines = said.map { [$0] } ?? []
-        if let task = try store.unseenDone(), let session = task.piSessionID {
+    /// 要另查库的两种，至多 `room` 行；新消息那一行页按对话当场排在最前（`said`），不经这里：它跟着对话变，不等重读。
+    static func read(replies: [CueNow.Item], room: Int, from store: isolated CueStore) throws -> CueBrief {
+        var lines: [Line] = []
+        if room > 0, let task = try store.unseenDone(), let session = task.piSessionID {
             let shot = try store.cueResultShots(of: [task])[task.id]?.first
             let preview = try shot.flatMap { try store.previews([$0.preview])[$0.preview] }
             lines.append(Line(
                 id: "done/\(task.id)", icon: .done, tone: .done, title: task.heading, detail: try gist(session, from: store) ?? CueNow.Item.Kind.done.label,
                 shot: preview.flatMap { preview in shot.map { CueShown(preview: preview, look: $0.look) } }, go: .session(session)))
         }
-        for item in replies.prefix(max(0, limit - lines.count)) {
+        for item in replies.prefix(max(0, room - lines.count)) {
             let session = String(item.id.dropFirst("reply/".count))
             lines.append(Line(
                 id: item.id, icon: .replied, tone: .reply, title: item.name, detail: try gist(session, from: store) ?? item.kind.label, go: .session(session)))
