@@ -114,26 +114,27 @@ private struct ModelPickBubble: View {
 
     var body: some View {
         let now = Date.now
-        VStack(alignment: .leading, spacing: Spacing.block) {
-            VStack(alignment: .leading, spacing: Spacing.tight) {
-                caption("模型") {
-                    if let current, let url = current.account?.usageURL(provider: current.key.provider) {
-                        Link("管理用量", destination: url).buttonStyle(PressStyle(.inline))
-                    }
-                }
-                VStack(alignment: .leading, spacing: Spacing.item) {
-                    ForEach(ModelLabel.groups(models.models), id: \.provider.id) { group in
-                        VStack(alignment: .leading, spacing: Spacing.hair) {
-                            ForEach(group.models) { row($0, at: now) }
-                        }
-                    }
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            caption("模型") {
+                if let current, let url = current.account?.usageURL(provider: current.key.provider) {
+                    Link("管理用量", destination: url).buttonStyle(PressStyle(.inline))
                 }
             }
-            if let meter, !meter.levels.isEmpty {
-                ThinkingTrack(meter: meter, choose: chooseThinking)
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                ForEach(ModelLabel.groups(models.models), id: \.provider.id) { group in
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        ForEach(group.models) { row($0, at: now) }
+                    }
+                }
             }
         }
         .padding(Spacing.item)
+        if let meter, !meter.levels.isEmpty {
+            // 钉在气泡底下：手机上工具排只在打字时露出，键盘升着气泡总是矮的，模型一多这一条就滚到了看不见的地方
+            ThinkingTrack(meter: meter, choose: chooseThinking)
+                .padding(Spacing.item)
+                .bubbleFoot()
+        }
     }
 
     private func caption(_ title: LocalizedStringResource, @ViewBuilder trailing: () -> some View) -> some View {

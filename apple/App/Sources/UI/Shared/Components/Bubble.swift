@@ -201,6 +201,15 @@ nonisolated struct BubbleShape: Shape {
     }
 }
 
+extension View {
+    /// 气泡内容最外层的一块标成钉在底下的：内容放不下、在气泡里滚时它不跟着滚走，别的在它上面滚。
+    func bubbleFoot() -> some View { containerValue(\.bubbleFoot, true) }
+}
+
+extension ContainerValues {
+    @Entry fileprivate var bubbleFoot = false
+}
+
 struct BubbleFrame<Content: View, Area: View>: View {
     let placement: BubblePlacement
     @ViewBuilder let content: Content
@@ -208,9 +217,27 @@ struct BubbleFrame<Content: View, Area: View>: View {
 
     var body: some View {
         let card = RoundedRectangle(cornerRadius: placement.radius)
-        ScrollView { content }
-            .scrollBounceBehavior(.basedOnSize)
-            .debugScrollsToMiddle()
+        Group(subviews: content) { parts in
+            let feet = parts.filter(\.containerValues.bubbleFoot)
+            let scroll = ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
+                .scrollBounceBehavior(.basedOnSize)
+                .debugScrollsToMiddle()
+            if feet.isEmpty {
+                scroll
+            } else {
+                // 钉着的那块排在滚动区下面、不压在它上面；滚着的内容到它跟前那一小截淡出，不被一条直线切断（不滚时这一截是内容自己的下边距）。
+                // 否决过：系统的栏（`safeAreaBar`）——滚着的字从钉着的那块后面透出来，叠在它的字上。
+                VStack(spacing: 0) {
+                    scroll.mask {
+                        VStack(spacing: 0) {
+                            Rectangle()
+                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Spacing.item)
+                        }
+                    }
+                    ForEach(feet) { $0 }
+                }
+            }
+        }
             .frame(minWidth: placement.narrowest, alignment: .topLeading)
             .clipShape(card)
             .rowContainer(card)
