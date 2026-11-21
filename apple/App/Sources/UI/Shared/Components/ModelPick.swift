@@ -12,15 +12,15 @@ struct ModelPick: View {
     let quotas: [AccountQuota]
     let meter: ThinkingMeter?
     let chooseThinking: (ThinkingLevel) -> Void
-    @Binding var picking: Bool
+    @Binding var picking: BubbleSwitch
     @State private var live = Live()
 
     var body: some View {
         Moments(next: quotas.nextReset(after:)) { now in
             Button { picking.toggle() } label: { label(at: now) }
                 .buttonStyle(PressStyle())
-                .bubble(isPresented: $picking, width: .fixed(Self.width)) { ModelPickBubble(live: live) }
-                .onChange(of: picking, initial: true) { if picking { live.take(self) } }
+                .bubble(isPresented: $picking.open, width: .fixed(Self.width)) { ModelPickBubble(live: live) }
+                .onChange(of: picking.open, initial: true) { if picking.open { live.take(self) } }
                 .onChange(of: Seen(self)) { live.take(self) }
                 .accessibilityLabel("模型")
                 .accessibilityValue(Dotted(spoken(at: now), meter.map { String(localized: "思考 \($0.label)") }).spoken)

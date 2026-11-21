@@ -63,7 +63,7 @@ struct ConfigControls<Trailing: View>: View {
     let trailing: Trailing
     var alignment = Alignment.leading
     @Environment(AppServices.self) var services
-    @State private var picking = false
+    @State private var picking = BubbleSwitch(open: DebugHooks.preset.modelMenu)
 
     init(
         agent: AgentPick? = nil, models: ModelMenu, shown: ConfigShown, unnamed: LocalizedStringResource = "模型", levels: [ThinkingLevel],
@@ -111,9 +111,8 @@ struct ConfigControls<Trailing: View>: View {
         .onChange(of: opening.wrappedValue) { _, pick in
             guard pick != nil else { return }
             opening.wrappedValue = nil
-            picking = true
+            picking.open = true
         }
-        .onAppear { if DebugHooks.preset.modelMenu { picking = true } }
     }
 }
 

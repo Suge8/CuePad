@@ -27,31 +27,31 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 
     func undelivered(at moment: Speech.Moment) -> Int { Speech.undelivered(deliveries, at: moment) }
 
-    /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值，是你换的、之后还没对它做别的才带上那一句（到哪了按 `Speech`）。
-    /// 思考强度按显示的模型夹取（`ThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
+    /// 模型、思考强度与加速此刻显示什么：每样各看最近一条动它的配置请求，还在路上就显示要换成的值，到头了（送达、未确认、没换成）显示会话当前的值（到哪了按 `Speech`）。
+    /// 各看各的，不按最近那一条的终态一起定：一条只换强度的请求送达或失败，不把还在路上的换模型盖回旧值；更早、还在路上的那条也盖不过较新的已到头的同一样。
+    /// 思考强度一律按显示的模型夹取（`ThinkingLevel.clamped`）：换了模型不显示新模型没有的档位，只换模型的请求送达后、Agent 报回新强度之前也一样。
+    /// 没换成的那一句只说给换的那个人、说到他对这个会话的下一个动作为止：Cue 换的由它看工具结果自己处理；之后又说了话、改了名，这句就过时了。
     /// 模型按键对回清单里的那一项：会话文件索引写下的只有键（`CueStore.writeSessionHistory`），名字与档位在清单里。
     func config(at moment: Speech.Moment) -> ConfigShown {
-        let listed = session?.model.map { model in catalog?.models.first { $0.key == model.key } ?? model }
-        let current = ConfigShown(model: listed ?? defaultModel, thinking: session?.thinking?.known, fast: session?.fast, context: session?.context, pending: false, failure: nil)
-        // 只看换模型、思考强度的请求：改名同走配置请求，但与这两样无关
-        guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil || $0.fast != nil } == true }),
-              let wanted = request.config else { return current }
-        switch Speech.trip(request, at: moment) {
-        case .preparing, .sending, .sent:
-            // 连着换（模型气泡里先换模型、紧接着换强度）时前一条也可能还在路上：每样取在路上的最近一条，后一条不把前一条要换的盖回会话现在的值
-            let flying = deliveries.filter { Speech.trip($0, at: moment).awaitingResult }.compactMap(\.config)
-            let model = flying.last(where: { $0.model != nil })?.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
-            let thinking = (flying.last(where: { $0.thinking != nil })?.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
-            return ConfigShown(model: model, thinking: thinking, fast: flying.last(where: { $0.fast != nil })?.fast ?? current.fast, context: current.context, pending: true, failure: nil)
-        case .delivered: return current
-        case .unconfirmed: return current
-        case .failed(let failure):
-            // 没换成只说给换的那个人、说到他对这个会话的下一个动作为止：Cue 换的由它看工具结果自己处理；之后又说了话、改了名，这句就过时了
-            guard !request.isFromCue, request.id == deliveries.last?.id else { return current }
-            let name = wanted.model.map { key in catalog?.models.first { $0.key == key }?.name ?? key.id } ?? wanted.thinking.map { String(localized: "思考 \($0.label)") }
-            let text = name.map { String(localized: "没换成 \($0)：\(failure.text)") } ?? String(localized: "没换成：\(failure.text)")
-            return ConfigShown(model: current.model, thinking: current.thinking, fast: current.fast, context: current.context, pending: false, failure: text)
+        // 改名同走配置请求，但与这三样无关
+        let requests = deliveries.filter { $0.config.map { $0.model != nil || $0.thinking != nil || $0.fast != nil } == true }
+        func flying(_ carries: (SessionConfig) -> Bool) -> SessionConfig? {
+            guard let request = requests.last(where: { $0.config.map(carries) == true }), Speech.trip(request, at: moment).awaitingResult else { return nil }
+            return request.config
         }
+        let listed = session?.model.map { model in catalog?.models.first { $0.key == model.key } ?? model }
+        let model = flying { $0.model != nil }?.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? listed ?? defaultModel
+        let thinking = (flying { $0.thinking != nil }?.thinking ?? session?.thinking?.known).map { $0.clamped(to: model?.thinkingLevels ?? []) }
+        let fast = flying { $0.fast != nil }?.fast ?? session?.fast
+        let pending = requests.contains { Speech.trip($0, at: moment).awaitingResult }
+        return ConfigShown(model: model, thinking: thinking, fast: fast, context: session?.context, pending: pending, failure: failure(of: requests.last, at: moment))
+    }
+
+    private func failure(of request: DeliveryRequest?, at moment: Speech.Moment) -> String? {
+        guard let request, let wanted = request.config, case .failed(let failure) = Speech.trip(request, at: moment),
+              !request.isFromCue, request.id == deliveries.last?.id else { return nil }
+        let name = wanted.model.map { key in catalog?.models.first { $0.key == key }?.name ?? key.id } ?? wanted.thinking.map { String(localized: "思考 \($0.label)") }
+        return name.map { String(localized: "没换成 \($0)：\(failure.text)") } ?? String(localized: "没换成：\(failure.text)")
     }
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {

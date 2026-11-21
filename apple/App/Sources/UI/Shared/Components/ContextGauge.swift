@@ -11,13 +11,14 @@ struct ContextGauge: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.chipHeight) private var chipHeight
-    @State private var showsDetail = false
-    private static let line: CGFloat = 2.5
+    @State private var showsDetail = BubbleSwitch()
     /// 用得再少也露出一小截弧：只剩圆头的一个点读不出是"用了一点"
     private static let least = 0.03
 
     private var tight: Bool { meter.level == .tight || meter.level == .critical }
     private var side: CGFloat { chipHeight ?? ControlSize.inline.height }
+    /// 线宽随圈定：细到 2.5 点时弧在玻璃上发虚，读不出用了几成
+    private var line: CGFloat { side * 0.11 }
     private var shown: Double { max(meter.fraction, Self.least) }
 
     private var arc: Color {
@@ -32,7 +33,7 @@ struct ContextGauge: View {
         Button { showsDetail.toggle() } label: { dial }
             .buttonStyle(PressStyle())
             .help(meter.help.visible)
-            .bubble(isPresented: $showsDetail) { detail }
+            .bubble(isPresented: $showsDetail.open) { detail }
             .accessibilityLabel("上下文")
             .accessibilityValue(meter.help.spoken)
             .animation(Motion.fade, value: meter)
@@ -41,17 +42,17 @@ struct ContextGauge: View {
     private var dial: some View {
         ZStack {
             Circle().fill(palette.fill)
-            Circle().strokeBorder(palette.track, lineWidth: Self.line)
+            Circle().strokeBorder(palette.track, lineWidth: line)
             if !meter.suggestsCompact {
-                Circle().fill(palette.ink3).frame(width: Self.line, height: Self.line)
-                    .offset(y: -(side - Self.line) / 2)
+                Circle().fill(palette.ink3).frame(width: line, height: line)
+                    .offset(y: -(side - line) / 2)
                     .rotationEffect(.degrees(360 * ContextMeter.compactFraction))
                     .transition(.opacity)
             }
-            Circle().inset(by: Self.line / 2).trim(from: 0, to: shown)
+            Circle().inset(by: line / 2).trim(from: 0, to: shown)
                 .stroke(
                     AngularGradient(colors: [arc.opacity(0.2), arc], center: .center, startAngle: .zero, endAngle: .degrees(360 * shown)),
-                    style: StrokeStyle(lineWidth: Self.line, lineCap: .round))
+                    style: StrokeStyle(lineWidth: line, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             // 圈里的字随圈定大，不随动态字体：放大了就撑出圈
             HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -84,7 +85,7 @@ struct ContextGauge: View {
     }
 
     private func compact() {
-        showsDetail = false
+        showsDetail.open = false
         workspace.compact(session)
     }
 }
