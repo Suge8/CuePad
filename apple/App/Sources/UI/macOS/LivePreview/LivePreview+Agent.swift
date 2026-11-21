@@ -35,6 +35,8 @@ extension LivePreview {
         /// 正在做 Agent 的动作：这时网页弹的对话框没人看着就当场答掉（`LivePreview+Dialogs`）。
         var acting = false
         var drivenUntil = ContinuousClock.now
+        /// 这一页（主框的那份文档）一直标着 aria-busy、等到头过（`untilCurrent`）。
+        var stuckBusy: String?
     }
 
     struct AgentPage {
@@ -210,6 +212,8 @@ extension LivePreview {
                 if let url = web.url?.absoluteString, url.contains(part) { return .done("等到了\(what)（\(Self.seconds(since: start))）：\(url)") }
             } else {
                 try requireLocal()
+                // 内容要现问的页面：每一轮都等它问回来再看，不拿上一轮的旧内容当等到了
+                await untilCurrent()
                 let documents = args.text == nil ? record.main.flatMap { record.documents[$0] }.map { [$0] } ?? [] : Array(record.documents.values)
                 for document in documents {
                     let hit = try? await call("return { hit: cue.has(args) }", ["args": ["text": args.text as Any, "selector": args.selector as Any]], in: document, within: .seconds(2))

@@ -7,6 +7,7 @@ struct InspirationEditorActions: View {
     let card: Card
     let editing: CardEditing
     let sharing: InspirationSharing
+
     var body: some View {
         Group {
             // 三种分享收成一项：摊开在最上面，把置顶、移动这些更常点的挤到了菜单下半截

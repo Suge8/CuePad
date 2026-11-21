@@ -16,7 +16,7 @@ extension Workspace {
 
     func showsLivePreview(_ session: UUID) -> Bool {
         switch layout {
-        case .wide: beside == .preview && self.session(in: .main)?.id == session
+        case .wide: beside.contains(.preview) && self.session(in: .main)?.id == session
         case .narrow: liveCover == session && liveRoute?.id == session
         }
     }
@@ -48,7 +48,7 @@ extension Workspace {
         }
         switch navigation {
         case .wide(var state):
-            state.beside = opening ? .preview : nil
+            if opening != state.beside.contains(.preview) { state.togglePreview(room: wideRoom) }
             navigation = .wide(state)
         case .narrow:
             liveCover = opening ? route.id : nil
@@ -71,7 +71,7 @@ extension Workspace {
     /// 会话页还开着（窄屏在导航栈里，宽屏在主区或并排）就留着它的预览，离开了才放掉。导航一变就调（`navigation`）。
     func keepLivePreviews() {
         let open: Set<UUID> = switch navigation {
-        case .wide: Set([session(in: .main), session(in: .beside)].compactMap { $0?.id })
+        case .wide: Set(([session(in: .main)].compactMap(\.self) + besideSessions).map(\.id))
         case .narrow(let state): Set(state.path.compactMap { if case .session(let route) = $0 { route.id } else { nil } })
         }
         let gone = livePreviews.filter { !open.contains($0.key) }.values

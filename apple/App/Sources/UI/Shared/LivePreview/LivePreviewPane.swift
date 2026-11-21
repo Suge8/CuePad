@@ -75,7 +75,7 @@ struct LivePreviewPane: View {
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             // 收起时滑出去的那一程按不并排的宽排着：不记它，后台预览（`LiveHost`）按开着时的大小排版
-            guard case .preview = workspace.beside else { return }
+            guard workspace.beside.contains(.preview) else { return }
             LivePreview.paneSize = size
         }
         .onDisappear {

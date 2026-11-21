@@ -113,7 +113,7 @@ public enum ScreenPage {
       }
       context.drawImage(frame, 0, 0);
       frame.close();
-      look?.(false);
+      look?.();
     };
 
     const configure = text => {
@@ -125,12 +125,13 @@ public enum ScreenPage {
       configured = text;
     };
 
-    // 画面里有什么（mirror 那一段）：`look(true)` 是刚送了输入、这就去问，`look(false)` 是画面自己动了、隔一会儿问一次
-    let look = null;
+    // 画面里有什么（mirror 那一段）：`look()` 是画面或输入动过了，等它停下来再问；`look(true)` 是刚连上，这就问。
+    // `forget`：连接断了，那一层不再作数
+    let look = null, forget = null;
     const say = message => {
       if (socket?.readyState !== WebSocket.OPEN) return;
       socket.send(JSON.stringify(message));
-      look?.(true);
+      look?.();
     };
     const place = event => {
       const box = stage.getBoundingClientRect();
@@ -150,10 +151,12 @@ public enum ScreenPage {
         const bytes = new Uint8Array(data);
         decoder.decode(new EncodedVideoChunk({ type: bytes[0] ? "key" : "delta", timestamp: performance.now() * 1000, data: bytes.subarray(1) }));
       };
+      mine.onopen = () => look?.(true);
       mine.onclose = () => {
         if (socket === mine) socket = null;
         // 按着的手指与键服务那头替这条连接抬起了：这头也忘掉，重连后不接着发半截的拖动
         release();
+        forget?.();
         setTimeout(connect, 1000);
       };
     };

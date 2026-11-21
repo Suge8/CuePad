@@ -11,6 +11,7 @@ final class IOSEditorHandle {
     var text: String? { view?.storedText }
     var selection: String? { view?.selectedStoredText }
     func insert(_ files: [IncomingFile]) { view?.insert(files) }
+    var focused: Bool { view?.isFirstResponder == true }
     func focus() { view?.becomeFirstResponder() }
     func replace(_ text: String) {
         guard let view else { return }

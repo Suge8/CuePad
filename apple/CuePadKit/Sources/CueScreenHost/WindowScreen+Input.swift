@@ -158,22 +158,33 @@ extension WindowScreen {
   private static let mark: Int64 = 0x43_7565
 
   /// 应用平常派发按下与键之前先过这里（`NSEvent.addLocalMonitorForEvents`，`WindowScreen.init` 装的）。应用在后台时哪扇窗都不是当前窗口：
-  /// 按下，AppKit 只当成"点到这扇窗"，不交给不接第一下的视图（文本框）；键，没有当前窗口可给，直接丢掉。
-  /// 这两样照当前窗口里会发生的做一遍，原来那一下吞掉。
+  /// 按下，AppKit 先问落点的视图接不接第一下（`acceptsFirstMouse`），不接的（文本框、带手势的 SwiftUI 视图）就只当成"点到这扇窗"；
+  /// 键，没有当前窗口可给，直接丢掉。按下：让那个视图对这里造的事件答"接"，之后照常派发；键：给拿键盘的那扇窗，原来那一下吞掉。
   @MainActor func dispatch(_ event: NSEvent) -> NSEvent? {
     guard event.cgEvent?.getIntegerValueField(.eventSourceUserData) == Self.mark else { return event }
     if event.type == .leftMouseDown {
-      guard let window = event.window, !window.isKeyWindow, let view = window.contentView?.superview?.hitTest(event.locationInWindow), !view.acceptsFirstMouse(for: event) else { return event }
-      if view.acceptsFirstResponder { window.makeFirstResponder(view) }
-      // 这一下可能就地转起一个跟踪循环等抬起（选字）：抬起也在队列里，循环从那里取
-      view.mouseDown(with: event)
-    } else if event.type == .keyDown, !event.modifierFlags.isDisjoint(with: [.command, .control]) {
-      shortcut(event)
-    } else {
-      typing?.sendEvent(event)
+      if let window = event.window, !window.isKeyWindow, let view = window.contentView?.superview?.hitTest(event.locationInWindow) { Self.welcome(type(of: view)) }
+      return event
     }
+    if !event.modifierFlags.isDisjoint(with: [.command, .control]), event.type == .keyDown { shortcut(event) } else { typing?.sendEvent(event) }
     return nil
   }
+
+  /// 这个类的视图对这里造的事件一律答"接第一下"，别的事件照它原来的答。
+  /// 改的是这一个类的方法：没有公开的口子让后台应用的窗口当上当前窗口（`makeKey` 不作数，实测 macOS 27.2），
+  /// 而自己替 AppKit 调 `mouseDown` 的话手势认不到（它们是 AppKit 派发时喂的，SwiftUI 的点按、拖、双击都是手势）。
+  @MainActor private static func welcome(_ type: AnyClass) {
+    let selector = #selector(NSView.acceptsFirstMouse(for:))
+    guard welcomed.insert(ObjectIdentifier(type)).inserted, let method = class_getInstanceMethod(type, selector) else { return }
+    typealias Original = @convention(c) (NSView, Selector, NSEvent?) -> Bool
+    let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
+    let ours: @convention(block) (NSView, NSEvent?) -> Bool = { view, event in
+      event?.cgEvent?.getIntegerValueField(.eventSourceUserData) == mark || original(view, selector, event)
+    }
+    class_replaceMethod(type, selector, imp_implementationWithBlock(ours), method_getTypeEncoding(method))
+  }
+
+  @MainActor private static var welcomed: Set<ObjectIdentifier> = []
 
   /// 带 ⌘ ⌃ 的键照 AppKit 平常的次序问一遍：拿键盘的那扇窗里的视图，再是菜单。应用在后台时菜单里靠当前窗口找目标的项（全选、撤销、关窗）都是灰的：
   /// 这种自己照键找出那一项，把它的动作顺着那扇窗的响应链送。

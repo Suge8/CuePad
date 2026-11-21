@@ -5885,22 +5885,6 @@
         }
       }
     },
-    "今天先不做" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Today"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "今天先不做"
-          }
-        }
-      }
-    },
     "今天还没做完的" : {
       "localizations" : {
         "en" : {
@@ -8757,22 +8741,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "去会话"
-          }
-        }
-      }
-    },
-    "去会话里看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去会话里看"
           }
         }
       }
@@ -14213,22 +14181,6 @@
         }
       }
     },
-    "拆成任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Make Tasks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拆成任务"
-          }
-        }
-      }
-    },
     "拍板" : {
       "localizations" : {
         "en" : {
@@ -15437,22 +15389,6 @@
         }
       }
     },
-    "放在这里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drop Here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放在这里"
-          }
-        }
-      }
-    },
     "放大" : {
       "localizations" : {
         "en" : {
@@ -16573,34 +16509,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最高"
-          }
-        }
-      }
-    },
-    "有 %lld 件等你拍板" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld thing needs your call"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld things need your call"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有 %lld 件等你拍板"
           }
         }
       }
@@ -19977,22 +19885,6 @@
         }
       }
     },
-    "看对话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Chat"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看对话"
-          }
-        }
-      }
-    },
     "看怎么才会有额度" : {
       "localizations" : {
         "en" : {
@@ -20069,38 +19961,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看每个窗口还剩多少、多久后重置"
-          }
-        }
-      }
-    },
-    "看看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看看"
-          }
-        }
-      }
-    },
-    "看结果" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See Result"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看结果"
           }
         }
       }
@@ -20437,6 +20297,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "窗口"
+          }
+        }
+      }
+    },
+    "窗口太窄，放不下并排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Window too narrow to show side by side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口太窄，放不下并排"
           }
         }
       }
@@ -22953,6 +22829,22 @@
         }
       }
     },
+    "边聊边看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat Alongside"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "边聊边看"
+          }
+        }
+      }
+    },
     "达到用量限制" : {
       "localizations" : {
         "en" : {
@@ -24013,22 +23905,6 @@
         }
       }
     },
-    "这几件，要不要顺手做了？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Want to knock these out?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这几件，要不要顺手做了？"
-          }
-        }
-      }
-    },
     "这句可能已经交出，不能安全撤回" : {
       "localizations" : {
         "en" : {
@@ -24713,6 +24589,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "送达未确认"
+          }
+        }
+      }
+    },
+    "选一个会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选一个会话"
           }
         }
       }

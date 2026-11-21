@@ -42,8 +42,9 @@ extension Workspace {
     /// 与系统通知同一条规则（`AlertCenter`）。
     func showsAlert(about session: UUID) -> Bool { !shownSessions.contains { $0.id == session } }
 
-    /// 说的是某个会话的提示时，你进了那个会话就当场撤下，不在正看着的页面上停满 5 秒。
+    /// 说的是某个会话的提示时，你进了那个会话就当场撤下，不在正看着的页面上停满 5 秒。挑会话的提示挑完、取消就撤。
     func keeps(_ notice: Notice) -> Bool {
+        if notice.tone == .pick { return pickingDock }
         guard case .session(let route)? = notice.link else { return true }
         return showsAlert(about: route.id)
     }

@@ -5,8 +5,8 @@ extension ScreenPage {
   /// 它们点的是这一层的元素，落点正是画面里那个控件，按下去照常经 `hands` 送进应用。
   static let mirror = #"""
     const layer = stage.querySelector("section"), made = new Map();
-    // 画面横着是应用里的多少点（`attend` 照它算放多大）。`app`：这一层照的是哪一份应用，换了一份（重新构建后再起的）整层重摆，旧的引用不落到新的元素上
-    let points = 0, app = 0;
+    // 画面横着是应用里的多少点（`attend` 照它算放多大）
+    let points = 0;
     // 自己接点击的（落点认它）；别的只供读，不挡着底下的
     const live = new Set(["window", "dialog", "menu", "button", "link", "textbox", "searchbox", "checkbox", "radio", "switch", "combobox", "slider", "spinbutton", "option", "tab", "menuitem"]);
     // 名字写成内容的：读页面的从内容取这几种的名字，等文字出现（wait --text）也找得到
@@ -41,7 +41,8 @@ extension ScreenPage {
           set(element, "type", node.secret ? "password" : node.r === "searchbox" ? "search" : undefined);
           set(element, "placeholder", node.hint);
           element.readOnly = !["textbox", "searchbox"].includes(node.r);
-          if (!node.secret && element.value !== (node.v ?? "")) element.value = node.v ?? "";
+          // 密码框应用只说多长：这头刚填的那段一样长就留着，不然清掉（`fill` 之后凭它知道进没进去）
+          if (node.secret ? element.value.length !== node.len : element.value !== (node.v ?? "")) element.value = node.v ?? "";
         } else if (text) {
           if (element.textContent !== (node.n ?? "")) element.textContent = node.n ?? "";
         } else {
@@ -52,34 +53,62 @@ extension ScreenPage {
       });
       while (parent.children.length > nodes.length) parent.lastElementChild.remove();
     };
-    let asking = false, stale = false, asked = 0, timer = null;
+    // 什么时候问应用（走一遍无障碍树占它的主线程，几十个元素十几毫秒）：
+    // 画面或输入动过了（`dirty`）不马上问，等它停下 200 毫秒；一直在动的（动画、拖着滚）就一直不问，隔一会儿小动一下的两次之间至少隔开 1 秒。
+    // 读页面的来了（CuePad 替 Agent 读、点之前发 `cuepad-read`）当场问，问到之前根元素标着 aria-busy，它等这个标去掉。
+    // 两问之间照上一遍的花销（`cost`，毫秒）隔开：没人读时不过应用主线程的 2%；有人等着读时不过一成，最多隔 1 秒（读的人只等 3 秒）
+    let asking = false, again = false, dirty = false, wanted = false, asked = 0, cost = 0, timer = null;
     const ask = async () => {
-      [asking, stale, asked] = [true, false, performance.now()];
+      clearTimeout(timer);
+      const from = socket;
+      [asking, again, dirty, wanted, asked] = [true, false, false, false, performance.now()];
+      let answered = false;
       try {
-        const response = await fetch("/outline");
-        if (response.ok) {
-          const seen = new Set(), outline = await response.json();
+        const response = await fetch("/outline"), outline = response.ok && await response.json();
+        // 问着的时候连接换过：这是上一份应用说的，不摆
+        if (outline && from === socket) {
+          const seen = new Set();
           points = outline.points;
-          if (app !== outline.app) {
-            layer.replaceChildren();
-            made.clear();
-            app = outline.app;
-          }
+          cost = outline.ms;
           arrange(outline.nodes, layer, [0, 0, 1, 1], seen);
           for (const id of [...made.keys()]) if (!seen.has(id)) made.delete(id);
+          answered = true;
         }
       } catch {}
       asking = false;
-      if (stale) look(true);
+      if (again) return ask();
+      if (from !== socket) return;
+      // 没问到的还标着 aria-busy，过一会儿再问
+      if (answered) document.documentElement.removeAttribute("aria-busy");
+      if (dirty || !answered) look();
     };
-    // 问着的时候又有新输入：答回来的可能是那之前的，接着再问一次。画面自己在动（动画）时一秒最多问一次
     look = now => {
       if (document.hidden) return;
-      if (asking) return void (stale ||= now);
-      const wait = now ? 0 : 1000 - (performance.now() - asked);
-      if (wait <= 0) return clearTimeout(timer), timer = null, void ask();
-      timer ??= setTimeout(() => { timer = null; look(true); }, wait);
+      if (now) return asking ? void (again = true) : void ask();
+      dirty = true;
+      if (asking || wanted) return;
+      clearTimeout(timer);
+      timer = setTimeout(ask, Math.max(200, asked + Math.max(1000, cost * 50) - performance.now()));
     };
+    addEventListener("cuepad-read", () => {
+      if (!dirty && !asking) return;
+      document.documentElement.setAttribute("aria-busy", "true");
+      // 在途的那一问答回来时说的就是此刻
+      if (asking || wanted) return;
+      wanted = true;
+      clearTimeout(timer);
+      timer = setTimeout(ask, Math.max(0, asked + Math.min(1000, cost * 10) - performance.now()));
+    });
+    // 这一层作不作数：没连上、刚连上还没问到时不作数，整层清空（再连上的可能是重新构建后起的另一份应用，旧的引用不落到新的元素上），
+    // 根元素标着 aria-busy；CuePad 替 Agent 读、点之前等它去掉（`LivePreview.untilCurrent`），不然刚开进预览就读到一张空页
+    forget = () => {
+      clearTimeout(timer);
+      dirty = wanted = false;
+      layer.replaceChildren();
+      made.clear();
+      document.documentElement.setAttribute("aria-busy", "true");
+    };
+    forget();
 
     // Agent 照元素做的那几样（CuePad 往页面里注入的脚本对着这一层的元素做，这里转给应用里的那个控件）：
     // 聚焦一个元素；把输入框填成一段字（它改完值发 change）；按键是脚本合成的（isTrusted 为假，真键盘的走 hands）。

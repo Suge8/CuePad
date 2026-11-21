@@ -30,7 +30,7 @@ struct BoardLink<Label: View>: View {
     }
 
     private func open(_ beside: Bool) {
-        workspace.openSession(to.id, sessionID: to.sessionID, in: beside ? .beside : .main)
+        workspace.openSession(to.id, sessionID: to.sessionID, in: beside ? .aside : .main)
     }
 }
 
@@ -40,7 +40,7 @@ struct OpenSessionBeside: View {
 
     var body: some View {
         if workspace.layout == .wide, !workspace.shownSessions.contains(where: { $0.sessionID == session.sessionID }) {
-            Button("并排打开", icon: .rightColumn) { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
+            Button("并排打开", icon: .rightColumn) { workspace.openSession(session.id, sessionID: session.sessionID, in: .aside) }
         }
     }
 }

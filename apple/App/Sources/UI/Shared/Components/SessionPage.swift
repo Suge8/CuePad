@@ -56,9 +56,6 @@ private struct SessionPageBody: View {
                 // 栏头是浮在对话上的玻璃：对话从它下面滑过去、到窗口边为止，不在栏头下沿裁掉或盖一层淡出
                 reply(session, digest)
                     .safeAreaPadding(.top, Chrome.band)
-                    #if os(iOS)
-                    .scrollEdgeEffectHidden(true, for: .top)
-                    #endif
                     .overlay(alignment: .top) {
                         if let session {
                             WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
@@ -69,8 +66,7 @@ private struct SessionPageBody: View {
             } else {
                 #if os(iOS)
                 // 右边只有活预览那一颗（有页面可看时），与左边的返回对称；完成、休眠这些点标题，等你的那件在看板与会话条上也有
-                // 对话滑到页头的玻璃下面，只有状态栏那一条由窗口的模糊盖着（`StatusBarBlur`），页头这一截不再垫系统的淡出
-                reply(session, digest).scrollEdgeEffectHidden(true, for: .top).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+                reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
                     if let session { menu(session, digest) }
                 } detail: {
                     if ending(digest) {
@@ -167,7 +163,10 @@ private struct SessionPageBody: View {
                         Color.clear.frame(height: ComposerMetrics.openOneLine)
                     }
                     #else
-                    dock(session, digest)
+                    VStack(spacing: 0) {
+                        DockedCard(workspace.ideaDock.flatMap { $0.session == id ? $0 : nil }) { IdeaDockCard(dock: $0) }
+                        dock(session, digest)
+                    }
                     #endif
                 }
                 #if os(macOS)

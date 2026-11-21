@@ -13,13 +13,15 @@ extension View {
     /// 只在刷新最宽那一下带动画——系统导航栏在 SwiftUI 动画之外先把中间那一项撑到新宽，玻璃照样当帧到位；
     /// 状态行垫一行隐藏的最宽状态字、一打开就按终点宽排（同 Mac 的 `OverlayTitle`）——首次也不跳了，但玻璃常年顶到系统给的宽，状态轮播时渲染服务指令 +15%；
     /// 只长不缩但用几何读数写回下限——静置时渲染服务的指令多四成；玻璃铺满两侧圆钮之间；按最宽的样子固定占位。
+    /// 给了 `idea` 时中间那块是这条灵感的把手：宽屏拖到主区右边就并排到会话旁边（`WideDrop`）。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
+        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil, idea: UUID? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            center: TitleStack(title: title, detail: detail()).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
+            center: TitleStack(title: title, detail: detail()).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1)
+                .draggable(idea: idea),
             trailing: trailing()))
     }
 

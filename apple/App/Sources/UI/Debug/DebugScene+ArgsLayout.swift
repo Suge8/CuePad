@@ -4,6 +4,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadBeside <会话>`（宽屏）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
     let beside: String?
+    /// `-CuePadBesideCard YES`（宽屏，配 `-CuePadSession`）：最左那个会话旁边再并排一条默认项目的灵感（`-CuePadCard` 挑哪条），在 `-CuePadBeside` 的会话右边
+    let besideCard: Bool
     /// `-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类）；不给时 iPad 的调试实例起来先铺满屏
     let compact: Double?
     /// `-CuePadCuePanel YES`（配 cue 画面）：页头一出现就展开成面板
@@ -35,7 +37,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let livePickCommit: Bool
     /// `-CuePadSessionDirectory <绝对路径>`（仅 Mac，演示库）：演示会话 atlas 的工作目录，在里面起的开发服务活预览认得出（`LiveServers`）
     let sessionDirectory: String?
-    /// `-CuePadBesideShare <0–1>`（配 `-CuePadBeside` 或 `-CuePadLivePreview`）：右半占主区的这几成（`Workspace.besideShare`），超出两边最窄的照样卡住；0 是左边最宽，1 是右半最宽
+    /// `-CuePadBesideShare <0–1>`（配 `-CuePadBeside` 或 `-CuePadLivePreview`）：右边那块占主区的这几成（`Workspace.paneShares`），超出两边最窄的照样卡住；0 是左边最宽，1 是右边最宽
     let besideShare: Double?
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段
     let mergePreview: Bool

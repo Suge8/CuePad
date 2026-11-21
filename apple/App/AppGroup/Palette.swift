@@ -28,8 +28,6 @@ struct Palette {
     var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
     /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
-    /// Cue 页舞台那张天空图下沿的颜色（`CueStage`）：图下面接着铺它，接缝看不出。跟着图走，不跟桌面。
-    var sky: Color { dark ? Color(hex: 0x1B1132) : Color(hex: 0xF7DBD2) }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
     var sheen: Color { Color.white.opacity(dark ? 0.07 : 0.9) }
