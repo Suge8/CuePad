@@ -9,7 +9,7 @@ extension WindowScreen {
   struct Input {
     /// 按下那一下落在哪扇窗：拖动与抬起都算它的，指针出了窗口也是。
     var pressed: NSWindow?
-    /// 最近点过的那扇窗：键与字交给它。应用在后台时没有"当前窗口"可问。
+    /// 最近点过的那扇窗：键与字交给它（`typing`）。应用在后台时没有"当前窗口"可问。
     weak var focus: NSWindow?
     var modifiers: NSEvent.ModifierFlags = []
     var clicks = (at: CGPoint.zero, time: 0.0, count: 0)
@@ -37,22 +37,22 @@ extension WindowScreen {
 
   // MARK: 画面与窗口
 
-  /// 画面里有哪些窗，从底下往上：那扇窗、挂在它上面的（表单、弹层），再是浮在普通窗口之上的（菜单、提示条，它们不挂在谁上面）。
-  /// 别的普通窗口不在画面里。ScreenCaptureKit 没说它把哪些算进来，这是照实测对出来的。
+  /// 画面里有哪些窗，从底下往上：那扇窗、挂在它上面的（表单、弹层），再是菜单（它不挂在谁上面，排在菜单那一层）。
+  /// 别的窗不在画面里：别的普通窗口、自己浮着的面板（放到菜单那一层的也不在，实测）。ScreenCaptureKit 没说它把哪些算进来，这是照实测对出来的。
   @MainActor private var stack: [NSWindow] {
     func chain(_ window: NSWindow) -> [NSWindow] { [window] + ((window.parent ?? window.sheetParent).map(chain) ?? []) }
     return NSApp.windows.compactMap { window -> (NSWindow, Int, Int)? in
-      guard window.isVisible, let root = chain(window).last, root === shown || root.level > .normal else { return nil }
+      guard window.isVisible, let root = chain(window).last, root === shown || root.level == .popUpMenu else { return nil }
       return (window, root.level.rawValue, chain(window).count)
     }.sorted { ($0.1, $0.2) < ($1.1, $1.2) }.map(\.0)
   }
 
   /// 画面里的一点 → 屏上的一点（AppKit 的坐标：左下原点），与画面缩了多少。
-  /// 画面是 `stack` 的外接矩形：没有哪扇伸出窗口时就是窗口本身；有伸出去的（靠边的菜单，它的影子那一圈也算），
-  /// ScreenCaptureKit 把整块外接矩形等比缩进窗口那么大的画面里、靠左上（实测）。
+  /// 画面平常就是窗口本身；有窗伸出去时（靠边的菜单，它的影子那一圈也算；流报的，`overflowing`），
+  /// ScreenCaptureKit 把 `stack` 的外接矩形等比缩进窗口那么大的画面里、靠左上（实测）。
   @MainActor private func place(_ x: Double, _ y: Double) -> (point: CGPoint, scale: Double)? {
     guard let frame = shown?.frame else { return nil }
-    let all = stack.reduce(frame) { $0.union($1.frame) }
+    let all = overflowing ? stack.reduce(frame) { $0.union($1.frame) } : frame
     let scale = min(frame.width / all.width, frame.height / all.height)
     return (CGPoint(x: all.minX + x * frame.width / scale, y: all.maxY - y * frame.height / scale), scale)
   }
@@ -104,7 +104,11 @@ extension WindowScreen {
 
   // MARK: 键与字
 
-  @MainActor private var typing: NSWindow? { input.focus ?? shown }
+  /// 键与字给哪扇窗：最近点过的那扇还在画面里就是它，不然是画面里最上面能拿键盘的（刚开出来的表单、换过去的设置窗）。
+  @MainActor private var typing: NSWindow? {
+    let stack = stack
+    return input.focus.flatMap { focus in stack.contains { $0 === focus } ? focus : nil } ?? stack.last(where: \.canBecomeKey)
+  }
 
   @MainActor private func key(_ usage: UInt32, _ down: Bool) {
     if let modifier = Self.modifiers[usage] {

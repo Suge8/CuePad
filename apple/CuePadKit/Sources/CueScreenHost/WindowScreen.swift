@@ -13,6 +13,8 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     let window: CGWindowID
     let width: Int
     let height: Int
+    /// 第几次起流：流自己停了、没起成，加一再量，同一扇窗也重起（`again`）。
+    let turn: Int
   }
 
   private struct Shared {
@@ -20,6 +22,10 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     var frame: CVPixelBuffer?
     /// `frame` 是哪一刻的。
     var time = 0.0
+    /// 正起着的那条流：停下的通知是不是它的，凭这个认。
+    var stream: SCStream?
+    /// 最近一帧里有窗伸出了窗口（`place`）。
+    var overflowing = false
   }
 
   private let shared = OSAllocatedUnfairLock(uncheckedState: Shared())
@@ -27,6 +33,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   /// 要取的那一块（没人看、没有窗口是 nil）：只留最新的，`capture` 一个个照着改流。
   private let wanted: AsyncStream<Stage?>.Continuation
   @MainActor private var asked: Stage?
+  @MainActor private var turn = 0
   @MainActor private var watching = false
   /// 画面里的那扇窗。
   @MainActor private(set) weak var shown: NSWindow?
@@ -39,7 +46,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     self.wanted = wanted
     super.init()
     Task.detached { [weak self] in
-      var stream: (SCStream, CGWindowID)?
+      var stream: (SCStream, Stage)?
       for await stage in stages {
         guard let self else { return }
         stream = await self.capture(stage, from: stream)
@@ -66,7 +73,11 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   }
 
   func rest() {
-    shared.withLockUnchecked { $0 = Shared() }
+    shared.withLockUnchecked {
+      $0.changed = nil
+      $0.frame = nil
+      $0.time = 0
+    }
     onMain {
       $0.watching = false
       $0.measure()
@@ -74,6 +85,9 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   }
 
   func frame() -> CVPixelBuffer? { shared.withLockUnchecked { $0.frame } }
+
+  /// 最近一帧里有窗伸出了窗口。
+  var overflowing: Bool { shared.withLockUnchecked { $0.overflowing } }
 
   func send(_ input: ScreenInput) { onMain { $0.deliver(input) } }
 
@@ -100,7 +114,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
       stage = shown.map {
         // 照窗口的像素取，长边不过 `longest`：再大编码与手机那头解码都白费。H.264 的宽高要是偶数
         let scale = min($0.backingScaleFactor, Self.longest / max($0.frame.width, $0.frame.height))
-        return Stage(window: CGWindowID($0.windowNumber), width: Int($0.frame.width * scale / 2) * 2, height: Int($0.frame.height * scale / 2) * 2)
+        return Stage(window: CGWindowID($0.windowNumber), width: Int($0.frame.width * scale / 2) * 2, height: Int($0.frame.height * scale / 2) * 2, turn: turn)
       }
     }
     guard stage != asked else { return }
@@ -112,42 +126,58 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
 
   // MARK: 取画面
 
-  /// 把流改成取 `stage`：没有流就起，换了窗口重起，同一扇窗只改大小；nil 是停。回来的是改完后的流。
-  private func capture(_ stage: Stage?, from running: (stream: SCStream, window: CGWindowID)?) async -> (SCStream, CGWindowID)? {
+  /// 把流改成取 `stage`：没有流就起，换了窗口、换了一次（`Stage.turn`）重起，同一扇窗只改大小；nil 是停。回来的是改完后的流。
+  private func capture(_ stage: Stage?, from running: (stream: SCStream, stage: Stage)?) async -> (SCStream, Stage)? {
     do {
-      let configuration = SCStreamConfiguration()
-      if let stage {
-        configuration.width = stage.width
-        configuration.height = stage.height
-        configuration.includeChildWindows = true
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
-        configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-        configuration.showsCursor = false
-        // 手上留着上一帧（`same`），编码那头还可能拿着一帧
-        configuration.queueDepth = 4
-      }
       if let running {
-        if stage?.window == running.window {
-          try await running.stream.updateConfiguration(configuration)
-          return running
+        if let stage, stage.window == running.stage.window, stage.turn == running.stage.turn {
+          try await running.stream.updateConfiguration(Self.configuration(stage))
+          return (running.stream, stage)
         }
+        shared.withLockUnchecked { $0.stream = nil }
         // 流自己停了的那一种这里会报错，不管它
         try? await running.stream.stopCapture()
       }
       guard let stage else { return nil }
+      // 刚开出来的窗 ScreenCaptureKit 可能还没列出
       guard let window = try await SCShareableContent.currentProcess.windows.first(where: { $0.windowID == stage.window }) else {
-        Host.say("ScreenCaptureKit 里找不到这扇窗")
+        again()
         return nil
       }
-      let stream = SCStream(filter: SCContentFilter(desktopIndependentWindow: window), configuration: configuration, delegate: self)
+      let stream = SCStream(filter: SCContentFilter(desktopIndependentWindow: window), configuration: Self.configuration(stage), delegate: self)
       try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: frames)
       try await stream.startCapture()
-      return (stream, stage.window)
+      shared.withLockUnchecked { $0.stream = stream }
+      return (stream, stage)
     } catch {
       Host.say("取不到画面：\(error)")
+      shared.withLockUnchecked { $0.stream = nil }
       try? await running?.stream.stopCapture()
+      again()
       return nil
     }
+  }
+
+  /// 没取成、流自己停了：过一秒当成新的一次再量，还有人看、窗口还在就重起。
+  private func again() {
+    Task { @MainActor [self] in
+      try? await Task.sleep(for: .seconds(1))
+      turn += 1
+      measure()
+    }
+  }
+
+  private static func configuration(_ stage: Stage) -> SCStreamConfiguration {
+    let configuration = SCStreamConfiguration()
+    configuration.width = stage.width
+    configuration.height = stage.height
+    configuration.includeChildWindows = true
+    configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
+    configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    configuration.showsCursor = false
+    // 手上留着上一帧（`same`），编码那头还可能拿着一帧
+    configuration.queueDepth = 4
+    return configuration
   }
 
   func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType) {
@@ -155,8 +185,14 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
           (info[.status] as? Int).flatMap(SCFrameStatus.init) == .complete, let buffer = sample.imageBuffer else { return }
     // 按窗口取的流不管画面动没动都一直出帧，也不守 `minimumFrameInterval`（实测：不动时每秒四十来帧，每帧都标着整幅有改动；120 Hz 的屏上滚动时近百帧）。
     // 这里压到每秒 60 帧，和上一帧一样的不往下送：不动的画面不编码、不发。被压掉的那一帧不会就此丢了：画面停住后流还在出同样的帧，下一帧补上
+    // 画面是窗口那么大；有窗伸出去时 ScreenCaptureKit 把它们的外接矩形等比缩进来，内容就不再铺满，宽高比对不上
+    let content = (info[.contentRect] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) } ?? .zero
+    let overflowing = content.height > 0 && abs(content.width / content.height - Double(CVPixelBufferGetWidth(buffer)) / Double(CVPixelBufferGetHeight(buffer))) > 0.005
     let time = CACurrentMediaTime()
-    let last = shared.withLockUnchecked { ($0.frame, $0.time) }
+    let last = shared.withLockUnchecked {
+      $0.overflowing = overflowing
+      return ($0.frame, $0.time)
+    }
     if time - last.1 < 1.0 / 61 { return }
     if let frame = last.0, Self.same(frame, buffer) { return }
     shared.withLockUnchecked {
@@ -181,14 +217,11 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     }
   }
 
-  /// 流自己停了（系统收回）：当成还没取，下一次量到窗口再起。
+  /// 流自己停了（系统收回）：重起。这里自己停掉的流（换窗、没人看）不算。
   func stream(_ stream: SCStream, didStopWithError error: any Error) {
+    guard shared.withLockUnchecked({ $0.stream === stream }) else { return }
     Host.say("画面停了：\(error)")
-    onMain {
-      $0.asked = nil
-      $0.wanted.yield(nil)
-      $0.measure()
-    }
+    again()
   }
 }
 #endif

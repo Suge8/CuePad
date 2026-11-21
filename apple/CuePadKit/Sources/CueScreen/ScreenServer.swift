@@ -262,13 +262,20 @@ public final class ScreenServer: @unchecked Sendable {
     return (Opcode(rawValue: bytes[0] & 0x0F) ?? .pong, payload)
   }
 
+  /// 一下滚轮最多滚这么多屏。
+  private static let maxWheel = 16.0
+
   private static func input(_ payload: Data) -> ScreenInput? {
     guard let message = try? JSONSerialization.jsonObject(with: payload) as? [String: Any], let kind = message["t"] as? String else { return nil }
     if kind == "text", let text = message["s"] as? String { return .text(text) }
     if kind == "key", let usage = message["u"] as? Int, (4...231).contains(usage), let down = message["d"] as? Bool { return .key(usage: UInt32(usage), down: down) }
-    guard let x = message["x"] as? Double, let y = message["y"] as? Double else { return nil }
+    // 来源照这些数造事件、算整数：出了界的不往下送
+    guard let x = message["x"] as? Double, let y = message["y"] as? Double, (0...1).contains(x), (0...1).contains(y) else { return nil }
     if kind == "menu" { return .secondary(x: x, y: y) }
-    if kind == "wheel", let dx = message["dx"] as? Double, let dy = message["dy"] as? Double { return .wheel(x: x, y: y, dx: dx, dy: dy) }
+    if kind == "wheel", let dx = message["dx"] as? Double, let dy = message["dy"] as? Double, abs(dx) <= maxWheel, abs(dy) <= maxWheel {
+      return .wheel(x: x, y: y, dx: dx, dy: dy)
+    }
+    if kind == "wheel" { return nil }
     return ScreenInput.Phase(rawValue: kind).map { .touch($0, x: x, y: y) }
   }
 }

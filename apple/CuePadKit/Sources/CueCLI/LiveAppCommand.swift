@@ -9,7 +9,7 @@ extension Command {
     path: ["live", "app"], summary: "把一个 Mac 应用起进活预览：用户在 CuePad 里看它的窗口、直接点它（Mac、手机、iPad 上都行）", arguments: "<应用.app> [-- 启动参数…]",
     notes: """
       什么时候用：你在做 Mac 的原生应用（AppKit、SwiftUI、Catalyst），调试构建好了，要用户看、上手试时。这一条在后台起一份新的实例（不抢前台），它的窗口就是预览里的那一页。
-      重新构建后再跑一遍这一条：上一次起的那份它替你退掉、起新的，用户那头的预览自己接上。
+      重新构建后再跑一遍这一条：这个会话上一次起的那份它替你退掉、起新的，用户那头的预览自己接上。
       画面是这个应用最前面的那扇主窗口，连同它的表单、弹层、菜单；新开一扇窗（设置）画面换过去，关了换回来。窗口被挡着、在别的桌面都照常出画面；最小化、隐藏时没有。
       用户能做的：点、拖、滚、右键，键盘打字（用他那一头的输入法）与快捷键；手机上轻点是点、拖是滚、按住再拖是拖，右下角的钮叫出键盘。拖标题栏挪窗口、拖边缘改大小、指针悬停的效果做不到。
       之后同 cuepad live。你自己要看画面用 cuepad live screenshot；snapshot、click、fill 认的是网页元素，这一页只有一块画布，点不到应用里的东西。
@@ -27,7 +27,7 @@ extension Command {
       throw CLIError.invalid("「\(name)」开了 Hardened Runtime（或是系统自带的应用），载不进取画面的库：用你自己的调试构建（Xcode 的 Debug 默认不开；构建脚本里是 ENABLE_HARDENED_RUNTIME=NO）")
     }
     guard call.store.appIsOpen else { throw notOpen(call, "没有起。请用户打开 CuePad 后再运行 cuepad live app") }
-    let (port, pid) = try await AppServe.launch(app, executable: executable, arguments: Array(call.args.positionals.dropFirst()))
+    let (port, pid) = try await AppServe.launch(app, executable: executable, arguments: Array(call.args.positionals.dropFirst()), session: session)
     let url = URL(string: "http://localhost:\(port)")!
     try await call.store.sendLive(url, to: session, found: false)
     let text = "已起「\(name)」（进程 \(pid)），它的窗口交给了这台 Mac 上的 CuePad：\(LiveAddress.shown(url))。会话开在主区、右半空着时预览直接滑开；否则会话栏头的预览钮亮起，等用户点开。重新构建后再运行这一条，这一份会被退掉换成新的。\n"
@@ -53,13 +53,15 @@ enum AppServe {
   }
 
   /// 起一份新的实例，等它里面屏的服务听上。回来的是服务的口与实例的进程号。
-  /// 口按应用的路径定：重新构建、再起之后还是同一个地址，用户那头的预览自己接回来。口上是上一次起的这个应用就先退掉它；被别的占着就顺次往后挪。
-  static func launch(_ app: URL, executable: URL, arguments: [String]) async throws -> (port: UInt16, pid: pid_t) {
+  /// 口按会话与应用的路径定：重新构建、再起之后还是同一个地址，用户那头的预览自己接回来。口上是这个会话上一次起的这个应用就先退掉它；
+  /// 被别的占着（别的会话起的同一个应用也算）就顺次往后挪。
+  static func launch(_ app: URL, executable: URL, arguments: [String], session: String) async throws -> (port: UInt16, pid: pid_t) {
     let name = app.deletingPathExtension().lastPathComponent
-    let first = UInt16(48_000 + app.path.utf8.reduce(0) { ($0 &* 31 &+ Int($1)) % 300 })
-    /// 这个口上屏的服务所在的进程，是这个应用的才算。
+    let first = UInt16(48_000 + (session + app.path).utf8.reduce(0) { ($0 &* 31 &+ Int($1)) % 300 })
+    /// 这个口上屏的服务所在的进程：是这个会话起的（`Host` 把 `CUEPAD_SCREEN_OWNER` 写在身份里）这个应用才算。
     func serving(_ port: UInt16) async -> pid_t? {
-      guard let pid = await ScreenServer.identity(port: port).flatMap({ pid_t($0) }) else { return nil }
+      let identity = (await ScreenServer.identity(port: port) ?? "").split(separator: " ", maxSplits: 1)
+      guard identity.count == 2, identity[1] == session, let pid = pid_t(identity[0]) else { return nil }
       var path = [UInt8](repeating: 0, count: Int(MAXPATHLEN))
       let length = proc_pidpath(pid, &path, UInt32(path.count))
       guard length > 0 else { return nil }
@@ -75,7 +77,8 @@ enum AppServe {
       // 经 LaunchServices 起（同在访达里双击）：不是这条命令的子进程，命令结束、Agent 收掉它的进程组，应用都留着
       let open = Process()
       open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-      open.arguments = ["-n", "-g", app.path, "--env", "DYLD_INSERT_LIBRARIES=\(library)", "--env", "CUEPAD_SCREEN_PORT=\(port)"] + (arguments.isEmpty ? [] : ["--args"] + arguments)
+      open.arguments = ["-n", "-g", app.path, "--env", "DYLD_INSERT_LIBRARIES=\(library)", "--env", "CUEPAD_SCREEN_PORT=\(port)", "--env", "CUEPAD_SCREEN_OWNER=\(session)"]
+        + (arguments.isEmpty ? [] : ["--args"] + arguments)
       let said = Pipe()
       open.standardError = said
       try open.run()
