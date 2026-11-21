@@ -28,7 +28,8 @@ let package = Package(
         .target(name: "CueAgent", dependencies: ["CueStore", "CueText"]),
         .target(name: "CueTestSupport", dependencies: ["CueStore"], path: "Tests/CueTestSupport"),
         .testTarget(name: "CueSyncTests", dependencies: ["CueSync", "CueTestSupport"]),
-        // 把一块屏变成本机网页（`cuepad live sim`）。仅 macOS。
+        // 把一块屏变成本机网页（`cuepad live sim`、`cuepad live app`）。仅 macOS。
+        // Sources/CueScreenHost 不是包的目标：工程的 CuePadScreenHost 目标把它与 CueScreen 的源码编成一个库，载进别的应用里取它的窗口。
         .target(name: "CueScreen"),
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText", "CueAgent", "CueScreen"]),
         .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),

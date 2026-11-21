@@ -28,8 +28,9 @@
 #                                                   把几张图拼成一张对照图，一次读完：每张先裁（像素，从左上角算）、按列数排开、下面写文件名；片子逐帧排开看动效（sheet.swift）
 #     ios、ipad 的 shot、rec、run 认 -CuePadLandscape YES：起实例前把模拟器横过来（设备的物理朝向，devicectl），这一张拍完转回竖屏（app_sim.py 的 orient）
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、scripts/ui.py 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
-#                                                   iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
-#                                                   验系统通知：CUEPAD_NOTIFY=1 xc.sh run mac -- -CuePadNotifications YES …，起一份拿得到通知权限的副本（app_mac.py 的 notify_copy）
+#     iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
+#     活预览里看、点这份 Mac 实例：CUEPAD_SCREEN_PORT=<口> xc.sh run mac …，再 cuepad live <口>
+#     验系统通知：CUEPAD_NOTIFY=1 xc.sh run mac -- -CuePadNotifications YES …，起一份拿得到通知权限的副本（app_mac.py 的 notify_copy）
 #   xc.sh stop                                      结束本检出 run 起的实例（Mac 与模拟器）
 #   xc.sh real [copy] [-- 启动参数…]                 发版前拿本检出的代码看真实数据：正式版资料库的副本上起一份 Mac 实例、窗口排在最前，不同步、不连手机；copy 只拷副本、打印路径（real.py 头注释）
 #   xc.sh fleet up|status|down|accept               同一个检出里 Mac、iPhone、iPad 三个隔离实例共用一朵模拟云；accept 验收手机建灵感 → Mac 与 iPad 读到（fleet.py 头注释）

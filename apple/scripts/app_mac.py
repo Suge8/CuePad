@@ -87,7 +87,9 @@ class Mac:
         os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
         if os.path.exists(self.ready):
             os.remove(self.ready)
-        self.proc = subprocess.Popen(disclaimed([f"{self.app}/Contents/MacOS/CuePad", *args]), env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, **front_env(args)),
+        # CUEPAD_SCREEN_PORT=<口>：实例的窗口在这个口上变成网页（应用包里的 CueScreenHost），之后 cuepad live <口> 开进活预览
+        screen = {"CUEPAD_INSERT_LIBRARIES": f"{self.app}/Contents/Frameworks/CueScreenHost.dylib"} if os.environ.get("CUEPAD_SCREEN_PORT") else {}
+        self.proc = subprocess.Popen(disclaimed([f"{self.app}/Contents/MacOS/CuePad", *args]), env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, **front_env(args), **screen),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         front_keeper(self.proc.pid, args)
         me().publish(app=self.proc.pid)

@@ -18,7 +18,11 @@ def main(argv):
     check(libc.posix_spawnattr_setflags(ctypes.byref(attr), ctypes.c_short(POSIX_SPAWN_SETEXEC)), "posix_spawnattr_setflags")
     check(libc.responsibility_spawnattrs_setdisclaim(ctypes.byref(attr), ctypes.c_bool(True)), "responsibility_spawnattrs_setdisclaim")
     args = (ctypes.c_char_p * (len(argv) + 1))(*[a.encode() for a in argv], None)
-    env = [f"{k}={v}".encode() for k, v in os.environ.items()]
+    # DYLD_ 开头的变量带不过受系统保护的程序（bash、系统的 python）：要目标程序载的库写在 CUEPAD_INSERT_LIBRARIES 里，到这最后一步才换成 DYLD 的那个
+    environ = dict(os.environ)
+    if "CUEPAD_INSERT_LIBRARIES" in environ:
+        environ["DYLD_INSERT_LIBRARIES"] = environ.pop("CUEPAD_INSERT_LIBRARIES")
+    env = [f"{k}={v}".encode() for k, v in environ.items()]
     envp = (ctypes.c_char_p * (len(env) + 1))(*env, None)
     pid = ctypes.c_int()
     # 成功时不返回（已换成目标程序）

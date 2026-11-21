@@ -33,7 +33,7 @@ struct Command: Sendable {
 
   // `live` 认的是本机在监听的开发服务（`LiveServers`，只有 Mac 有）；这个目标在 iOS 上也要编得过（`xc.sh test ios` 连它一起编）
   #if os(macOS)
-  static let all: [Command] = project + card + task + [search, show, live, liveSim] + liveActions + conflicts
+  static let all: [Command] = project + card + task + [search, show, live, liveSim, liveApp] + liveActions + conflicts
   #else
   static let all: [Command] = project + card + task + [search, show] + conflicts
   #endif

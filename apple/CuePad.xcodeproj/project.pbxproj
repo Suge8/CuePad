@@ -27,6 +27,7 @@
 		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A001 /* CueSync */; };
 		D1000000000000000000A00C /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A002 /* CueSync */; };
 		E1000000000000000000000A /* cuepad in Embed CLI */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* cuepad */; platformFilters = (macos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E2000000000000000000000A /* CueScreenHost.dylib in Embed Screen Host */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* CueScreenHost.dylib */; platformFilters = (macos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
 		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
 		E10000000000000000000012 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; productRef = E10000000000000000000011 /* CueAgent */; };
@@ -72,6 +73,13 @@
 			remoteGlobalIDString = E10000000000000000000003;
 			remoteInfo = CuePadCLI;
 		};
+		E2000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E20000000000000000000003;
+			remoteInfo = CuePadScreenHost;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -99,6 +107,17 @@
 			name = "Embed CLI";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E20000000000000000000009 /* Embed Screen Host */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E2000000000000000000000A /* CueScreenHost.dylib in Embed Screen Host */,
+			);
+			name = "Embed Screen Host";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -107,6 +126,7 @@
 		D2000000000000000000000F /* NotificationService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "NotificationService-Info.plist"; sourceTree = "<group>"; };
 		D20000000000000000000010 /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };
 		E10000000000000000000001 /* cuepad */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = cuepad; sourceTree = BUILT_PRODUCTS_DIR; };
+		E20000000000000000000001 /* CueScreenHost.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = CueScreenHost.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000004 /* CuePadShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000005 /* CuePadWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000006 /* CuePad.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CuePad.entitlements; sourceTree = "<group>"; };
@@ -167,6 +187,8 @@
 		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A4 /* Exceptions for "ShareExtension" folder in "CuePad" target */, ); path = App/ShareExtension; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1000000000000000000E0A3 /* Exceptions for "Widget" folder in "CuePad" target */, ); path = App/Widget; sourceTree = "<group>"; };
 		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };
+		E20000000000000000000002 /* CueScreen */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueScreen; sourceTree = "<group>"; };
+		E2000000000000000000000D /* CueScreenHost */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueScreenHost; sourceTree = "<group>"; };
 		D20000000000000000000001 /* NotificationService */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/NotificationService; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Strings */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Strings; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -236,6 +258,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E20000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -247,6 +276,8 @@
 				A10000000000000000000022 /* Strings */,
 				A10000000000000000000F02 /* FakeExtension.swift */,
 				E10000000000000000000002 /* CueCLI */,
+				E20000000000000000000002 /* CueScreen */,
+				E2000000000000000000000D /* CueScreenHost */,
 				C10000000000000000000001 /* AppGroup */,
 				C10000000000000000000002 /* ShareExtension */,
 				C10000000000000000000003 /* Widget */,
@@ -281,6 +312,7 @@
 				A10000000000000000000002 /* CuePad.app */,
 				A10000000000000000000003 /* CuePadTests.xctest */,
 				E10000000000000000000001 /* cuepad */,
+				E20000000000000000000001 /* CueScreenHost.dylib */,
 				C10000000000000000000004 /* CuePadShare.appex */,
 				C10000000000000000000005 /* CuePadWidget.appex */,
 				D20000000000000000000002 /* CuePadNotify.appex */,
@@ -325,6 +357,7 @@
 				A10000000000000000000051 /* Resources */,
 				C10000000000000000000012 /* Embed Foundation Extensions */,
 				E10000000000000000000009 /* Embed CLI */,
+				E20000000000000000000009 /* Embed Screen Host */,
 			);
 			buildRules = (
 			);
@@ -333,6 +366,7 @@
 				D2000000000000000000000C /* PBXTargetDependency */,
 				C10000000000000000000018 /* PBXTargetDependency */,
 				E1000000000000000000000C /* PBXTargetDependency */,
+				E2000000000000000000000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000020 /* Sources */,
@@ -460,6 +494,26 @@
 			productReference = E10000000000000000000001 /* cuepad */;
 			productType = "com.apple.product-type.tool";
 		};
+		E20000000000000000000003 /* CuePadScreenHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E20000000000000000000008 /* Build configuration list for PBXNativeTarget "CuePadScreenHost" */;
+			buildPhases = (
+				E20000000000000000000004 /* Sources */,
+				E20000000000000000000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E20000000000000000000002 /* CueScreen */,
+				E2000000000000000000000D /* CueScreenHost */,
+			);
+			name = CuePadScreenHost;
+			productName = CuePadScreenHost;
+			productReference = E20000000000000000000001 /* CueScreenHost.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -495,6 +549,7 @@
 				C1000000000000000000000B /* CuePadWidget */,
 				D20000000000000000000007 /* CuePadNotify */,
 				E10000000000000000000003 /* CuePadCLI */,
+				E20000000000000000000003 /* CuePadScreenHost */,
 			);
 		};
 /* End PBXProject section */
@@ -581,6 +636,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E20000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -612,6 +674,12 @@
 			platformFilters = (macos, );
 			target = E10000000000000000000003 /* CuePadCLI */;
 			targetProxy = E1000000000000000000000B /* PBXContainerItemProxy */;
+		};
+		E2000000000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilters = (macos, );
+			target = E20000000000000000000003 /* CuePadScreenHost */;
+			targetProxy = E2000000000000000000000B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -920,6 +988,36 @@
 			};
 			name = Release;
 		};
+		E20000000000000000000006 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				EXECUTABLE_PREFIX = "";
+				PRODUCT_MODULE_NAME = CueScreenHost;
+				PRODUCT_NAME = CueScreenHost;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		E20000000000000000000007 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				"CODE_SIGN_STYLE[sdk=macosx*]" = Manual;
+				CODE_SIGN_ENTITLEMENTS = "";
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				EXECUTABLE_PREFIX = "";
+				PRODUCT_MODULE_NAME = CueScreenHost;
+				PRODUCT_NAME = CueScreenHost;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -982,6 +1080,15 @@
 			buildConfigurations = (
 				E10000000000000000000006 /* Debug */,
 				E10000000000000000000007 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E20000000000000000000008 /* Build configuration list for PBXNativeTarget "CuePadScreenHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E20000000000000000000006 /* Debug */,
+				E20000000000000000000007 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

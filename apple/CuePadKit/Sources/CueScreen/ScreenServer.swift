@@ -5,7 +5,7 @@ import Network
 
 /// 把一块屏变成本机网页：`GET /` 是那张页（`ScreenPage`），页面连 `/screen` 这条 WebSocket，画面往下发、手指往上送。
 /// 只听本机回环：活预览（`cuepad live`）照普通的开发服务打开它，手机经隧道看到的也是这一页。
-/// 没人连着时不取画面、不编码。画面只在有改动时编，停下来后补几帧（`settle`）。
+/// 有人连着才让来源取画面（`ScreenSource.watch`、`rest`）。画面只在有改动时编，停下来后补几帧（`settle`）。
 public final class ScreenServer: @unchecked Sendable {
   private let queue = DispatchQueue(label: "cuepad.screen", qos: .userInteractive)
   private let source: any ScreenSource
@@ -18,6 +18,8 @@ public final class ScreenServer: @unchecked Sendable {
   private var dirty = false
   private var encoding = false
   private var settling = 0
+  /// 编到第几帧了。
+  private var turn = 0
 
   /// 只在 `queue` 上碰。
   private final class Viewer: @unchecked Sendable {
@@ -39,7 +41,7 @@ public final class ScreenServer: @unchecked Sendable {
   private static let settle = 3
   private static let settleGap = DispatchTimeInterval.milliseconds(80)
 
-  /// `identity` 写在每个回应的 `X-CuePad-Screen` 头里：再起一次时认得出这个口上是不是同一块屏的服务（`ScreenServer.serves`）。
+  /// `identity` 写在每个回应的 `X-CuePad-Screen` 头里：再起一次时认得出这个口上是不是同一块屏的服务（`ScreenServer.identity(port:)`）。
   public init(source: any ScreenSource, port: UInt16, identity: String, page: String) throws {
     self.source = source
     self.port = port
@@ -55,10 +57,6 @@ public final class ScreenServer: @unchecked Sendable {
 
   /// 听上了才返回；口被占着就抛。
   public func start() async throws {
-    source.watch { [weak self] in
-      guard let self else { return }
-      queue.async { self.changed() }
-    }
     listener.newConnectionHandler = { [weak self] in self?.accept($0) }
     try await withCheckedThrowingContinuation { (ready: CheckedContinuation<Void, any Error>) in
       listener.stateUpdateHandler = { [listener] state in
@@ -73,15 +71,15 @@ public final class ScreenServer: @unchecked Sendable {
     }
   }
 
-  /// 这个口上是不是 `identity` 那块屏的服务。
-  public static func serves(_ identity: String, port: UInt16) async -> Bool {
+  /// 这个口上的服务是哪块屏的（它的 `identity`）；没在听、不是屏的服务是 nil。
+  public static func identity(port: UInt16) async -> String? {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.connectionProxyDictionary = [:]
     configuration.timeoutIntervalForRequest = 1
     var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/")!)
     request.httpMethod = "HEAD"
     let response = try? await URLSession(configuration: configuration).data(for: request).1 as? HTTPURLResponse
-    return response?.value(forHTTPHeaderField: header) == identity
+    return response?.value(forHTTPHeaderField: header)
   }
 
   private static let header = "X-CuePad-Screen"
@@ -101,6 +99,7 @@ public final class ScreenServer: @unchecked Sendable {
     if dirty { settling = Self.settle } else if !key { settling -= 1 }
     dirty = false
     encoding = true
+    turn += 1
     encoder.encode(buffer, key: key) { [weak self] frame in
       guard let self else { return }
       queue.async { self.encoded(frame) }
@@ -112,7 +111,10 @@ public final class ScreenServer: @unchecked Sendable {
     if let frame { viewers.values.forEach { deliver(frame, to: $0) } }
     // 没编出来的那一次也隔一拍再来：编码器一直起不来时不空转
     if dirty, frame != nil { return pump() }
-    queue.asyncAfter(deadline: .now() + Self.settleGap) { [weak self] in self?.pump() }
+    // 这一拍里画面又动过（编过新的一帧）就不补：不然动着的时候每帧后面都跟一帧重复的
+    queue.asyncAfter(deadline: .now() + Self.settleGap) { [weak self, turn] in
+      if self?.turn == turn { self?.pump() }
+    }
   }
 
   private func deliver(_ frame: ScreenEncoder.Frame, to viewer: Viewer) {
@@ -168,6 +170,12 @@ public final class ScreenServer: @unchecked Sendable {
       connection.send(content: Data(lines.joined(separator: "\r\n").utf8), completion: .contentProcessed { _ in })
       let viewer = Viewer(connection)
       viewers[ObjectIdentifier(viewer)] = viewer
+      if viewers.count == 1 {
+        source.watch { [weak self] in
+          guard let self else { return }
+          queue.async { self.changed() }
+        }
+      }
       listen(viewer)
       pump()
     default: reply(connection, "404 Not Found")
@@ -221,7 +229,7 @@ public final class ScreenServer: @unchecked Sendable {
     switch input {
     case .touch(let phase, let x, let y): viewer.finger = phase == .up ? nil : (x, y)
     case .key(let usage, let down): if down { viewer.keys.insert(usage) } else { viewer.keys.remove(usage) }
-    case .wheel: break
+    case .secondary, .wheel, .text: break
     }
     source.send(input)
   }
@@ -229,6 +237,7 @@ public final class ScreenServer: @unchecked Sendable {
   /// `answering`：那头先发了 Close，把它的那一帧（带着关闭码）回过去再断，不回的话它记成异常断开。
   private func drop(_ viewer: Viewer, answering: Data? = nil) {
     guard viewers.removeValue(forKey: ObjectIdentifier(viewer)) != nil else { return }
+    if viewers.isEmpty { source.rest() }
     if let finger = viewer.finger { source.send(.touch(.up, x: finger.x, y: finger.y)) }
     viewer.keys.forEach { source.send(.key(usage: $0, down: false)) }
     let connection = viewer.connection
@@ -253,11 +262,20 @@ public final class ScreenServer: @unchecked Sendable {
     return (Opcode(rawValue: bytes[0] & 0x0F) ?? .pong, payload)
   }
 
+  /// 一下滚轮最多滚这么多屏。
+  private static let maxWheel = 16.0
+
   private static func input(_ payload: Data) -> ScreenInput? {
     guard let message = try? JSONSerialization.jsonObject(with: payload) as? [String: Any], let kind = message["t"] as? String else { return nil }
+    if kind == "text", let text = message["s"] as? String { return .text(text) }
     if kind == "key", let usage = message["u"] as? Int, (4...231).contains(usage), let down = message["d"] as? Bool { return .key(usage: UInt32(usage), down: down) }
-    guard let x = message["x"] as? Double, let y = message["y"] as? Double else { return nil }
-    if kind == "wheel", let dx = message["dx"] as? Double, let dy = message["dy"] as? Double { return .wheel(x: x, y: y, dx: dx, dy: dy) }
+    // 来源照这些数造事件、算整数：出了界的不往下送
+    guard let x = message["x"] as? Double, let y = message["y"] as? Double, (0...1).contains(x), (0...1).contains(y) else { return nil }
+    if kind == "menu" { return .secondary(x: x, y: y) }
+    if kind == "wheel", let dx = message["dx"] as? Double, let dy = message["dy"] as? Double, abs(dx) <= maxWheel, abs(dy) <= maxWheel {
+      return .wheel(x: x, y: y, dx: dx, dy: dy)
+    }
+    if kind == "wheel" { return nil }
     return ScreenInput.Phase(rawValue: kind).map { .touch($0, x: x, y: y) }
   }
 }
