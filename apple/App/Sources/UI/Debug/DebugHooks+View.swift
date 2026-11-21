@@ -140,9 +140,9 @@ extension View {
     #endif
 
     /// 这一处正在过渡（如编辑页正在淡入）：截图的就绪标记等它停下。SwiftUI 自己驱动的动画在图层上看不出来，由视图自己报。
-    func debugSettling(_ busy: Bool) -> some View {
+    func debugSettling(_ busy: Bool, fileID: String = #fileID, line: Int = #line) -> some View {
         #if DEBUG
-        modifier(DebugSettling(busy: busy))
+        modifier(DebugSettling(busy: busy, place: "\(fileID):\(line)"))
         #else
         self
         #endif
@@ -203,12 +203,13 @@ extension View {
 #if DEBUG
 private struct DebugSettling: ViewModifier {
     let busy: Bool
+    let place: String
     @State private var id = UUID()
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: busy, initial: true) { DebugScene.settling(id, busy) }
-            .onDisappear { DebugScene.settling(id, false) }
+            .onChange(of: busy, initial: true) { DebugScene.settling(id, busy ? place : nil) }
+            .onDisappear { DebugScene.settling(id, nil) }
     }
 }
 #endif
