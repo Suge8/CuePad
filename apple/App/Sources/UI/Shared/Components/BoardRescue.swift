@@ -17,8 +17,8 @@ struct BoardRescue: View {
         Group {
             switch SessionRescue.of(session) {
             case .usage(let url): Link(destination: url) { face { Text("管理用量").font(Typography.label).padding(.horizontal, Spacing.group) } }
-            case .retry: Button { workspace.retry(session) } label: { face { disc(.retry, "重试") } }
-            case .compact: Button { workspace.compact(session) } label: { face { disc(.compacting, "现在压缩") } }
+            case .retry: Button { workspace.retry(session) } label: { face { RescueDisc.glyph(.retry, "重试") } }
+            case .compact: Button { workspace.compact(session) } label: { face { RescueDisc.glyph(.compacting, "现在压缩") } }
             case nil: EmptyView()
             }
         }
@@ -26,21 +26,43 @@ struct BoardRescue: View {
         .fixedSize()
     }
 
-    private func disc(_ icon: Icon, _ title: LocalizedStringResource) -> some View {
-        Label(title, icon: icon).labelStyle(.iconOnly).font(Self.glyph).frame(width: TaskNextMark.disc).help(Text(title))
-    }
-
     private func face(@ViewBuilder _ label: () -> some View) -> some View {
-        let shown = label().foregroundStyle(palette.ink).frame(height: TaskNextMark.disc).background(palette.fill, in: .capsule)
-        return shown.frame(minWidth: reserves ? nil : TaskNextMark.target, minHeight: reserves ? nil : TaskNextMark.target, alignment: .trailing)
+        label().rescueFace(palette)
+            .frame(minWidth: reserves ? nil : TaskNextMark.target, minHeight: reserves ? nil : TaskNextMark.target, alignment: .trailing)
             .contentShape(.rect)
     }
+}
 
+/// 淡底圆上一颗墨色图标：卡脚的重试与压缩、上下文气泡里的压缩是同一颗。点得到的那一圈比圆大（`TaskNextMark.target`），
+/// 让出来的那一截不占排版：圆的边同旁边的字、条对齐。
+struct RescueDisc: View {
+    let icon: Icon
+    let title: LocalizedStringResource
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) { Self.glyph(icon, title).rescueFace(palette).padding(Self.reach).contentShape(.rect) }
+            .buttonStyle(PressStyle(.button))
+            .padding(-Self.reach)
+    }
+
+    static func glyph(_ icon: Icon, _ title: LocalizedStringResource) -> some View {
+        Label(title, icon: icon).labelStyle(.iconOnly).font(font).frame(width: TaskNextMark.disc).help(Text(title))
+    }
+
+    private static let reach = (TaskNextMark.target - TaskNextMark.disc) / 2
     #if os(macOS)
-    private static let glyph = Glyph.small
+    private static let font = Glyph.small
     #else
-    private static let glyph = Typography.caption.weight(.semibold)
+    private static let font = Typography.caption.weight(.semibold)
     #endif
+}
+
+private extension View {
+    func rescueFace(_ palette: Palette) -> some View {
+        foregroundStyle(palette.ink).frame(height: TaskNextMark.disc).background(palette.fill, in: .capsule)
+    }
 }
 
 extension View {
