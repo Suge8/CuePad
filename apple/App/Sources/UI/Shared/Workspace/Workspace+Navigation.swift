@@ -63,8 +63,11 @@ extension Workspace {
         }
         switch navigation {
         case .narrow(var state):
-            guard let index = state.path.firstIndex(of: route) else { return }
-            state.path = Array(state.path[..<index])
+            let index = state.path.firstIndex(of: route)
+            let docked = if case .card(let id) = route { state.dock?.card == id } else { false }
+            guard index != nil || docked else { return }
+            if docked { state.dock = nil }
+            if let index { state.path = Array(state.path[..<index]) }
             navigation = .narrow(state)
         case .wide(var state):
             guard case .page(route) = state.main else { return }

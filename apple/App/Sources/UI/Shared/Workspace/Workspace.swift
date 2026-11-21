@@ -24,10 +24,13 @@ final class Workspace {
             case gone
             case paused
             case failure
+            /// 等你挑一样东西（边聊边看挑会话）：挑着时一直在，不按时收（`holdNotice`）。
+            case pick
 
             var icon: Icon {
                 switch self {
                 case .done: .done
+                case .pick: .session
                 // 不用对勾：对勾只表示完成与记下
                 case .gone: .gone
                 case .paused: .syncPaused

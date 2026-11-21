@@ -22913,6 +22913,22 @@
         }
       }
     },
+    "边聊边看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat Alongside"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "边聊边看"
+          }
+        }
+      }
+    },
     "达到用量限制" : {
       "localizations" : {
         "en" : {
@@ -24673,6 +24689,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "送达未确认"
+          }
+        }
+      }
+    },
+    "选一个会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选一个会话"
           }
         }
       }
