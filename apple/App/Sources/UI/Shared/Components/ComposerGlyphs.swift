@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// 输入框里的圆钮（看得见的 40，点得到的 44）：＋ 与主按钮（`SendGlyph`）同一个。
+/// 输入框里的圆钮（看得见的 `ComposerMetrics.glyph`，点得到的 44）：＋ 与主按钮（`SendGlyph`）同一个，描边同工具排的胶囊。
 struct CircleGlyph<Content: View>: View {
     let fill: Color
     @ViewBuilder let content: () -> Content
+    @Environment(\.palette) private var palette
 
     var body: some View {
         content()
             .frame(width: ComposerMetrics.glyph, height: ComposerMetrics.glyph)
             .background(fill, in: .circle)
+            .overlay { Circle().strokeBorder(fill == palette.fill ? palette.hair : .clear, lineWidth: ControlMetrics.stroke) }
             .frame(width: ComposerMetrics.glyphTarget, height: ComposerMetrics.glyphTarget)
             .contentShape(.circle)
     }

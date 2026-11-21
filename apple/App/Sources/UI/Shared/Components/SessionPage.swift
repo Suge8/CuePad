@@ -53,20 +53,25 @@ private struct SessionPageBody: View {
         let session = digest?.session ?? lastSeen
         Group {
             if workspace.layout == .wide {
-                VStack(spacing: 0) {
-                    if let session {
-                        WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
-                                         ended: session.staysEnded(by: digest?.delivery, at: services.speech), column: column)
-                            .contextMenu { if secondary { menu(session, digest) } }
+                // 栏头是浮在对话上的玻璃：对话从它下面滑过去、到窗口边为止，不在栏头下沿裁掉或盖一层淡出
+                reply(session, digest)
+                    .safeAreaPadding(.top, Chrome.band)
+                    #if os(iOS)
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    #endif
+                    .overlay(alignment: .top) {
+                        if let session {
+                            WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
+                                             ended: session.staysEnded(by: digest?.delivery, at: services.speech), column: column)
+                                .contextMenu { if secondary { menu(session, digest) } }
+                        }
                     }
-                    reply(session, digest).fadesUnderHead()
-                }
             } else {
                 #if os(iOS)
-                // 只绑着一件没做完的事时，完成是右边那颗钮；别的操作点标题
-                let finishing = task?.open.count == 1 ? task?.open.first : nil
-                reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
-                    if let session { menu(session, digest, completes: finishing == nil) }
+                // 右边只有活预览那一颗（有页面可看时），与左边的返回对称；完成、休眠这些点标题，等你的那件在看板与会话条上也有
+                // 对话滑到页头的玻璃下面，只有状态栏那一条由窗口的模糊盖着（`StatusBarBlur`），页头这一截不再垫系统的淡出
+                reply(session, digest).scrollEdgeEffectHidden(true, for: .top).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+                    if let session { menu(session, digest) }
                 } detail: {
                     if ending(digest) {
                         Text("正在休眠…").font(Typography.caption).foregroundStyle(palette.ink3)
@@ -75,9 +80,6 @@ private struct SessionPageBody: View {
                     }
                 } trailing: {
                     LivePhoneTool(session: id, zoom: zoom)
-                    if let finishing {
-                        Button("完成任务", icon: .complete) { workspace.completeTask(finishing.task.id) }
-                    }
                 }
                 .livePhoneCover(id, zoom: zoom)
                 #endif
@@ -146,8 +148,8 @@ private struct SessionPageBody: View {
         MacDelivery.endProgress(digest?.deliveries ?? [], at: services.speech)?.inTransit == true
     }
 
-    private func menu(_ session: SessionState, _ digest: SessionDigest?, completes: Bool = true) -> SessionMenuItems {
-        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest), completes: completes)
+    private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionMenuItems {
+        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest))
     }
 
     /// 发出时回复框收回一行，对话不被系统先拉下来再滑上去。

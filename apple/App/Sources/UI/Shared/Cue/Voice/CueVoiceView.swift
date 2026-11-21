@@ -106,24 +106,6 @@ struct CueVoiceView: View {
     }
 }
 
-/// 配置排只占一个固定入口；问题与朗读记录统一从常驻通话栏的详情进入，结束时不再增高回复框。
-/// 平台宿主提供同一份投影与 BubbleSource；开始动作不捕获、重造请求或媒体身份。
-struct CueVoiceEntry: View {
-    let presentation: CueVoicePresentation?
-    @Binding var detailsSource: BubbleSource?
-    let start: () -> Void
-
-    var body: some View {
-        let active = presentation?.active == true
-        CueVoiceDetailButton(source: $detailsSource, activate: active ? nil : start) {
-            Image(.call).chip(on: active, size: .inline)
-        }
-        .disabled(!active && presentation?.startUnavailableReason != nil)
-        .accessibilityLabel(active ? "通话详情" : "和 Cue 通话")
-        .help(Text(active ? "通话详情" : presentation?.startUnavailableReason ?? "和 Cue 通话"))
-    }
-}
-
 private extension View {
     /// 保留测量与视图身份；退出开始就撤掉点击、键盘与读屏入口，淡去只影响画面。
     func voiceSlot(_ visible: Bool) -> some View {

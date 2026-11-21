@@ -19,15 +19,4 @@ struct CueVoicePanel: View {
 
     private func run(_ action: VoiceAction) { workspace.runVoice(action) { feedback.rejection = $0 } }
 }
-
-/// 输入框只接共享入口，保持与顶部宿主相同的呈现和浮层来源。
-struct CueVoiceComposerEntry: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        CueVoiceEntry(presentation: workspace.voiceViewState.presentation(), detailsSource: Bindable(workspace).voiceDetails) {
-            workspace.startVoiceCall()
-        }
-    }
-}
 #endif

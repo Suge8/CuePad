@@ -7,16 +7,13 @@ enum CueBarTarget: CaseIterable { case cue, idea, task }
 /// "对 Cue 说"的输入框（全 App 只此一个）：草稿是 Cue 的那一份（`CueWatch.draft`），可带图片。要做事就在这里说，随手记也在这里：
 /// 发送是对 Cue 说，长按是"只记下"（记成默认项目里的一条灵感，不交给它）；Cue 没启用时发送就是记下。
 /// 按下就清空输入框，不等上传；这里只管输入与发完之后做什么（`sent`）。
-/// Mac 的 Cue 页上有 Cue 用哪个 Agent、模型与思考强度的工具排（`CueConfigControls`，与新会话同一排）；没启用时不放：
-/// 没启用时发出去只是记下，还没有在哪台 Mac 运行，那几颗只能写一份选不了的缺省。
+/// Cue 用哪个 Agent、模型与思考强度、在哪台 Mac 运行，三端都在 Cue 面板（点名牌长出的那块，`CueNowPanel`），输入框里不再放一份。
 /// 浮起的输入条的工具排是这一句的去处（`CueBarTargets`）：对 Cue 说、记成灵感、建成任务，Tab 轮换；后两种可选项目。
 /// 记下后不马上收：占位处写一下记到了哪（`receipt`），这一下里又打了字就留着接着记下一条；没写成（草稿放回来了）也留着。
 /// 再唤出时草稿空着就回到对 Cue 说：按快捷键、打字、回车做的事每次一样；有草稿时去处留着，没说完的那句不会发错地方。
-/// Cue 运行在别的 Mac 上时工具排末尾的 Mac 图标说明在哪台（`CueNow.elsewhere`）：那几枚胶囊选的就是那台上的大脑。
-/// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
-/// 手机与 iPad 的 Cue 页上，右下那一颗空着时是和 Cue 通话、有草稿时是发送（同一颗钮原地换，`SendGlyph`）；通话中这块玻璃原地变成通话条（`PhoneCall`）。
+/// Cue 页上右下那一颗空着时是和 Cue 通话、有草稿时是发送（同一颗钮原地换，`SendGlyph`），三端一样。
+/// 手机与 iPad 通话中这块玻璃原地变成通话条（`PhoneCall`）；Mac 通话中整个输入框让给通话条（`CueVoicePanel`，`CuePage`）。
 /// 在不在通话、静没静音只看 `VoiceService`，界面不另存一份。
-/// Mac 的通话入口在工具排末尾（`CueVoiceComposerEntry`），通话中整个输入框让给通话条（`CueVoicePanel`，`CuePage`）。
 struct CueComposer: View {
     enum Style: Equatable {
         case page
@@ -41,9 +38,7 @@ struct CueComposer: View {
     @State private var target = CueBarTarget.cue
     @State private var project = Project.defaultID
     @State private var receipt: String?
-    #if os(macOS)
-    @State private var opening: ConfigPick?
-    #else
+    #if os(iOS)
     /// 接通时输入框有焦点：挂断后还给它。
     @State private var focusAfterCall = false
     #endif
@@ -107,7 +102,7 @@ struct CueComposer: View {
             .relayLaunch(launch, color: palette.signature)
             .fixedSize()
             #if os(macOS)
-            .help("发送（\(ReplyShortcut.send.symbols)）；按住只记下")
+            .help(calls ? Text(workspace.voiceStartBlock?.message ?? "和 Cue 通话") : Text("发送（\(ReplyShortcut.send.symbols)）；按住只记下"))
             #endif
         } else {
             Button(action: send) { SendGlyph(.save(enabled: true)) }
@@ -118,7 +113,7 @@ struct CueComposer: View {
 
     private var tooled: Bool {
         #if os(macOS)
-        opens != nil || workspace.cue.canHear
+        opens != nil
         #else
         false
         #endif
@@ -128,8 +123,6 @@ struct CueComposer: View {
         #if os(macOS)
         if opens != nil {
             CueBarTargets(targets: targets, aim: aim, project: destination, pick: { target = $0 }) { project = $0 }
-        } else if tooled {
-            CueBrainRow(opening: $opening)
         }
         #endif
     }
@@ -175,7 +168,7 @@ struct CueComposer: View {
         false
         #endif
     }
-    private var calls: Bool { phonePage && workspace.cue.canHear && !hasDraft && !sending }
+    private var calls: Bool { style == .page && workspace.cue.canHear && !hasDraft && !sending }
     private var inCall: Bool { phonePage && !workspace.services.voice.canStart }
     private var callReady: Bool { workspace.voiceStartBlock == nil }
 
@@ -193,6 +186,8 @@ struct CueComposer: View {
     private func call() {
         #if os(iOS)
         workspace.callCue()
+        #else
+        workspace.startVoiceCall()
         #endif
     }
 
@@ -211,16 +206,7 @@ struct CueComposer: View {
         return .open
     }
 
-    private var shortcuts: [ReplyShortcut: () -> Void] {
-        var map: [ReplyShortcut: () -> Void] = [.send: send]
-        #if os(macOS)
-        if tooled {
-            map[.model] = { opening = .model }
-            map[.thinking] = { opening = .thinking }
-        }
-        #endif
-        return map
-    }
+    private var shortcuts: [ReplyShortcut: () -> Void] { [.send: send] }
 
     private var opens: Int? { if case .bar(let opens) = style { opens } else { nil } }
 
@@ -265,35 +251,3 @@ struct CueComposer: View {
         sent()
     }
 }
-
-#if os(macOS)
-/// 大脑的可选与当前由这一排自己订阅：读到、变了只重算这一排，不重算整个输入框。
-private struct CueBrainRow: View {
-    @Binding var opening: ConfigPick?
-    @State private var brain: AgentModelChoice?
-
-    var body: some View {
-        CueConfigControls(choice: brain, opening: $opening) {
-            CueHostNote()
-            CueVoiceComposerEntry()
-        }
-        .observingCueBrain(into: $brain)
-    }
-}
-
-/// 单拆一个视图读 Cue 此刻：输入框本身不随它重算。
-private struct CueHostNote: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if let elsewhere = workspace.cue.now.elsewhere {
-            Image(.mac)
-                .font(Typography.meta).foregroundStyle(palette.ink3)
-                .help(elsewhere).iconLabel(elsewhere)
-                .padding(.trailing, Spacing.tight)
-                .transition(.opacity)
-        }
-    }
-}
-#endif

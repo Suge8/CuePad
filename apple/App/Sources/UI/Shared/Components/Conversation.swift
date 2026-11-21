@@ -284,7 +284,8 @@ struct SessionSubtitle: View {
         }
     }
 
-    private static let font = Typography.caption
+    /// 页头玻璃里标题下面那一行（同 Cue 名牌的数字账）：再大一号，两行就顶到 44 点玻璃的上下沿。
+    private static let font = Typography.toolbarSubtitle
 }
 
 /// 正开着的会话（与 Cue 手上那个）此刻的状态：标与一句。状态标换形不重建（不按字换身份），一轮跑完落到哪儿在手机上轻震一下：
