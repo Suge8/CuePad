@@ -33,7 +33,7 @@ extension InteractionBench {
         workspace.services.settings.railExpanded = true
         workspace.selectWide(.progress)
         if item.sessions > 0 { workspace.openSession(ids[0], sessionID: sessions[0], in: .main) }
-        if item.sessions > 1 { workspace.openSession(ids[1], sessionID: sessions[1], in: .beside) }
+        if item.sessions > 1 { workspace.openSession(ids[1], sessionID: sessions[1], in: .aside) }
     }
 
     static func measureWide(_ workspace: Workspace, in window: NSWindow, sessions: [String], only: Set<String>?, foreground: Bool) async throws {
@@ -159,7 +159,7 @@ extension InteractionBench {
         let settings = workspace.services.settings
         return Snapshot(
             rail: settings.railExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
-            main: workspace.mainRoute, beside: workspace.besideSession?.id,
+            main: workspace.mainRoute, beside: workspace.besideSessions.first?.id,
             drafts: ids.map { settings.replyDraft(for: $0).text } + [workspace.cue.draft.text])
     }
 

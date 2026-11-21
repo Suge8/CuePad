@@ -15405,22 +15405,6 @@
         }
       }
     },
-    "放在这里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drop Here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放在这里"
-          }
-        }
-      }
-    },
     "放大" : {
       "localizations" : {
         "en" : {
@@ -20333,6 +20317,22 @@
         }
       }
     },
+    "窗口太窄，放不下并排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Window too narrow to show side by side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口太窄，放不下并排"
+          }
+        }
+      }
+    },
     "立即同步" : {
       "localizations" : {
         "en" : {
@@ -22789,6 +22789,22 @@
         }
       }
     },
+    "边聊边看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat Alongside"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "边聊边看"
+          }
+        }
+      }
+    },
     "达到用量限制" : {
       "localizations" : {
         "en" : {
@@ -24533,6 +24549,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "送达未确认"
+          }
+        }
+      }
+    },
+    "选一个会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选一个会话"
           }
         }
       }

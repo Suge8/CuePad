@@ -58,7 +58,7 @@ extension DebugScene {
         }
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, project) } }
-        presetBeside(workspace)
+        await presetBeside(workspace)
         presetDrawers(workspace)
         await presetSpeech(workspace)
         await prepareNarrow(workspace)

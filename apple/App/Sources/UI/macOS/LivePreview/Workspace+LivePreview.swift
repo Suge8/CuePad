@@ -5,13 +5,11 @@ import SwiftUI
 import WebKit
 
 extension Workspace {
-    /// 会话页栏头那颗钮与菜单里的"打开活预览"：左边那个会话的活预览在右半开、收（开着并排的会话时换掉它）。第一次打开时给这个会话建一份；
+    /// 会话页栏头那颗钮与菜单里的"打开活预览"：最左那个会话的活预览开在它紧右边、再点收起（放满了挤掉最右那块）。第一次打开时给这个会话建一份；
     /// 先用 Agent 发来的（`cuepad live`），再用你填过的，没有或认出的那个已不在了才换认出的服务里最近起来的，都没有是空的地址输入。
     func toggleLivePreview() {
         guard case .wide(var state) = navigation, !state.home, case .session(let session) = state.main else { return }
-        if state.beside == .preview {
-            state.beside = nil
-        } else {
+        if !state.beside.contains(.preview) {
             let preview = livePreviews[session.id] ?? LivePreview()
             preview.sessionID = preview.sessionID ?? session.sessionID
             livePreviews[session.id] = preview
@@ -20,8 +18,8 @@ extension Workspace {
             } else if let found = liveFound[session.id], let first = found.first, !preview.keeps(found) {
                 preview.retarget(.init(url: first, source: .found))
             }
-            state.beside = .preview
         }
+        state.togglePreview(room: wideRoom)
         navigation = .wide(state)
     }
 
@@ -37,7 +35,7 @@ extension Workspace {
 
     func hasLivePage(_ session: UUID) -> Bool { !livePages(session).isEmpty }
 
-    func showsLivePreview(_ session: UUID) -> Bool { beside == .preview && self.session(in: .main)?.id == session }
+    func showsLivePreview(_ session: UUID) -> Bool { beside.contains(.preview) && self.session(in: .main)?.id == session }
 
     /// nil：没有页面可看、预览也没开着，栏头不放这颗钮（手动打开在会话的菜单里，`openLivePreview`）。开着空的地址输入也有它：收起只有这一处。
     func liveButton(_ session: UUID) -> LiveButton? {
@@ -50,7 +48,7 @@ extension Workspace {
     /// 手机要用 UU 远程看时（`showLive`）也走这里，那时有页面可看，开的是它。
     func openLivePreview(_ session: SessionState) {
         if self.session(in: .main)?.id != session.id { openSession(session.id, sessionID: session.sessionID, in: .main) }
-        if beside != .preview { toggleLivePreview() }
+        if !beside.contains(.preview) { toggleLivePreview() }
     }
 
     /// 活预览只看这台 Mac 上的会话（本机的服务、本机的 localhost）。
@@ -79,7 +77,7 @@ extension Workspace {
     }
 
     /// 记到会话上，并在后台为它建好预览、载入这一页：之后 Agent 的 `cuepad live snapshot` 等作用在这一页上，用户点开看到的也是它。
-    /// 会话此刻在主区、右半空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
+    /// 会话此刻在主区最左、旁边空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
     private func receive(_ address: LiveAddress) {
         let id = SessionState.recordID(sessionID: address.sessionID)
         let target = LivePreview.Target(url: address.url, source: address.found ? .found : .sent)
@@ -89,12 +87,12 @@ extension Workspace {
         livePreviews[id] = preview
         liveReleased.remove(id)
         // Agent 这期间操作的是你开着的这一页
-        if !preview.yields(showing: here && beside == .preview) { return liveSent[id] = target }
+        if !preview.yields(showing: here && beside.contains(.preview)) { return liveSent[id] = target }
         liveSent[id] = nil
         preview.retarget(target)
         preview.start()
         preview.engage()
-        if here, beside == nil { toggleLivePreview() }
+        if here, beside.isEmpty { toggleLivePreview() }
     }
 
     /// 每隔 `liveScan` 扫一遍本机进程表，把在监听、答得出网页的口归给会话：窗口有人看着时（`ViewerKeeper.present`）扫本机全部没结束的会话

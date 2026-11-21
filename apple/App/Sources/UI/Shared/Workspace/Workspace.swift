@@ -24,10 +24,13 @@ final class Workspace {
             case gone
             case paused
             case failure
+            /// 等你挑一样东西（边聊边看挑会话）：挑着时一直在，不按时收（`holdNotice`）。
+            case pick
 
             var icon: Icon {
                 switch self {
                 case .done: .done
+                case .pick: .session
                 // 不用对勾：对勾只表示完成与记下
                 case .gone: .gone
                 case .paused: .syncPaused
@@ -160,8 +163,15 @@ final class Workspace {
     var railDrawer = false
     @ObservationIgnored var wideFits: WideMetrics.Fits?
     var cueAsking: String?
-    var notice: Notice?
+    /// 挑会话的那条提示（`Notice.Tone.pick`）怎么没的都算不挑了（甩走、读屏关掉、被下一条顶掉）：挑着的状态只跟着它看得见的那段。
+    var notice: Notice? {
+        didSet { if oldValue?.tone == .pick, notice?.tone != .pick, pickingDock { setDock(nil) } }
+    }
     var preview: PreviewOpening?
+    /// 拖着经过宽屏主区时放下会怎样（`WideDrop`），占位按它画；不拖时为 nil。
+    var dropTarget: WideDropTarget?
+    /// 这个窗口里此刻拖起的是哪一块（`reportsWideDrag`，iPad 的落点读）；没在拖或拖的不是这个窗口报的为 nil。
+    @ObservationIgnored var dragging: WideNavigation.Beside??
     /// 一次性：该会话的回复框聚焦后清掉。
     var replyFocus: UUID?
     var folderPicker: Project?
@@ -218,8 +228,8 @@ final class Workspace {
     /// 隧道放行的端口（`admitLive`），按会话记一秒：网页一次开几条连接，不各扫一遍进程表。
     @ObservationIgnored var livePorts: [String: (ports: [Int: String], at: ContinuousClock.Instant)] = [:]
     #endif
-    /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。
-    var besideShare = WideMetrics.BesideShare()
+    /// 并排几块之间的分界拖到了哪（`WideMetrics.Shares`）：每个窗口一份，只在内存里。
+    var paneShares = WideMetrics.Shares()
 
     let launching = Launching()
     @ObservationIgnored var launches: [SessionLaunching.Key: SessionLaunching] = [:]
@@ -385,7 +395,7 @@ final class Workspace {
     private var shownRoutes: [Route] {
         let routes: [Route] = switch navigation {
         case .narrow(let state): state.path
-        case .wide: [mainRoute]
+        case .wide: [mainRoute] + beside.compactMap { if case .card(let id) = $0 { .card(id) } else { nil } }
         }
         return routes + [overlay?.route].compactMap(\.self)
     }

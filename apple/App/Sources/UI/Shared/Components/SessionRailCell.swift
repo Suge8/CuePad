@@ -36,6 +36,7 @@ struct SessionRailCell: View {
             .accessibilityActions { menu }
             .contentShape(.dragPreview, .rect(cornerRadius: Radius.row))
             .draggable(DraggedSession(sessionID: item.id))
+            .reportsWideDrag(.session(SessionRoute(id: SessionState.recordID(sessionID: item.id), sessionID: item.id)))
             .padding(.leading, compact ? Self.indent : 0)
             #if os(macOS)
             // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
@@ -68,11 +69,6 @@ struct SessionRailCell: View {
         #else
         false
         #endif
-    }
-
-    private var besides: Bool {
-        guard let main = workspace.session(in: .main) else { return false }
-        return main.sessionID != item.id && workspace.besideSession?.sessionID != item.id
     }
 
     /// 项目下面的会话缩进这么多：项目图形那一列的中线上画一道引线（`RailProjectSessions`），行的悬停底从引线右边一档起，不盖住它。
@@ -125,16 +121,9 @@ struct SessionRailCell: View {
                     Spacer(minLength: Spacing.item)
                     // 同栏头那颗预览钮的图形，只是个记号（点行就是开会话）：读屏在行名里说
                     if live { Image(.livePreview).font(Glyph.small).foregroundStyle(palette.ink3).readerHidden(true).transition(.opacity) }
-                    SessionRailReadout(item: item).modifier(YieldsToTool(yields: besides))
+                    SessionRailReadout(item: item)
                 }
                 .animation(Motion.fade, value: live)
-                #if os(macOS)
-                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来。
-                // 完成不放在这里：项目下面列的多半还在做，对勾摆在行尾是请人误点；它在等你回话的那张卡上（`card`）
-                .hoverReveal(when: besides) {
-                    RailHoverTool("并排打开", .rightColumn) { open(item.session, .beside) }.padding(.trailing, -RailHoverTool.overhang)
-                }
-                #endif
             } else {
                 card
             }
@@ -187,16 +176,6 @@ struct SessionRailCell: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(cornerRadius: Radius.card, lifted: true, wash: TaskBoard.Column.waiting.paper(palette))
         .overlay { if selected { RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.ink2, lineWidth: 1.5) } }
-    }
-}
-
-/// 行尾的读数在指针停着、那里要露出小钮时让开：读数比钮宽，不让开会从钮的左边露出半截。
-private struct YieldsToTool: ViewModifier {
-    let yields: Bool
-    @Environment(\.rowHovered) private var hovered
-
-    func body(content: Content) -> some View {
-        content.opacity(yields && hovered ? 0 : 1)
     }
 }
 

@@ -45,7 +45,7 @@ private struct SessionLink: ViewModifier {
         let opened = workspace.shownSessions.contains { $0.sessionID == sessionID }
         let button = Button {
             workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID,
-                                  in: NSEvent.modifierFlags.contains(.command) ? .beside : .main)
+                                  in: NSEvent.modifierFlags.contains(.command) ? .aside : .main)
         } label: {
             content.contentShape(.rect)
         }

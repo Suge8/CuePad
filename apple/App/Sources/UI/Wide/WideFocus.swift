@@ -2,19 +2,28 @@ import SwiftUI
 import CueStore
 import UniformTypeIdentifiers
 
-enum WideSlot: CaseIterable {
-    case main, beside, cue
+enum WideSlot: Hashable, CaseIterable {
+    case main, beside(Int), cue
+
+    static let allCases: [WideSlot] = [.main] + (0..<WideNavigation.maxPanes - 1).map(WideSlot.beside) + [.cue]
+
+    init(_ column: Workspace.Column) {
+        switch column {
+        case .main: self = .main
+        case .beside(let index): self = .beside(index)
+        }
+    }
 
     var column: Workspace.Column? {
         switch self {
         case .main: .main
-        case .beside: .beside
+        case .beside(let index): .beside(index)
         case .cue: nil
         }
     }
 }
 
-/// 只保留控件引用，当前栏从系统第一响应者读取，不复制输入焦点状态。⌃Tab 在看得见的几块之间轮换（主区、并排的右半、Cue）。
+/// 只保留控件引用，当前栏从系统第一响应者读取，不复制输入焦点状态。⌃Tab 在看得见的几块之间轮换（主区并排的几块、Cue）。
 final class WideFocus {
     let windowID = UUID()
     #if os(macOS)
@@ -92,12 +101,12 @@ final class WideFocus {
         focus(shown[next])
     }
 
-    func move(to target: Workspace.Column, in workspace: Workspace) {
-        guard let source = current?.column else { return }
-        workspace.moveSession(from: source, to: target)
+    /// ⌘⌥← →：有焦点的那一块与左边或右边那块对调，焦点跟着它走；挪不过去的焦点也不动。
+    func move(by step: Int, in workspace: Workspace) {
+        guard let source = current?.column, source.index + step >= 0, workspace.moveColumn(source, by: step) else { return }
         Task {
             await NextFrame.wait()
-            focus(target == .main ? .main : .beside)
+            focus(WideSlot(Workspace.Column(index: source.index + step)))
         }
     }
 }
@@ -111,6 +120,10 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     let shape: WideMetrics.Shape
     /// 收起的 Cue 仍挂着（回来时对话、滚动位置都在），只是藏起：看不见、点不到、⌃Tab 跳过。
     var hidden = false
+    /// 右端压在 Cue 浮板下面多宽（主区不并排时，`underCue`）：拖放按露出来的那截算落在哪。
+    var under: CGFloat = 0
+    /// 主区各块此刻在哪（`WideMetrics.spans`）：这一块换了放的东西时从它原来的位置滑过来（`WideColumnSlide.move`）。
+    var spans: [WideNavigation.Beside: WideMetrics.Span] = [:]
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace
@@ -128,8 +141,9 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WideColumnView, context: Context) {
-        if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape) }
-        view.host.rootView = AnyView(content.overlay { WideDropFeedback(state: view.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
+        if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape, spans: spans) }
+        view.drop.under = under
+        view.host.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
         view.slide.park(hidden)
         // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过，盖住它或露出它（`WideColumnSlide`），页里透明的地方不能透出下面的会话条
         if slot == .main { view.host.layer?.backgroundColor = environment.palette.desk.resolve(in: environment).cgColor }
@@ -177,45 +191,85 @@ final class WideColumnView: NSView {
         host.autoresizingMask = [.width, .height]
         addSubview(host)
         host.wantsLayer = true
-        if slot.column != nil { registerForDraggedTypes([.init(DraggedColumn.type.identifier), .init(UTType.cuepadSession.identifier)]) }
+        if slot.column != nil { addSubview(catcher) }
     }
 
     required init?(coder: NSCoder) { nil }
     override func layout() {
         super.layout()
         host.frame = bounds
+        catcher.frame = bounds
     }
 
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        drop.targeted = true
-        return .copy
+    /// 拖放交给指针下最深一层登记过这种类型的视图、不往外传：对话里的文字视图、回复框都登记着，挂在块上的接收器只接得到栏头那一条。
+    /// 所以盖一层在最上面专接主区的几种拖放，鼠标照常穿过它（`hitTest` 为 nil）。
+    private lazy var catcher = DropCatcher(owner: self)
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        let pasteboard = sender.draggingPasteboard
+        if drop.drag != sender.draggingSequenceNumber {
+            drop.drag = sender.draggingSequenceNumber
+            drop.pane = try? Self.pane(in: pasteboard)
+        }
+        let types = Set((pasteboard.types ?? []).compactMap { UTType($0.rawValue) })
+        let x = convert(sender.draggingLocation, from: nil).x
+        let target = slot.column.flatMap { WideDrop.target(types, dragged: drop.pane, at: x / max(1, bounds.width - drop.under), in: $0, workspace: workspace) }
+        if workspace.dropTarget != target { workspace.dropTarget = target }
+        return target == nil ? [] : .copy
     }
 
-    override func draggingExited(_ sender: (any NSDraggingInfo)?) { drop.targeted = false }
-    override func draggingEnded(_ sender: any NSDraggingInfo) { drop.targeted = false }
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+    }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        drop.targeted = false
-        guard let column = slot.column else { return false }
-        let pasteboard = sender.draggingPasteboard
+        let target = workspace.dropTarget
+        workspace.dropTarget = nil
+        guard let target, target.column == slot.column else { return false }
         do {
-            if let data = pasteboard.data(forType: .init(DraggedColumn.type.identifier)) {
-                let value = try JSONDecoder().decode(DraggedColumn.self, from: data)
-                workspace.dropSession(SessionRoute(id: value.recordID, sessionID: value.sessionID), in: column, movingWithinWindow: value.windowID == focus.windowID)
-                return true
-            }
-            if let data = pasteboard.data(forType: .init(UTType.cuepadSession.identifier)) {
-                let value = try JSONDecoder().decode(DraggedSession.self, from: data)
-                workspace.openSession(SessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID, in: column)
-                return true
-            }
-        } catch { workspace.fail(error) }
-        return false
+            guard let pane = try Self.pane(in: sender.draggingPasteboard) ?? nil else { return false }
+            return WideDrop.apply(pane, target, workspace: workspace)
+        } catch {
+            workspace.fail(error)
+            return false
+        }
+    }
+
+    /// 拖的是哪一块：nil 是剪贴板上还读不出（按类型猜），`.some(nil)` 是读出来了但主区不接（任务卡）。同一个 App 里拖的，拖着时就读得出。
+    private static func pane(in pasteboard: NSPasteboard) throws -> WideNavigation.Beside?? {
+        for type in WideDrop.types {
+            if let data = pasteboard.data(forType: .init(type.identifier)) { return .some(try WideDrop.pane(type, data)) }
+        }
+        return nil
     }
 
     @objc func switchWideFocus(_ sender: Any?) { focus.cycle() }
-    @objc func moveWideLeft(_ sender: Any?) { focus.move(to: .main, in: workspace) }
-    @objc func moveWideRight(_ sender: Any?) { focus.move(to: .beside, in: workspace) }
+
+    private final class DropCatcher: NSView {
+        unowned let owner: WideColumnView
+
+        init(owner: WideColumnView) {
+            self.owner = owner
+            super.init(frame: .zero)
+            registerForDraggedTypes(WideDrop.types.map { .init($0.identifier) })
+        }
+
+        required init?(coder: NSCoder) { nil }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { owner.draggingUpdated(sender) }
+        override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation { owner.draggingUpdated(sender) }
+        override func draggingExited(_ sender: (any NSDraggingInfo)?) { owner.draggingExited(sender) }
+        override func draggingEnded(_ sender: any NSDraggingInfo) { owner.draggingEnded(sender) }
+        override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool { owner.performDragOperation(sender) }
+    }
+    @objc func moveWideLeft(_ sender: Any?) { focus.move(by: -1, in: workspace) }
+    @objc func moveWideRight(_ sender: Any?) { focus.move(by: 1, in: workspace) }
 }
 #else
 struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
@@ -225,6 +279,10 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     let width: CGFloat
     let shape: WideMetrics.Shape
     var hidden = false
+    /// 右端压在 Cue 浮板下面多宽（主区不并排时，`underCue`）：拖放按露出来的那截算落在哪。
+    var under: CGFloat = 0
+    /// 同 Mac 的 `WideColumnHost.spans`。
+    var spans: [WideNavigation.Beside: WideMetrics.Span] = [:]
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace
@@ -237,98 +295,18 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
-        controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape)
-        controller.rootView = AnyView(content.overlay { WideDropFeedback(state: controller.drop) }.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
+        controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape, spans: spans)
+        controller.drop.under = under
+        controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
         controller.slide.park(hidden)
         // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过、盖住它或露出它（`WideColumnSlide`），页里透明的地方不能透出下面的会话条
         if slot == .main { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }
     }
 }
-
-nonisolated private final class LayoutMark: CALayer {
-    var laidOut: (@MainActor () -> Void)?
-
-    override func layoutSublayers() {
-        super.layoutSublayers()
-        // 块的层只在主线程的提交里排
-        let laidOut = laidOut
-        MainActor.assumeIsolated { laidOut?() }
-    }
-}
-
-final class WideColumnController: UIHostingController<AnyView> {
-    let slot: WideSlot
-    let drop = WideDropState()
-    let focus: WideFocus
-    let workspace: Workspace
-    private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.view.isHidden = $0 }
-    /// 块的图层最后一个子层：CA 提交时按层树先父后子排版，排到它时这一次提交里块里各处托管的页都已摆到层上，页里各层的补位在这里接上（`WideColumnSlide.laidOut`）。
-    /// 在块自己排完时（`viewDidLayoutSubviews`）接的话，SwiftUI 还没把页摆到层上，补的全是 0，居中的、靠右的只跟着整块平移、第一帧先跳到反方向。
-    /// 会话页在导航栈里另有一个托管视图，下一次提交才摆：下一圈再排它一次、补上新挪的（`WideColumnSlide.layoutPasses`）。
-    private let lastLayout = LayoutMark()
-    init(slot: WideSlot, focus: WideFocus, workspace: Workspace) {
-        self.slot = slot
-        self.focus = focus
-        self.workspace = workspace
-        super.init(rootView: AnyView(EmptyView()))
-        // 只认容器的安全区(键盘不认:块排在窗口的键盘安全区里,键盘升起时整块变矮)。块的下沿伸到窗口下缘（`reachesWindowBottom`），
-        // 横条那一截照它在窗口里盖住多少算成页的下安全区：回复框停在横条上方，对话滚到窗口下缘、在横条后面透出来（同手机）
-        safeAreaRegions = .container
-    }
-    @MainActor required dynamic init?(coder: NSCoder) { nil }
-
-    /// 托管视图默认铺系统底色（白、深色下黑），会盖住窗口的桌面色（`SplitRoot`）：页没画到的地方——会话的栏头、Cue 那一栏名牌两侧——露出一条白。主区铺桌面色（`WideColumnHost`）。
-    /// 按栏的框裁：滑动时右缘随图层的宽走（`WideColumnSlide`）。Cue 那一块宽一直不变、不裁：它是抽屉时面板阴影与伸进状态栏的面落在块外（`CueDock`）。
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .clear
-        view.clipsToBounds = slot != .cue
-        lastLayout.laidOut = { [unowned self] in
-            slide.laidOut(view.layer)
-            guard slide.awaitsLayout else { return }
-            Task { [weak self] in self?.lastLayout.setNeedsLayout() }
-        }
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        // 每次排完都挪回最后：页排版时可能在它后面加了层
-        if slide.awaitsLayout {
-            view.layer.addSublayer(lastLayout)
-            lastLayout.setNeedsLayout()
-        }
-        installDropTargets(in: view)
-    }
-
-    private func installDropTargets(in target: UIView) {
-        guard slot.column != nil else { return }
-        let interactions = target.interactions.compactMap { $0 as? UIDropInteraction }
-        // 列表与回复框自带接收器，会截住父栏的拖放；追加只认会话的接收器，保留原处理。
-        if (target === view || !interactions.isEmpty) && !interactions.contains(where: { $0.delegate === self }) {
-            target.addInteraction(UIDropInteraction(delegate: self))
-        }
-        target.subviews.forEach { installDropTargets(in: $0) }
-    }
-
-    override var canBecomeFirstResponder: Bool { true }
-
-    override var keyCommands: [UIKeyCommand]? {
-        let commands = [
-            UIKeyCommand(input: "\t", modifierFlags: .control, action: #selector(cycle)),
-            UIKeyCommand(input: UIKeyCommand.inputLeftArrow, modifierFlags: [.command, .alternate], action: #selector(left)),
-            UIKeyCommand(input: UIKeyCommand.inputRightArrow, modifierFlags: [.command, .alternate], action: #selector(right))
-        ]
-        commands.forEach { $0.wantsPriorityOverSystemBehavior = true }
-        return commands
-    }
-    @objc private func cycle() { focus.cycle() }
-    @objc private func left() { focus.move(to: .main, in: workspace) }
-    @objc private func right() { focus.move(to: .beside, in: workspace) }
-}
 #endif
 
 /// Hosting 边界只传页面需要的环境，避免几块共用 SwiftUI 内部的焦点与无障碍桥。
-private struct WideEnvironment: ViewModifier {
+struct WideEnvironment: ViewModifier {
     let workspace: Workspace
     let values: EnvironmentValues
 

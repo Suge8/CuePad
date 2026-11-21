@@ -66,6 +66,8 @@ struct OverlayTitle: View {
         .help(content?.help ?? "")
         .accessibilityElement(children: .combine)
         .opacity(content == nil ? 0 : 1)
+        // 灵感的名牌拖到主区右边，它就并排到会话旁边（`WideDrop`）
+        .draggable(idea: content.flatMap { if case .card(let id) = $0.page { id } else { nil } })
     }
 
     private func line(_ text: Dotted) -> some View {
