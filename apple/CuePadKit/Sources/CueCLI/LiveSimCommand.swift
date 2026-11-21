@@ -11,6 +11,7 @@ extension Command {
       设备：UDID 或名字（iPhone 17）；不给就用开着的那一台，开着几台时报错列出来。
       之后同 cuepad live：开在这个会话旁边，竖长的屏摆成手机宽那一档。你自己要看画面用 cuepad live screenshot；snapshot、click、fill 认的是网页元素，这一页只有一块画布，点不到模拟器里的东西。
       用户能做的：点、拖、滚（滚轮与触控板变成手指拖动）、从屏的最下沿往上划回主屏幕；Mac 上点一下画面后直接用键盘打字，手机上点模拟器里的软键盘。横屏的画面是侧着的。
+      模拟器吃内存（一台几个 GB）、这台 Mac 吃紧时：simslim（github.com/MobAI-App/simslim）能停掉模拟器里用不上的系统服务。停哪些要照这个应用用到的留（推送、iCloud、小组件之类），停了是持久的，先问用户。
       \(Schema.output(LiveOutput.fields.description("Live"), "found 恒为 false"))
       """
   ) { call in
@@ -50,11 +51,11 @@ enum SimServe {
     let log = FileManager.default.temporaryDirectory.appending(path: "cuepad-screen-\(UUID().uuidString).log")
     defer { try? FileManager.default.removeItem(at: log) }
     for port in first..<first + 8 {
-      if await ScreenServer.serves(device.udid, port: port) { return port }
+      if await ScreenServer.identity(port: port) == device.udid { return port }
       let pid = try launch([entry, device.udid, String(port)], log: log)
       for _ in 0..<50 {
         try await Task.sleep(for: .milliseconds(100))
-        if await ScreenServer.serves(device.udid, port: port) { return port }
+        if await ScreenServer.identity(port: port) == device.udid { return port }
         // 没起来只按它退出了算：系统框架往 stderr 写的诊断不算
         var status: Int32 = 0
         guard waitpid(pid, &status, WNOHANG) == pid else { continue }
@@ -62,7 +63,7 @@ enum SimServe {
         // 口被占着（`run` 退出时写的这个词）：占着它的可能正是同时起的另一条命令的这台的服务，再认一次，不是才往后挪
         guard said.contains(taken) else { throw CLIError.invalid("接不上模拟器「\(device.name)」的屏：\(said.trimmingCharacters(in: .whitespacesAndNewlines))") }
         try await Task.sleep(for: .milliseconds(300))
-        if await ScreenServer.serves(device.udid, port: port) { return port }
+        if await ScreenServer.identity(port: port) == device.udid { return port }
         break
       }
     }
@@ -104,7 +105,7 @@ enum SimServe {
     guard arguments.count == 2, let port = UInt16(arguments[1]) else { fail("用法：cuepad \(entry) <UDID> <端口>") }
     do {
       let screen = try SimScreen(udid: arguments[0])
-      let server = try ScreenServer(source: screen, port: port, identity: screen.device.udid, page: ScreenPage.html(title: screen.device.name, phone: screen.tall))
+      let server = try ScreenServer(source: screen, port: port, identity: screen.device.udid, page: ScreenPage.html(title: screen.device.name, kind: .touchscreen(tall: screen.tall)))
       do { try await server.start() } catch { fail("\(taken)：\(error)") }
       let executable = Bundle.main.executablePath ?? ""
       let born = try? FileManager.default.attributesOfItem(atPath: executable)[.systemFileNumber] as? Int

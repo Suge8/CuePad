@@ -33,6 +33,8 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
   private let legacy: Legacy?
   private var hub: xpc_connection_t?
   private let input = DispatchQueue(label: "cuepad.screen.input", qos: .userInteractive)
+  private let changed = OSAllocatedUnfairLock<(@Sendable () -> Void)?>(initialState: nil)
+  private var registered = false
   private var pool: CVPixelBufferPool?
   private var pooled = (width: 0, height: 0)
   private var scroll: (x: Double, y: Double)?
@@ -100,14 +102,18 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
 
   // MARK: 画面
 
+  /// 回调只登记一次、没人看时也留着：换缓冲那一条要一直听，不然歇着时转了屏，回来读的还是旧的那块。
   func watch(_ changed: @escaping @Sendable () -> Void) {
+    self.changed.withLock { $0 = changed }
+    guard !registered else { return }
+    registered = true
     let id = NSUUID()
     // 模拟器换一块缓冲（转屏、重启界面）时告诉这里；平时原地改写同一块，改了哪几块矩形经 damage 回调来
-    let swapped: @convention(block) (IOSurface?, IOSurface?) -> Void = { [surface] unmasked, _ in
+    let swapped: @convention(block) (IOSurface?, IOSurface?) -> Void = { [surface, weak self] unmasked, _ in
       if let unmasked { surface.withLockUnchecked { $0 = unmasked } }
-      changed()
+      self?.changed.withLock { $0 }?()
     }
-    let damaged: @convention(block) (NSArray?) -> Void = { _ in changed() }
+    let damaged: @convention(block) (NSArray?) -> Void = { [weak self] _ in self?.changed.withLock { $0 }?() }
     typealias Register = @convention(c) (AnyObject, Selector, NSUUID, AnyObject) -> Void
     for (name, block) in [("registerCallbackWithUUID:ioSurfacesChangeCallback:", swapped as AnyObject), ("registerCallbackWithUUID:damageRectanglesCallback:", damaged as AnyObject)] {
       let selector = NSSelectorFromString(name)
@@ -115,6 +121,8 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
       unsafeBitCast(display.method(for: selector), to: Register.self)(display, selector, id, block)
     }
   }
+
+  func rest() { changed.withLock { $0 = nil } }
 
   func frame() -> CVPixelBuffer? {
     let surface = surface.withLockUnchecked { $0 }
@@ -153,6 +161,8 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
         finger(phase, x, y)
       case .wheel(let x, let y, let dx, let dy): wheel(x, y, dx, dy)
       case .key(let usage, let down): post("IndigoKeyboardButtonEvent", ["usageCode": UInt64(usage), "state": UInt64(down ? 1 : 2)])
+      // 触摸屏那张页不发这两种：没有右键，字在模拟器自己的键盘上打
+      case .secondary, .text: break
       }
     }
   }
