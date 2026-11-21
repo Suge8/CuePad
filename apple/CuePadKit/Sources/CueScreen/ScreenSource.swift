@@ -10,6 +10,13 @@ public protocol ScreenSource: AnyObject, Sendable {
   /// 此刻的画面，交出去之后不会再变：编码是异步的，来源那块缓冲会被原地改写的要拷一份，不然编进半帧。还没有画面是 nil。
   func frame() -> CVPixelBuffer?
   func send(_ input: ScreenInput)
+  /// 画面里有什么：角色、名字、值与在画面里的位置（JSON，`ScreenPage` 的 `mirror` 读），等画面与输入都停下了再答。
+  /// 页面照它在画面上摆一层看不见的元素，Agent 读的、点的（`cuepad live snapshot|click|fill`）与用户点选的都是那一层。说不出来的来源答 nil。
+  func outline(_ reply: @escaping @Sendable (Data?) -> Void)
+}
+
+extension ScreenSource {
+  public func outline(_ reply: @escaping @Sendable (Data?) -> Void) { reply(nil) }
 }
 
 /// 坐标与位移都按画面的宽高归一（0…1）。
@@ -24,6 +31,10 @@ public enum ScreenInput: Sendable {
   case key(usage: UInt32, down: Bool)
   /// 打出来的一段字（看的那一头的输入法已经组好）。
   case text(String)
+  /// 键盘焦点给 `outline` 里的这个元素（编号是最近那一份里的）。
+  case focus(Int)
+  /// 这个输入框里的字换成这一段。
+  case fill(Int, String)
 
   public enum Phase: String, Sendable { case down, move, up }
 }
