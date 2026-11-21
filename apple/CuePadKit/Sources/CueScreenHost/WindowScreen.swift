@@ -6,7 +6,7 @@ import os
 /// 这个应用最前面的那扇主窗口，连同挂在它上面的窗（表单、弹层、菜单）。
 /// 画面经 ScreenCaptureKit 按窗口取（`desktopIndependentWindow`）：只列本进程内容的那一条不过授权（`SCShareableContent.currentProcess`），
 /// 被别的窗口挡着、应用在后台、窗口在别的桌面照样出帧（实测；按显示器取的那一种窗口不在当前桌面时一帧都没有）。最小化、隐藏时没有画面。
-/// 点与键见 `WindowScreen+Input`。
+/// 点与键见 `WindowScreen+Input`，画面里有什么见 `WindowScreen+Outline`。
 final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
   /// 取哪扇窗，画面多大（像素）。
   struct Stage: Equatable, Sendable {
@@ -40,6 +40,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   /// 上一次量到开着的那些窗。
   @MainActor private var seen: Set<Int> = []
   @MainActor var input = Input()
+  @MainActor var outlined = Outlined()
 
   @MainActor override init() {
     let (stages, wanted) = AsyncStream.makeStream(of: Stage?.self, bufferingPolicy: .bufferingNewest(1))
@@ -69,6 +70,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     onMain {
       $0.watching = true
       $0.measure()
+      $0.outlines()
     }
   }
 
@@ -88,12 +90,16 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
 
   /// 最近一帧里有窗伸出了窗口。
   var overflowing: Bool { shared.withLockUnchecked { $0.overflowing } }
+  /// 最近一帧是哪一刻。
+  var changed: Double { shared.withLockUnchecked { $0.time } }
 
   func send(_ input: ScreenInput) { onMain { $0.deliver(input) } }
 
+  func outline(_ reply: @escaping @Sendable (Data?) -> Void) { onMain { $0.ask(reply) } }
+
   /// 回主线程做。排在运行循环上、不排主队列：按下那一下可能就地转起一个跟踪循环等抬起（`dispatch`），
   /// 主队列在自己的一块活里不会再往下取，抬起永远到不了（实测卡死在 NSTextView 的选字循环里）；运行循环嵌着转时照样取。
-  private func onMain(_ work: @escaping @MainActor @Sendable (WindowScreen) -> Void) {
+  func onMain(_ work: @escaping @MainActor @Sendable (WindowScreen) -> Void) {
     RunLoop.main.perform(inModes: [.common]) { [self] in
       MainActor.assumeIsolated { work(self) }
     }

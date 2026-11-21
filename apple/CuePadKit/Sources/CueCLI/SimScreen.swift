@@ -161,8 +161,8 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
         finger(phase, x, y)
       case .wheel(let x, let y, let dx, let dy): wheel(x, y, dx, dy)
       case .key(let usage, let down): post("IndigoKeyboardButtonEvent", ["usageCode": UInt64(usage), "state": UInt64(down ? 1 : 2)])
-      // 触摸屏那张页不发这两种：没有右键，字在模拟器自己的键盘上打
-      case .secondary, .text: break
+      // 触摸屏那张页不发这几种：没有右键，字在模拟器自己的键盘上打，画面里有什么它说不出来（`outline`）
+      case .secondary, .text, .focus, .fill: break
       }
     }
   }
