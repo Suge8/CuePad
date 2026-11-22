@@ -9,7 +9,9 @@ struct CardTextField: View {
     let theme: CueEditorTheme
     var fits = false
     var editable = true
+    var underHeader = false
     @Environment(Workspace.self) private var workspace
+    @Environment(\.headerClearance) private var headerClearance
 
     var body: some View {
         @Bindable var handle = editing.handle
@@ -20,7 +22,7 @@ struct CardTextField: View {
             onChange: { [editing] in editing.changed($0) },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits, bottomInset: fits ? 0 : CardEditorBar.clearance(theme), editable: editable)
+            fits: fits, topInset: underHeader ? headerClearance : 0, bottomInset: fits ? 0 : CardEditorBar.clearance(theme), editable: editable)
         .overlay { AttachmentSpotLayer(spot: handle.spot) }
         .overlay(alignment: .bottom) { if !fits { CardEditorBar(card: card, editing: editing, theme: theme) } }
         .modifier(FileSources(source: $handle.source) { handle.insert($0) })

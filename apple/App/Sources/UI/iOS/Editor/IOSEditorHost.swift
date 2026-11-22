@@ -35,6 +35,7 @@ struct IOSEditorHost: UIViewRepresentable {
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
     var fits = false
+    var topInset: CGFloat = 0
     var bottomInset: CGFloat = 0
     var editable = true
     @Environment(AppServices.self) private var services
@@ -90,6 +91,11 @@ struct IOSEditorHost: UIViewRepresentable {
     func updateUIView(_ view: CueTextView, context: Context) {
         // 光标跟随避开的是滚动 inset；只给正文末尾留白，UIKit 输入时仍会把光标推到纸边。
         if view.contentInset.bottom != bottomInset { view.contentInset.bottom = bottomInset }
+        if view.contentInset.top != topInset {
+            let atTop = view.contentOffset.y <= -view.adjustedContentInset.top
+            view.contentInset.top = topInset
+            if atTop { view.contentOffset.y = -view.adjustedContentInset.top }
+        }
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError

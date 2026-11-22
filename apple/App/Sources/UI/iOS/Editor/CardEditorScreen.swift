@@ -18,8 +18,6 @@ struct CardEditorScreen: View {
     @State private var editing: CardEditing?
     @State private var inspirationSharing = InspirationSharing()
 
-    private static let pageWidth: CGFloat = 760
-
     var body: some View {
         page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
@@ -40,28 +38,15 @@ struct CardEditorScreen: View {
 
     private var wide: Bool { sizeClass == .regular }
 
-    @ViewBuilder private var page: some View {
-        if wide {
-            editor
-                .frame(maxWidth: Self.pageWidth, maxHeight: .infinity, alignment: .top)
-                .background(palette.paper, in: .rect(cornerRadius: Radius.sheet))
-                .overlay { RoundedRectangle(cornerRadius: Radius.sheet).strokeBorder(palette.hair).allowsHitTesting(false) }
-                .clipShape(.rect(cornerRadius: Radius.sheet))
-                .padding(EdgeInsets(top: Spacing.item, leading: Spacing.sheet, bottom: 0, trailing: Spacing.sheet))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            editor
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .ignoresSafeArea(.container, edges: .vertical)
-        }
-    }
-
-    @ViewBuilder private var editor: some View {
+    private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let data, let editing {
-                CardTextField(card: data.card, editing: editing, theme: .inspiration(palette, horizontalInset: wide ? Spacing.sheet : LibraryLayout.textInset))
+                CardTextField(card: data.card, editing: editing, theme: .inspiration(
+                    palette, horizontalInset: wide ? Spacing.page : LibraryLayout.textInset, maxTextWidth: InspirationPaper.textWidth), underHeader: true)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(.container, edges: .vertical)
     }
 
     @ViewBuilder private var detail: some View {
