@@ -68,16 +68,17 @@ nonisolated struct RevealClock: Equatable {
     private var entries: [Entry] = []
     private let opened = Date.now.timeIntervalSinceReferenceDate
 
-    func clock(for source: String, length: Int, role: RevealRole, at t: Double) -> RevealClock? {
+    func clock(for source: String, length: @autoclosure () -> Int, role: RevealRole, at t: Double) -> RevealClock? {
         let text = source.trimmingCharacters(in: .whitespacesAndNewlines)
         if let index = entries.lastIndex(where: { $0.text == text || $0.clock != nil && text.hasPrefix($0.text) }) {
             guard var clock = entries[index].clock else { return nil }
+            let length = length()
             if clock.length != length { clock.receive(length, at: t) }
             entries[index] = Entry(text: text, clock: clock)
             return role == .speaking || t < clock.settles + Self.linger ? clock : nil
         }
         guard role != .landed else { return nil }
-        let opening = t - opened < Self.opening
+        let length = length(), opening = t - opened < Self.opening
         let clock: RevealClock? = switch role {
         case .speaking: Self.start(shown: opening ? length : 0, of: length, at: t)
         case .newest where !opening: Self.start(shown: 0, of: length, at: t)
