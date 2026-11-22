@@ -28,7 +28,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var anchor = ChatAnchor()
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
-    @State var held: CGFloat?
+    @State var held: Held?
     @State var sliding: Task<Void, Never>?
     @State var releasing: Task<Void, Never>?
     @State var lift = ContentLift()

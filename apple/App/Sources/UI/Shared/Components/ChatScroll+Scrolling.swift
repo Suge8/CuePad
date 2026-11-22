@@ -19,32 +19,44 @@ extension ChatScroll {
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
     /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
-    var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
+    var bottomPadding: CGFloat { max(bottomInset, held?.height ?? 0) }
 
-    /// 贴着最新时变矮（一轮做完小人收走、收起一格）不往下滑：让出的高先留成留白（`held`），接着长出来的（回答一行行显影）先填它，
+    /// 留着的底部留白。发出时留的（`fills` 为假）那句一到就整个收掉；变矮时留的先被接着长出来的填，到时再收剩下的。
+    struct Held {
+        let height: CGFloat
+        let fills: Bool
+    }
+
+    /// 贴着最新时变矮（一轮做完小人收走、收起一格）不往下滑：让出的高先留成留白，接着长出来的（回答一行行显影）先填它，
     /// 填进去的那一截对话不动——先滑下去再被回答顶上来，看着是整段沉一下再浮起。`keeps` 之后还没填满的那截再一次滑走。
     func keep(_ shrunk: CGFloat) {
-        held = bottomPadding + shrunk
-        release()
+        hold(Held(height: bottomPadding + shrunk, fills: true))
     }
 
     /// 长出来的先填留白，返回没填下、要滑上去的那一截。
     func fill(_ grown: CGFloat) -> CGFloat {
         guard let held, grown > 0 else { return grown }
-        let spare = max(0, held - bottomInset)
-        self.held = held - grown > bottomInset ? held - grown : nil
-        if self.held != nil { release() }
-        return grown - min(grown, spare)
+        guard held.fills else {
+            hold(nil)
+            return grown
+        }
+        let left = held.height - grown
+        hold(left > bottomInset ? Held(height: left, fills: true) : nil)
+        return grown - min(grown, max(0, held.height - bottomInset))
     }
 
-    private func release() {
+    /// 换留白都经这里：上一次留的到时收的那一下作废，不会收掉之后才留的（发出时留的）。
+    func hold(_ next: Held?) {
         releasing?.cancel()
+        releasing = nil
+        held = next
+        guard let next, next.fills else { return }
         releasing = Task {
             try? await Task.sleep(for: Self.keeps)
-            guard !Task.isCancelled, let held else { return }
+            guard !Task.isCancelled else { return }
             releasing = nil
-            self.held = nil
-            if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling { rise(by: bottomInset - held) }
+            held = nil
+            if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling { rise(by: bottomInset - next.height) }
         }
     }
 
@@ -117,7 +129,7 @@ extension ChatScroll {
     }
 
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
-        held = sent ? bottomInset : nil
+        hold(sent ? Held(height: bottomInset, fills: false) : nil)
         withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }
     }
 

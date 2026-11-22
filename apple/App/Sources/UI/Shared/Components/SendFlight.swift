@@ -34,12 +34,17 @@ import SwiftUI
         return said.timeIntervalSince(trip.at) > -Self.slack && Self.shown(text) == trip.text
     }
 
-    /// 库里的时间只存到毫秒，读回来比起飞时早一点；一秒内不会再发出一样的一句。
-    private static let slack: TimeInterval = 1
+    /// 库里的时间按毫秒四舍五入，读回来最多比起飞时早半毫秒；放宽到这一点为止，按下之前说过的同一句（连发两遍）不认。
+    private static let slack: TimeInterval = 0.001
 
-    /// 落点压在输入框后面（对话没滚到最新）就不认：往下钻进输入框后面读不出去了哪。
+    /// 落点压在输入框后面（对话没滚到最新）就不认：往下钻进输入框后面读不出去了哪。比的是输入框此刻的位置：键盘收起时它与对话一起往下挪。
+    /// 认过之后又被压住（飞着时往回滚了）就不飞了，当场换成真的那颗。
     func aim(_ landing: Landing) {
-        guard let trip, landing.frame.maxY <= trip.from.minY, self.landing != landing else { return }
+        guard let trip, self.landing != landing else { return }
+        guard landing.frame.maxY <= (origin ?? trip.from).minY else {
+            if self.landing != nil { land(trip) }
+            return
+        }
         self.landing = landing
     }
 
@@ -116,7 +121,7 @@ private struct FlyingWords: View {
     @State private var spot: CGPoint
     @State private var grown = false
     @State private var gone = false
-    @State private var leg = 0
+    @State private var legs = Legs()
     @Environment(\.palette) private var palette
 
     init(flight: SendFlight, trip: SendFlight.Trip, base: CGPoint) {
@@ -149,23 +154,37 @@ private struct FlyingWords: View {
             }
     }
 
+    /// 两个方向各记各的最后一段：落点只在一个方向上挪了时，另一个方向还在走，两边都停了才落下。
+    private struct Legs {
+        var y = 0, x = 0
+        var moving: Set<WritableKeyPath<Self, Int>> = []
+    }
+
     /// 按下当帧就先往上起飞一小段（气泡要几帧后才排出来，停在原处会压着输入框里冒出来的占位字）；
-    /// 落点到了、或在飞的途中挪了（滚到最新、键盘收起）就改终点：弹簧从当前的位置与速度接着走，只认最后一段的落定。
+    /// 落点到了、或在飞的途中挪了（滚到最新、键盘收起）就改终点：弹簧从当前的位置与速度接着走。
     private func fly(to landing: SendFlight.Landing?) {
         guard let landing else {
             withAnimation(Motion.Send.lift) { spot.y -= Motion.Send.takeoff }
             return
         }
         withAnimation(Motion.Send.grow) { grown = true }
-        let to = landing.frame.origin, across = abs(to.x - spot.x) >= Self.still
-        guard across || abs(to.y - spot.y) >= Self.still else { return }
-        leg += 1
-        let current = leg
-        func land() { if leg == current { flight.land(trip) } }
-        withAnimation(Motion.Send.lift, completionCriteria: .logicallyComplete) { spot.y = to.y } completion: { if !across { land() } }
-        withAnimation(Motion.Send.drift, completionCriteria: .logicallyComplete) { spot.x = to.x } completion: { if across { land() } }
+        let to = landing.frame.origin
+        move(\.y, Motion.Send.lift, from: spot.y, to: to.y) { spot.y = to.y }
+        move(\.x, Motion.Send.drift, from: spot.x, to: to.x) { spot.x = to.x }
     }
 
     /// 终点没挪（同一处又报了一次，只差小数点后几位）就不开新的一段：值没变的动画当场回调完成，会在半路落地。
+    private func move(_ axis: WritableKeyPath<Legs, Int>, _ animation: Animation, from: CGFloat, to: CGFloat, _ change: () -> Void) {
+        guard abs(to - from) >= Self.still else { return }
+        legs[keyPath: axis] += 1
+        legs.moving.insert(axis)
+        let current = legs[keyPath: axis]
+        withAnimation(animation, completionCriteria: .logicallyComplete, change) {
+            guard legs[keyPath: axis] == current else { return }
+            legs.moving.remove(axis)
+            if legs.moving.isEmpty { flight.land(trip) }
+        }
+    }
+
     private static let still: CGFloat = 0.5
 }
