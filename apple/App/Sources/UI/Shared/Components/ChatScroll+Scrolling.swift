@@ -21,6 +21,36 @@ extension ChatScroll {
     /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
     var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
+    /// 贴着最新时变矮（一轮做完小人收走、收起一格）不往下滑：让出的高先留成留白（`held`），接着长出来的（回答一行行显影）先填它，
+    /// 填进去的那一截对话不动——先滑下去再被回答顶上来，看着是整段沉一下再浮起。`keeps` 之后还没填满的那截再一次滑走。
+    func keep(_ shrunk: CGFloat) {
+        held = bottomPadding + shrunk
+        release()
+    }
+
+    /// 长出来的先填留白，返回没填下、要滑上去的那一截。
+    func fill(_ grown: CGFloat) -> CGFloat {
+        guard let held, grown > 0 else { return grown }
+        let spare = max(0, held - bottomInset)
+        self.held = held - grown > bottomInset ? held - grown : nil
+        if self.held != nil { release() }
+        return grown - min(grown, spare)
+    }
+
+    private func release() {
+        releasing?.cancel()
+        releasing = Task {
+            try? await Task.sleep(for: Self.keeps)
+            guard !Task.isCancelled, let held else { return }
+            releasing = nil
+            self.held = nil
+            if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling { rise(by: bottomInset - held) }
+        }
+    }
+
+    /// 回答整段到了也在追平时长内显影完（`RevealClock`）：手机上逐段排，段与段之间隔得开，按"一段时间没再长"收会在两段之间收、下一段又顶上来。
+    static var keeps: Duration { .seconds(Motion.Reveal.catchUp + Motion.Reveal.develop) }
+
     final class ScrollOffset {
         private(set) var read: CGFloat = 0
         private(set) var end: CGFloat = 0

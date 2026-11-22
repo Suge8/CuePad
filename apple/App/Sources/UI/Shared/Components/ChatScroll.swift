@@ -30,6 +30,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var offset = ScrollOffset()
     @State var held: CGFloat?
     @State var sliding: Task<Void, Never>?
+    @State var releasing: Task<Void, Never>?
     @State var lift = ContentLift()
     @State var leftAt: Key?
 
@@ -111,7 +112,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             reader.scrollTo(target.id, anchor: target.anchor)
                             return
                         }
-                        if held != nil, grown > 0 { held = nil }
+                        let rising = fill(grown)
                         let following = follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling
                         var next = follow.wrappedValue
                         // 算用户滚走的只有偏移真的挪了的那次：手指按着、甩着的期间可见区变高矮（键盘、输入框随贴底状态收起与展开）、内容边距变了，
@@ -129,9 +130,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating
-                        if grown < 0, glides, reading.nearNewest, offset.read <= max(offset.end, 0) { rise(by: grown) }
+                        if grown < 0, glides, reading.nearNewest, offset.read <= max(offset.end, 0) { keep(-grown) }
                         if grown > 0, reading.nearNewest {
-                            if glides { rise(by: grown) }
+                            if glides, rising > 0 { rise(by: rising) }
                         } else if Self.followsKeyboard, delivered.viewShrank, grown == 0 {
                             // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。整段滑上去，
                             // 对话与键盘、回复框一起走；当下补滚的话整段对话先一下跳到终点，键盘与回复框还在半路
