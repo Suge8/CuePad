@@ -6,7 +6,8 @@ import SwiftUI
 /// Mac 上正在说的那句（`draft`）跟在最后。只往末尾长：正在说的那句落进过程、回答落进对话都在原处换下，不挪位置。
 /// 一轮里最新的那段话与前面说过的隔开一档（`apart`）：做完的是回答，在跑的是正在说的或刚说完的那句。
 /// 隔开的总是最新那段，它落进过程、落成回答时间距不变，读着的那段不跳。
-/// 开没开记在对话那一层（`RoundFolds`，按这一轮第一项的身份认，`Chat.round`）：在跑时点开的，回答落下换成回答那一块后照样开着
+/// 开没开记在对话那一层（`RoundFolds`），按这一轮各项的身份认（`Chat.keys`）：在跑那块与回答那块有共同的项就是同一轮，
+/// 收尾时升成回答的那句话从过程里拿走也认得出，在跑时点开的，回答落下后照样开着
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     var took: String?
@@ -19,10 +20,10 @@ struct RoundProcess: View {
     @State private var flippedHere = false
 
     private var fold: Binding<Bool> {
-        let preset = DebugHooks.preset.toolsOpen
-        guard let round = Chat.round(tools), let folds else { return Binding { preset != flippedHere } set: { flippedHere = $0 != preset } }
-        return Binding { preset != folds.flipped.contains(round) } set: { open in
-            if open != preset { folds.flipped.insert(round) } else { folds.flipped.remove(round) }
+        let preset = DebugHooks.preset.toolsOpen, round = Chat.keys(tools)
+        guard !round.isEmpty, let folds else { return Binding { preset != flippedHere } set: { flippedHere = $0 != preset } }
+        return Binding { preset == folds.flipped.isDisjoint(with: round) } set: { open in
+            if open != preset { folds.flipped.formUnion(round) } else { folds.flipped.subtract(round) }
         }
     }
 

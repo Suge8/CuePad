@@ -158,18 +158,19 @@ nonisolated enum Chat {
         ].filter { $0.count > 0 }
     }
 
-    static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {
-        let replied = Set(reply?.tools?.items.compactMap(key) ?? [])
-        return pending.items.contains { key($0).map(replied.contains) == true }
+    static func keys(_ tools: ChatMessage.Tools?) -> Set<String> {
+        Set(tools?.items.compactMap { $0.record?.uuidString ?? $0.calls?.first } ?? [])
     }
 
-    static func round(_ tools: ChatMessage.Tools?) -> String? { tools?.items.lazy.compactMap(key).first }
+    static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {
+        guard let reply else { return false }
+        return !keys(pending).isDisjoint(with: keys(reply.tools).union([reply.id.uuidString]))
+    }
 
-    private static func key(_ item: ChatMessage.Tools.Item) -> String? { item.record?.uuidString ?? item.calls?.first }
-
-    static func replying(_ session: SessionState, newest: ChatMessage?) -> Bool {
-        guard let reply = session.lastReply, !reply.isEmpty else { return false }
-        return newest.map { Recap.reply($0.text) } != reply
+    static func awaiting(_ tools: ChatMessage.Tools, endedWith reply: String?, session: SessionState, messages: [ChatMessage]) -> Bool {
+        guard reply?.isEmpty != true, session.lastReply == reply, session.pendingPrompt == nil else { return false }
+        if let end = session.answeredAt, let last = messages.last, last.at >= end { return false }
+        return !landed(tools, in: messages.last { $0.role == .known(.pi) })
     }
 
     enum ProcessRow: Hashable {
