@@ -4695,6 +4695,22 @@
         }
       }
     },
+    "排序改成按 `firstJoinedAt` 了，接着改断言。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorting now uses `firstJoinedAt`. Updating the assertions next."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排序改成按 `firstJoinedAt` 了，接着改断言。"
+          }
+        }
+      }
+    },
     "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。\n%@" : {
       "localizations" : {
         "en" : {
@@ -7015,6 +7031,22 @@
         }
       }
     },
+    "类型检查说 `firstJoinedAt` 可能为空：旧数据里没有这个字段。先拿 `joinedAt` 兜底，再跑测试。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The type check says `firstJoinedAt` may be missing: older records don't have the field. I'll fall back to `joinedAt`, then run the tests."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类型检查说 `firstJoinedAt` 可能为空：旧数据里没有这个字段。先拿 `joinedAt` 兜底，再跑测试。"
+          }
+        }
+      }
+    },
     "纸上的一小片风景\n\n为下一版留下的配色与节奏。" : {
       "localizations" : {
         "en" : {
@@ -8643,6 +8675,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "闲鱼"
+          }
+        }
+      }
+    },
+    "队列按 `joinedAt` 排序，重连的人会拿到新的时间戳。先把断言补全，再跑一遍看还有没有别的失败。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The queue sorts by `joinedAt`, and anyone who reconnects gets a new timestamp. I'll finish the assertions first, then rerun to see if anything else fails."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "队列按 `joinedAt` 排序，重连的人会拿到新的时间戳。先把断言补全，再跑一遍看还有没有别的失败。"
           }
         }
       }

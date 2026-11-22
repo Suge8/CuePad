@@ -164,7 +164,7 @@ extension HistoryCheckpoint {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         var current = round ?? Round(startedAt: nil)
-        current.tools.say(text)
+        current.tools.say(text, at: entry.at, record: sessionID.map { ChatMessage.recordID(sessionID: $0, entryID: entry.id) })
         round = current
         reply = Reply(text: text, id: entry.id, seq: entry.seq, at: entry.at)
     }

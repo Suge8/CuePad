@@ -60,6 +60,7 @@ extension CueTools {
 
   static let latestReplyLimit = 4000
   static let latestReplyHead = 1000
+  static let latestSaidLimit = 300
 
   static let overviewLimit = 60
 
@@ -181,8 +182,8 @@ extension CueTools {
         ? "\(text.prefix(latestReplyHead))\n（中间截掉 \(cut) 字；要找其中的话用 memory recall 查那里的词）\n\(text.suffix(latestReplyLimit - latestReplyHead))" : text
       lines.append("  \(agent)（最新的回答）：\n" + indented(full))
     }
-    if let said = detail.session.pendingTools?.items.last(where: { $0.kind == .said })?.target {
-      lines.append("  \(agent)（这一轮还没答完，到目前最后说的）：\n" + indented(CueFormat.plainText(said)))
+    if let said = detail.session.pendingTools?.lastSaid?.target {
+      lines.append("  \(agent)（这一轮还没答完，到目前最后说的）：\n" + indented(CueEnvelope.clip(CueFormat.plainText(said), latestSaidLimit)))
     }
     return lines
   }

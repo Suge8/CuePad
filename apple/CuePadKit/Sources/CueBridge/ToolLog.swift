@@ -35,8 +35,11 @@ struct ToolLog: Codable, Equatable {
         activity.cache = Tools.Cache(recached: missed > 0 ? missed : nil, context: context, warmUntil: warmUntil, estimated: estimated ? true : nil)
     }
 
-    mutating func say(_ text: String) {
-        activity.record(.init(kind: .said, target: text.clipped(Tools.saidLimit)))
+    mutating func say(_ text: String, at: Date, record: UUID?) {
+        var said = Tools.Item(kind: .said, target: text)
+        said.at = at
+        said.record = record
+        activity.record(said)
     }
 
     var settled: Tools? { activity == Tools() ? nil : activity }
@@ -49,8 +52,9 @@ struct ToolLog: Codable, Equatable {
     }
 
     private mutating func settle(_ call: Call, id: String, failed: Bool, images: [String] = []) {
+        let segment = activity.items.lastIndex { $0.kind == .said }.map { $0 + 1 } ?? 0
         if !failed, call.kind == .edit || call.kind == .read,
-           let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
+           let index = activity.items[segment...].firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
             let item = activity.items[index]
             activity.items[index].added = item.added.map { $0 + (call.added ?? 0) } ?? call.added
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed

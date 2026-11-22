@@ -9173,34 +9173,6 @@
         }
       }
     },
-    "另有 %lld 步未列出" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld more step not shown"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld more steps not shown"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另有 %lld 步未列出"
-          }
-        }
-      }
-    },
     "只有 CuePad 最近 15 分钟的日志，标成私密的内容系统已打码。经你自己的 iCloud 送到你的 Mac（~/Library/Logs/CuePad），不经别人。" : {
       "localizations" : {
         "en" : {

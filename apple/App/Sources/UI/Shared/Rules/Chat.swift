@@ -124,6 +124,29 @@ nonisolated enum Chat {
         return Process(counts: counts, steps: complete && !counts.isEmpty ? nil : String(localized: "共 \(tools.steps) 步"), recached: recached)
     }
 
+    enum ProcessPart: Hashable, Identifiable {
+        case steps(Range<Int>)
+        case said(Int)
+
+        var id: Int {
+            switch self {
+            case .steps(let range): range.lowerBound
+            case .said(let index): index
+            }
+        }
+    }
+
+    static func parts(_ items: [ChatMessage.Tools.Item]) -> [ProcessPart] {
+        var parts: [ProcessPart] = [], start = 0
+        for (index, item) in items.enumerated() where item.kind == .said {
+            if index > start { parts.append(.steps(start..<index)) }
+            parts.append(.said(index))
+            start = index + 1
+        }
+        if items.count > start { parts.append(.steps(start..<items.count)) }
+        return parts
+    }
+
     static func looks(_ items: some Collection<ChatMessage.Tools.Item>) -> [Process.Count] {
         func count(_ kind: ChatMessage.Tools.Kind) -> Int { items.count { $0.kind == kind } }
         let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
@@ -135,6 +158,15 @@ nonisolated enum Chat {
         ].filter { $0.count > 0 }
     }
 
+    static func keys(_ tools: ChatMessage.Tools?) -> Set<String> {
+        Set(tools?.items.compactMap { $0.record?.uuidString ?? $0.calls?.first } ?? [])
+    }
+
+    static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {
+        guard let reply else { return false }
+        return !keys(pending).isDisjoint(with: keys(reply.tools).union([reply.id.uuidString]))
+    }
+
     enum ProcessRow: Hashable {
         case step(Int)
         case looks(Range<Int>)
@@ -142,18 +174,18 @@ nonisolated enum Chat {
 
     static let foldedLooks = 3
 
-    static func rows(_ items: [ChatMessage.Tools.Item], settled: Bool) -> [ProcessRow] {
+    static func rows(_ items: ArraySlice<ChatMessage.Tools.Item>, settled: Bool) -> [ProcessRow] {
         guard settled else { return items.indices.map(ProcessRow.step) }
-        var rows: [ProcessRow] = [], start = 0
+        var rows: [ProcessRow] = [], start = items.startIndex
         func close(at end: Int) {
             rows += end - start >= foldedLooks ? [.looks(start..<end)] : (start..<end).map(ProcessRow.step)
             start = end + 1
         }
-        for (index, item) in items.enumerated() where item.kind.acts || item.kind == .said {
+        for index in items.indices where items[index].kind.acts {
             close(at: index)
             rows.append(.step(index))
         }
-        close(at: items.count)
+        close(at: items.endIndex)
         return rows == [.looks(items.indices)] ? items.indices.map(ProcessRow.step) : rows
     }
 

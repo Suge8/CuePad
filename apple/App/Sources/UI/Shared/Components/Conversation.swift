@@ -20,6 +20,7 @@ struct Conversation: View {
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
     @State private var opened: PreviewOpening?
+    @State private var roundFolds = RoundFolds()
 
     var body: some View {
         let all = items
@@ -36,6 +37,7 @@ struct Conversation: View {
             ending
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.roundFolds, roundFolds)
         #if os(iOS)
         .environment(\.inlineTextSelection, false)
         #endif
@@ -58,20 +60,19 @@ struct Conversation: View {
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
-            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }, floating: floating)
+            SessionDraft(slot: slot, session: session, messages: messages, floating: floating)
         } else {
-            ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
+            liveRound
         }
         #else
-        ChatLiveSlot(spacing: Self.spacing, floating: floating) { liveStatus }
+        liveRound
         #endif
     }
 
     private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
-    private var liveStatus: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty { LiveStatus(session: session).transition(.entry) }
+    private var liveRound: some View {
+        LiveRound(session: session, messages: messages, floating: floating) {
             LiveFigure(live: FigureLive(session: session), handoff: FigureHandoff(reply: messages.last { $0.role == .known(.pi) }?.at))
         }
     }
@@ -79,35 +80,24 @@ struct Conversation: View {
 
 
 #if os(macOS)
+/// Mac 上开着的会话：正在说的那句逐字接在过程后面，说完（转去调工具）也留在原处，直到它落进过程或回答，没有一下空白。
+/// 说着的时候与回答已落进对话、这一轮还没收尾时，角色先让开
 struct SessionDraft: View {
     let slot: Bridge.Slot
     let session: SessionState
-    let newestReply: ChatMessage?
+    let messages: [ChatMessage]
     let floating: CGFloat
 
     var body: some View {
-        let draft = slot.draft
-        let landed = draft?.landed(newestReply: newestReply?.at, record: newestReply?.id) ?? false
-        let speaking = draft != nil && !landed
-        VStack(alignment: .leading, spacing: Conversation.spacing) {
-            if let draft, speaking {
-                DraftReply(text: draft.text) {
-                    if let ending = LiveStatus.ending(of: session, speaking: true) {
-                        RoundProcess(tools: session.pendingTools, ending: ending, session: session)
-                    }
-                }
-            }
-            ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
-                let said = speaking || landed && session.runtimeState.known?.isTurnRunning == true
-                VStack(alignment: .leading, spacing: Spacing.item) {
-                    if said {
-                        SubagentList(agents: session.runtimeSubagents)
-                    } else if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty {
-                        LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
-                    }
-                    LiveFigure(live: said ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
-                }
-            }
+        let draft = slot.draft, newestReply = messages.last { $0.role == .known(.pi) }
+        let answered = draft?.landed(newestReply: newestReply?.at, record: newestReply?.id) ?? false
+        let said = session.pendingTools?.lastSaid
+        let inProcess = draft.map { draft in said.map { draft.landed(newestReply: $0.at, record: $0.record) } ?? false } ?? false
+        let running = session.runtimeState.known?.isTurnRunning == true
+        let shown = draft.flatMap { !answered && !inProcess && (slot.speaking || running) ? $0 : nil }
+        let speaking = slot.speaking && shown != nil
+        LiveRound(session: session, messages: messages, draft: shown?.text, swapsInPlace: true, floating: floating) {
+            LiveFigure(live: speaking || answered && running ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
         }
     }
 }

@@ -20,8 +20,9 @@ public struct LiveDraft: Equatable, Sendable {
         self.record = record
     }
 
-    /// 会话页与 Cue 页同一条规则。`newestReply` 是对话里最新那条回答的时刻与它的 `ChatMessage.id`（对话不是从会话文件读出来的，
-    /// 如 Cue 页，给 nil）：两边都有身份时按身份认；否则按时刻认，不按文字认：两轮说了一样的话也认得开。
+    /// 会话页与 Cue 页同一条规则。`newestReply` 是对话里最新那条回答（或这一轮过程里最新那句中途的话，`Tools.Item` 的 `at` 与 `record`）
+    /// 的时刻与它的 `ChatMessage.id`（对话不是从会话文件读出来的，如 Cue 页，给 nil）：两边都有身份时按身份认；否则按时刻认，
+    /// 不按文字认：两轮说了一样的话也认得开。
     /// 按毫秒比：两边是同一个毫秒精度的时钟，一边从毫秒数、一边从会话文件的时间文字换算，
     /// 同一毫秒换出的 `Date` 会差一个舍入误差（实测差 1e-7 秒），直接比时常认不出同一刻。
     public func landed(newestReply at: Date?, record newest: UUID?) -> Bool {
@@ -69,8 +70,12 @@ struct DraftParts {
 @MainActor @Observable
 public final class LiveDraftFeed {
     public private(set) var draft: LiveDraft?
+    /// 最近说的那句，说完（Agent 转去调工具）也留着，下一句开说才换：它落进对话之前界面接着摆它，不空一下。
+    /// 这一轮停下时没在说的丢掉；下一轮开始时上一轮的一律丢掉（`stale`）：上一轮的回答此刻可能还在供着，随后才被清掉
+    public private(set) var latest: LiveDraft?
     public private(set) var speaking = false
     @ObservationIgnored private var offered: LiveDraft?
+    @ObservationIgnored private var stale: LiveDraft?
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
     @ObservationIgnored private var flush: Task<Void, Never>?
 
@@ -79,6 +84,7 @@ public final class LiveDraftFeed {
     public init() {}
 
     public func offer(_ next: LiveDraft?) {
+        if next == nil, let offered, offered != stale, latest != offered { latest = offered }
         offered = next
         let now = ContinuousClock.now
         if next == nil || next?.since != draft?.since || shownAt.map({ now - $0 >= Self.interval }) ?? true {
@@ -92,11 +98,21 @@ public final class LiveDraftFeed {
         }
     }
 
+    func turnStarted() {
+        stale = offered
+        if latest != nil { latest = nil }
+    }
+
+    func turnStopped() {
+        if offered == nil, latest != nil { latest = nil }
+    }
+
     private func show(at now: ContinuousClock.Instant) {
         flush?.cancel()
         flush = nil
         shownAt = now
         if draft != offered { draft = offered }
+        if let offered, offered != stale, latest != offered { latest = offered }
         if speaking != (offered != nil) { speaking = offered != nil }
     }
 }
