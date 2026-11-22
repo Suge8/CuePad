@@ -6,8 +6,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 当 Cue 的大脑的真 Agent：缺省 Claude Code（opus · medium，同用户的 Cue）；`CUEPAD_CUE_EVAL_RUNTIME=pi` 换成 Pi（anthropic/claude-sonnet-5-5 · medium），
-/// `=codex` 换成 Codex（gpt-6.1-sol · medium）；
+/// 当 Cue 的大脑的真 Agent，用 `CUEPAD_CUE_EVAL_RUNTIME` 选（缺省由 cue-eval.sh 定）：`claude` 是 Claude Code（opus · medium，同用户的 Cue），
+/// `pi` 是 Pi（anthropic/claude-sonnet-5-5 · medium），`codex` 是 Codex（gpt-6.1-sol · medium）；
 /// `CUEPAD_CUE_EVAL_MODEL`、`CUEPAD_CUE_EVAL_EFFORT` 换模型与强度。`launch` 写一个起它的外壳，配置与 HOME 在临时目录，
 /// 继承来的 ANTHROPIC_*、XDG_* 清掉，登录在外壳起进程时现取、只进它的环境：
 /// - Claude Code 用它自己存在钥匙串里的那条（`ClaudeLogin`），配置目录 `CLAUDE_CONFIG_DIR` 在临时目录（不碰 ~/.claude）；
