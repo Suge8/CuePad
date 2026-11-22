@@ -6,6 +6,9 @@ struct DitherImage: View {
     let placement: CGRect
     let size: CGSize
     var fade: CGFloat = 0
+    /// 格子是平时的几倍（开门时由粗到细，`CueOpening`）。
+    var grain = 1
+    var onDraw: () -> Void = {}
     @Environment(\.displayScale) private var scale
     @State private var image: CGImage?
     @State private var drawn: DitherGPU.Job?
@@ -15,25 +18,27 @@ struct DitherImage: View {
             if let image {
                 Image(decorative: image, scale: 1).resizable().interpolation(.none)
                     .frame(width: CGFloat(job.width) * cellPx / scale, height: CGFloat(job.height) * cellPx / scale)
-                    .transition(.opacity)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
         .debugSettling(drawn != job)
-        // 换一份就换一个视图起任务，不用 task(id:)：它靠 onChange，同一帧里变两次（气泡量出高、云跟着挪）第二次被丢掉，停在旧的一份上
+        // 换一份就换一个视图起任务，不用 task(id:)：它靠 onChange，同一帧里变两次（气泡量出高、云跟着挪）第二次被丢掉，停在旧的一份上。
+        // 同样大的格子换了位置才等一下、淡过去；第一张与换格子大小（开门）当场换上：第一张画在启动的墨色底下，换格子要踩着门开的节拍
         .background {
             Color.clear.task { [job] in
-                if image != nil { do { try await Task.sleep(for: .milliseconds(120)) } catch { return } }
+                let moved = drawn?.cell == job.cell
+                if moved { do { try await Task.sleep(for: .milliseconds(120)) } catch { return } }
                 let rendered = await DitherGPU.shared.render(job)
                 guard !Task.isCancelled else { return }
-                withAnimation(Motion.fade) { image = rendered }
+                if moved { withAnimation(Motion.fade) { image = rendered } } else { image = rendered }
                 drawn = job
+                onDraw()
             }
             .id(job)
         }
     }
 
-    private var cellPx: CGFloat { DitherGPU.cell * max(1, scale.rounded()) }
+    private var cellPx: CGFloat { DitherGPU.cell * max(1, scale.rounded()) * CGFloat(grain) }
 
     private var job: DitherGPU.Job {
         let px = { (v: CGFloat) in Float(v * scale) }

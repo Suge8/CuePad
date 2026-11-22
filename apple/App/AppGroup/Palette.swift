@@ -15,7 +15,7 @@ struct Palette {
 
 
     var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
-    /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
+    /// 页面底，也是小组件与分享扩展的底。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
@@ -38,6 +38,8 @@ struct Palette {
     var fill: Color { ink.opacity(fillAmount) }
     private var fillAmount: Double { dark ? 0.07 : 0.05 }
     var track: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.16 : 0.14)) }
+    /// 开门那只环（`CueOpening`）：一圈黑管子，从上往下受光、压暗再在下沿返一点光；墨色上用，浅深外观同一套。
+    var ringTube: [Color] { [Color(hex: 0x77706A), Color(hex: 0x2B2825), Color(hex: 0x0D0C0B), Color(hex: 0x050505), Color(hex: 0x3A3531)] }
     var backdrop: Color { Color.black.opacity(dark ? 0.35 : 0.18) }
     var stale: Color { desk.opacity(dark ? 0.62 : 0.55) }
     var shadow: Color { Color.black.opacity(dark ? 0.3 : 0.08) }
