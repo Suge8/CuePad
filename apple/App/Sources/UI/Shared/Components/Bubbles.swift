@@ -38,6 +38,7 @@ struct UserBubble<Menu: View>: View {
     var highlighted = false
     var fromCue = false
     var marksTransit = true
+    var fadesIn = true
     var quote: BubbleQuote?
     var said: Date?
     @ViewBuilder var menu: Menu
@@ -67,7 +68,7 @@ struct UserBubble<Menu: View>: View {
             #endif
             .contextMenu { menu }
         }
-        .transition(.entry)
+        .transition(fadesIn ? .entry : .identity)
     }
 }
 

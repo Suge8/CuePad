@@ -17,6 +17,8 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var previews: [PreviewItem] = []
     var question: String?
     var fromCue = false
+    /// 你说的这句在途时已经作为请求（`outgoing`）摆在对话里：落库后换成的这一条接在同一处，不再淡入一遍。
+    var replacesOutgoing = false
 }
 
 private nonisolated extension ChatEntry {
@@ -63,6 +65,7 @@ nonisolated enum Chat {
         let batches = previews.map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.preview($0)) }
         let stranded = outgoing[..<tail].map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.stranded($0)) }
         var waiting = (answers + batches + stranded).sorted { ($0.at, $0.key) < ($1.at, $1.key) }.map(\.item)[...]
+        let requested = Set(deliveries.map(\.id))
         var entries: [ChatEntry] = []
         func place(before time: Date?) {
             while let next = waiting.first, time.map({ next.at < $0 }) ?? true {
@@ -86,7 +89,7 @@ nonisolated enum Chat {
             place(before: message.at)
             entries.append(ChatEntry(
                 id: message.id, role: role, text: message.text, took: took(message), tools: message.tools,
-                fromCue: message.saidByCue(cueSent)))
+                fromCue: message.saidByCue(cueSent), replacesOutgoing: message.deliveryID.map(requested.contains) == true))
         }
         place(before: nil)
         entries += outgoing[tail...].map(ChatEntry.outgoing)

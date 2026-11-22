@@ -28,9 +28,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var anchor = ChatAnchor()
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
-    @State var held: Held?
+    @State var held: CGFloat?
     @State var sliding: Task<Void, Never>?
-    @State var releasing: Task<Void, Never>?
     @State var lift = ContentLift()
     @State var leftAt: Key?
 
@@ -55,6 +54,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     // 显式竖排正文与末尾锚点：宿主的隐式布局可能把零高锚点放在正文中部。
                     VStack(spacing: 0) {
                         content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
+                            .coordinateSpace(.named(chatContentSpace))
                             .environment(\.chatAnchor, anchor)
                             .environment(\.chatOnScreen, onScreen)
                         Color.clear.frame(height: 0).id(Self.end)
@@ -174,3 +174,5 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         .animation(Motion.fade, value: unseen)
     }
 }
+
+nonisolated let chatContentSpace = "ChatScroll.content"

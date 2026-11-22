@@ -13,55 +13,23 @@ extension ChatScroll {
 
     var pinned: Bool { follow.wrappedValue.pinned(holding: holding) }
 
-    /// 发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
-    /// 那句到了（内容真的长高）再收，与它出现在同一帧；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
+    /// 贴着最新时对话底下让出的高先留成留白（`held`），接着长出来的先填它，填进去的那一截对话不动，填不下的才上滑；留白不自己收，等下一次长出来。
+    /// 让出高的两处：发出时回复框当下收起、发出的话要等写进库才到；一轮做完小人收走、收起一格。跟着变矮的话贴着最新的整段对话先沉下去，
+    /// 接着到的那句、长出的回答又把它顶上来；到时自己收的话回答显完后整段再沉一下。代价是短回答之后回复框上方空着一截，直到下一句。
     /// 看内容长高，不看 `followKey`：它还算着别的（之前那句的送达情况），可能比那句先变。
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
     /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
-    var bottomPadding: CGFloat { max(bottomInset, held?.height ?? 0) }
+    var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
-    /// 留着的底部留白。发出时留的（`fills` 为假）那句一到就整个收掉；变矮时留的先被接着长出来的填，到时再收剩下的。
-    struct Held {
-        let height: CGFloat
-        let fills: Bool
-    }
-
-    /// 贴着最新时变矮（一轮做完小人收走、收起一格）不往下滑：让出的高先留成留白，接着长出来的（回答一行行显影）先填它，
-    /// 填进去的那一截对话不动——先滑下去再被回答顶上来，看着是整段沉一下再浮起。`keeps` 之后还没填满的那截再一次滑走。
-    func keep(_ shrunk: CGFloat) {
-        hold(Held(height: bottomPadding + shrunk, fills: true))
-    }
+    func keep(_ shrunk: CGFloat) { held = bottomPadding + shrunk }
 
     /// 长出来的先填留白，返回没填下、要滑上去的那一截。
     func fill(_ grown: CGFloat) -> CGFloat {
         guard let held, grown > 0 else { return grown }
-        guard held.fills else {
-            hold(nil)
-            return grown
-        }
-        let left = held.height - grown
-        hold(left > bottomInset ? Held(height: left, fills: true) : nil)
-        return grown - min(grown, max(0, held.height - bottomInset))
+        self.held = held - grown > bottomInset ? held - grown : nil
+        return grown - min(grown, max(0, held - bottomInset))
     }
-
-    /// 换留白都经这里：上一次留的到时收的那一下作废，不会收掉之后才留的（发出时留的）。
-    func hold(_ next: Held?) {
-        releasing?.cancel()
-        releasing = nil
-        held = next
-        guard let next, next.fills else { return }
-        releasing = Task {
-            try? await Task.sleep(for: Self.keeps)
-            guard !Task.isCancelled else { return }
-            releasing = nil
-            held = nil
-            if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling { rise(by: bottomInset - next.height) }
-        }
-    }
-
-    /// 回答整段到了也在追平时长内显影完（`RevealClock`）：手机上逐段排，段与段之间隔得开，按"一段时间没再长"收会在两段之间收、下一段又顶上来。
-    static var keeps: Duration { .seconds(Motion.Reveal.catchUp + Motion.Reveal.develop) }
 
     final class ScrollOffset {
         private(set) var read: CGFloat = 0
@@ -129,7 +97,7 @@ extension ChatScroll {
     }
 
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
-        hold(sent ? Held(height: bottomInset, fills: false) : nil)
+        held = sent ? bottomPadding : nil
         withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }
     }
 

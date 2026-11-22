@@ -148,7 +148,7 @@ private struct ChatSegment: View, Equatable {
     @ViewBuilder private func row(_ entry: ChatEntry, last: Bool) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
+            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue, fadesIn: !entry.replacesOutgoing) {
                 MessageActions(text: SkillCall.shown(entry.text), kind: .mine, session: session)
             }
                 .padding(.top, Self.turnGap)
