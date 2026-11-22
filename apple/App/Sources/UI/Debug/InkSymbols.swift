@@ -69,7 +69,6 @@ enum InkSymbols {
         "cue.photo",
         "cue.photos",
         "cue.select",
-        "cue.braces",
         "cue.window.play",
         "cue.doc.blank",
         "cue.wrench",

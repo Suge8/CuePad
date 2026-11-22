@@ -10,7 +10,6 @@ final class IOSEditorHandle {
     @ObservationIgnored fileprivate var refocus = false
     fileprivate var focusChanges = 0
     var source: ComposerSource?
-    var editingVariables = false
 
     var text: String? { view?.storedText }
     var selection: String? { view?.selectedStoredText }

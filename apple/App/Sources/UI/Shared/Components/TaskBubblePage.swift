@@ -1,5 +1,6 @@
 import CueEditor
 import CueStore
+import CueText
 import SwiftUI
 
 struct TaskBubblePage: View {
@@ -82,7 +83,11 @@ private struct TaskEditor: View {
 
     var body: some View {
         let theme = CueEditorTheme.task(palette, done: card.status == .done)
-        field(theme).overlay(alignment: .bottomLeading) { BodyHint(editing: editing, inset: theme.verticalInset) }
+        let names = CueVariables.names(in: editing.text)
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            field(theme).overlay(alignment: .bottomLeading) { BodyHint(editing: editing, inset: theme.verticalInset) }
+            if !names.isEmpty { VariablesFields(card: card, names: names) }
+        }
     }
 
     @ViewBuilder private func field(_ theme: CueEditorTheme) -> some View {
