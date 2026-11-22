@@ -10,12 +10,8 @@ extension Composer {
         } : []
         return MenuButton(sections: lead == nil ? [ChoiceMenu.Section(choices: cards + files)] : [], primary: lead?.act, press: .button,
                           accessibilityLabel: lead?.label ?? "添加") {
-            CircleGlyph(fill: lead?.on == true ? palette.selection : palette.fill) {
-                Image(lead?.icon ?? .add).font(Glyph.control.weight(.semibold))
-                    .foregroundStyle(lead?.enabled == false ? palette.ink3 : palette.ink)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .animation(Motion.fade, value: lead)
+            PlusGlyph(icon: lead?.icon ?? .add, on: lead?.on == true, enabled: lead?.enabled != false)
+                .animation(Motion.fade, value: lead)
         }
         .disabled(lead?.enabled == false)
         .fixedSize()
