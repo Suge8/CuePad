@@ -105,52 +105,40 @@ struct StepRow: View {
 private struct StepDetail: View {
     let detail: ToolCallDetail
     @Environment(\.palette) private var palette
-    @State private var earlierOpen = false
-    @State private var long = false
-    @ScaledMetric(relativeTo: .caption) private var tail: CGFloat = 192
+    @ScaledMetric(relativeTo: .caption) private var cap: CGFloat = 192
 
     var body: some View {
         NoteThread {
             VStack(alignment: .leading, spacing: Spacing.item) {
-                if let command = detail.command { Text(command).foregroundStyle(palette.ink).selectable() }
+                if let command = detail.command {
+                    Peek(cap: cap, from: .top) { Text(command).foregroundStyle(palette.ink).selectable() }
+                }
                 if let diff = detail.diff {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(Self.runs(diff).enumerated()), id: \.offset) { _, run in
-                            Text(run.text).foregroundStyle(run.kind.changed ? palette.ink : palette.ink2).selectable()
-                                .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(run.kind.wash(palette))
+                    Peek(cap: cap, from: .top) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(Self.runs(diff).enumerated()), id: \.offset) { _, run in
+                                Text(run.text).foregroundStyle(run.kind.changed ? palette.ink : palette.ink2).selectable()
+                                    .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(run.kind.wash(palette))
+                            }
                         }
                     }
                     .clipShape(.rect(cornerRadius: Radius.chip))
                 }
-                if !detail.output.isEmpty { output }
+                if !detail.output.isEmpty {
+                    Peek(cap: cap, from: .bottom) {
+                        VStack(alignment: .leading, spacing: Spacing.item) {
+                            if detail.clipped { Text("更早的输出未显示").font(Typography.caption).foregroundStyle(palette.ink3) }
+                            Text(detail.output).foregroundStyle(palette.ink2).selectable()
+                        }
+                    }
+                }
             }
             .font(Typography.codeNote)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, Spacing.tight)
-        }
-    }
-
-    @ViewBuilder private var output: some View {
-        let dropped = Text("更早的输出未显示").font(Typography.caption).foregroundStyle(palette.ink3)
-        let text = Text(detail.output).foregroundStyle(palette.ink2).selectable().fixedSize(horizontal: false, vertical: true)
-            .onGeometryChange(for: Bool.self) { [tail] in $0.size.height > tail } action: { long = $0 }
-        if long {
-            Fold(open: $earlierOpen) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
-                    Text("更早的输出").font(Typography.caption).foregroundStyle(palette.ink3)
-                    DisclosureChevron(open: earlierOpen)
-                }
-                .frame(minHeight: Note.lineHeight).contentShape(.rect)
-            } content: {
-                if earlierOpen, detail.clipped { dropped.padding(.bottom, Spacing.item).transition(.opacity) }
-                text.frame(maxHeight: earlierOpen ? nil : tail, alignment: .bottom).clipped().fadesEdge(.top, when: !earlierOpen)
-            }
-        } else {
-            if detail.clipped { dropped }
-            text
         }
     }
 
@@ -171,5 +159,71 @@ private struct StepDetail: View {
             if let last = runs.last, last.kind.sign == kind.sign { runs[runs.count - 1].rows.append(row) } else { runs.append((kind, [row])) }
         }
         return runs.map { ($0.kind, $0.rows.joined(separator: "\n")) }
+    }
+}
+
+private struct Peek<Content: View>: View {
+    let cap: CGFloat
+    let from: VerticalEdge
+    @ViewBuilder let content: Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    #if os(macOS)
+    @State private var beyond = Beyond()
+
+    var body: some View {
+        Capped(cap: cap, pin: nil) {
+            ScrollView {
+                content.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .defaultScrollAnchor(from == .top ? .top : .bottom)
+            .scrollBounceBehavior(.basedOnSize)
+            .onScrollGeometryChange(for: Beyond.self) { geometry in
+                Beyond(top: geometry.contentOffset.y > 1, bottom: geometry.contentOffset.y + geometry.containerSize.height < geometry.contentSize.height - 1)
+            } action: { _, now in
+                withAnimation(Motion.fade) { beyond = now }
+            }
+        }
+        .fadesEdge(.top, when: beyond.top)
+        .fadesEdge(.bottom, when: beyond.bottom)
+    }
+
+    private struct Beyond: Equatable {
+        var top = false
+        var bottom = false
+    }
+    #else
+    @State private var long = false
+    @State private var open = false
+
+    var body: some View {
+        Capped(cap: open ? .infinity : cap, pin: from) {
+            content.fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: Bool.self) { [cap] in $0.size.height > cap } action: { long = $0 }
+        }
+        .clipped()
+        .contentShape(.rect)
+        .fadesEdge(from == .top ? .bottom : .top, when: long && !open)
+        .onTapGesture {
+            guard long, !open else { return }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { open = true }
+        }
+    }
+    #endif
+}
+
+private struct Capped: Layout {
+    let cap: CGFloat
+    let pin: VerticalEdge?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let full = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? full.width, height: min(full.height, cap))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let pin else { return subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size)) }
+        let full = subviews[0].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: pin == .top ? bounds.minY : bounds.maxY - full.height), proposal: ProposedViewSize(width: bounds.width, height: full.height))
     }
 }
