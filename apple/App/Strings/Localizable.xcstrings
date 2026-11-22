@@ -2287,12 +2287,6 @@
       },
       "shouldTranslate" : false
     },
-    "+%lld" : {
-      "localizations" : {
-
-      },
-      "shouldTranslate" : false
-    },
     "3D 模型" : {
       "localizations" : {
         "en" : {
@@ -8969,22 +8963,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取一步的详情"
-          }
-        }
-      }
-    },
-    "取值" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Value"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取值"
           }
         }
       }
@@ -17841,22 +17819,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正文里有附件找不到了，无法发送"
-          }
-        }
-      }
-    },
-    "正文里还没有 {{变量}}" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No {{variables}} in the notes yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正文里还没有 {{变量}}"
           }
         }
       }

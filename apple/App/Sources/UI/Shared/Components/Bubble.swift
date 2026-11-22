@@ -75,6 +75,12 @@ nonisolated struct BubblePlacement: Equatable {
             tailEdge = .bottom
             side = 1
         }
+        // 键盘起来后控件落到了键盘后面（量到的框还是起来之前的）：贴着键盘上沿摆，尾巴指不到它就不画
+        if let low = bottom, low > bounds.maxY {
+            bottom = bounds.maxY
+            maxHeight = bounds.height
+            tailEdge = nil
+        }
     }
 
     var narrowest: CGFloat {
