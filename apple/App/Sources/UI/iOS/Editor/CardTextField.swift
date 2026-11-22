@@ -10,8 +10,8 @@ struct CardTextField: View {
     let theme: CueEditorTheme
     var fits = false
     var editable = true
-    var keyboardBar = true
     @Environment(Workspace.self) private var workspace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         @Bindable var handle = editing.handle
@@ -20,22 +20,30 @@ struct CardTextField: View {
             theme: theme,
             handle: handle,
             onChange: { [editing] in editing.changed($0) },
-            onInsertImage: { handle.source = .photos },
-            onInsertFile: { handle.source = .files },
-            onVariables: { handle.editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits, bottomInset: fits ? 0 : theme.verticalInset, editable: editable, keyboardBar: keyboardBar)
+            fits: fits, bottomInset: fits ? 0 : plusMargin + FloatingGlyph.size + Spacing.item, editable: editable)
         .overlay { AttachmentSpotLayer(spot: handle.spot) }
+        .overlay(alignment: .bottomLeading) {
+            if !fits, handle.focused {
+                CardInsertMenu(editing: editing) { FloatingGlyph(icon: .add) }
+                    .padding([.leading, .bottom], plusMargin)
+                    .transition(Motion.pop(reduceMotion: reduceMotion))
+            }
+        }
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: handle.focused)
         .modifier(FileSources(source: $handle.source) { handle.insert($0) })
         .sheet(isPresented: $handle.editingVariables) {
             VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? editing.initialText))
         }
     }
+
+    private var plusMargin: CGFloat { theme.horizontalInset - (FloatingGlyph.size - FloatingGlyph.face) / 2 }
 }
 
-struct CardInsertMenu: View {
+struct CardInsertMenu<Label: View>: View {
     let editing: CardEditing
+    @ViewBuilder let label: () -> Label
 
     var body: some View {
         let handle = editing.handle
@@ -44,7 +52,7 @@ struct CardInsertMenu: View {
         }
         let variables = editing.hasVariables
             ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "变量取值", image: .icon(.variables)) { handle.editingVariables = true }])] : []
-        MenuButton(sections: [ChoiceMenu.Section(choices: files)] + variables, press: .button, accessibilityLabel: "添加") { PlusGlyph() }
+        MenuButton(sections: [ChoiceMenu.Section(choices: files)] + variables, press: .button, accessibilityLabel: "添加", label: label)
             .fixedSize()
     }
 }

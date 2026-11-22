@@ -30,7 +30,7 @@ struct BubbleFooter: View {
         HStack(spacing: 0) {
             #if os(iOS)
             if let editing, inserting {
-                CardInsertMenu(editing: editing)
+                CardInsertMenu(editing: editing) { PlusGlyph() }
                     .padding(.leading, ComposerMetrics.glyphInset - Spacing.group)
                     .transition(Motion.pop(reduceMotion: reduceMotion))
             }

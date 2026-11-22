@@ -166,7 +166,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         .overlay(alignment: .bottomTrailing) {
             if follow.wrappedValue.showsJump {
                 JumpToNewest(unseen: unseen) { follow.wrappedValue.jumpToNewest() }
-                    .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset + bottomInset)
+                    .padding(.trailing, FloatingGlyph.inset).padding(.bottom, FloatingGlyph.inset + bottomInset)
                     .transition(Motion.pop(reduceMotion: reduceMotion))
             }
         }
