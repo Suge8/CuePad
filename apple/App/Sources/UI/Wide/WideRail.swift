@@ -100,7 +100,7 @@ private struct RailQuota: View {
 
     var body: some View {
         QuotaRings(open: detail.open, height: Chrome.control, cell: true) { detail.toggle() }
-            .bubble(isPresented: $detail.open, width: QuotaDetail.bubbleWidth(accounts: services.accountQuotas.items.count)) { QuotaDetail().padding(QuotaDetail.bubblePadding) }
+            .bubble($detail, width: QuotaDetail.bubbleWidth(accounts: services.accountQuotas.items.count)) { QuotaDetail().padding(QuotaDetail.bubblePadding) }
             .refreshesQuota(open: detail.open)
     }
 }

@@ -16,7 +16,7 @@ struct ModelPick: View {
         Moments(next: quotas.nextReset(after:)) { now in
             Button { picking.toggle() } label: { label(at: now) }
                 .buttonStyle(PressStyle())
-                .bubble(isPresented: $picking.open, width: .fixed(Self.width)) { ModelPickBubble(live: live) }
+                .bubble($picking, width: .fixed(Self.width)) { ModelPickBubble(live: live) }
                 .onChange(of: picking.open, initial: true) { if picking.open { live.take(self) } }
                 .onChange(of: Seen(self)) { live.take(self) }
                 .accessibilityLabel("模型")

@@ -2,7 +2,7 @@
 """模拟器里按元素操作界面：读、点、拖、输入、等文字、截图（AXe 的薄封装）。
 用法：ui.py <UDID|iphone|ipad|mac> <命令> …，iphone、ipad、mac 是 `xc.sh fleet up` 起的那一台（fleet.json）。
   read [--all]               屏上的元素，每行 类型⇥标签⇥值⇥x,y,宽,高（点）；--all 连屏外的与没标签的一起列
-  tap <标签|#id|x,y> [--type T] [--nth N] [--physical]   按元素点它的中心：标签先全等后包含，只数屏上的；有几个就报错列出，--nth 从 0 起挑一个
+  tap <标签|#id|x,y> [--type T] [--nth N]   按元素点它的中心：标签先全等后包含，只数屏上的；有几个就报错列出，--nth 从 0 起挑一个
   drag <x1,y1> <x2,y2> [中间点数=6] [--rec 片.mp4]
                              按住再拖：按下、逐点挪过去、抬手。axe drag 按下就走（带 --pre-delay 也是），按住才浮起来的东西（看板的卡）它拎不动。
                              每个点约 1.5 秒（axe 1.8.0 实测），整趟是慢动作：验的是放下的结果与抬手之后的动效，不是拖着时的手感。
@@ -85,7 +85,7 @@ def center(e):
     return e["f"]["x"] + e["f"]["width"] / 2, e["f"]["y"] + e["f"]["height"] / 2
 
 
-def tap(udid, key, kind=None, nth=None, physical=False):
+def tap(udid, key, kind=None, nth=None):
     if re.fullmatch(r"\d+(\.\d+)?,\d+(\.\d+)?", key):
         x, y = map(float, key.split(","))
     else:
@@ -95,7 +95,8 @@ def tap(udid, key, kind=None, nth=None, physical=False):
         if nth is None and len({center(e) for e in hits}) > 1:
             fail(f"屏上有 {len(hits)} 个 {key}，用 --nth 挑一个：" + "；".join(f"{i}: {e['type']} {tuple(round(v) for v in center(e))}" for i, e in enumerate(hits)))
         x, y = center(hits[nth or 0])
-    axe("tap", "-x", str(x), "-y", str(y), "--udid", udid, *(["--tap-style", "physical"] if physical else []))
+    # axe tap 报成功时，标题菜单的 PopUpButton、回复框常没反应（axe 1.8.0）；按下停一下再抬起才认
+    axe("touch", "-x", str(x), "-y", str(y), "--down", "--up", "--delay", "0.12", "--udid", udid)
 
 
 def drag(udid, start, end, points=6, rec=None):
@@ -171,7 +172,7 @@ def main(argv):
         for e in read(ident, "--all" in flags):
             print("\t".join([e["type"], e["label"] or "", "" if e["value"] is None else str(e["value"]), ",".join(str(round(e["f"][k])) for k in ("x", "y", "width", "height"))]))
     elif cmd == "tap":
-        tap(ident, args[0], opts.get("type"), int(opts["nth"]) if "nth" in opts else None, "--physical" in flags)
+        tap(ident, args[0], opts.get("type"), int(opts["nth"]) if "nth" in opts else None)
     elif cmd == "drag":
         start, end = (tuple(map(float, a.split(","))) for a in args[:2])
         at = drag(ident, start, end, *map(int, args[2:3]), rec=opts.get("rec"))
