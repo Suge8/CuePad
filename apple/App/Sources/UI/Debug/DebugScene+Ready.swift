@@ -64,9 +64,13 @@ extension DebugScene {
         init(_ description: String) { self.description = description }
     }
 
+    /// 画面摆好的那一刻：之后才有的请求是按发送钮、手打发出的（`playRound`），之前的是演示预置的。
+    static var preparedAt: Date?
+
     static func signalReady(_ services: AppServices, _ prepare: () async -> Void) async -> Bool {
         guard let path = readyFile else {
             await prepare()
+            preparedAt = .now
             return !Task.isCancelled
         }
         let watch = Task {
@@ -78,6 +82,7 @@ extension DebugScene {
         }
         defer { watch.cancel() }
         await prepare()
+        preparedAt = .now
         var still = 0
         while still < 3 {
             guard !Task.isCancelled else { return false }

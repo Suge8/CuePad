@@ -9,7 +9,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     let ids: [UUID]
     let paging: ChatPaging
     let holding: Bool
-    let arrival: UUID?
     @ViewBuilder let content: (ChatWindow) -> Content
     /// 连后面的一起记：那一条自己掉出了读的范围（排开到了最早那头，来一句新的它就掉出去），从它后面还在的第一条排（`start`），不缩回一屏——缩回去内容一下矮了几屏，可见区落在内容外、整屏空白。
     /// 在同一次更新里就接上：等 `onChange` 改记已晚了一帧，那一帧缩回去又长回来，正在看的先被甩到最早那头再滑回来。
@@ -20,7 +19,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, marks: [ChatMark], ids: [UUID],
-        paging: ChatPaging, holding: Bool, arrival: UUID? = nil, @ViewBuilder content: @escaping (ChatWindow) -> Content
+        paging: ChatPaging, holding: Bool, @ViewBuilder content: @escaping (ChatWindow) -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
@@ -30,7 +29,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         self.ids = ids
         self.paging = paging
         self.holding = holding
-        self.arrival = arrival
         self.content = content
     }
 
@@ -52,7 +50,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         GeometryReader { proxy in
             let size = proxy.size, window = self.window(size), first = ids.count - window
             let margin = ChatLayout.margin(size.width, readingWidth: readingWidth, inset: inset)
-            ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding, arrival: arrival) {
+            ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding) {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
                     .environment(\.chatMargin, margin)
             }

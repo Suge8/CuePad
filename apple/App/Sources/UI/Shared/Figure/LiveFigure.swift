@@ -59,6 +59,7 @@ struct LiveFigure: View {
     @State private var shownAt = Date.now
     @State private var arrivedWith = FigureHandoff()
     @State private var visible = true
+    @State private var speaks = true
     @LoopsPlay private var plays
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -74,6 +75,8 @@ struct LiveFigure: View {
     }
 
     static let dwell: TimeInterval = 0.6
+    /// 新来时先聚成形、再开口：字与它一起出现的话，字比还是一团点的它先被看见。
+    static let speakAfter: Duration = .milliseconds(350)
     private static let height = FigureLayout.size - FigureLayout.headroom
     static let lingerLimit: Duration = .seconds(1)
     static let restLimit: Duration = .milliseconds(800)
@@ -129,11 +132,15 @@ struct LiveFigure: View {
                 }
                 .opacity(plays || !fading ? 1 : 0)
             FigureStatus(live: shown, since: shown.since ?? arrivedAt)
-                .opacity(fading ? 0 : 1)
+                .opacity(fading || !speaks ? 0 : 1)
         }
         .frame(height: FigureLayout.size)
         // 量角色本身，不量这一块：回复接上时这一块已收成零高、按它量就算不在可见区，画布停在那一帧、碎不开
         .onScrollVisibilityChange(threshold: 0.05) { visible = $0 }
+        .task(id: arrivedAt) {
+            guard !speaks, await wait(Self.speakAfter) else { return }
+            withAnimation(Motion.fade) { speaks = true }
+        }
         .transition(.opacity)
     }
 
@@ -164,6 +171,7 @@ struct LiveFigure: View {
 
     private func show(_ live: FigureLive, arriving: Bool) {
         arrives = arriving
+        speaks = !arriving || reduceMotion
         arrivedAt = .now
         shownAt = .now
         arrivedWith = handoff

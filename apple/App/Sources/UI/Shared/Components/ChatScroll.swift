@@ -21,7 +21,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let inset: CGFloat
     let follow: Binding<ChatFollow>
     let holding: Bool
-    let arrival: UUID?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
@@ -35,14 +34,13 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var leftAt: Key?
 
     init(
-        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
         self.holding = holding
-        self.arrival = arrival
         self.follow = follow
         self.content = content()
     }
@@ -82,7 +80,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 可见区底边 = 偏移 + 顶部 inset + 容器高（containerSize 已扣掉上下 inset）
                         let read = geometry.contentOffset.y + geometry.contentInsets.top
                         let screen = geometry.containerSize.height.rounded()
-                        offset.set(read: max(0, read.rounded()), end: (geometry.contentSize.height - geometry.containerSize.height).rounded(), container: screen)
+                        offset.set(read: max(0, read.rounded()), end: (geometry.contentSize.height - geometry.containerSize.height).rounded(), container: screen, width: geometry.containerSize.width.rounded())
                         let tracked = anchor.track(read: read, height: geometry.containerSize.height, keeping: keeping)
                         let settled = read + tracked.shift
                         let distance = max(0, (geometry.contentSize.height - settled - geometry.containerSize.height).rounded())
@@ -93,7 +91,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         let delivered = offset.deliver(reading)
                         let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
-                        let rising = offset.arrived(arrival) && grown > 0
+                        let glides = delivered.reading != nil && !delivered.widthChanged
                         if reading.anchor.onScreen != onScreen { onScreen = reading.anchor.onScreen }
                         if let chatReading, chatReading.id != reading.anchor.reading { chatReading.id = reading.anchor.reading }
                         let shift = anchor.take()
@@ -131,8 +129,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating
+                        if grown < 0, glides, reading.nearNewest, offset.read <= max(offset.end, 0) { rise(by: grown) }
                         if grown > 0, reading.nearNewest {
-                            if rising { rise(by: grown) }
+                            if glides { rise(by: grown) }
                         } else if Self.followsKeyboard, delivered.viewShrank, grown == 0 {
                             // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。整段滑上去，
                             // 对话与键盘、回复框一起走；当下补滚的话整段对话先一下跳到终点，键盘与回复框还在半路

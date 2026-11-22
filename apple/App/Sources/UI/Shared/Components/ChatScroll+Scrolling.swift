@@ -25,30 +25,26 @@ extension ChatScroll {
         private(set) var read: CGFloat = 0
         private(set) var end: CGFloat = 0
         private(set) var container: CGFloat = 0
+        private var width: CGFloat = 0
         /// 不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，拿它比内容变没变高会漏掉。
-        private var delivered: (reading: Reading, container: CGFloat, read: CGFloat)?
-        private var arrival: UUID?
+        private var delivered: (reading: Reading, container: CGFloat, width: CGFloat, read: CGFloat)?
 
         struct Delivered {
             let reading: Reading?
             let viewShrank: Bool
+            let widthChanged: Bool
             let moved: Bool
         }
 
-        func set(read: CGFloat, end: CGFloat, container: CGFloat) {
-            (self.read, self.end, self.container) = (read, end, container)
+        func set(read: CGFloat, end: CGFloat, container: CGFloat, width: CGFloat) {
+            (self.read, self.end, self.container, self.width) = (read, end, container, width)
         }
 
         func deliver(_ reading: Reading) -> Delivered {
-            defer { delivered = (reading, container, read) }
+            defer { delivered = (reading, container, width, read) }
             return Delivered(
-                reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false, moved: delivered.map { $0.read != read } ?? true)
-        }
-
-        func arrived(_ arrival: UUID?) -> Bool {
-            guard let arrival else { return false }
-            defer { self.arrival = arrival }
-            return self.arrival.map { $0 != arrival } ?? false
+                reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false,
+                widthChanged: delivered.map { width != $0.width } ?? true, moved: delivered.map { $0.read != read } ?? true)
         }
     }
 
