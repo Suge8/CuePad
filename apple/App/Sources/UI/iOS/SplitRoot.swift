@@ -12,10 +12,10 @@ struct SplitRoot: View {
         let covered = modals?.modal?.inPage == true
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let under = sizes.split || sizes.home ? 0 : sizes.cue
+            let under = sizes.split ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under, spans: sizes.spans) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.fill, under: under, spans: sizes.spans) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                         .environment(\.underCue, under)
@@ -31,12 +31,11 @@ struct SplitRoot: View {
             }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
             .overlay { WideDropFeedback(window: geometry.size.width) }
-            .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
+            .overlay { if !sizes.fill { railChrome(sizes) } }
             .readerHidden(covered)
             .overlay {
-                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { cue(fits: $0, home: sizes.home, bottom: geometry.safeAreaInsets.bottom) }
+                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { cue(fits: $0, bottom: geometry.safeAreaInsets.bottom) }
             }
-            .overlay { if sizes.home { railChrome(sizes).readerHidden(covered) } }
             .reportsWideFits(sizes, to: workspace)
             .background(palette.desk)
         }
@@ -64,15 +63,15 @@ struct SplitRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func cue(fits: Bool, home: Bool, bottom: CGFloat) -> some View {
-        let inset = fits && !home ? CuePanel.float : 0
+    private func cue(fits: Bool, bottom: CGFloat) -> some View {
+        let inset = fits ? CuePanel.float : 0
         return CuePage()
             .environment(\.headerHost, .panel)
             .modifier(KeyboardHold())
             .safeAreaPadding(.top, inset)
             .safeAreaPadding(.bottom, max(0, bottom - inset))
-            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits, home: home)))
-            .cuePanel(fits: fits, home: home)
+            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits)))
+            .cuePanel(fits: fits)
             .ignoresSafeArea(.container, edges: .bottom)
     }
 

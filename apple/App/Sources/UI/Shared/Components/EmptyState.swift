@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct EmptyState<Action: View>: View {
-    let mascot: Mascot
+    let mascot: Mascot?
     let title: LocalizedStringResource
     var message: LocalizedStringResource?
     var waitsForSync = false
@@ -18,7 +18,7 @@ struct EmptyState<Action: View>: View {
     var body: some View {
         ZStack {
             VStack(spacing: Spacing.block) {
-                illustration
+                if let shown = syncing ? .search : mascot { illustration(shown) }
                 copy
                 if !syncing { action }
             }
@@ -44,8 +44,8 @@ struct EmptyState<Action: View>: View {
         withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { shown = true }
     }
 
-    private var illustration: some View {
-        Image(decorative: syncing ? Mascot.search.rawValue : mascot.rawValue).resizable().scaledToFit()
+    private func illustration(_ shown: Mascot) -> some View {
+        Image(decorative: shown.rawValue).resizable().scaledToFit()
             .frame(width: 104, height: 104)
             .readerHidden(true)
     }

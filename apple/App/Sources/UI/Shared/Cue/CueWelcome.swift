@@ -16,10 +16,11 @@ struct CueWelcome: View {
             if intro {
                 let hears = workspace.cue.canHear
                 EmptyState(
-                    mascot: .hello, title: "我是 \(name)", message: hears ? "要做什么，直接跟我说，比如：" : .verbatim(message(settings)), waitsForSync: true, bare: true
+                    mascot: nil, title: "我是 \(name)", message: hears ? "要做什么，直接跟我说，比如：" : .verbatim(message(settings)), waitsForSync: true, bare: true
                 ) {
                     if hears { CueStarters() } else { steps(settings, hosts) }
                 }
+                .glass(in: .rect(cornerRadius: Radius.sheet))
             } else {
                 VStack(spacing: Spacing.item) {
                     Text("启用后 \(name) 接着干活").font(Typography.secondary).foregroundStyle(palette.ink2)

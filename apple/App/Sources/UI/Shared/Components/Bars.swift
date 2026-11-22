@@ -9,36 +9,31 @@ extension View {
     /// 淡出从栏头下沿起、不收在它上面：iPad 的 Cue 名牌带投影，淡出收在名牌后面的话露出来的只剩最后几点，看着仍是一刀。
     /// Mac 的内容裁在栏头下沿；iPad 不裁：栏头与横条让出的都是安全区，按页的框裁会裁在名牌下沿与横条上沿，对话滚不进去、在那儿一刀切开。
     /// 淡出是盖在内容上的一层桌面色（`palette.desk`）、不接点按，不是遮罩：滚动时不用每帧离屏再合成整栏。
-    func fadesUnderHead(_ on: Bool = true) -> some View { modifier(HeadFade(on: on)) }
+    func fadesUnderHead() -> some View { modifier(HeadFade()) }
 }
 
 private struct HeadFade: ViewModifier {
-    let on: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        if on {
-            content
-                #if os(macOS)
-                .clipped()
-                #else
-                .scrollEdgeEffectHidden(true, for: .top)
-                #endif
-                .overlay {
-                    GeometryReader { proxy in
-                        VStack(spacing: 0) {
-                            palette.desk.frame(height: max(0, proxy.safeAreaInsets.top - Bars.contentGap))
-                            LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Bars.fade)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .ignoresSafeArea(edges: .top)
+        content
+            #if os(macOS)
+            .clipped()
+            #else
+            .scrollEdgeEffectHidden(true, for: .top)
+            #endif
+            .overlay {
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        palette.desk.frame(height: max(0, proxy.safeAreaInsets.top - Bars.contentGap))
+                        LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Bars.fade)
                     }
-                    .allowsHitTesting(false)
-                    .readerHidden(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .ignoresSafeArea(edges: .top)
                 }
-        } else {
-            content
-        }
+                .allowsHitTesting(false)
+                .readerHidden(true)
+            }
     }
 }
 

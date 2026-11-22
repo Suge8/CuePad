@@ -77,7 +77,7 @@ struct RailHome: View {
     var body: some View {
         let cue = workspace.cue, moving = cue.now.tally.moving
         HStack(spacing: Spacing.item) {
-            tile(Text(verbatim: cue.name), selected: workspace.cueHome) { workspace.goHome() } content: {
+            tile(Text(verbatim: cue.name), selected: workspace.cueVisible) { workspace.toggleCue() } content: {
                 CueAvatar(cue.beat, size: .card, plate: false).overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
             }
             tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } content: {
@@ -221,7 +221,7 @@ struct RailSessions: View {
     }
 
     private var projectsHeader: some View {
-        let selected = workspace.mainRoute == .shelf && !workspace.cueHome
+        let selected = workspace.mainRoute == .shelf
         return Button { workspace.selectPane(.projects) } label: {
             HStack(spacing: Spacing.glyph) {
                 Text("项目").fontWeight(selected ? .semibold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
@@ -237,7 +237,7 @@ struct RailSessions: View {
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
-        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id) && !workspace.cueHome, open: expanded.contains(project.id)) {
+        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id), open: expanded.contains(project.id)) {
             workspace.show(.project(project.id))
             expand { $0.insert(project.id) }
         } toggle: {

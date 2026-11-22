@@ -114,10 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let workspace, let window = services?.windowShell else { return }
         workspace.toggleRail(WideMetrics(width: window.frame.width, workspace: workspace))
     }
-    @objc func toggleCueColumn(_ sender: Any?) {
-        guard let workspace, let window = services?.windowShell else { return }
-        workspace.toggleCue(WideMetrics(width: window.frame.width, workspace: workspace))
-    }
+    @objc func toggleCueColumn(_ sender: Any?) { workspace?.toggleCue() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {

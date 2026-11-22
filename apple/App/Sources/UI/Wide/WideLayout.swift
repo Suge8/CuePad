@@ -38,7 +38,6 @@ struct WideMetrics {
         mutating func set(_ fractions: [CGFloat]?, for beside: [Kind]) { stored[beside] = fractions }
     }
 
-    let home: Bool
     let rail: CGFloat
     let railFits: Bool
     let main: CGFloat
@@ -76,7 +75,7 @@ struct WideMetrics {
         var order: [WideNavigation.Beside] = []
     }
 
-    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, panes: widths.count, fill: fill, order: order) }
+    var shape: Shape { Shape(rail: rail, cue: cue, panes: widths.count, fill: fill, order: order) }
 
     var spans: [WideNavigation.Beside: Span] {
         Dictionary(order.indices.map { (order[$0], Span(origin: origin($0, window: .infinity), width: width($0))) }) { first, _ in first }
@@ -98,8 +97,7 @@ struct WideMetrics {
 
     init(width: CGFloat, workspace: Workspace, navigation: WideNavigation? = nil) {
         window = width
-        home = navigation?.home ?? workspace.cueHome
-        let panes = home ? [] : navigation?.panes ?? workspace.session(in: .main).map { [.session($0)] + workspace.beside } ?? []
+        let panes = navigation?.panes ?? workspace.session(in: .main).map { [.session($0)] + workspace.beside } ?? []
         let wanted = panes.dropFirst().map(Kind.init)
         var shown = wanted.count
         while shown > 0, Self.session + wanted.prefix(shown).map(\.narrowest).reduce(0, +) > width { shown -= 1 }
@@ -109,8 +107,8 @@ struct WideMetrics {
         let narrowest = Self.session + beside.map(\.narrowest).reduce(0, +)
         railFits = width >= Chrome.rail + narrowest
         rail = workspace.sidebarOpen && railFits && !fill ? Chrome.rail : 0
-        cueFits = home || beside.isEmpty && width >= rail + narrowest + Self.cue
-        cue = home ? width - rail : workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
+        cueFits = beside.isEmpty && width >= rail + narrowest + Self.cue
+        cue = workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)
         widths = Self.widths(main: main, beside: beside, fractions: workspace.paneShares.fractions(beside))
         let spare = max(0, width - narrowest)

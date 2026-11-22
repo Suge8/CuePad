@@ -25,16 +25,16 @@ struct CueSwitchTests {
         let workspace = Workspace(services: services)
         let following = Task { await workspace.followCue() }
         defer { await following.stop() }
-        try await eventually("在 Mac Studio 上运行") { workspace.cue.now.quietLine == "在「Mac Studio」上运行" }
+        try await eventually("在 Mac Studio 上运行") { workspace.cue.now.elsewhere == "在「Mac Studio」上运行" }
 
         let toggle = CueSettingsModel()
         toggle.turn(false, here: services.hostID, services)
-        try await eventually("已停用") { workspace.cue.now.quietLine == "已停用" }
+        try await eventually("已停用") { workspace.cue.now.cue == .away("已停用", failed: false) }
         #expect(try await store.cueProfile()?.activeHost == nil)
 
         toggle.turn(true, here: services.hostID, services)
         try await eventually("回到 Mac Studio") { try await store.cueProfile()?.activeHost == "mac-old" }
-        try await eventually("又在 Mac Studio 上运行") { workspace.cue.now.quietLine == "在「Mac Studio」上运行" }
+        try await eventually("又在 Mac Studio 上运行") { workspace.cue.now.elsewhere == "在「Mac Studio」上运行" }
     }
 }
 #endif

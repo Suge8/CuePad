@@ -2,24 +2,14 @@ import CueStore
 import SwiftUI
 
 struct CuePage: View {
-    var grounded = true
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(\.headerHost) private var headerHost
-    #endif
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
     @State private var docking = false
     @State private var dockedCard: String?
     @State private var seen: [UUID: Date] = [:]
-    @State private var stage: Bool?
-    @State private var brief: CueBrief?
-    @State private var stagedAt = Date.now
-    @State private var stageInView = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let readingWidth = Spacing.reading
     static let inset = Spacing.page
@@ -30,17 +20,12 @@ struct CuePage: View {
     private var catchingUp: Bool { services.syncing.isCatchingUp(on: cue.hostID) }
     var body: some View {
         page
+            .background { CueSky(beat: cue.beat) }
             .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
             .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
-            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow, staged: staged) {
-                guard DebugHooks.preset.cueStage == nil else { return }
-                stage = true
-                stagedAt = .now
-                follow.jumpToNewest()
-            })
-            .onAppear { if stage == nil { stage = DebugHooks.preset.cueStage ?? CueStage.opens(left: services.settings.cueLeft, at: .now) } }
+            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
             .onChange(of: thread.flatMap(card), initial: true) { dockedCard = $1 }
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
@@ -54,11 +39,9 @@ struct CuePage: View {
             chat.frame(maxWidth: .infinity, maxHeight: .infinity)
         } reply: {
             bottom()
-                .replyTray(!(staged && stageInView))
                 .padding(.horizontal, Self.inset)
                 .frame(maxWidth: Self.readingWidth)
         }
-        .background { if grounded { palette.desk } }
     }
     #else
     private var page: some View {
@@ -70,24 +53,17 @@ struct CuePage: View {
                 .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
-        .fadesUnderHead(headerHost == .panel && !(staged && stageInView))
-        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader(staged: staged && stageInView) }) { EmptyView() }
+        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader() }) { EmptyView() }
     }
     #endif
 
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.phoneWidth + Spacing.item - Self.inset : 0 }
 
-    private var staged: Bool { stage == true && cue.canHear && thread?.rows.isEmpty == false }
-
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
-                if stage != nil {
-                    conversation(thread)
-                } else {
-                    Color.clear
-                }
+                conversation(thread)
             } else if thread != nil {
                 CueWelcomeChat().padding(.horizontal, railInset)
             } else {
@@ -116,36 +92,11 @@ struct CuePage: View {
                     })
                     .equatable()
                 }
-                if staged {
-                    stageView(thread)
-                } else {
-                    CueEnding(
-                        newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
-                }
+                CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
             #if os(iOS)
             .environment(\.inlineTextSelection, false)
             #endif
-        }
-    }
-
-    private func stageView(_ thread: CueThread) -> some View {
-        let replies = cue.now.items.filter { $0.kind == .reply }, said = CueBrief.said(thread)
-        let room = CueBrief.limit - (said == nil ? 0 : 1)
-        return CueStage(
-            beat: cue.beat, status: cue.now.quietLine, brief: (said.map { [$0] } ?? []) + (brief?.lines ?? []),
-            period: CueStage.Period(at: stagedAt, dark: palette.dark), open: openBrief)
-            .onScrollVisibilityChange(threshold: 0.4) { stageInView = $0 }
-            .observing(services.store, id: [String(room)] + replies.map(\.id), into: $brief, onError: workspace.fail) { [replies] in
-                try CueBrief.read(replies: replies, room: room, from: $0)
-            }
-            .transition(.opacity)
-    }
-
-    private func openBrief(_ line: CueBrief.Line) {
-        switch line.go {
-        case .session(let session): workspace.openSession(SessionState.recordID(sessionID: session), sessionID: session)
-        case .message(let id): follow.seek(id)
         }
     }
 
@@ -174,21 +125,12 @@ struct CuePage: View {
             CueVoicePanel()
             #endif
             if !calling, cue.canHear || workspace.layout == .narrow {
-                CueComposer(style: .page, takesFocusRequests: true, focusing: closeStage) {
-                    follow.sent()
-                    closeStage()
-                }
+                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .animation(Motion.fade, value: cue.canHear)
         .animation(Motion.fade, value: calling)
-    }
-
-    private func closeStage() {
-        guard stage == true else { return }
-        stageInView = false
-        withAnimation(Motion.fading(Motion.travel, reduceMotion: reduceMotion)) { stage = false }
     }
 
     private var calling: Bool {
@@ -200,6 +142,7 @@ struct CuePage: View {
     }
 }
 
+/// 欢迎的字排在小人头顶之上（`CueSky.reach`）：空着时天空与小人就是这一页的底。
 private struct CueWelcomeChat: View {
     @Environment(\.chatBottomInset) private var replyInset
 
@@ -209,9 +152,9 @@ private struct CueWelcomeChat: View {
                 CueWelcome(intro: true)
                     .padding(.horizontal, CuePage.inset)
                     .frame(maxWidth: CuePage.readingWidth)
-                    .frame(maxWidth: .infinity, minHeight: max(0, room.size.height - replyInset))
+                    .frame(maxWidth: .infinity, minHeight: max(0, room.size.height - max(replyInset, CueSky.reach)))
             }
-            .safeAreaPadding(.bottom, replyInset)
+            .safeAreaPadding(.bottom, max(replyInset, CueSky.reach))
             .scrollBounceBehavior(.basedOnSize)
         }
     }

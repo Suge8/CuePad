@@ -12,7 +12,6 @@ struct CueComposer: View {
     let style: Style
     var takesFocusRequests = false
     var dismiss: () -> Void = {}
-    var focusing: () -> Void = {}
     var sent: () -> Void = {}
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -65,7 +64,6 @@ struct CueComposer: View {
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
             #endif
-            .onChange(of: focused) { _, now in if now { focusing() } }
             .task { if style == .page { await DebugHooks.pressSendIfAsked(session: false, send) } }
     }
 

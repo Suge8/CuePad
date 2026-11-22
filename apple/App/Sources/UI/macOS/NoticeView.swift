@@ -10,7 +10,7 @@ struct NoticeView: View {
     var body: some View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let width = sizes.home ? geometry.size.width : sizes.rail + sizes.main
+            let width = sizes.rail + sizes.main
             ZStack(alignment: .top) {
                 if workspace.noticeOnHead, let notice = workspace.notice {
                     LinearGradient(stops: [.init(color: palette.desk, location: 0), .init(color: palette.desk, location: 0.75), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)

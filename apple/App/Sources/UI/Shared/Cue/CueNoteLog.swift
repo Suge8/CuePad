@@ -32,6 +32,7 @@ struct CueNoteLog: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .onSky()
             .animation(Motion.fade, value: folds)
         }
         .transition(.entry)

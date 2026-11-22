@@ -16,9 +16,7 @@ nonisolated struct CueArgs: Decodable, DebugArgGroup {
     let overdue: Bool
     /// `-CuePadCuePresence <名>`：Cue 页摆成哪种在场状态，取值见 `seedPresence` 与 `seedCue`；unchosen 是还没选过在哪台 Mac 上运行（演示的几台 Mac 都在，手机 Cue 面板就地选）
     let presence: String?
-    /// `-CuePadCueStage open|closed`（配 cue 画面）：Cue 页打开时舞台开着或收着，不按上次离开的时刻定
-    let stage: String?
-    /// `-CuePadCueSky dawn|day|dusk|night`（配 cue 画面）：舞台的天空钉成这个时段，不按钟点与外观换
+    /// `-CuePadCueSky dawn|day|dusk|night`（配 cue 画面）：Cue 页的天空钉成这个时段，不按钟点与外观换
     let sky: String?
     /// `-CuePadCueStale YES`：Cue 页摆成对话停滞的样子
     let stale: Bool
