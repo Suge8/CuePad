@@ -1,56 +1,27 @@
 import SwiftUI
 
-/// 盖在窗口上的那几层：墨色（挖一个门洞）、门洞里的投影与内沿的光、环、小人。
+/// 盖在窗口上的两层：墨色（开门时换成一格格散开的逐帧图）与小人。
 final class OpeningCurtain {
     private let canvas = CALayer()
-    private let ink = CAShapeLayer()
-    private let depth = CAShapeLayer()
-    private let depthMask = CAShapeLayer()
-    private let lip = CAShapeLayer()
-    private let rim = CAGradientLayer()
-    private let rimMask = CAShapeLayer()
-    private let glow = CAGradientLayer()
+    private let veil = CALayer()
     private let figure = CALayer()
     private let world: CALayer?
-
-    private static let rimStops: [NSNumber] = [0, 0.2, 0.48, 0.72, 1]
-    private static let shadowBlur: CGFloat = 14
-    /// 环的高光从左上斜着照下来（CSS 的 165°）。
-    private static let light = CGVector(dx: sin(165 * Double.pi / 180), dy: -cos(165 * Double.pi / 180))
+    private let pose: (idle: CGImage, jump: CGImage)
 
     /// Cue 在墨色上等门开时一呼一吸地浮着（启动屏上它是静的，从原位起步，接缝看不出）。
     private static let breath = (rise: CGFloat(3), period: 1.4)
 
-    init(root: CALayer, world: CALayer?, ink color: CGColor, ring: [CGColor], cue: CGImage, at start: CGRect, up: CGFloat, breathes: Bool) {
+    init(root: CALayer, world: CALayer?, ink: CGColor, pose: (idle: CGImage, jump: CGImage), at start: CGRect, up: CGFloat, breathes: Bool) {
         self.world = world
-        let bounds = root.bounds
+        self.pose = pose
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        canvas.frame = bounds
-        for layer in [ink, depth, depthMask, lip, rimMask] { layer.frame = bounds }
-        rim.frame = bounds
-        ink.fillColor = color
-        ink.path = CGPath(rect: bounds, transform: nil)
-        depth.fillColor = CGColor(gray: 0, alpha: 1)
-        depth.shadowColor = CGColor(gray: 0, alpha: 1)
-        depth.shadowOpacity = 0.5
-        depth.shadowRadius = Self.shadowBlur
-        depth.mask = depthMask
-        depth.isHidden = true
-        lip.fillColor = nil
-        lip.strokeColor = CGColor(gray: 1, alpha: 0.16)
-        lip.lineWidth = 1.5
-        rim.colors = ring
-        rim.locations = Self.rimStops
-        rim.mask = rimMask
-        rim.isHidden = true
-        glow.type = .radial
-        glow.colors = [CGColor(gray: 1, alpha: 0.28), CGColor(gray: 1, alpha: 0)]
-        glow.startPoint = CGPoint(x: 0.5, y: 0.5)
-        glow.endPoint = CGPoint(x: 1, y: 1)
-        glow.isHidden = true
-        figure.contents = cue
-        figure.contentsGravity = .resizeAspect
+        canvas.frame = root.bounds
+        veil.frame = root.bounds
+        veil.backgroundColor = ink
+        veil.magnificationFilter = .nearest
+        figure.contents = pose.idle
+        figure.contentsGravity = .resize
         figure.frame = start
         if breathes {
             let breathe = CABasicAnimation(keyPath: "transform.translation.y")
@@ -62,11 +33,7 @@ final class OpeningCurtain {
             breathe.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             figure.add(breathe, forKey: "breathe")
         }
-        canvas.addSublayer(glow)
-        canvas.addSublayer(ink)
-        canvas.addSublayer(depth)
-        canvas.addSublayer(lip)
-        canvas.addSublayer(rim)
+        canvas.addSublayer(veil)
         canvas.addSublayer(figure)
         canvas.zPosition = 10_001
         root.addSublayer(canvas)
@@ -86,40 +53,37 @@ final class OpeningCurtain {
         figure.add(settle, forKey: "breathe")
     }
 
-    func open(_ door: OpeningDoor) async {
-        let frames = door.frames, bounds = canvas.bounds, up = door.up
-        let bottom = CGPoint(x: 0.5, y: up < 0 ? 1 : 0)
+    func open(_ door: OpeningDoor, veils: [CGImage]) async {
+        let frames = door.frames, up = door.up
         await withCheckedContinuation { done in
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             CATransaction.setCompletionBlock { done.resume() }
             stopBreathing()
-            depth.isHidden = false
-            rim.isHidden = false
-            glow.isHidden = false
-            depth.shadowOffset = CGSize(width: 0, height: -up * 12)
-            figure.anchorPoint = bottom
-            let frame = frames.last!
-            figure.bounds = CGRect(origin: .zero, size: frame.cue.size)
-            figure.position = CGPoint(x: frame.cue.midX, y: up < 0 ? frame.cue.maxY : frame.cue.minY)
-            let holed = frames.map { Self.holed(bounds, by: $0.hole) }
-            add(ink, "path", holed)
-            add(depth, "path", holed)
-            add(depth, "shadowPath", holed)
-            add(depthMask, "path", frames.map { CGPath(ellipseIn: $0.hole, transform: nil) })
-            add(lip, "path", frames.map { CGPath(ellipseIn: $0.hole, transform: nil) })
-            add(glow, "bounds.size", frames.map { Self.value($0.hole.size) })
-            add(glow, "position", frames.map { Self.value(CGPoint(x: $0.hole.midX, y: $0.hole.midY)) })
-            add(glow, "opacity", frames.map { $0.light })
-            add(rimMask, "path", frames.map { Self.ring($0) })
-            let lit = frames.map { Self.lit($0, in: bounds, up: up) }
-            add(rim, "startPoint", lit.map { Self.value($0.0) })
-            add(rim, "endPoint", lit.map { Self.value($0.1) })
+            veil.frame = OpeningDoor.grid(in: door.bounds)
+            veil.backgroundColor = nil
+            veil.contents = veils.last
+            let reveal = CAKeyframeAnimation(keyPath: "contents")
+            reveal.values = veils
+            reveal.duration = OpeningDoor.reveal
+            reveal.calculationMode = .discrete
+            veil.add(reveal, forKey: "reveal")
+            figure.anchorPoint = CGPoint(x: 0.5, y: up < 0 ? 1 : 0)
+            let foot = { (cue: CGRect) in CGPoint(x: cue.midX, y: up < 0 ? cue.maxY : cue.minY) }
+            let last = frames.last!.cue
+            figure.bounds = CGRect(origin: .zero, size: last.size)
+            figure.position = foot(last)
             add(figure, "bounds.size", frames.map { Self.value($0.cue.size) })
-            add(figure, "position", frames.map { Self.value(CGPoint(x: $0.cue.midX, y: up < 0 ? $0.cue.maxY : $0.cue.minY)) })
+            add(figure, "position", frames.map { Self.value(foot($0.cue)) })
+            let hop = CAKeyframeAnimation(keyPath: "contents")
+            hop.values = [pose.idle, pose.jump, pose.idle]
+            hop.keyTimes = [0, OpeningDoor.crouch, OpeningDoor.crouch + OpeningDoor.airborne * OpeningDoor.flight].map { NSNumber(value: $0 / OpeningDoor.duration) }
+            hop.calculationMode = .discrete
+            hop.duration = OpeningDoor.duration
+            figure.add(hop, forKey: "hop")
             if door.landing == nil { add(figure, "opacity", frames.indices.map { 1 - Double($0) / Double(frames.count - 1) }) }
             if let world {
-                let center = canvas.convert(door.center, to: world)
+                let center = canvas.convert(CGPoint(x: door.start.midX, y: door.start.midY), to: world)
                 let anchor = CGPoint(x: world.bounds.minX + world.anchorPoint.x * world.bounds.width, y: world.bounds.minY + world.anchorPoint.y * world.bounds.height)
                 let shift = CGPoint(x: center.x - anchor.x, y: center.y - anchor.y)
                 add(world, "transform", frames.map { frame in
@@ -135,7 +99,7 @@ final class OpeningCurtain {
                 settle.stiffness = 320
                 settle.damping = 14
                 settle.duration = 0.55
-                settle.beginTime = figure.convertTime(CACurrentMediaTime(), from: nil) + OpeningDoor.duration * 0.94
+                settle.beginTime = figure.convertTime(CACurrentMediaTime(), from: nil) + OpeningDoor.duration
                 figure.add(settle, forKey: "settle")
             }
             CATransaction.commit()
@@ -178,29 +142,4 @@ final class OpeningCurtain {
     private static func value(_ point: CGPoint) -> NSValue { NSValue(point: point) }
     private static func value(_ size: CGSize) -> NSValue { NSValue(size: size) }
     #endif
-
-    /// 整块墨色挖掉门洞。门洞反着绕：投影的路径只认非零绕数，同向绕就填满、挖不出洞。
-    private static func holed(_ bounds: CGRect, by hole: CGRect) -> CGPath {
-        let path = CGMutablePath()
-        path.addRect(bounds)
-        path.addEllipse(in: hole, transform: CGAffineTransform(translationX: 2 * hole.midX, y: 0).scaledBy(x: -1, y: 1))
-        return path
-    }
-
-    private static func ring(_ frame: OpeningDoor.Frame) -> CGPath {
-        let path = CGMutablePath()
-        let half = frame.tube / 2
-        path.addEllipse(in: frame.ring.insetBy(dx: -half, dy: -half))
-        path.addEllipse(in: frame.ring.insetBy(dx: half, dy: half), transform: CGAffineTransform(translationX: 2 * frame.ring.midX, y: 0).scaledBy(x: -1, y: 1))
-        return path
-    }
-
-    /// 环的明暗按它自己的外框铺：渐变层铺满整窗，起止点随环换算成整窗的单位坐标。
-    private static func lit(_ frame: OpeningDoor.Frame, in bounds: CGRect, up: CGFloat) -> (CGPoint, CGPoint) {
-        let box = frame.ring.insetBy(dx: -frame.tube / 2, dy: -frame.tube / 2)
-        let dx = light.dx, dy = light.dy * -up
-        let half = (abs(box.width * dx) + abs(box.height * dy)) / 2
-        let unit = { (x: CGFloat, y: CGFloat) in CGPoint(x: (x - bounds.minX) / bounds.width, y: (y - bounds.minY) / bounds.height) }
-        return (unit(box.midX - dx * half, box.midY - dy * half), unit(box.midX + dx * half, box.midY + dy * half))
-    }
 }

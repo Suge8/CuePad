@@ -16,7 +16,7 @@ struct CueSky: View {
             let size = CGSize(width: room.size.width + inset.leading + inset.trailing, height: room.size.height + inset.top + inset.bottom)
             let sky = Sky(size, floor: Sky.floor + inset.bottom, period: Period(at: .now, dark: palette.dark))
             ZStack(alignment: .topLeading) {
-                DitherImage(asset: sky.asset, placement: sky.placement, size: size, grain: CueOpening.shared.phase.grain) { CueOpening.shared.drewSky() }
+                DitherImage(asset: sky.asset, placement: sky.placement, size: size) { CueOpening.shared.drewSky() }
                 if beat == .away { palette.backdrop }
                 figure(sky)
             }
