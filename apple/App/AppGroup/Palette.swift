@@ -130,6 +130,7 @@ struct Palette {
 
     var failureWash: Color { dark ? Color(hex: 0x382A2E) : Color(hex: 0xFBEDF0) }
     var repliedWash: Color { dark ? Color(hex: 0x26382D) : Color(hex: 0xE2F1E7) }
+    var signatureWash: Color { dark ? Color(hex: 0x262C3D) : Color(hex: 0xE5E9F5) }
 
     var diffAdded: Color { repliedWash }
     var diffRemoved: Color { failureWash }

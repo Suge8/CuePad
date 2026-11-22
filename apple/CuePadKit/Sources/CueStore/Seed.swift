@@ -77,7 +77,7 @@ extension CueStore {
     try write {
       try db.exec(
         """
-        UPDATE cueMessages SET createdAt = createdAt - \(ms), answeredAt = answeredAt - \(ms);
+        UPDATE cueMessages SET createdAt = createdAt - \(ms);
         UPDATE marks SET modifiedAt = modifiedAt - \(ms) WHERE kind = 'cueRead';
         """)
     }

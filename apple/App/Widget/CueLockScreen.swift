@@ -55,8 +55,8 @@ private struct Poster {
         case .idle:
             if now.unconfirmed {
                 String(localized: "状态未确认")
-            } else if now.advancing > 0 {
-                String(localized: "推进中 \(now.advancing) 件，都空闲")
+            } else if let counts = Dotted(now.counts.map(\.words)).nonEmpty {
+                counts.visible
             } else {
                 now.elsewhere ?? String(localized: "手上没有事")
             }
