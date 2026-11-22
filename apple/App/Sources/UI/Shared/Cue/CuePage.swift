@@ -134,7 +134,7 @@ struct CuePage: View {
     }
 }
 
-/// 欢迎的字排在小人头顶之上（`CueSky.reach`）：空着时天空与小人就是这一页的底。
+/// Cue 的话贴着小人头顶往上排（`CueSky.reach`）：空着时天空与小人就是这一页的底，它在说话。
 private struct CueWelcomeChat: View {
     @Environment(\.chatBottomInset) private var replyInset
 
@@ -144,7 +144,7 @@ private struct CueWelcomeChat: View {
                 CueWelcome(intro: true)
                     .padding(.horizontal, CuePage.inset)
                     .frame(maxWidth: CuePage.readingWidth)
-                    .frame(maxWidth: .infinity, minHeight: max(0, room.size.height - max(replyInset, CueSky.reach)))
+                    .frame(maxWidth: .infinity, minHeight: max(0, room.size.height - max(replyInset, CueSky.reach)), alignment: .bottom)
             }
             .safeAreaPadding(.bottom, max(replyInset, CueSky.reach))
             .scrollBounceBehavior(.basedOnSize)
