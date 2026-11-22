@@ -216,8 +216,9 @@ struct ReplyBar: View {
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
         let talked = commandLine == nil
-        if talked { flight?.depart(draft) }
-        workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card)
+        let id = UUID()
+        if talked { flight?.depart(draft, as: id) }
+        workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card, as: id)
         didSend(talked: talked)
     }
 }

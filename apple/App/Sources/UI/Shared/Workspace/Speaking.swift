@@ -5,14 +5,14 @@ extension Workspace {
     @discardableResult
     func speak(
         to listener: Listener, from box: Binding<ComposerDraft>, keeping: (ComposerDraft) -> ComposerDraft = { _ in ComposerDraft() },
-        saying: Dotted? = nil, content: @escaping (ComposerDraft) -> String
+        saying: Dotted? = nil, as id: UUID = UUID(), content: @escaping (ComposerDraft) -> String
     ) -> Task<Void, Never> {
         let taken = box.wrappedValue
         let kept = keeping(taken)
         let claim = claimImports(taken.withImports(notIn: kept))
         box.wrappedValue = kept
         if let saying { say(saying) }
-        return write(to: listener, taking: {
+        return write(to: listener, as: id, taking: {
             let sent = await claim.settled()
             return (sent, content(sent))
         }, restore: { sent in box.wrappedValue = sent.followed(by: box.wrappedValue, keeping: kept) })
@@ -21,12 +21,12 @@ extension Workspace {
     @discardableResult
     func reply(
         to session: SessionState, commands: [SlashCommand], from box: Binding<ComposerDraft>, accepting kinds: ComposerKinds,
-        mode: DeliveryMode = .send, card: UUID? = nil, saying: Dotted? = nil
+        mode: DeliveryMode = .send, card: UUID? = nil, saying: Dotted? = nil, as id: UUID = UUID()
     ) -> Task<Void, Never> {
         if let line = Slash.line(of: box.wrappedValue.accepting(kinds), in: commands, for: session) {
             return speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }, saying: saying) { _ in line }
         }
-        return speak(to: .session(session, mode: mode, card: card), from: box, saying: saying) { draft in
+        return speak(to: .session(session, mode: mode, card: card), from: box, saying: saying, as: id) { draft in
             let draft = draft.accepting(kinds)
             return Slash.said(draft, in: commands, for: session) ?? draft.stored
         }
@@ -74,17 +74,17 @@ extension Workspace {
     }
 
     private func write(_ stored: String, to listener: Listener, restore: @escaping () -> Void) -> Task<Void, Never> {
-        write(to: listener, taking: { (ComposerDraft(), stored) }, restore: { _ in restore() })
+        write(to: listener, as: UUID(), taking: { (ComposerDraft(), stored) }, restore: { _ in restore() })
     }
 
     private func write(
-        to listener: Listener, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
+        to listener: Listener, as id: UUID, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
     ) -> Task<Void, Never> {
         let services = services
         return services.sendOrder.enqueue(listener.orderKey) { [self] in
             let (sent, body) = await taking()
             do {
-                try await services.recordSpeech(body, to: listener)
+                try await services.recordSpeech(body, to: listener, as: id)
             } catch {
                 restore(sent)
                 switch listener {

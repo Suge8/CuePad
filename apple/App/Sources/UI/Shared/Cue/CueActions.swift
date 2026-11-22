@@ -14,9 +14,9 @@ extension Workspace {
     }
 
     @discardableResult
-    func sayToCue(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
+    func sayToCue(from box: Binding<ComposerDraft>, as id: UUID = UUID()) -> Task<Void, Never>? {
         guard cue.canHear else { return note(from: box) }
-        return speak(to: .cue, from: box) { $0.stored }
+        return speak(to: .cue, from: box, as: id) { $0.stored }
     }
 
     @discardableResult

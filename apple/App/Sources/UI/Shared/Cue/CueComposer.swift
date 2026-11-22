@@ -192,8 +192,9 @@ struct CueComposer: View {
         let draft = Bindable(workspace.cue).draft
         if aim == .cue {
             let event = CueWatch.Send(at: .now, beat: workspace.cue.beat)
-            flight?.depart(draft.wrappedValue)
-            guard workspace.sayToCue(from: draft) != nil else { return }
+            let id = UUID()
+            flight?.depart(draft.wrappedValue, as: id)
+            guard workspace.sayToCue(from: draft, as: id) != nil else { return }
             workspace.cue.sent(event)
             workspace.services.settings.play(.send)
             launch.fly(since: event.at, reduceMotion: reduceMotion)

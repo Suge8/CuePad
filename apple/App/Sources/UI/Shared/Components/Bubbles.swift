@@ -40,7 +40,7 @@ struct UserBubble<Menu: View>: View {
     var marksTransit = true
     var fadesIn = true
     var quote: BubbleQuote?
-    var said: Date?
+    var said: UUID?
     @ViewBuilder var menu: Menu
     @Environment(\.sendFlight) private var flight
 
@@ -57,7 +57,7 @@ struct UserBubble<Menu: View>: View {
                     BubbleText(
                         text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, fromCue: fromCue, foldedLines: Self.foldedLines, quote: quote)
                     .tripMark(images.isEmpty && parts.files.isEmpty ? mark : .arrived, above: look.padding.bottom)
-                    .flightLanding(plain && flight?.carries(text, said: said) == true ? flight : nil, look: look, opacity: trip.opacity)
+                    .flightLanding(plain && flight?.carries(said) == true ? flight : nil, look: look, opacity: trip.opacity)
                 }
                 if let skill, !skill.body.isEmpty { SkillBody(skill: skill) }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(parts.files.isEmpty ? mark : .arrived, above: 0) }

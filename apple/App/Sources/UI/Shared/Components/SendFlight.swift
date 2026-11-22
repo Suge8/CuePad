@@ -2,14 +2,14 @@ import SwiftUI
 
 /// 发出的那句从输入框飞进对话。按下时字留在输入框里原处（写进库、排出气泡要几帧，输入框这时已经空了，不留这一下空白）；
 /// 气泡一排好就飞过去：竖着比横着快，走一道弧，一路显影出气泡的底（`Developing`），落下时换成真的那颗（飞着时它透明）。
-/// 一个对话区（`FloatingReply`）一份：输入框报字的位置（`origin`），气泡按"按下之后说的、字一样"认出自己（`carries`）、报落点（`aim`）。
+/// 一个对话区（`FloatingReply`）一份：输入框报字的位置（`origin`），气泡按这句在库里的编号（按下时定好）认出自己（`carries`）、报落点（`aim`）。
 /// 只飞纯文字：带附件、批注、技能调用的气泡长相不同；没有看得见的落点就原地淡掉。减弱动态效果时不给这一份，不飞。
 /// 只平移与改留白，不缩放：缩放时每帧重画字形。
 @MainActor @Observable final class SendFlight {
     struct Trip: Equatable {
+        let id: UUID
         let text: String
         let from: CGRect
-        let at: Date
     }
 
     struct Landing: Equatable {
@@ -22,20 +22,14 @@ import SwiftUI
     private(set) var landing: Landing?
     @ObservationIgnored var origin: CGRect?
 
-    func depart(_ draft: ComposerDraft) {
-        let text = Self.shown(draft.text)
+    func depart(_ draft: ComposerDraft, as id: UUID) {
+        let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let origin, !text.isEmpty, draft.files.isEmpty, draft.attachments.isEmpty, draft.notes.isEmpty else { return }
         landing = nil
-        trip = Trip(text: text, from: origin, at: .now)
+        trip = Trip(id: id, text: text, from: origin)
     }
 
-    func carries(_ text: String, said: Date?) -> Bool {
-        guard let trip, let said else { return false }
-        return said.timeIntervalSince(trip.at) > -Self.slack && Self.shown(text) == trip.text
-    }
-
-    /// 库里的时间按毫秒四舍五入，读回来最多比起飞时早半毫秒；放宽到这一点为止，按下之前说过的同一句（连发两遍）不认。
-    private static let slack: TimeInterval = 0.001
+    func carries(_ said: UUID?) -> Bool { trip?.id == said && said != nil }
 
     /// 落点压在输入框后面（对话没滚到最新）就不认：往下钻进输入框后面读不出去了哪。比的是输入框此刻的位置：键盘收起时它与对话一起往下挪。
     /// 认过之后又被压住（飞着时往回滚了）就不飞了，当场换成真的那颗。
@@ -54,7 +48,6 @@ import SwiftUI
         landing = nil
     }
 
-    private static func shown(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
 extension EnvironmentValues {
@@ -106,7 +99,7 @@ struct SendFlightLayer: View {
     var body: some View {
         if let trip = flight.trip {
             GeometryReader { layer in
-                FlyingWords(flight: flight, trip: trip, base: layer.frame(in: .named(floatingReplyPage)).origin).id(trip.at)
+                FlyingWords(flight: flight, trip: trip, base: layer.frame(in: .named(floatingReplyPage)).origin).id(trip.id)
             }
             .allowsHitTesting(false)
             .readerHidden(true)
