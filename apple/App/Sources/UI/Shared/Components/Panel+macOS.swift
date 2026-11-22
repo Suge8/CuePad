@@ -16,8 +16,8 @@ extension View {
             close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
 
-    func bubble(isPresented: Binding<Bool>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
-        modifier(ControlBubble(isPresented: isPresented, width: width, panel: content))
+    func bubble(_ shown: Binding<BubbleSwitch>, width: BubblePlacement.Width = .fitting, @ViewBuilder content: @escaping () -> some View) -> some View {
+        modifier(ControlBubble(isPresented: shown.open, width: width, panel: content))
     }
 }
 

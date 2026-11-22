@@ -68,7 +68,7 @@ public enum ChatNotice: String, Sendable, CaseIterable {
   public var label: String {
     switch self {
     case .compacted: String(localized: "已压缩上下文")
-    case .stopped: String(localized: "已停止")
+    case .stopped: String(localized: "被中断")
     case .declined: String(localized: "已拒绝")
     case .truncated: String(localized: "回答未完成：达到输出长度上限")
     }

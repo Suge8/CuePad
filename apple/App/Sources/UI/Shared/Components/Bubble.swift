@@ -205,23 +205,21 @@ struct BubbleFrame<Content: View, Area: View>: View {
         let card = RoundedRectangle(cornerRadius: placement.radius)
         Group(subviews: content) { parts in
             let feet = parts.filter(\.containerValues.bubbleFoot)
-            let scroll = ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
-                .scrollBounceBehavior(.basedOnSize)
-                .debugScrollsToMiddle()
-            if feet.isEmpty {
-                scroll
-            } else {
-                // 钉着的那块排在滚动区下面、不压在它上面；滚着的内容到它跟前那一小截淡出，不被一条直线切断（不滚时这一截是内容自己的下边距）。
-                // 否决过：系统的栏（`safeAreaBar`）——滚着的字从钉着的那块后面透出来，叠在它的字上。
-                VStack(spacing: 0) {
-                    scroll.mask {
+            // 钉着的那块排在滚动区下面、不压在它上面；滚着的内容到它跟前那一小截淡出，不被一条直线切断（不滚时这一截是内容自己的下边距）。
+            // 否决过：系统的栏（`safeAreaBar`）——滚着的字从钉着的那块后面透出来，叠在它的字上。
+            // 有没有脚都是这一个结构：脚晚一拍出现时换结构，滚动区连同里面的文字区会被重建一份（编辑器的句柄指向被扔掉的那份）
+            VStack(spacing: 0) {
+                ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .scrollDismissesKeyboard(placement.sheet ? .immediately : .automatic)
+                    .debugScrollsToMiddle()
+                    .mask {
                         VStack(spacing: 0) {
                             Rectangle()
-                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Spacing.item)
+                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: feet.isEmpty ? 0 : Spacing.item)
                         }
                     }
-                    ForEach(feet) { $0 }
-                }
+                ForEach(feet) { $0 }
             }
         }
             .frame(minWidth: placement.narrowest, alignment: .topLeading)

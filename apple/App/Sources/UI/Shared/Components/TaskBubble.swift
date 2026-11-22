@@ -16,43 +16,44 @@ struct TaskBubble: View {
     @Environment(AppServices.self) private var services
     @Environment(\.closePanel) private var close
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var footerHeight: CGFloat = 0
     @State private var data: BubbleData?
     @State private var editing: CardEditing?
 
     var body: some View {
+        Group {
+            pages
+            if let data, let editing, editing.cardID == data.focus(step).id {
+                BubbleFooter(data: data, focus: data.focus(step), editing: editing)
+                    .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.glyphInset)
+                    .padding(.top, BubbleMetrics.footerGap - Spacing.item)
+                    .padding(.bottom, ComposerMetrics.glyphInset + (sheet ? BubbleMetrics.sheetBottom : 0))
+                    .bubbleFoot()
+            }
+        }
+        #if os(macOS)
+        .modifier(WindowCardAgents(workspace: workspace))
+        #endif
+    }
+
+    private var pages: some View {
         // 是一个容器而不是 Group：数据读到之前 Group 里没有视图，挂在它上面的读库也就不会开始；翻页的两页叠在 `TurnStack` 里（`Motion.turn`）
         TurnStack {
             if let data, let editing, editing.cardID == data.focus(step).id {
                 let focus = data.focus(step)
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionFooters) {
-                    Section {
-                        VStack(alignment: .leading, spacing: BubbleMetrics.footerGap) {
-                            #if os(iOS)
-                            if sheet { SheetGrabber().padding(.bottom, -BubbleMetrics.footerGap) }
-                            #endif
-                            TaskBubblePage(data: data, focus: focus, editing: editing)
-                            ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
-                                .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
-                        }
-                        .padding(.top, Spacing.item).padding(.leading, BubbleMetrics.leading)
-                        .mask(alignment: .top) { UnderFooterFade(footer: footerHeight) }
-                    } footer: {
-                        BubbleFooter(data: data, focus: focus, editing: editing)
-                            .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.glyphInset)
-                            .padding(.top, BubbleMetrics.footerGap)
-                            .padding(.bottom, ComposerMetrics.glyphInset + (sheet ? BubbleMetrics.sheetBottom : 0))
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
-                    }
+                VStack(alignment: .leading, spacing: BubbleMetrics.footerGap) {
+                    #if os(iOS)
+                    if sheet { SheetGrabber().padding(.bottom, -BubbleMetrics.footerGap) }
+                    #endif
+                    TaskBubblePage(data: data, focus: focus, editing: editing)
+                    ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
+                        .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
                 }
+                .padding(.vertical, Spacing.item).padding(.leading, BubbleMetrics.leading)
                 .id(focus.id)
                 .transition(Motion.turn(from: step == nil ? .leading : .trailing, reduceMotion: reduceMotion))
             }
         }
         .debugCyclesTurn { if let data { workspace.openTask(step == nil ? data.steps.first ?? data.goal : data.goal) } }
-        #if os(macOS)
-        .modifier(WindowCardAgents(workspace: workspace))
-        #endif
         .observing(services.store, id: request.task, into: $data, onError: workspace.fail) { [task = request.task] in try BubbleData.read(task, from: $0) }
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
         .onChange(of: data?.focus(step).id, initial: true) { edit(data?.focus(step)) }
@@ -73,25 +74,6 @@ struct TaskBubble: View {
         editing?.leave()
         editing = card.map { CardEditing($0, titled: true, workspace: workspace) }
     }
-}
-
-private struct UnderFooterFade: View {
-    let footer: CGFloat
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Color.black
-            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
-        }
-        .padding(.bottom, -Self.fade)
-        .visualEffect { [footer, fade = Self.fade, gap = BubbleMetrics.footerGap] content, proxy in
-            let top = (proxy.bounds(of: .scrollView)?.maxY ?? .infinity) - footer
-            let hidden = max(0, proxy.size.height - top)
-            return content.offset(y: -min(hidden * 3, hidden + fade - gap))
-        }
-    }
-
-    private static let fade: CGFloat = 24
 }
 
 /// 只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。

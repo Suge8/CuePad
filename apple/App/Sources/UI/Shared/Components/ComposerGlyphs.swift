@@ -15,6 +15,21 @@ struct CircleGlyph<Content: View>: View {
     }
 }
 
+struct PlusGlyph: View {
+    var icon = Icon.add
+    var on = false
+    var enabled = true
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        CircleGlyph(fill: on ? palette.selection : palette.fill) {
+            Image(icon).font(Glyph.control.weight(.semibold))
+                .foregroundStyle(enabled ? palette.ink : palette.ink3)
+                .contentTransition(.symbolEffect(.replace))
+        }
+    }
+}
+
 struct SendGlyph: View {
     enum Phase: Equatable {
         case idle, ready, sending, stop, stopping

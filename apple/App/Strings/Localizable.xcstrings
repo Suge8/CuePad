@@ -12021,22 +12021,6 @@
         }
       }
     },
-    "已停止" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stopped"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已停止"
-          }
-        }
-      }
-    },
     "已停用" : {
       "localizations" : {
         "en" : {

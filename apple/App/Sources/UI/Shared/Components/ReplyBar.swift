@@ -101,6 +101,8 @@ struct ReplyBar: View {
             }
             #if os(macOS)
             .onAppear { focused = active && !covered }
+            #else
+            .onAppear { if DebugHooks.preset.modelMenu { focused = true } }
             #endif
     }
 
