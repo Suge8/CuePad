@@ -204,7 +204,8 @@ struct BubbleFrame<Content: View, Area: View>: View {
             // 有没有脚都是这一个结构：脚晚一拍出现时换结构，滚动区连同里面的文字区会被重建一份（编辑器的句柄指向被扔掉的那份）
             VStack(spacing: 0) {
                 ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
-                    .scrollBounceBehavior(.basedOnSize)
+                    // 底部的纸里内容短到不用滚时也要拖得动：往下滑收键盘靠滚动区的拖动
+                    .scrollBounceBehavior(placement.sheet ? .always : .basedOnSize)
                     .scrollDismissesKeyboard(placement.sheet ? .interactively : .automatic)
                     .debugScrollsToMiddle()
                     .mask {
