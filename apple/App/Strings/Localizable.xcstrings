@@ -4318,22 +4318,6 @@
         }
       }
     },
-    "「%@」不是这条提问的选项" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%@” isn't one of this question's choices"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「%@」不是这条提问的选项"
-          }
-        }
-      }
-    },
     "「%@」做完了\n\n%@" : {
       "localizations" : {
         "en" : {
@@ -19690,22 +19674,6 @@
         }
       }
     },
-    "等 Mac 出现再请求通知权限没能启动：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't start waiting for a Mac to ask for notification permission: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 Mac 出现再请求通知权限没能启动：%@"
-          }
-        }
-      }
-    },
     "等了 %@" : {
       "localizations" : {
         "en" : {
@@ -23458,22 +23426,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条在别处改过，没能保存的字接在了后面"
-          }
-        }
-      }
-    },
-    "这条提问已经结束了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This question has already closed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这条提问已经结束了"
           }
         }
       }

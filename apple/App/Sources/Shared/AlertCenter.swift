@@ -83,7 +83,8 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         receive(response.notification.request.content.userInfo)
     }
 
-    /// 本机发通知的唯一出口：Mac 上到不到你不成立时、这份库不发时（`delivers`）什么都不做（不要权限、不装提示音）；第一次真要发时才征求权限，没有权限就不发。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
+    /// 本机发通知的唯一出口：Mac 上到不到你不成立时、这份库不发时（`delivers`）什么都不做（不要权限、不装提示音）；没有权限就不发。
+    /// Mac 第一次真要发时征求权限；手机只在你启用 Cue 那一下征求（`AppServices.enableCue`），不在你没在做什么的时候突然弹。给了 `date` 是定时的：到点由系统弹，App 不必在跑；
     /// 同一 `id` 的待发通知原地换掉，已送达的还在通知中心里时系统只换内容、不再响（所以即时的每条标识都不同）。
     func post(_ alert: AlertMessage, id: String = UUID().uuidString, at date: Date? = nil) async {
         #if os(macOS)
@@ -92,7 +93,9 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         guard delivers else {
             return AppServices.log.notice("通知（不碰真实世界，不发）：\(alert.title, privacy: .public)：\(alert.body, privacy: .private)")
         }
+        #if os(macOS)
         if authorization == .notDetermined { await requestAuthorization() }
+        #endif
         guard isAuthorized else { return }
         let content = UNMutableNotificationContent()
         content.title = alert.title
@@ -169,17 +172,11 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     @ObservationIgnored private var enabled = false
 
     func enable() async {
-        guard !enabled, let services else { return }
+        guard !enabled else { return }
         enabled = true
         await refresh()
         // 无论是否授权都注册：只叫醒 App 拉一次的静默推送（Cue 对你说的话、请求的结果，见 `AlertSubscriptions`）不要通知权限
         UIApplication.shared.registerForRemoteNotifications()
-        guard authorization == .notDetermined else { return }
-        services.follow(reporting: { .syncUnavailable(String(localized: "等 Mac 出现再请求通知权限没能启动：\(String(describing: $0))")) }) {
-            for try await hasMac in services.store.observe({ try $0.workMac() != nil }) where hasMac {
-                return await self.requestAuthorization()
-            }
-        }
     }
 
     func registered() { registration = .registered }
