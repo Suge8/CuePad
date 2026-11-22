@@ -58,10 +58,11 @@ final class CueOpening {
         let light = reduceMotion ? nil : Task.detached { OpeningLight(grid: stage.grid, paint: paint).frames(scale: scale) }
         Task {
             let clock = ContinuousClock(), deadline = clock.now + OpeningDoor.patience
-            if let light { curtain.glow(await light.value) }
-            let lit = clock.now
+            if let light {
+                curtain.glow(await light.value)
+                try? await clock.sleep(for: .seconds(OpeningLight.sweep))
+            }
             await sky(by: deadline)
-            try? await clock.sleep(until: lit + OpeningDoor.dwell)
             await NextFrame.drawn()
             guard !reduceMotion else { return await curtain.fade() }
             let landing = Self.landing(in: window, root: root)

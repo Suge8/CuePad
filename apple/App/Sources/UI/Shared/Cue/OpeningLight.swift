@@ -21,10 +21,10 @@ nonisolated struct OpeningLight: Sendable {
     /// 一格的边长（pt）：字标的一个像素，也是点阵屏的一个点位。
     static let cell: CGFloat = 7
     /// 斜光从左上扫到右下要多久。
-    static let sweep = 0.6
+    static let sweep = 0.9
     static let fps = 30.0
-    /// 逐帧算到最晚开门（`OpeningDoor.patience`）再加门开的时长，之后停在最后一帧。
-    static let span = OpeningDoor.patience / .seconds(1) + OpeningDoor.reveal
+    /// 逐帧算到最晚开门（光扫完、或等天空等到 `OpeningDoor.patience`）再加门开的时长，之后停在最后一帧。
+    static let span = max(sweep, OpeningDoor.patience / .seconds(1)) + OpeningDoor.reveal
     /// 点在一格里四周留的空（pt）。
     private static let gap: CGFloat = 1.4
 

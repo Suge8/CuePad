@@ -77,17 +77,15 @@ struct OpeningDoor {
 
     /// 启动屏上那个 Cue 的大小。
     static let cue = CGSize(width: 150, height: 142.5)
-    /// 点阵屏亮起后至少停这么久再开门：斜光扫完（`OpeningLight.sweep`）。
-    static let dwell = Duration.seconds(OpeningLight.sweep)
     /// 天空等不到就不等了（Cue 栏收着时它可能不画）。
     nonisolated static let patience = Duration.seconds(1)
-    static let crouch = 0.1
-    static let flight = 0.72
+    static let crouch = 0.15
+    static let flight = 1.08
     static let duration = crouch + flight
     /// 飞到这一成之前是跳起的姿势，之后换回站姿落地。
     static let airborne = 0.8
     /// 墨色散尽要多久。
-    nonisolated static let reveal = 0.78
+    nonisolated static let reveal = 1.17
     nonisolated private static let fps = 60.0
     /// 格子按离 Cue 的远近排先后，再按有序抖动错开一点：前沿是一圈抖动的格子，同 Cue 页天空的像素，不是一条光滑的圆边。
     nonisolated private static let spread = 0.12
