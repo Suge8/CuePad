@@ -1,8 +1,27 @@
 import QuartzCore
 
 /// 开门的时间线：墨色从 Cue 身上碎成方格、由近及远散开露出 App，整个窗口从近处退回原位；
-/// Cue 先蹲一下，跳着飞回它住的地方。尺寸按启动屏上那个 Cue（`LaunchCue`），时间按开门起的秒数。
+/// Cue 先蹲一下，跳着飞回它住的地方。摆法同启动屏（`Stage`），时间按开门起的秒数。
 struct OpeningDoor {
+    /// 启动那一幕：Cue 在上、字标（`CueWordmark`）在下，整组在窗口正中，同 iOS 启动图（`LaunchStage`，系统把它摆在屏幕正中）。
+    struct Stage {
+        let cue: CGRect
+        /// 字标整张图（连右下的厚度）；字面左右居中。
+        let mark: CGRect
+
+        init(in bounds: CGRect, scale: CGFloat, up: CGFloat) {
+            let face = CueWordmark.points(CueWordmark.face, scale: scale), image = CueWordmark.points(CueWordmark.size, scale: scale)
+            let total = OpeningDoor.cue.height + Self.gap + face.height
+            func top(_ offset: CGFloat, height: CGFloat) -> CGFloat { up < 0 ? bounds.midY + offset : bounds.midY - offset - height }
+            cue = CGRect(x: bounds.midX - OpeningDoor.cue.width / 2, y: top(-total / 2, height: OpeningDoor.cue.height), width: OpeningDoor.cue.width, height: OpeningDoor.cue.height)
+            let markTop = -total / 2 + OpeningDoor.cue.height + Self.gap
+            mark = CGRect(x: bounds.midX - face.width / 2, y: up < 0 ? bounds.midY + markTop : bounds.midY - markTop - image.height, width: image.width, height: image.height)
+        }
+
+        /// Cue 脚下到字面顶的空：Cue 连字标是一个标志，比例定死，不随平台的间距档变（iOS 的启动图是同一张图）。
+        private static let gap: CGFloat = 34
+    }
+
     struct Landing {
         let spot: CueSpot?
         let frame: CGRect
@@ -13,7 +32,7 @@ struct OpeningDoor {
         let zoom: CGFloat
     }
 
-    /// 启动屏上那个 Cue 的大小，同 `LaunchCue` 图（@3x 450 像素宽）。
+    /// 启动屏上那个 Cue 的大小。
     static let cue = CGSize(width: 150, height: 142.5)
     /// 墨色至少停这么久：iOS 的图标还在放大成启动屏，Mac 的窗口刚出来，先看清是 Cue 再开门。
     static let dwell = Duration.milliseconds(350)
@@ -38,14 +57,9 @@ struct OpeningDoor {
     private static let lift: CGFloat = 70
 
     let bounds: CGRect
+    let start: CGRect
     let up: CGFloat
     let landing: Landing?
-
-    static func start(in bounds: CGRect) -> CGRect {
-        CGRect(x: bounds.midX - cue.width / 2, y: bounds.midY - cue.height / 2, width: cue.width, height: cue.height)
-    }
-
-    var start: CGRect { Self.start(in: bounds) }
 
     var frames: [Frame] { (0...Int(Self.duration * Self.fps)).map { at(Double($0) / Self.fps) } }
 
@@ -75,14 +89,14 @@ struct OpeningDoor {
             width: (bounds.width / cell).rounded(.up) * cell, height: (bounds.height / cell).rounded(.up) * cell)
     }
 
-    /// 墨色散开的逐帧图：一格一个像素，铺到 `grid` 上用最近邻放大。门开前在后台画好（Mac 整窗上万格、几十帧）。
-    nonisolated static func veil(in bounds: CGRect, ink: Pixel, edge: Pixel) -> [CGImage] {
+    /// 墨色从 `center`（Cue 身上）散开的逐帧图：一格一个像素，铺到 `grid` 上用最近邻放大。门开前在后台画好（Mac 整窗上万格、几十帧）。
+    nonisolated static func veil(in bounds: CGRect, from center: CGPoint, up: CGFloat, ink: Pixel, edge: Pixel) -> [CGImage] {
         let grid = grid(in: bounds), columns = Int(grid.width / cell), rows = Int(grid.height / cell)
-        let center = CGPoint(x: bounds.width / 2, y: bounds.height / 2)
-        let far = Double(hypot(bounds.width / 2, bounds.height / 2) + 2 * cell)
+        let origin = CGPoint(x: center.x - grid.minX, y: up < 0 ? center.y - grid.minY : grid.maxY - center.y)
+        let far = Double([bounds.minX, bounds.maxX].flatMap { x in [bounds.minY, bounds.maxY].map { hypot(x - center.x, $0 - center.y) } }.max()! + 2 * cell)
         let threshold = (0..<rows * columns).map { index in
             let (row, column) = index.quotientAndRemainder(dividingBy: columns)
-            let x = (CGFloat(column) + 0.5) * cell - center.x, y = (CGFloat(row) + 0.5) * cell - center.y
+            let x = (CGFloat(column) + 0.5) * cell - origin.x, y = (CGFloat(row) + 0.5) * cell - origin.y
             return Double(hypot(x, y)) / far * (1 - spread) + bayer[row % 4 * 4 + column % 4] * spread
         }
         return (0...Int(reveal * fps)).map { frame in
@@ -91,19 +105,28 @@ struct OpeningDoor {
             for (index, level) in threshold.enumerated() where front < level {
                 pixels[index] = level - front < Self.edge ? edge : ink
             }
-            return CGImage(
-                width: columns, height: rows, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: columns * 4,
-                space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                provider: CGDataProvider(data: pixels.withUnsafeBytes { Data($0) } as CFData)!, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+            return image(pixels, size: SIMD2(columns, rows))
         }
     }
 
-    /// 一格的颜色，按内存里的 RGBA 次序装进一个数。
+    /// 一格的颜色（不透明），按内存里的 RGBA 次序装进一个数；0 是透明。
     typealias Pixel = UInt32
 
-    static func pixel(_ color: CGColor) -> Pixel {
+    nonisolated static func rgb(_ color: CGColor) -> CueWordmark.RGB {
         let rgba = color.converted(to: CGColorSpace(name: CGColorSpace.sRGB)!, intent: .defaultIntent, options: nil)!.components!
-        return rgba.reversed().reduce(0) { $0 << 8 | Pixel(($1 * 255).rounded()) }.littleEndian
+        return CueWordmark.RGB(rgba[0], rgba[1], rgba[2])
+    }
+
+    nonisolated static func pixel(_ rgb: CueWordmark.RGB) -> Pixel {
+        let byte = (rgb.clamped(lowerBound: .zero, upperBound: .one) * 255).rounded(.toNearestOrAwayFromZero)
+        return (Pixel(byte.x) | Pixel(byte.y) << 8 | Pixel(byte.z) << 16 | 0xFF << 24).littleEndian
+    }
+
+    nonisolated static func image(_ pixels: [Pixel], size: SIMD2<Int>) -> CGImage {
+        CGImage(
+            width: size.x, height: size.y, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: size.x * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: CGDataProvider(data: pixels.withUnsafeBytes { Data($0) } as CFData)!, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
     }
 
     private static func out3(_ t: Double) -> CGFloat { CGFloat(1 - pow(1 - t, 3)) }

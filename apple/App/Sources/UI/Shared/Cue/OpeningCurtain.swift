@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// 盖在窗口上的两层：墨色（开门时换成一格格散开的逐帧图）与小人。
+/// 盖在窗口上的三层：墨色（开门时换成一格格散开的逐帧图）、字标（开门时跟着墨色一格格碎掉）与小人。
 final class OpeningCurtain {
     private let canvas = CALayer()
     private let veil = CALayer()
+    private let mark = CALayer()
     private let figure = CALayer()
     private let world: CALayer?
     private let pose: (idle: CGImage, jump: CGImage)
@@ -11,7 +12,7 @@ final class OpeningCurtain {
     /// Cue 在墨色上等门开时一呼一吸地浮着（启动屏上它是静的，从原位起步，接缝看不出）。
     private static let breath = (rise: CGFloat(3), period: 1.4)
 
-    init(root: CALayer, world: CALayer?, ink: CGColor, pose: (idle: CGImage, jump: CGImage), at start: CGRect, up: CGFloat, breathes: Bool) {
+    init(root: CALayer, world: CALayer?, ink: CGColor, pose: (idle: CGImage, jump: CGImage), stage: OpeningDoor.Stage, mark first: CGImage, up: CGFloat, breathes: Bool) {
         self.world = world
         self.pose = pose
         CATransaction.begin()
@@ -20,9 +21,12 @@ final class OpeningCurtain {
         veil.frame = root.bounds
         veil.backgroundColor = ink
         veil.magnificationFilter = .nearest
+        mark.frame = stage.mark
+        mark.contents = first
+        mark.magnificationFilter = .nearest
         figure.contents = pose.idle
         figure.contentsGravity = .resize
-        figure.frame = start
+        figure.frame = stage.cue
         if breathes {
             let breathe = CABasicAnimation(keyPath: "transform.translation.y")
             breathe.fromValue = 0
@@ -34,10 +38,21 @@ final class OpeningCurtain {
             figure.add(breathe, forKey: "breathe")
         }
         canvas.addSublayer(veil)
+        canvas.addSublayer(mark)
         canvas.addSublayer(figure)
         canvas.zPosition = 10_001
         root.addSublayer(canvas)
         CATransaction.commit()
+    }
+
+    /// 等门时金光来回扫（从第 0 帧起，与启动图那一帧接上）。
+    func shimmer(_ frames: [CGImage]) {
+        let loop = CAKeyframeAnimation(keyPath: "contents")
+        loop.values = frames
+        loop.duration = CueWordmark.period
+        loop.calculationMode = .discrete
+        loop.repeatCount = .infinity
+        mark.add(loop, forKey: "shimmer")
     }
 
     /// 呼吸停在半路的那一下，用 0.25 秒落回原位，不跳。
@@ -68,6 +83,12 @@ final class OpeningCurtain {
             reveal.duration = OpeningDoor.reveal
             reveal.calculationMode = .discrete
             veil.add(reveal, forKey: "reveal")
+            let crumble = CALayer()
+            crumble.frame = canvas.convert(veil.frame, to: mark)
+            crumble.contents = veils.last
+            crumble.magnificationFilter = .nearest
+            crumble.add(reveal, forKey: "reveal")
+            mark.mask = crumble
             figure.anchorPoint = CGPoint(x: 0.5, y: up < 0 ? 1 : 0)
             let foot = { (cue: CGRect) in CGPoint(x: cue.midX, y: up < 0 ? cue.maxY : cue.minY) }
             let last = frames.last!.cue

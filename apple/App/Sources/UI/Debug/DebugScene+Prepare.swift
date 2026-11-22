@@ -39,6 +39,7 @@ extension DebugScene {
             { await cueNowTourIfAsked(workspace) },
             { await boardTourIfAsked(services.store) },
             { await cycleIfAsked(services) },
+            { launchArtIfAsked() },
         ]
         #if os(macOS)
         let from = workspace.mainRoute

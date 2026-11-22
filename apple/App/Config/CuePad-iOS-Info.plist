@@ -13,7 +13,7 @@
 		<key>UIColorName</key>
 		<string>LaunchBackground</string>
 		<key>UIImageName</key>
-		<string>LaunchCue</string>
+		<string>LaunchStage</string>
 	</dict>
 	<key>CFBundleURLTypes</key>
 	<array>
