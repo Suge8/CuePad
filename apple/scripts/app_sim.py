@@ -195,6 +195,7 @@ def keep(s, pid):
         if not os.read(report_r, 1):
             die("看守没有起来")
         print(pid, s.device)
+        print(f"App 的输出写在 {s.log}", file=sys.stderr)
         return
     os.close(report_r)
     os.setsid()

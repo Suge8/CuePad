@@ -6,14 +6,14 @@ struct HelpButton<Content: View>: View {
     var kind = ControlButtonStyle.Kind.round
     var size = ControlSize.compact
     @ViewBuilder var content: Content
-    @State private var open = false
+    @State private var shown = BubbleSwitch()
 
     var body: some View {
-        Button { open.toggle() } label: { Image(.help) }
-            .debugOpensHelp { open = true }
+        Button { shown.toggle() } label: { Image(.help) }
+            .debugOpensHelp { shown.open = true }
             .buttonStyle(ControlButtonStyle(kind: kind, size: size))
             .help("说明")
             .accessibilityLabel("说明")
-            .bubble(isPresented: $open) { content }
+            .bubble($shown) { content }
     }
 }

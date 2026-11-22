@@ -51,5 +51,5 @@ for root in ("App", "CuePadKit"):
 if hits:
     print("\n".join(hits))
     print("  → 间距只经 Spacing 的几档（Theme/Spacing.swift，按这段空隔开的是什么取）、ControlSize、Chrome 与组件里有名字的常量：padding、safeAreaPadding、spacing:、EdgeInsets 的参数里写的数是又一套手感，"
-          "不在档上的按角色就近落档；确是组件几何或光学校准的提成 static let，写一句为什么。0 与按比例的乘除（size * 0.08、height / 2）不算\n")
+          "不在档上的按角色就近落档；确是组件几何或光学校准的提成 static let，在它上一行或行尾写一句为什么。0 与按比例的乘除（size * 0.08、height / 2）不算\n")
     raise SystemExit(1)

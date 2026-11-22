@@ -87,7 +87,7 @@ private struct LiveAddressField: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(palette.fill, in: .capsule)
                     .onAppear { focused = true }
-                    .bubble(isPresented: Binding { !dismissed && !others.isEmpty } set: { if !$0 { dismissed = true } }) {
+                    .bubble(Binding { BubbleSwitch(open: !dismissed && !others.isEmpty) } set: { if !$0.open { dismissed = true } }) {
                         LiveCandidates(urls: others) { url in
                             go(url)
                             editing = false

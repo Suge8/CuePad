@@ -68,7 +68,7 @@ class Mac:
         if not BUILD.fullmatch(app):
             die(f"只起 apple/.derived* 里的构建，不起 {app}")
         self.app, self.library, self.what, self.proc = app, os.path.abspath(library), what, None
-        self.ready, self.log = READY, re.sub(r"/Build/Products/.*", "/app-mac.log", app)
+        self.ready, self.log = READY, app_log(app)
         self.notify = what == "run" and os.environ.get("CUEPAD_NOTIFY") == "1"
 
     def __enter__(self):
@@ -161,6 +161,10 @@ def record_launch(m, shot):
         die(f"冷启动录屏失败（wincap 退出码 {rec[0].returncode}）")
 
 
+def app_log(app):
+    return re.sub(r"/Build/Products/.*", "/app-mac.log", app)
+
+
 def run_mac(app, library, args):
     """起着给 bcu 操作：看守进程脱离 xc.sh 在后台守到 App 退出、RUN_TTL 或 stop，这里等就绪后打印 PID 就返回。"""
     report_r, report_w = os.pipe()
@@ -170,6 +174,7 @@ def run_mac(app, library, args):
         if not pid:
             sys.exit(1)
         print(pid)
+        print(f"App 的输出写在 {app_log(app)}", file=sys.stderr)
         return
     os.close(report_r)
     os.setsid()
