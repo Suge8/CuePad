@@ -39,7 +39,7 @@ struct OpeningDoor {
         }
     }
 
-    /// 开屏整张网：与字标的格对齐，铺满窗口（多出的不到一格伸到窗外）。点阵屏、字标、碎开的墨色都在这张网上。
+    /// 开屏整张网：与字标的格对齐，铺满窗口，也盖住整个字标（字标尺寸固定，小窗、横屏的手机里它伸出窗外）。点阵屏、字标、碎开的墨色都在这张网上。
     nonisolated struct Grid: Sendable {
         /// 第一格的左上角，从窗口左上起量。
         let origin: CGPoint
@@ -51,10 +51,11 @@ struct OpeningDoor {
         let frame: CGRect
 
         init(_ screen: Screen, mark at: CGPoint) {
-            let cell = OpeningLight.cell, before = Int((at.x / cell).rounded(.up)), above = Int((at.y / cell).rounded(.up))
+            let cell = OpeningLight.cell, end = CGFloat(CueWordmark.size.x) * cell, foot = CGFloat(CueWordmark.size.y) * cell
+            let before = max(0, Int((at.x / cell).rounded(.up))), above = max(0, Int((at.y / cell).rounded(.up)))
             origin = CGPoint(x: at.x - CGFloat(before) * cell, y: at.y - CGFloat(above) * cell)
-            columns = Int(((screen.bounds.width - origin.x) / cell).rounded(.up))
-            rows = Int(((screen.bounds.height - origin.y) / cell).rounded(.up))
+            columns = Int(((max(screen.bounds.width, at.x + end) - origin.x) / cell).rounded(.up))
+            rows = Int(((max(screen.bounds.height, at.y + foot) - origin.y) / cell).rounded(.up))
             mark = SIMD2(before, above)
             size = screen.bounds.size
             frame = screen.rect(origin, CGSize(width: CGFloat(columns) * cell, height: CGFloat(rows) * cell))

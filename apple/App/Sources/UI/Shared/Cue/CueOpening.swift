@@ -53,22 +53,25 @@ final class CueOpening {
         let curtain = OpeningCurtain(
             root: root, world: world, ink: ink, pose: pose, stage: stage, mark: OpeningLight.still(paint), up: up, breathes: !reduceMotion)
         let pixels = (ink: OpeningDoor.pixel(OpeningDoor.rgb(ink)), edge: OpeningDoor.pixel(OpeningDoor.rgb(edge)))
-        let veils = Task.detached { OpeningDoor.veil(on: stage.grid, from: stage.heart, ink: pixels.ink, edge: pixels.edge) }
         // 在外面开：放进下面那个 Task 里再开，调试版一启动就崩在任务分配器上（"freed pointer was not the last allocation"，Swift 6.4）。
-        let light = reduceMotion ? nil : Task.detached { OpeningLight(grid: stage.grid, paint: paint).frames(scale: scale) }
+        let motion = reduceMotion ? nil : (
+            light: Task.detached { OpeningLight(grid: stage.grid, paint: paint).frames(scale: scale) },
+            veils: Task.detached { OpeningDoor.veil(on: stage.grid, from: stage.heart, ink: pixels.ink, edge: pixels.edge) })
         Task {
             let clock = ContinuousClock(), deadline = clock.now + OpeningDoor.patience
-            if let light {
-                curtain.glow(await light.value)
-                try? await clock.sleep(for: .seconds(OpeningLight.sweep))
+            guard let motion else {
+                await sky(by: deadline)
+                await NextFrame.drawn()
+                return await curtain.fade()
             }
+            curtain.glow(await motion.light.value)
+            try? await clock.sleep(for: .seconds(OpeningLight.sweep))
             await sky(by: deadline)
             await NextFrame.drawn()
-            guard !reduceMotion else { return await curtain.fade() }
             let landing = Self.landing(in: window, root: root)
             let door = OpeningDoor(bounds: root.bounds, start: stage.cue, up: up, landing: landing)
             phase = .opening(landing: landing?.spot)
-            await curtain.open(door, veils: await veils.value)
+            await curtain.open(door, veils: await motion.veils.value)
             phase = .open
             await NextFrame.drawn()
             curtain.remove()
