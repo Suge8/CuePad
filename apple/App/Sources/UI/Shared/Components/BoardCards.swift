@@ -215,7 +215,7 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
                     if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false) }
                     trailing
                 }
-                if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
+                if advancing, pulse.speaks || pulse.shown?.isOffline == false || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
             }
             .frame(maxHeight: row ? .infinity : nil, alignment: .top)
             BoardFoot(glyph: BoardCardMetrics.footGlyph) {

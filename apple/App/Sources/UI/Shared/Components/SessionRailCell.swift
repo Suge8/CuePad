@@ -205,7 +205,7 @@ private struct SessionRailTime: View {
 
 extension SessionRailRows.Item {
     var shown: SessionShown {
-        guard let waiting else { return pulse.shown ?? SessionShown(status: .unknown()) }
+        guard let waiting else { return pulse.shown ?? SessionShown(status: .unknown) }
         return SessionShown(status: waiting, clock: pulse.shown?.clock)
     }
 

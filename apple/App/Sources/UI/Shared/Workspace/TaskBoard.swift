@@ -20,7 +20,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var title: String {
             switch self {
             case .todo: String(localized: "待办")
-            case .advancing: String(localized: "推进中")
+            case .advancing: String(localized: "进行中")
             case .waiting: String(localized: "等你")
             case .done: String(localized: "已完成")
             }
@@ -64,6 +64,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         var title: String { item?.task.title(session: session.title) ?? session.title }
         var project: UUID { item?.task.projectID ?? TaskBoard.home(session) }
+        var shown: SessionShown { SessionShown(status: deciding ? .asking : .awaitsReply) }
     }
 
     private(set) var todo: [Item]

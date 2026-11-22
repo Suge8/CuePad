@@ -76,7 +76,7 @@ struct CueWidget: Widget {
             WidgetViews.cue(entry.snapshot ?? .empty)
         }
         .configurationDisplayName("Cue")
-        .description("它此刻在做什么、手上几件活、几件等你拍板，点一下和它说话。")
+        .description("它此刻在做什么、手上几件活、几件等你，点一下和它说话。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

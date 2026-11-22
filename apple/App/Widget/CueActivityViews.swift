@@ -229,8 +229,8 @@ private struct Details: View {
                         item.kind.glyph?.image
                         if item.kind.tone == .moving {
                             ActivityElapsed(since: item.since).minimumScaleFactor(0.8).frame(width: IslandType.rowClockWidth, alignment: .trailing)
-                        } else {
-                            Text(item.label)
+                        } else if let label = item.label {
+                            Text(label)
                         }
                     }
                     .font(IslandType.rowTail).foregroundStyle(item.kind.tone.color(palette)).fixedSize()

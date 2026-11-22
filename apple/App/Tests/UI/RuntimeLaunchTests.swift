@@ -25,7 +25,7 @@ struct RuntimeLaunchTests {
         let first = Dictionary(uniqueKeysWithValues: services.liveSessions.items.map { ($0.state.sessionID, $0) })
         let workspace = Workspace(services: services)
         let resting = workspace.shown(try #require(first["resting"])), gone = workspace.shown(try #require(first["gone"]))
-        #expect(resting.status != .unknown() && resting.label != "状态未确认", "\(resting.label)")
+        #expect(resting.status != .unknown && resting.label != "状态未确认", "\(resting.label)")
         #expect(gone.status == .interrupted, "\(gone.label)")
         #expect(try await store.macOnline(TestApp.hostID))
     }

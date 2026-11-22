@@ -129,14 +129,14 @@ nonisolated struct SessionShown: Hashable, Sendable {
         case fresh
         case ended
         case interrupted
-        case unknown(macOff: String? = nil)
+        case unknown
+        case offline(mac: String)
     }
 
     let status: Status
     var note: String?
     var clock: SessionClock?
     var cue: String?
-    var asksForWords = false
     var speaking = false
 
     func speaking(_ drafting: Bool) -> SessionShown {
@@ -155,7 +155,7 @@ nonisolated extension SessionShown {
         let own = SessionClock.reading(session.runtimeState, stateSince: session.stateSince, busySince: session.busySince)
         let busy = session.runtimeState.isWorking || session.runtimeState == .known(.waitingForUser)
         var reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
-        if let mac = session.macOff(at: moment) { reported = .unknown(macOff: mac) }
+        if let mac = session.macOff(at: moment) { reported = .offline(mac: mac) }
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
         switch DeliveryShown.phase(of: delivery, for: session, seen: marks?.seen, at: moment) {
         case .failed(let failure):
@@ -172,7 +172,6 @@ nonisolated extension SessionShown {
         case nil:
             self.init(status: asked, clock: own, cue: cue)
         }
-        asksForWords = session.question?.kind == .known(.text)
     }
 
     init(_ session: SessionState, cue: CueDuty? = nil) {
@@ -189,7 +188,7 @@ nonisolated extension SessionShown {
         case .settled: .idle
         case .ended: .ended
         case .interrupted: .interrupted
-        case nil: .unknown()
+        case nil: .unknown
         }
     }
 }

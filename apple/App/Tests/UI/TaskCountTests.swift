@@ -48,7 +48,7 @@ struct TaskCountTests {
     }
 
     #if os(macOS)
-    @Test func 看板_拖到推进中就是开始_拖到做完就是做完() async throws {
+    @Test func 看板_拖到进行中就是开始_拖到做完就是做完() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -77,7 +77,7 @@ struct TaskCountTests {
     }
     #endif
 
-    @Test func 会话结束任务仍推进中_看板计数同口径_执行集合独立() async throws {
+    @Test func 会话结束任务仍进行中_看板计数同口径_执行集合独立() async throws {
         let card = try await store.createTask("开 U 卡")
         let bitget = try await store.createTask("bitget", under: card.id)
         _ = try await store.createTask("KYC", under: card.id)

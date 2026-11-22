@@ -53,7 +53,7 @@ struct RailProjectRow: View {
         }
         .buttonStyle(RowStyle(selected: selected))
         .contextMenu { ProjectActions(project: project) }
-        .help(running > 0 ? Text("\(running) 推进中") : Text(verbatim: project.shownName))
+        .help(running > 0 ? Text("\(running) 工作中") : Text(verbatim: project.shownName))
         .accessibilityLabel(Text(verbatim: project.shownName))
         .accessibilityValue(running > 0 ? Text(running, format: .number) : Text(verbatim: ""))
         .accessibilityAddTraits(selected ? .isSelected : [])
