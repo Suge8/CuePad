@@ -23,7 +23,7 @@ public final class Bridge {
         }
 
         func offer(_ next: LiveDraft?) { feed.offer(next) }
-        func roundStopped() { feed.roundStopped() }
+        func turn(running: Bool) { if running { feed.turnStarted() } else { feed.turnStopped() } }
     }
 
     public internal(set) var slots: [Slot] = []

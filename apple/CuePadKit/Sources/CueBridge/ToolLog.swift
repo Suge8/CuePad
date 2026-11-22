@@ -52,8 +52,9 @@ struct ToolLog: Codable, Equatable {
     }
 
     private mutating func settle(_ call: Call, id: String, failed: Bool, images: [String] = []) {
+        let segment = activity.items.lastIndex { $0.kind == .said }.map { $0 + 1 } ?? 0
         if !failed, call.kind == .edit || call.kind == .read,
-           let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
+           let index = activity.items[segment...].firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
             let item = activity.items[index]
             activity.items[index].added = item.added.map { $0 + (call.added ?? 0) } ?? call.added
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed

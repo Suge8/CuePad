@@ -58,7 +58,7 @@ struct Conversation: View {
     @ViewBuilder private var ending: some View {
         #if os(macOS)
         if let slot {
-            SessionDraft(slot: slot, session: session, newestReply: messages.last { $0.role == .known(.pi) }, floating: floating)
+            SessionDraft(slot: slot, session: session, messages: messages, floating: floating)
         } else {
             liveRound
         }
@@ -70,7 +70,7 @@ struct Conversation: View {
     private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
     private var liveRound: some View {
-        LiveRound(session: session, floating: floating) {
+        LiveRound(session: session, messages: messages, floating: floating) {
             LiveFigure(live: FigureLive(session: session), handoff: FigureHandoff(reply: messages.last { $0.role == .known(.pi) }?.at))
         }
     }
@@ -83,18 +83,18 @@ struct Conversation: View {
 struct SessionDraft: View {
     let slot: Bridge.Slot
     let session: SessionState
-    let newestReply: ChatMessage?
+    let messages: [ChatMessage]
     let floating: CGFloat
 
     var body: some View {
-        let draft = slot.draft
+        let draft = slot.draft, newestReply = messages.last { $0.role == .known(.pi) }
         let answered = draft?.landed(newestReply: newestReply?.at, record: newestReply?.id) ?? false
         let said = session.pendingTools?.lastSaid
         let inProcess = draft.map { draft in said.map { draft.landed(newestReply: $0.at, record: $0.record) } ?? false } ?? false
         let running = session.runtimeState.known?.isTurnRunning == true
         let shown = draft.flatMap { !answered && !inProcess && (slot.speaking || running) ? $0 : nil }
         let speaking = slot.speaking && shown != nil
-        LiveRound(session: session, draft: shown?.text, swapsInPlace: true, floating: floating) {
+        LiveRound(session: session, messages: messages, draft: shown?.text, swapsInPlace: true, floating: floating) {
             LiveFigure(live: speaking || answered && running ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
         }
     }

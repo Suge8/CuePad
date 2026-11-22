@@ -148,6 +148,9 @@ enum OpenCodeHistory {
             if let tokens = message.tokens {
                 cp.requested(id: message.id, read: tokens.cache?.read ?? 0, fresh: tokens.input + (tokens.cache?.write ?? 0), lifetime: nil, at: message.at)
             }
+            let text = (message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
+            let aborted = message.error?.type == "aborted"
+            cp.spoke(text, aborted ? History.Entry(id: message.id + "#said", seq: seq, at: message.at) : entry)
             for tool in message.content ?? [] where tool.type == "tool" {
                 let id = tool.id ?? ""
                 cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? ToolArguments())
@@ -158,9 +161,8 @@ enum OpenCodeHistory {
                 }
             }
             // 被停下的那一步带着 `aborted` 的错误（接着的 `idle` 也是 `interrupted`）
-            let text = (message.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
-            if message.error?.type == "aborted" { return cp.interrupted(entry, said: text, into: &transcript) }
-            if message.finish == "tool-calls" { cp.spoke(text, entry) } else { cp.answered(text, entry, into: &transcript) }
+            if aborted { return cp.interrupted(entry, into: &transcript) }
+            if message.finish != "tool-calls" { cp.answered("", entry, into: &transcript) }
         case "compaction" where message.status == "completed":
             cp.compacted(entry, into: &transcript)
         case "idle":

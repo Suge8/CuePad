@@ -107,18 +107,25 @@ private struct MachineCard: View {
 }
 
 
-/// 在跑的一轮：过程接在对话末尾，Mac 上正在说的那句跟在最后，子代理与角色在下面。这一轮做完，对话里的回答（`ReplyBlock`）在原处接上同样的排法
+/// 在跑的一轮：过程接在对话末尾，Mac 上正在说的那句跟在最后，子代理与角色在下面。这一轮做完，对话里的回答（`ReplyBlock`）在原处接上同样的排法。
+/// 摆不摆过程只看库里这一轮还开着没有（`pendingTools`），不看 Agent 此刻的状态：Mac 上状态先歇下，回答过一会儿才读进库。
+/// 手机上这一轮的状态与回答分两条通道同步，状态走快的那条：状态先到、清掉了过程而回答还没到时，接着摆刚才那份，
+/// 对话里来了新消息或过了 `holdLimit` 才撤；回答先到时，已经落进回答的那份（`Chat.landed`）不再摆
 struct LiveRound<Below: View>: View {
     let session: SessionState
+    let messages: [ChatMessage]
     var draft: String?
     var swapsInPlace = false
     let floating: CGFloat
     @ViewBuilder let below: Below
+    @State private var held: ChatMessage.Tools?
+
+    static var holdLimit: Duration { .seconds(5) }
 
     var body: some View {
-        let tools = session.runtimeState.known?.hasPendingWork == true ? session.pendingTools : nil
+        let open = Self.open(session.pendingTools, in: messages)
         VStack(alignment: .leading, spacing: Conversation.spacing) {
-            RoundProcess(tools: tools, draft: draft, session: session, fadesIn: !swapsInPlace)
+            RoundProcess(tools: open ?? held, draft: draft, session: session, fadesIn: !swapsInPlace)
                 .transition(swapsInPlace ? .asymmetric(insertion: .entry, removal: .identity) : .entry)
             ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
                 VStack(alignment: .leading, spacing: Spacing.item) {
@@ -128,6 +135,16 @@ struct LiveRound<Below: View>: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .onChange(of: session.pendingTools) { old, new in held = new == nil ? Self.open(old, in: messages) : nil }
+        .onChange(of: messages.last?.id) { held = nil }
+        .task(id: held) {
+            guard held != nil, (try? await Task.sleep(for: Self.holdLimit)) != nil else { return }
+            held = nil
+        }
+    }
+
+    private static func open(_ tools: ChatMessage.Tools?, in messages: [ChatMessage]) -> ChatMessage.Tools? {
+        tools.flatMap { Chat.landed($0, in: messages.last { $0.role == .known(.pi) }) ? nil : $0 }
     }
 }
 

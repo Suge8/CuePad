@@ -70,10 +70,12 @@ struct DraftParts {
 @MainActor @Observable
 public final class LiveDraftFeed {
     public private(set) var draft: LiveDraft?
-    /// 最近说的那句，说完（Agent 转去调工具、被停下）也留着，下一句开说或这一轮停下才换：它落进对话之前界面接着摆它，不空一下
+    /// 最近说的那句，说完（Agent 转去调工具）也留着，下一句开说才换：它落进对话之前界面接着摆它，不空一下。
+    /// 这一轮停下时没在说的丢掉；下一轮开始时上一轮的一律丢掉（`stale`）：上一轮的回答此刻可能还在供着，随后才被清掉
     public private(set) var latest: LiveDraft?
     public private(set) var speaking = false
     @ObservationIgnored private var offered: LiveDraft?
+    @ObservationIgnored private var stale: LiveDraft?
     @ObservationIgnored private var shownAt: ContinuousClock.Instant?
     @ObservationIgnored private var flush: Task<Void, Never>?
 
@@ -82,7 +84,7 @@ public final class LiveDraftFeed {
     public init() {}
 
     public func offer(_ next: LiveDraft?) {
-        if next == nil, let offered, latest != offered { latest = offered }
+        if next == nil, let offered, offered != stale, latest != offered { latest = offered }
         offered = next
         let now = ContinuousClock.now
         if next == nil || next?.since != draft?.since || shownAt.map({ now - $0 >= Self.interval }) ?? true {
@@ -96,7 +98,12 @@ public final class LiveDraftFeed {
         }
     }
 
-    func roundStopped() {
+    func turnStarted() {
+        stale = offered
+        if latest != nil { latest = nil }
+    }
+
+    func turnStopped() {
         if offered == nil, latest != nil { latest = nil }
     }
 
@@ -105,7 +112,7 @@ public final class LiveDraftFeed {
         flush = nil
         shownAt = now
         if draft != offered { draft = offered }
-        if let offered, latest != offered { latest = offered }
+        if let offered, offered != stale, latest != offered { latest = offered }
         if speaking != (offered != nil) { speaking = offered != nil }
     }
 }

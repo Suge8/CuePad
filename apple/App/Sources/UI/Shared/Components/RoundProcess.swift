@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 一轮的过程：中途说的话照回答的样子留在原处，两句话之间的步骤各收成一行，点开看是哪几步。
-/// 做完的一轮摆在回答上面，`took`（这一轮用了多久）挂在最后一行步骤上；在跑的一轮接在对话末尾，Mac 上正在说的那句（`draft`）跟在最后。
-/// 只往末尾长：缓存失效的提示在最前，正在说的那句落进过程、回答落进对话都在原处换下，不挪位置
+/// 一轮的过程：顶上一行写这一轮用了多久、做了多少；中途说的话照回答的样子连着往下排，不夹工具行。
+/// 点开那一行，两句话之间做的步骤在原处插回，先后一目了然。做完的一轮摆在回答上面；在跑的一轮接在对话末尾，
+/// Mac 上正在说的那句（`draft`）跟在最后。只往末尾长：正在说的那句落进过程、回答落进对话都在原处换下，不挪位置
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     var took: String?
@@ -12,24 +12,18 @@ struct RoundProcess: View {
     var message: UUID?
     var fadesIn = true
     @Environment(\.palette) private var palette
+    @State private var open = DebugHooks.preset.toolsOpen
 
     var body: some View {
-        let items = tools?.items ?? [], parts = Chat.parts(items), recached = Chat.recached(tools)
-        let closing = parts.last { if case .steps = $0 { true } else { false } }
-        if !parts.isEmpty || recached != nil || draft != nil {
+        let items = tools?.items ?? [], process = Chat.process(tools)
+        let parts = Chat.parts(items).filter { if case .steps = $0 { open } else { true } }
+        if process != nil || !parts.isEmpty || draft != nil {
             VStack(alignment: .leading, spacing: Spacing.item) {
-                if let recached {
-                    NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.ink3) }
-                }
+                if let process { summary(process, items: items) }
                 ForEach(parts) { part in
                     switch part {
-                    case .said(let index):
-                        SaidText(text: items[index].target, session: session).transition(arrival)
-                    case .steps(let range):
-                        StepsRow(
-                            items: items[range], took: part == closing ? took : nil, unlisted: part == closing ? tools.map(Chat.unlisted) ?? 0 : 0,
-                            session: session, message: message)
-                        .transition(arrival)
+                    case .said(let index): SaidText(text: items[index].target, session: session).transition(fadesIn ? .entry : .identity)
+                    case .steps(let range): NoteThread { list(items[range]) }.transition(.opacity)
                     }
                 }
                 if let draft { MarkdownText(source: draft).equatable().transition(.asymmetric(insertion: .entry, removal: .identity)) }
@@ -38,7 +32,60 @@ struct RoundProcess: View {
         }
     }
 
-    private var arrival: AnyTransition { fadesIn ? .entry : .identity }
+    @ViewBuilder private func summary(_ process: Chat.Process, items: [ChatMessage.Tools.Item]) -> some View {
+        if let tools, tools.steps > 0 {
+            let listed = items.contains { $0.kind != .said }
+            Fold(open: $open, toggles: listed) {
+                header(process, open: listed ? open : nil)
+                    .accessibilityElement(children: .ignore).accessibilityLabel(Dotted(process.spoken.parts + [took]).spoken)
+                    #if os(macOS)
+                    .help(process.spoken.visible)
+                    #endif
+            } content: {
+                if !tools.images.isEmpty {
+                    NoteThread {
+                        ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: open ? nil : 1)
+                            .padding(.vertical, Spacing.hair)
+                    }
+                }
+            }
+        }
+        if let recached = process.recached {
+            NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.ink3) }
+        }
+    }
+
+    private static let imageSide: CGFloat = 64
+    private static let imageRow = 4
+
+    private func header(_ process: Chat.Process, open: Bool?) -> some View {
+        NoteLine(open: open) {
+            Image(.tool).imageScale(.small)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+                if let took { Text(took).fixedSize() }
+                ForEach(process.counts, id: \.kind) { count in
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.hair) {
+                        Image(Self.icon(count.kind)).font(Typography.caption2)
+                        Text(verbatim: "\(count.count)").contentTransition(.numericText(value: Double(count.count)))
+                    }
+                    .fixedSize().foregroundStyle(palette.ink3).transition(.opacity)
+                }
+                if let steps = process.steps { Text(steps).fixedSize().foregroundStyle(palette.ink3).contentTransition(.numericText()) }
+            }
+            .animation(Motion.nudge, value: process.counts.map(\.count))
+            .animation(Motion.nudge, value: process.steps)
+        }
+    }
+
+    @ViewBuilder private func list(_ items: ArraySlice<ChatMessage.Tools.Item>) -> some View {
+        ForEach(Chat.rows(items, settled: message != nil), id: \.self) { row in
+            switch row {
+            case .step(let index): StepRow(item: items[index], session: session, message: message, index: index)
+            case .looks(let range): LooksRow(range: range, items: items, session: session, message: message)
+            }
+        }
+    }
 
     static func icon(_ kind: ChatMessage.Tools.Kind) -> Icon {
         switch kind {
@@ -61,80 +108,6 @@ private struct SaidText: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
             .contextMenu { MessageActions(text: text, kind: .reply, session: session) }
-    }
-}
-
-private struct StepsRow: View {
-    let items: ArraySlice<ChatMessage.Tools.Item>
-    let took: String?
-    let unlisted: Int
-    let session: SessionState
-    let message: UUID?
-    @Environment(\.palette) private var palette
-    @State private var open = DebugHooks.preset.toolsOpen
-
-    var body: some View {
-        let counts = Chat.counts(items), images = Self.images(items)
-        Fold(open: $open) {
-            header(counts)
-                .accessibilityElement(children: .ignore).accessibilityLabel(spoken(counts))
-                #if os(macOS)
-                .help(Dotted(counts.isEmpty ? [total] : counts.map(\.spoken)).visible)
-                #endif
-        } content: {
-            if !images.isEmpty {
-                NoteThread {
-                    ChatImages(hashes: images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: open ? nil : 1)
-                        .padding(.vertical, Spacing.hair)
-                }
-            }
-            if open { NoteThread { list } }
-        }
-    }
-
-    private static let imageSide: CGFloat = 64
-    private static let imageRow = 4
-
-    private static func images(_ items: ArraySlice<ChatMessage.Tools.Item>) -> [String] {
-        var seen = Set<String>()
-        return items.flatMap { $0.images ?? [] }.filter { seen.insert($0).inserted }
-    }
-
-    private var total: String { String(localized: "共 \(items.count) 步") }
-
-    private func spoken(_ counts: [Chat.Count]) -> String {
-        Dotted((counts.isEmpty ? [total] : counts.map(\.spoken)) + [took]).spoken
-    }
-
-    private func header(_ counts: [Chat.Count]) -> some View {
-        NoteLine(open: open) {
-            Image(.tool).imageScale(.small)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                if let took { Text(took).fixedSize() }
-                ForEach(counts, id: \.kind) { count in
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.hair) {
-                        Image(RoundProcess.icon(count.kind)).font(Typography.caption2)
-                        Text(verbatim: "\(count.count)").contentTransition(.numericText(value: Double(count.count)))
-                    }
-                    .fixedSize().foregroundStyle(palette.ink3).transition(.opacity)
-                }
-                if counts.isEmpty { Text(total).fixedSize().foregroundStyle(palette.ink3) }
-            }
-            .animation(Motion.nudge, value: counts.map(\.count))
-        }
-    }
-
-    @ViewBuilder private var list: some View {
-        ForEach(Chat.rows(items, settled: message != nil), id: \.self) { row in
-            switch row {
-            case .step(let index): StepRow(item: items[index], session: session, message: message, index: index)
-            case .looks(let range): LooksRow(range: range, items: items, session: session, message: message)
-            }
-        }
-        if unlisted > 0 {
-            Text("另有 \(unlisted) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).noteGlyph(.indent)
-        }
     }
 }
 

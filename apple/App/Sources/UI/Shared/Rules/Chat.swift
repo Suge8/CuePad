@@ -98,10 +98,30 @@ nonisolated enum Chat {
         return SessionClock.duration(message.at.timeIntervalSince(started))
     }
 
-    struct Count: Equatable {
-        let kind: ChatMessage.Tools.Kind
-        let count: Int
-        let spoken: String
+    struct Process: Equatable {
+        struct Count: Equatable {
+            let kind: ChatMessage.Tools.Kind
+            let count: Int
+            let spoken: String
+        }
+
+        var counts: [Count] = []
+        var steps: String?
+        var recached: String?
+
+        var spoken: Dotted { Dotted(counts.map(\.spoken) + [steps]) }
+    }
+
+    static func process(_ tools: ChatMessage.Tools?) -> Process? {
+        guard let tools else { return nil }
+        let recached = tools.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
+        guard tools.steps > 0 else { return recached.map { Process(recached: $0) } }
+        let edits = tools.items.count { $0.kind == .edit && !$0.failed }
+        var counts = [Process.Count(kind: .edit, count: edits, spoken: String(localized: "改了 \(edits) 个文件"))]
+        let complete = tools.steps == tools.items.count { $0.kind != .said }
+        if complete { counts += looks(tools.items) }
+        counts.removeAll { $0.count == 0 }
+        return Process(counts: counts, steps: complete && !counts.isEmpty ? nil : String(localized: "共 \(tools.steps) 步"), recached: recached)
     }
 
     enum ProcessPart: Hashable, Identifiable {
@@ -127,26 +147,21 @@ nonisolated enum Chat {
         return parts
     }
 
-    static func counts(_ items: some Collection<ChatMessage.Tools.Item>) -> [Count] {
-        let edits = items.count { $0.kind == .edit && !$0.failed }
-        return ([Count(kind: .edit, count: edits, spoken: String(localized: "改了 \(edits) 个文件"))] + looks(items)).filter { $0.count > 0 }
-    }
-
-    static func looks(_ items: some Collection<ChatMessage.Tools.Item>) -> [Count] {
+    static func looks(_ items: some Collection<ChatMessage.Tools.Item>) -> [Process.Count] {
         func count(_ kind: ChatMessage.Tools.Kind) -> Int { items.count { $0.kind == kind } }
         let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
         return [
-            Count(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
+            Process.Count(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
             .init(kind: .read, count: reads, spoken: String(localized: "读了 \(reads) 个文件")),
             .init(kind: .search, count: searches, spoken: String(localized: "搜了 \(searches) 次")),
             .init(kind: .other, count: others, spoken: String(localized: "\(others) 次工具")),
         ].filter { $0.count > 0 }
     }
 
-    static func unlisted(_ tools: ChatMessage.Tools) -> Int { tools.steps - tools.items.count { $0.kind != .said } }
-
-    static func recached(_ tools: ChatMessage.Tools?) -> String? {
-        tools?.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
+    static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {
+        func key(_ item: ChatMessage.Tools.Item) -> String? { item.record?.uuidString ?? item.calls?.first }
+        let replied = Set(reply?.tools?.items.compactMap(key) ?? [])
+        return pending.items.contains { key($0).map(replied.contains) == true }
     }
 
     enum ProcessRow: Hashable {
