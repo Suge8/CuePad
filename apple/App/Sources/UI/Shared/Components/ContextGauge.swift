@@ -20,7 +20,7 @@ struct ContextGauge: View {
                 Button { showsDetail.toggle() } label: { label(note) }
                     .buttonStyle(PressStyle())
                     .help(help.visible)
-                    .bubble(isPresented: $showsDetail.open) { ContextDetail(shown: shown, compact: compact) }
+                    .bubble($showsDetail) { ContextDetail(shown: shown, compact: compact) }
                     .accessibilityLabel("上下文")
                     .accessibilityValue(help.spoken)
             }

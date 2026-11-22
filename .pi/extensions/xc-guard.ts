@@ -80,6 +80,12 @@ function killsByName(text: string): boolean {
 	return false;
 }
 
+function mergesElsewhere(args: string[]): boolean {
+	const flag = args.findIndex((a) => a === "-R" || a === "--repo");
+	const repo = flag >= 0 ? args[flag + 1] : args.find((a) => /^(?:--repo=|-R.)/.test(a))?.replace(/^--repo=|^-R/, "");
+	return repo !== undefined && !/(?:^|\/)suge8\/cuepad(?:\.git)?\/?$/i.test(repo);
+}
+
 function unshell(text: string): string {
 	let out = "";
 	for (let i = 0; i < text.length; i++) {
@@ -116,8 +122,8 @@ function blocked(command: string): string | undefined {
 		const args = words.slice(i + 1);
 		if (program === "xcodebuild" && args.some((a) => XCODEBUILD_READONLY.has(a))) continue;
 		if (program === "xcodebuild" || program === "swift-build" || program === "swift-test") return `不直接调 ${program}。${BUILD}`;
-		if (program === "gh" && sub === "pr" && args[1] === "merge")
-			return "合并只经 apple/scripts/xc.sh land [PR] [--red]：主干最近一遍云端检查红着它就停下、列出红的用例，合完快进主检出（land.sh 头注释）。";
+		if (program === "gh" && sub === "pr" && args[1] === "merge" && !mergesElsewhere(args))
+			return "合并只经 apple/scripts/xc.sh land [PR] [--red]：主干最近一遍云端检查红着它就停下、列出红的用例，合完快进主检出（land.sh 头注释）。别的仓库的 PR 用 gh pr merge -R <owner/repo>。";
 		if (program === "swift" && SWIFT_BLOCKED.has(sub)) return `不直接调 swift ${sub}。${BUILD}`;
 		if (program === "simctl" && SIMCTL_BLOCKED.has(sub)) return `不直接调 simctl ${sub}。${BUILD}`;
 		if (program === "CuePad" || (program === "open" && args.some((a) => CUEPAD.test(a)))) return `不直接起 CuePad。${INSTANCE}`;

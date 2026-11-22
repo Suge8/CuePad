@@ -43,7 +43,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let mergePreview: Bool
     /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来，App 自己不读；登记在这里是为了不被当成拼错的参数
     let landscape: Bool
-    /// `-CuePadModelMenu YES`：模型与思考强度的气泡一出现就打开
+    /// `-CuePadModelMenu YES`：模型与思考强度的气泡一出现就打开；iPhone、iPad 上回复框跟着聚焦（工具排只在聚焦时出现）
     let modelMenu: Bool
     /// `-CuePadOnTop YES`（Mac）：主窗口起在所有窗口最前给人看（`xc.sh real`），不接键盘、点一下才激活；不给时排在最后
     let onTop: Bool

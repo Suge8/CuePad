@@ -58,7 +58,7 @@ private struct VariablesChip: View {
     let card: Card
     let names: [String]
     @Environment(\.palette) private var palette
-    @State private var editing = false
+    @State private var editing = BubbleSwitch()
 
     var body: some View {
         Button { editing.toggle() } label: {
@@ -77,7 +77,7 @@ private struct VariablesChip: View {
         }
         .buttonStyle(PressStyle())
         .glass(in: .capsule, interactive: true)
-        .bubble(isPresented: $editing) { VariablesForm(card: card, names: names) { editing = false } }
+        .bubble($editing) { VariablesForm(card: card, names: names) { editing.open = false } }
         .help("变量取值")
         .accessibilityLabel("变量取值，共 \(names.count) 个")
     }
