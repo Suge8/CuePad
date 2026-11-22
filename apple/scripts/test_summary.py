@@ -76,7 +76,8 @@ if first_failure:
     for d in detail:
         print(f"  {d}")
 elif status != 0:
-    print("用例都过了但命令失败：看上面的错误输出（编译、超时、测试宿主崩溃）")
+    crash = next((m[0] for line in lines if (m := re.search(r"(\S+:\d+: )?Fatal error: .*", line))), None)
+    print(f"测试宿主崩了：{crash}" if crash else "用例都过了但命令失败：看上面的错误输出（编译、超时、测试宿主崩溃）")
 by_reason = defaultdict(list)
 for name, reason in skipped:
     by_reason[reason].append(name)

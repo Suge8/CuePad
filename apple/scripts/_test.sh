@@ -54,7 +54,7 @@ xc_test() {
   fi
   # 点名的测试一个也没对上（名字或所在的 Suite 写错）时 xcodebuild 照样报成功。并行跑（-parallel-testing-enabled YES）时没有那两行汇总，
   # 只有每条用例一行 Test case '…' passed/failed on '…'
-  if [[ " ${*:3}" == *" -only-testing:"* ]] && ! grep -aqE 'Test run with [1-9]|Executed [1-9][0-9]* tests?,|^Test case .* (passed|failed) on ' "$log"; then
+  if [ "$status" = 0 ] && [[ " ${*:3}" == *" -only-testing:"* ]] && ! grep -aqE 'Test run with [1-9]|Executed [1-9][0-9]* tests?,|^Test case .* (passed|failed) on ' "$log"; then
     echo "-only-testing 一个测试也没对上：Swift Testing 写 <测试目标>/<Suite 类型名>/<函数名>()，用例所在的类型以源码为准" >&2
     status=1
   fi
