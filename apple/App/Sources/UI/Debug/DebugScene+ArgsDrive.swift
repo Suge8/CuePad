@@ -56,6 +56,8 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let scrollDriver: String?
     /// `-CuePadScrollPointer in|out`：热身之后把指针移到对话区中央（in）或窗口外的屏幕角落（out），量完放回
     let scrollPointer: String?
+    /// `-CuePadSpeak YES`（仅 Mac，配 session 画面）：会话挂上一段演示的在线会话，一轮一轮地一截一截说出回答，说完落进对话：看出字与交接
+    let speak: Bool
     /// `-CuePadSpeech press`：输入框出现 3 秒后按一下它的发送钮，录发出的那一下
     let speech: String?
     /// `-CuePadStream YES`（配 session 画面）：打开会话后像真的 Agent 那样一轮一轮追加：看新内容到达时跟随最新

@@ -21,23 +21,26 @@ struct Conversation: View {
     @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
     @State private var opened: PreviewOpening?
     @State private var roundFolds = RoundFolds()
+    @State private var reveals = RevealLedger()
 
     var body: some View {
         let all = items
         let notes = services.settings.replyNotes(for: session.id)
+        let newest = all.last { $0.role == .pi }?.id
         ChatStack(spacing: Self.spacing) {
             if fetching {
                 Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3).frame(maxWidth: .infinity)
             }
             if all.allSatisfy(\.role.isOutgoing), let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
             ChatSegments(items: all, window: window, size: Self.segment) { items in
-                ChatSegment(items: Array(items), session: session, highlight: highlight, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
+                ChatSegment(items: Array(items), session: session, highlight: highlight, newest: newest, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
             ending
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(\.roundFolds, roundFolds)
+        .environment(\.revealLedger, reveals)
         #if os(iOS)
         .environment(\.inlineTextSelection, false)
         #endif
@@ -96,7 +99,7 @@ struct SessionDraft: View {
         let running = session.runtimeState.known?.isTurnRunning == true
         let shown = draft.flatMap { !answered && !inProcess && (slot.speaking || running) ? $0 : nil }
         let speaking = slot.speaking && shown != nil
-        LiveRound(session: session, messages: messages, draft: shown?.text, swapsInPlace: true, floating: floating) {
+        LiveRound(session: session, messages: messages, draft: shown?.text, speaking: speaking, swapsInPlace: true, floating: floating) {
             LiveFigure(live: speaking || answered && running ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
         }
     }
@@ -108,23 +111,27 @@ private struct ChatSegment: View, Equatable {
     let items: [ChatEntry]
     let session: SessionState
     let highlight: UUID?
+    let newest: UUID?
     let notes: [ReplyNote]
     let swapsInPlace: Bool
     @Binding var opened: PreviewOpening?
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
 
-    init(items: [ChatEntry], session: SessionState, highlight: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>) {
+    init(
+        items: [ChatEntry], session: SessionState, highlight: UUID?, newest: UUID?, notes: [ReplyNote], swapsInPlace: Bool, opened: Binding<PreviewOpening?>
+    ) {
         self.items = items
         self.session = session
         self.swapsInPlace = swapsInPlace
         self.highlight = highlight.flatMap { id in items.contains { $0.id == id } ? id : nil }
+        self.newest = newest.flatMap { id in items.contains { $0.id == id } ? id : nil }
         self.notes = notes.filter { note in items.contains { $0.id == note.entry } }
         _opened = opened
     }
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.notes == rhs.notes && lhs.swapsInPlace == rhs.swapsInPlace
+        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.newest == rhs.newest && lhs.notes == rhs.notes && lhs.swapsInPlace == rhs.swapsInPlace
             && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
     }
 
@@ -154,7 +161,7 @@ private struct ChatSegment: View, Equatable {
         case .pi:
             ReplyBlock(
                 id: entry.id, text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id },
-                fadesIn: !swapsInPlace)
+                newest: entry.id == newest, fadesIn: !swapsInPlace)
         case .notice(let notice) where notice.changesContext:
             ContextBoundary(title: notice.label, highlighted: entry.id == highlight)
         case .notice(let notice):

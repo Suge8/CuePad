@@ -80,7 +80,7 @@ struct CueRow: View, Equatable {
                 MessageActions(text: message.text, kind: .cue)
             }
         case .cue(let message, let task):
-            CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, joined: joined)
+            CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, joined: joined, reveal: settled ? .landed : .newest)
         case .result(let message, let task):
             CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
@@ -114,7 +114,7 @@ struct CueEnding: View {
             let draft = services.cue.keeper?.speech.draft
             if let draft, !draft.landed(newestReply: newestSaid, record: nil) {
                 BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                    MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
+                    MarkdownText(source: draft.text, reveal: services.cue.keeper?.speech.speaking == true ? .speaking : .landed).equatable().cueBubble(joined: joined)
                 }
                 .padding(.top, CuePage.gap(before: .leading, joined: joined))
                 .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))

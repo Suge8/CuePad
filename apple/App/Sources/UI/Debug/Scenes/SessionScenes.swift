@@ -20,6 +20,7 @@ extension DebugScene {
         if let id = sessionToOpen {
             workspace.show(.session(id))
             if args.driveOpts.stream { Task { await stream(id, store: store) } }
+            if args.driveOpts.speak { Task { await speak(id, services: workspace.services) } }
         }
         #else
         if scene == "send" {

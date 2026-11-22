@@ -17,10 +17,15 @@ struct MarkdownText: View, Equatable {
     let source: String
     var notes: [ReplyNote] = []
     var style = Style.reply
+    /// 看着时新来的字一个个显出来（`Reveal`）。
+    var reveal: RevealRole?
     @Environment(\.palette) private var palette
-    @Environment(\.readingColumnBleeds) private var columnBleeds
+    @Environment(\.revealLedger) private var revealLedger
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source && lhs.notes == rhs.notes && lhs.style == rhs.style }
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.source == rhs.source && lhs.notes == rhs.notes && lhs.style == rhs.style && lhs.reveal == rhs.reveal
+    }
 
     static func proseTexts(_ source: String) -> [String] {
         Run.of(source, Palette(dark: false), notes: [], style: .reply).compactMap { run in
@@ -29,43 +34,36 @@ struct MarkdownText: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            ForEach(Array(Run.of(source, palette, notes: notes, style: style).enumerated()), id: \.offset) { _, run in
-                switch run {
-                case .prose(let text):
-                    Paragraphs(text, lineSpacing: Typography.readingLineSpacing)
-                case .table(let block):
-                    if case .table(let table) = block.content {
-                        ScrollView(.horizontal) { MarkdownBlockFrame(block: block) { MarkdownTableView(table: table).selectable() } }
-                            .scrollIndicatorsFlash(onAppear: true)
-                            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                            .scrollClipDisabled(columnBleeds)
-                            .modifier(MoreToTheRight(enabled: !columnBleeds))
-                    }
-                case .list(let items):
-                    ListRows(items: items)
-                case .code(let block):
-                    if case .code(let code) = block.content {
-                        MarkdownBlockFrame(block: block) {
-                            ScrollView(.horizontal) {
-                                Text(verbatim: code).font(Typography.code).foregroundStyle(palette.ink).fixedSize().textSelection(.enabled)
-                                    .padding(ChatBlock.inset)
-                            }
-                            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                            .background(palette.fill, in: ChatBlock.shape)
-                        }
-                    }
-                }
+        let runs = Run.of(source, palette, notes: notes, style: style)
+        if let clock = revealClock(runs) {
+            RevealedRuns(runs: runs, clock: clock, speaking: reveal == .speaking)
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                ForEach(Array(runs.enumerated()), id: \.offset) { _, run in RunView(run: run) }
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private enum Run {
+    private func revealClock(_ runs: [Run]) -> RevealClock? {
+        guard let reveal, let revealLedger, !reduceMotion else { return nil }
+        return revealLedger.clock(for: source, length: runs.reduce(0) { $0 + $1.length }, role: reveal, at: Date.now.timeIntervalSinceReferenceDate)
+    }
+
+    fileprivate enum Run {
         case prose(AttributedString)
         case table(MarkdownBlock)
         case code(MarkdownBlock)
         case list([MarkdownBlock])
+
+        /// 出字时占几个字（UTF-16）：表格、单独成块的代码与列表整块淡入，按它们的字数占时间。
+        var length: Int {
+            switch self {
+            case .prose(let text): text.characters.reduce(0) { $0 + $1.utf16.count }
+            case .table(let block), .code(let block): block.revealLength
+            case .list(let items): items.reduce(0) { $0 + $1.revealLength }
+            }
+        }
 
         static func of(_ source: String, _ palette: Palette, notes: [ReplyNote], style: Style) -> [Run] {
             var runs: [Run] = []
@@ -196,6 +194,95 @@ struct MarkdownText: View, Equatable {
             }
         }
         return string
+    }
+}
+
+private extension MarkdownBlock {
+    var revealLength: Int {
+        switch content {
+        case .paragraph(let text), .heading(_, let text), .quote(let text), .code(let text): text.utf16.count
+        case .table(let table): (table.header + table.rows.joined()).reduce(0) { $0 + $1.utf16.count }
+        case .rule: 1
+        }
+    }
+}
+
+private struct RunView: View {
+    let run: MarkdownText.Run
+    var reveal: (frame: RevealFrame, offset: Int)?
+    @Environment(\.palette) private var palette
+    @Environment(\.readingColumnBleeds) private var columnBleeds
+
+    var body: some View {
+        switch run {
+        case .prose(let text):
+            Paragraphs(text, lineSpacing: Typography.readingLineSpacing, reveal: reveal)
+        case .table(let block):
+            if case .table(let table) = block.content {
+                ScrollView(.horizontal) { MarkdownBlockFrame(block: block) { MarkdownTableView(table: table).selectable() } }
+                    .scrollIndicatorsFlash(onAppear: true)
+                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                    .scrollClipDisabled(columnBleeds)
+                    .modifier(MoreToTheRight(enabled: !columnBleeds))
+                    .opacity(fadeIn)
+            }
+        case .list(let items):
+            ListRows(items: items).opacity(fadeIn)
+        case .code(let block):
+            if case .code(let code) = block.content {
+                MarkdownBlockFrame(block: block) {
+                    ScrollView(.horizontal) {
+                        Text(verbatim: code).font(Typography.code).foregroundStyle(palette.ink).fixedSize().textSelection(.enabled)
+                            .padding(ChatBlock.inset)
+                    }
+                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                    .background(palette.fill, in: ChatBlock.shape)
+                }
+                .opacity(fadeIn)
+            }
+        }
+    }
+
+    private var fadeIn: Double { reveal.map { $0.frame.clock.progress($0.offset, at: $0.frame.t) ?? 0 } ?? 1 }
+}
+
+/// 出字中的一条：跟着显示刷新逐帧画，显完（正在说的那句等下一截时笔尖呼吸，不呼吸的话也一样）就停。
+private struct RevealedRuns: View {
+    let runs: [MarkdownText.Run]
+    let clock: RevealClock
+    let speaking: Bool
+    @LoopsPlay private var breathes
+    @State private var settledAt: Double?
+
+    var body: some View {
+        let still = clock.settles + (speaking ? Motion.Reveal.develop : max(Motion.Reveal.develop, Motion.Reveal.penFade))
+        TimelineView(.animation(paused: settledAt == still && !(speaking && breathes))) { context in
+            let frame = RevealFrame(clock: clock, t: context.date.timeIntervalSinceReferenceDate, pen: pen(at: context.date.timeIntervalSinceReferenceDate))
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                ForEach(Array(Self.offsets(runs).enumerated()), id: \.offset) { index, offset in
+                    if Double(offset) < frame.head { RunView(run: runs[index], reveal: (frame, offset)) }
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .task(id: still) {
+            guard (try? await Task.sleep(for: .seconds(max(0, still - Date.now.timeIntervalSinceReferenceDate)))) != nil else { return }
+            settledAt = still
+        }
+    }
+
+    private func pen(at t: Double) -> Double {
+        guard clock.head(t) >= Double(clock.length) else { return 1 }
+        if speaking { return breathes ? 0.55 + 0.45 * cos((t - clock.settles) * 4.2) : 1 }
+        return max(0, 1 - (t - clock.settles) / Motion.Reveal.penFade)
+    }
+
+    private static func offsets(_ runs: [MarkdownText.Run]) -> [Int] {
+        var at = 0
+        return runs.map { run in
+            defer { at += run.length }
+            return at
+        }
     }
 }
 

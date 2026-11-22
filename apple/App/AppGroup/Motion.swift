@@ -68,6 +68,21 @@ extension Motion {
         static let pop = Animation.spring(duration: 0.42, bounce: 0.3)
     }
 
+    /// 出字（`RevealClock`）：平时一秒 `pace` 个字；积压多了提速，在 `catchUp` 秒内追平。手机上回答整段一次到，追平给得宽些，不一闪而过。
+    /// 每个字落下后 `develop` 秒显影完：短于 0.4 秒几乎看不出，长于 0.6 秒带色的尾巴拖得太长。
+    /// 追得快时同时在显影的不超过 `front` 个字（每个字显影得更快）：一次几百个字半显半隐是一片发灰的字，笔尖跑在空白里。
+    nonisolated enum Reveal {
+        static let pace = 45.0
+        #if os(macOS)
+        static let catchUp = 0.8
+        #else
+        static let catchUp = 2.5
+        #endif
+        static let develop = 0.4
+        static let front = 40.0
+        static let penFade = 0.45
+    }
+
     nonisolated enum Write {
         static let delay: Duration = .milliseconds(300)
         static let stroke = Animation.easeOut(duration: 0.45)

@@ -12,6 +12,7 @@ struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     var took: String?
     var draft: String?
+    var speaking = false
     let session: SessionState
     var message: UUID?
     var fadesIn = true
@@ -39,14 +40,14 @@ struct RoundProcess: View {
                 ForEach(parts) { part in
                     switch part {
                     case .said(let index):
-                        SaidText(text: items[index].target, session: session)
+                        SaidText(text: items[index].target, session: session, reveal: message == nil && index == said.last ? .newest : .landed)
                             .padding(.top, index == newest ? Self.apart : 0)
                             .transition(fadesIn ? .entry : .identity)
                     case .steps(let range): NoteThread { list(items[range]) }.transition(.opacity)
                     }
                 }
                 if let draft {
-                    MarkdownText(source: draft).equatable()
+                    MarkdownText(source: draft, reveal: speaking ? .speaking : .landed).equatable()
                         .padding(.top, said.isEmpty || message != nil ? 0 : Self.apart)
                         .transition(.asymmetric(insertion: .entry, removal: .identity))
                 }
@@ -128,9 +129,10 @@ struct RoundProcess: View {
 private struct SaidText: View {
     let text: String
     let session: SessionState
+    let reveal: RevealRole
 
     var body: some View {
-        MarkdownText(source: text).equatable()
+        MarkdownText(source: text, reveal: reveal).equatable()
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
             .contextMenu { MessageActions(text: text, kind: .reply, session: session) }

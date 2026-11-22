@@ -10,6 +10,7 @@ struct CuePage: View {
     @State private var docking = false
     @State private var dockedCard: String?
     @State private var seen: [UUID: Date] = [:]
+    @State private var reveals = RevealLedger()
 
     static let readingWidth = Spacing.reading
     static let inset = Spacing.page
@@ -94,6 +95,7 @@ struct CuePage: View {
                 }
                 CueEnding(newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
             }
+            .environment(\.revealLedger, reveals)
             #if os(iOS)
             .environment(\.inlineTextSelection, false)
             #endif
