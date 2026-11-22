@@ -57,6 +57,7 @@ extension MCPTests {
     let project = try await sandbox.project("演示")
     let mine = try await store.createTask("用户自己的事", in: project.id)
     let home = try await store.createTask("默认项目里的事")
+    await nextMillisecond()
     let done = try await store.createTask("做完的事", in: project.id)
     try await store.setStatus(done.id, .done)
     try await Server.run(library: sandbox.directory) { server in

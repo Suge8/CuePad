@@ -26,6 +26,7 @@ struct CardTextField: View {
         .overlay { AttachmentSpotLayer(spot: handle.spot) }
         .overlay(alignment: .bottom) { if !fits { CardEditorBar(card: card, editing: editing, theme: theme) } }
         .modifier(FileSources(source: $handle.source) { handle.insert($0) })
+        .ignoresSafeArea(.container, edges: underHeader ? .vertical : [])
     }
 }
 

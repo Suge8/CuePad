@@ -135,9 +135,7 @@ import Testing
     #expect(started.string("status") == "inProgress" && started.string("startedAt") != nil)
     #expect(try array(try await sb.json("task", "list")).count == 2)
 
-    let done = try await sb.object("task", "done", String(id.prefix(8)))
-    #expect(done.string("status") == "done")
-    #expect(done.string("completedAt") != nil)
+    try await sb.store.completeTask(UUID(uuidString: id)!)
     #expect(try array(try await sb.json("task", "list")).count == 1)
     #expect(try array(try await sb.json("task", "list", "--done")).compactMap { $0.string("id") } == [id])
     #expect(try array(try await sb.json("task", "list", "--all")).count == 2)
@@ -151,7 +149,7 @@ import Testing
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
   }
 
-  @Test func bindExistingSessionAndCompleteTask() async throws {
+  @Test func bindExistingSession() async throws {
     let sb = try Fixture()
     let task = try await sb.store.createTask("关联已有会话")
     try await sb.store.setStatus(task.id, .inProgress)
@@ -165,10 +163,6 @@ import Testing
     #expect(try await sb.store.deliveryRequests().isEmpty)
     #expect((await sb.run("task", "unbind", id)).code == 0)
     #expect(try await sb.store.card(task.id)?.piSessionID == nil)
-    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
-    #expect((await sb.run("task", "done", id)).code == 0)
-    let ended = try await sb.store.deliveryRequests().filter { $0.mode == .known(.end) }
-    #expect(ended.isEmpty, "完成借用会话的任务不能结束会话：\(ended.map(\.target.ref))")
     #expect((await sb.run("task", "unbind", UUID().uuidString)).code != 0)
     #expect((await sb.run("task", "bind", id, "missing-session")).code != 0)
   }
@@ -285,13 +279,13 @@ import Testing
     }
     #expect(try await documentedFields(["project", "list"], type: "Project") == projectFields)
     #expect(try await documentedFields(["card", "show"], type: "Card") == cardFields)
-    #expect(try await documentedFields(["task", "done"], type: "Card") == cardFields)
+    #expect(try await documentedFields(["task", "start"], type: "Card") == cardFields)
     #expect(try await documentedFields(["search"], type: "Search") == searchFields)
     #expect(try await documentedFields(["conflicts", "list"], type: "Conflict") == conflictFields)
     let projects = try array(try await sb.json("project", "list"))
     #expect(Set(projects[0].keys) == projectFields)
     #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == cardFields)
-    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == cardFields)
+    #expect(Set(try await sb.object("task", "start", task.id.uuidString).keys) == cardFields)
     #expect(Set(try await sb.object("search", "x").keys) == searchFields)
     let conflicts = try array(try await sb.json("conflicts", "list"))
     #expect(Set(conflicts[0].keys) == conflictFields)

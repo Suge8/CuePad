@@ -70,13 +70,6 @@ extension Command {
       let view = try await call.freshView(task.id)
       return Reply(text: view.line + "\n" + note, json: view.json)
     },
-    Command(path: ["task", "done"], summary: "完成任务（没完成的子任务一起完成）", arguments: "<任务>",
-      notes: Schema.output("更新后的 Card", Schema.card)) { call in
-      try call.args.expect("任务")
-      let task = try await call.task(call.args.positionals[0])
-      _ = try await call.store.completeTask(task.id)
-      return reply(try await call.freshView(task.id))
-    },
     Command(path: ["task", "bind"], summary: "关联已有任务与会话（不发送正文）", arguments: "<任务> <会话>",
       notes: "会话写完整 id。\n" + Schema.output("更新后的 Card", Schema.card)) { call in
       try call.args.expect("任务", "会话")

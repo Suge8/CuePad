@@ -1,0 +1,36 @@
+name: Red
+
+# 主干上 Swift 那一遍红了（重跑又红也算），把红的 job、用例与 run 链接记进偶发红台账 #187：
+# 不靠合并的人记得去记，后一遍先绿了也不会把它盖过去。偶发还是改动造成的，由下一个合并的人判断（land.sh）。
+on:
+  workflow_run:
+    workflows: [Swift]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  record:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: apple/scripts/red_cases.sh
+          sparse-checkout-cone-mode: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          TITLE: ${{ github.event.workflow_run.display_title }}
+          URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          jobs="$(gh run view "$RUN" --attempt "$ATTEMPT" --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join("、")')"
+          cases="$(apple/scripts/red_cases.sh "$RUN" "$ATTEMPT" | sed 's/^[[:space:]]*/- /')"
+          printf '主干 %s 第 %s 遍红（%s）：%s\n\n%s\n\n%s\n' "${SHA:0:9}" "$ATTEMPT" "$jobs" "$TITLE" "${cases:-没列出用例，看 run 日志}" "$URL" > body.md
+          gh issue comment 187 --repo "$GITHUB_REPOSITORY" --body-file body.md
