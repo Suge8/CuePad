@@ -57,6 +57,7 @@ extension CueHostTests {
         let project = try #require(try await rig.store.projects().first)
         let task = try await rig.store.createTask("修好登录页 半路断开", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-2")
+        try await rig.store.setTier(.full, of: "remote-2")
         try await rig.remoteMac()
             .update(sessionID: "remote-2", state: .settled, title: "修好登录页", turnStartedAt: .now)
         try await rig.answered("remote-2")
@@ -79,6 +80,7 @@ extension CueHostTests {
         let project = try #require(try await rig.store.projects().first)
         let task = try await rig.store.createTask("修好登录页 晚到", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
+        try await rig.store.setTier(.full, of: "remote-1")
         let remote = StateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
         let settledAt = Date.now
@@ -97,6 +99,7 @@ extension CueHostTests {
         let task = try await rig.store.createTask("修好登录页 说不出去", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
         let remote = try await rig.remoteMac()
+        try await rig.store.setTier(.full, of: "remote-1")
         try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
         try await remote.update(sessionID: "remote-1", state: .settled)
         try await rig.answered("remote-1")

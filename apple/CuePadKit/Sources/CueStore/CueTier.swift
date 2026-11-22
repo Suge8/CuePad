@@ -5,7 +5,12 @@ public enum CueTier: String, CaseIterable, Sendable {
   case yours, push, full
 
   public static func of(_ session: SessionState, chosen: [String: CueTier]) -> CueTier {
-    chosen[session.sessionID] ?? (session.turnOpener?.cue == true ? .full : .yours)
+    if let tier = chosen[session.sessionID] { return tier }
+    return switch session.turnOpener?.cue {
+    case true?: .full
+    case false?: .yours
+    case nil: session.createdForTaskID == nil ? .yours : .full
+    }
   }
 }
 

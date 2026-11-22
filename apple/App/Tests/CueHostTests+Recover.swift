@@ -88,10 +88,10 @@ extension CueHostTests {
         let rig = try await Rig()
         let brain = try #require(rig.brainPIDs.first), tools = try #require(rig.toolServerPIDs.first)
         kill(tools, SIGKILL)
-        try await rig.say("你好")
+        try await rig.say("请提醒我一句")
         try await eventually("换了个班次") { rig.brainPIDs.count == 1 && !rig.brainPIDs.contains(brain) }
-        try await rig.say("在吗")
-        try await rig.message(.cue, containing: "收到：在吗")
+        try await rig.say("请提醒我一句")
+        try await rig.message(.cue, containing: "记得推送")
         await rig.stop()
     }
 
@@ -108,6 +108,7 @@ extension CueHostTests {
 
     @Test func 额度卡住时新变化不催重来_你的一轮做完就接着做定时() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
+        try await rig.store.setTier(.full, of: "remote-retry")
         let remote = StateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-retry", state: .thinking, title: "旁边的工作", turnStartedAt: .now)
         rig.model.blockQuota(times: 1)

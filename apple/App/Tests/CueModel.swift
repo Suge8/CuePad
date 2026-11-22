@@ -103,9 +103,10 @@ nonisolated final class CueModel: Sendable {
         if let speech = text.matches(of: /请对隔离会话说「([^」]+)」/).last?.1 {
             return call("task", ["action": "say", "session": "语音停止验收", "text": String(speech)])
         }
+        if text.contains("请提醒我一句") { return tell("记得推送") }
         if text.contains("请对登录页说继续") { return call("task", ["action": "say", "task": "修好登录页 说不出去", "text": "继续"]) }
         if let path = text.firstMatch(of: /请读一下关卡 (\S+)/)?.1 { return call("read", ["path": String(path)]) }
-        if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
+        if text.contains("请建个任务并开工"), !text.contains("醒来：会话有动静") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
         let blocked = quotaBlocked.withLock { rule in
             guard rule.left > 0, last["role"] as? String == "user",

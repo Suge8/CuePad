@@ -21,7 +21,7 @@ extension CueHostTests {
                 directory == rig.folder.path && name == "修好登录页" && model == "fake/m" && thinking == "high"
             } else { false }
         })
-        #expect(session.messages.first?.text == "修好登录页\n把登录页修好")
+        #expect(session.messages.first?.text == "修好登录页\n请建个任务并开工\n\n（以下是 Cue 补充的）\n把登录页修好", "他的原话在前，Cue 的补充另起一段")
         #expect(!session.received.contains("config"))
         await rig.stop()
     }
