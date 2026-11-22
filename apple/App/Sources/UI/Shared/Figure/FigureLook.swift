@@ -16,12 +16,13 @@ nonisolated struct FigureSprite {
 }
 
 nonisolated enum FigureLayout {
-    static let size: CGFloat = 120
+    static let size: CGFloat = 144
+    static let headroom: CGFloat = 16
     static let tiles = 36
     static let span: Float = 2.7
     static let tile = size / CGFloat(tiles)
-    static let origin = CGPoint(x: 16, y: 26)
-    static let canvas = CGSize(width: size + 150, height: size + 44)
+    static let origin = CGPoint(x: 20, y: 32)
+    static let canvas = CGSize(width: size + 180, height: size + 52)
 }
 
 nonisolated struct FigureColors {

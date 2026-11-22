@@ -53,7 +53,7 @@ struct CuePanel: ViewModifier {
         let floats = fits && !home, bleeds = fits && home
         content
             .padding(bleeds ? Self.bleed : 0)
-            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground(shown: fits))
+            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground, shown: fits)
             .padding(bleeds ? -Self.bleed : floats ? Self.float : 0)
             .clipShape(Rectangle().scale(x: bleeds ? 1 : 1.5, y: 3))
     }

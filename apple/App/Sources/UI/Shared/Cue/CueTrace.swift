@@ -10,17 +10,21 @@ struct CueTrace: View {
     static let rows = 3
 
     var body: some View {
-        let folded = !unfolded && touches.count > Self.rows
-        let shown = folded ? Array(touches.prefix(Self.rows - 1)) : touches
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(shown.indices, id: \.self) { index in line(shown[index]) }
-            if folded {
-                Button { unfolded = true } label: {
-                    CueNoteRow { Image(.expand) } text: { Text("还有 \(touches.count - shown.count) 处") }
+        if touches.count > Self.rows {
+            Fold(open: $unfolded, edge: .bottom, press: .row) {
+                CueNoteRow { DisclosureChevron(open: unfolded) } text: {
+                    if unfolded { Text("收起") } else { Text("还有 \(touches.count - Self.rows + 1) 处") }
                 }
-                .buttonStyle(.row)
+            } content: {
+                lines(unfolded ? touches : Array(touches.prefix(Self.rows - 1)))
             }
+        } else {
+            VStack(alignment: .leading, spacing: 0) { lines(touches) }
         }
+    }
+
+    private func lines(_ shown: [CueActivity.Touch]) -> some View {
+        ForEach(shown.indices, id: \.self) { index in line(shown[index]).transition(.opacity) }
     }
 
     static func words(_ touch: CueActivity.Touch, name: Color) -> Text {

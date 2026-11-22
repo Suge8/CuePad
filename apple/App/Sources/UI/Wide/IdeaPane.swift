@@ -53,7 +53,6 @@ struct IdeaPane: View {
         HStack(spacing: Spacing.item) {
             name
             Spacer(minLength: Spacing.item)
-            HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(column) }
         }
         .accessibilityElement(children: .contain)
         .windowDragArea()
@@ -76,9 +75,11 @@ struct IdeaPane: View {
                 .draggable(DraggedCard.idea(cardID))
                 .layoutPriority(1)
             #endif
+            PaneClose { workspace.closeColumn(column) }
         }
         .font(Typography.toolbarTitle)
-        .padding(.horizontal, Spacing.block)
+        .padding(.leading, Spacing.block)
+        .padding(.trailing, PaneClose.inset)
         .frame(height: Chrome.control)
         .glass(in: .capsule)
     }

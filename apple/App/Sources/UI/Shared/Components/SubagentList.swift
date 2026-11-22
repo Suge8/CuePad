@@ -4,53 +4,48 @@ import SwiftUI
 struct SubagentList: View {
     let agents: [SubagentState]
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expanded = DebugHooks.preset.toolsOpen
 
     var body: some View {
         if let summary = SubagentSummary(agents) {
-            VStack(alignment: .leading, spacing: 0) {
+            Fold(open: $expanded) {
                 header(summary)
+            } content: {
                 if expanded {
                     NoteThread { ForEach(agents.identified, id: \.id) { row($0.agent).padding(.vertical, Spacing.hair) } }
                 }
             }
-            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
         }
     }
 
     private func header(_ summary: SubagentSummary) -> some View {
-        Button { expanded.toggle() } label: {
-            NoteLine {
-                if summary.running > 0 {
-                    StateDot(shown: SessionShown(status: .working(.delegating)), size: 6)
-                } else {
-                    Image(.branch).imageScale(.small)
-                }
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-                    Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)
-                        .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).monospacedDigit().rollingCount(summary.running > 0 ? summary.running : summary.total)
-                    if let tail = summary.tail {
-                        Dot()
-                        Text(tail).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.total)
-                    }
-                    if let failure = summary.failure {
-                        Dot().foregroundStyle(palette.failure)
-                        Text(failure).foregroundStyle(palette.failure).monospacedDigit().rollingCount(summary.failed)
-                    }
-                    if let rejection = summary.rejection {
-                        Dot()
-                        Text(rejection).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.rejected)
-                    }
-                    DisclosureChevron(open: expanded)
-                }
-                .handOff(id: [summary.running > 0 ? "running" : "total", summary.tail == nil ? nil : "total", summary.failure == nil ? nil : "failed", summary.rejection == nil ? nil : "rejected"].compactMap { $0 })
+        NoteLine {
+            if summary.running > 0 {
+                StateDot(shown: SessionShown(status: .working(.delegating)), size: 6)
+            } else {
+                Image(.branch).imageScale(.small)
             }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
+                Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)
+                    .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).monospacedDigit().rollingCount(summary.running > 0 ? summary.running : summary.total)
+                if let tail = summary.tail {
+                    Dot()
+                    Text(tail).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.total)
+                }
+                if let failure = summary.failure {
+                    Dot().foregroundStyle(palette.failure)
+                    Text(failure).foregroundStyle(palette.failure).monospacedDigit().rollingCount(summary.failed)
+                }
+                if let rejection = summary.rejection {
+                    Dot()
+                    Text(rejection).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.rejected)
+                }
+                DisclosureChevron(open: expanded)
+            }
+            .handOff(id: [summary.running > 0 ? "running" : "total", summary.tail == nil ? nil : "total", summary.failure == nil ? nil : "failed", summary.rejection == nil ? nil : "rejected"].compactMap { $0 })
         }
-        .buttonStyle(PressStyle(.inline))
         .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure, summary.rejection).spoken)
-        .accessibilityExpanded(expanded)
     }
 
     private func row(_ agent: SubagentState) -> some View {

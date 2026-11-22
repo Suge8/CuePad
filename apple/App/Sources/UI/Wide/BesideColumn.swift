@@ -5,6 +5,7 @@ struct BesideColumn<Session: View, Card: View>: View {
     @ViewBuilder let session: (SessionRoute) -> Session
     @ViewBuilder let card: (UUID) -> Card
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @State private var shown: Shown?
 
     private struct Shown: Equatable {
@@ -23,6 +24,9 @@ struct BesideColumn<Session: View, Card: View>: View {
             case .card(let id): card(id).id(id)
             default: EmptyView()
             }
+        }
+        .overlay(alignment: .leading) {
+            if workspace.liveFill == nil { palette.hair.frame(width: 1).ignoresSafeArea().allowsHitTesting(false) }
         }
         .ignoresSafeArea(.container, edges: .top)
         .task(id: now) {

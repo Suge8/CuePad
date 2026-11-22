@@ -74,6 +74,7 @@ struct LiveFigure: View {
     }
 
     static let dwell: TimeInterval = 0.6
+    private static let height = FigureLayout.size - FigureLayout.headroom
     static let lingerLimit: Duration = .seconds(1)
     static let restLimit: Duration = .milliseconds(800)
 
@@ -84,9 +85,9 @@ struct LiveFigure: View {
         case .absent, .leaving, .resting: false
         }
         ZStack(alignment: .topLeading) {
-            if let shown = stage.shown { row(shown, fading: handed || stage == .leaving(shown)) }
+            if let shown = stage.shown { row(shown, fading: handed || stage == .leaving(shown)).offset(y: holds ? -FigureLayout.headroom : 0) }
         }
-        .frame(maxWidth: .infinity, minHeight: holds ? FigureLayout.size : 0, maxHeight: holds ? FigureLayout.size : 0, alignment: handed ? .bottomLeading : .topLeading)
+        .frame(maxWidth: .infinity, minHeight: holds ? Self.height : 0, maxHeight: holds ? Self.height : 0, alignment: handed ? .bottomLeading : .topLeading)
         .onAppear {
             FigureGPU.warm()
             if stage == .absent, let live { show(live, arriving: false) }
@@ -120,7 +121,7 @@ struct LiveFigure: View {
 
     private func row(_ shown: FigureLive, fading: Bool) -> some View {
         let pose: FigurePose = if case .lingering = stage { .done } else { shown.pose }
-        return HStack(alignment: .center, spacing: Spacing.item) {
+        return HStack(alignment: .center, spacing: Spacing.group) {
             Color.clear.frame(width: FigureLayout.size, height: FigureLayout.size)
                 .overlay(alignment: .topLeading) {
                     FigureCanvas(pose: pose, arrives: arrives, leaving: fading, running: plays && visible)
@@ -186,9 +187,9 @@ private struct FigureStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                DoingLine(text: live.verb).font(Typography.secondary.weight(.semibold)).lineLimit(1)
+                DoingLine(text: live.verb).font(Typography.bodyStrong).lineLimit(1)
                 Text(timerInterval: since...Date.distantFuture, countsDown: false)
-                    .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+                    .font(Typography.secondary.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
             }
             ZStack(alignment: .leading) {
                 Text(verbatim: " ").hidden()

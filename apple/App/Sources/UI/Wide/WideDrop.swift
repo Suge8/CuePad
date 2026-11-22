@@ -191,17 +191,15 @@ struct WideSessionTitle: View {
     var body: some View {
         HStack(spacing: Spacing.item) {
             name
+            if column == .main, let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
             Spacer(minLength: Spacing.item)
-            if column == .main {
-                if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
-            } else {
-                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(column) }
-            }
         }
         .accessibilityElement(children: .contain)
         .padding(inset).frame(height: Chrome.band)
         .windowDragArea()
     }
+
+    private var closes: Bool { column != .main || !workspace.besideSessions.isEmpty }
 
     private var name: some View {
         HStack(spacing: Spacing.glyph) {
@@ -231,12 +229,37 @@ struct WideSessionTitle: View {
                     .padding(.leading, Spacing.tight)
                     .transition(.opacity)
             }
+            if closes { PaneClose { workspace.closeColumn(column) } }
         }
         .font(Typography.toolbarTitle)
         .animation(Motion.fade, value: ended)
-        .padding(.horizontal, Spacing.block)
+        .padding(.leading, Spacing.block)
+        .padding(.trailing, closes ? PaneClose.inset : Spacing.block)
         .frame(height: Chrome.control)
         .glass(in: .capsule)
+    }
+}
+
+struct PaneClose: View {
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    static let inset = Spacing.tight
+    private static var side: CGFloat { Chrome.control - 2 * inset }
+
+    var body: some View {
+        Button(action: action) {
+            Image(.close).font(Glyph.small).foregroundStyle(palette.ink3)
+                .frame(width: Self.side, height: Self.side)
+                .contentShape(.circle)
+        }
+        .buttonStyle(PressStyle(.control))
+        #if os(iOS)
+        .contentShape(.hoverEffect, .circle)
+        .hoverEffect(.highlight)
+        #endif
+        .help(Text("收起并排"))
+        .accessibilityLabel(Text("收起并排"))
     }
 }
 

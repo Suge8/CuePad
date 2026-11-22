@@ -4957,22 +4957,6 @@
         }
       }
     },
-    "上一处" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上一处"
-          }
-        }
-      }
-    },
     "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。" : {
       "localizations" : {
         "en" : {
@@ -5241,22 +5225,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一件"
-          }
-        }
-      }
-    },
-    "下一处" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下一处"
           }
         }
       }
@@ -7361,34 +7329,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "共 %lld 个"
-          }
-        }
-      }
-    },
-    "共 %lld 处" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld mark"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld marks"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "共 %lld 处"
           }
         }
       }
@@ -11741,18 +11681,18 @@
         }
       }
     },
-    "对话刻度" : {
+    "对话目录" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conversation scrubber"
+            "value" : "Chat Index"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "对话刻度"
+            "value" : "对话目录"
           }
         }
       }
@@ -20361,22 +20301,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "第 %1$lld 件，共 %2$lld 件"
-          }
-        }
-      }
-    },
-    "第 %lld 处，共 %lld 处：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld of %2$lld: %3$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "第 %1$lld 处，共 %2$lld 处：%3$@"
           }
         }
       }

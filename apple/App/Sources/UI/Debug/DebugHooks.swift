@@ -38,8 +38,8 @@ enum DebugHooks {
         var cueStage: Bool?
         /// 舞台的天空钉成哪个时段（`-CuePadCueSky`，`CueStage.Period`）。
         var cueSky: String?
-        /// 手机的会话条一出现就展开成面板（`-CuePadRailOpen`）。
-        var railOpen = false
+        /// 贴这一边的边缘索引一出现就展开成面板（`-CuePadIndexOpen`）。
+        var indexOpen: HorizontalEdge?
         #if os(iOS)
         var alertStatus: AlertStatus?
         var searchListsSessions = false

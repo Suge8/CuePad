@@ -65,7 +65,7 @@ extension DebugHooks.Preset {
         cuePanelOpen = args.layoutOpts.cuePanel
         cueStage = args.cueOpts.stage.map { $0 == "open" }
         cueSky = args.cueOpts.sky
-        railOpen = args.railOpen
+        indexOpen = args.indexOpen.flatMap { ["leading": .leading, "trailing": .trailing][$0] }
         #if os(iOS)
         alertStatus = DebugScene.alertStatus
         searchListsSessions = args.searchScope == "sessions" || args.scene.map(["sessions", "cuerows"].contains) == true
