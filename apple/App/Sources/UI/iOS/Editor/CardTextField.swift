@@ -2,7 +2,6 @@
 import CueEditor
 import CueStore
 import CueText
-import PhotosUI
 import SwiftUI
 
 struct CardTextField: View {
@@ -11,49 +10,42 @@ struct CardTextField: View {
     let theme: CueEditorTheme
     var fits = false
     var editable = true
+    var keyboardBar = true
     @Environment(Workspace.self) private var workspace
-    @State private var pickingImage = false
-    @State private var pickedImage: PhotosPickerItem?
-    @State private var pickingFile = false
-    @State private var editingVariables = false
 
     var body: some View {
+        @Bindable var handle = editing.handle
         IOSEditorHost(
             initialText: editing.initialText,
             theme: theme,
-            handle: editing.handle,
+            handle: handle,
             onChange: { [editing] in editing.changed($0) },
-            onInsertImage: { pickingImage = true },
-            onInsertFile: { pickingFile = true },
-            onVariables: { editingVariables = true },
+            onInsertImage: { handle.source = .photos },
+            onInsertFile: { handle.source = .files },
+            onVariables: { handle.editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits, bottomInset: fits ? 0 : theme.verticalInset, editable: editable)
-        .overlay { AttachmentSpotLayer(spot: editing.handle.spot) }
-        .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
-        .onChange(of: pickedImage) { insertPicked() }
-        .fileImporter(isPresented: $pickingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            switch result {
-            case .success(let urls): editing.handle.insert(urls.map(IncomingFile.file))
-            case .failure(let error): workspace.fail(error)
-            }
-        }
-        .sheet(isPresented: $editingVariables) {
-            VariablesSheet(card: card, names: CueVariables.names(in: editing.handle.text ?? editing.initialText))
+            fits: fits, bottomInset: fits ? 0 : theme.verticalInset, editable: editable, keyboardBar: keyboardBar)
+        .overlay { AttachmentSpotLayer(spot: handle.spot) }
+        .modifier(FileSources(source: $handle.source) { handle.insert($0) })
+        .sheet(isPresented: $handle.editingVariables) {
+            VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? editing.initialText))
         }
     }
+}
 
-    private func insertPicked() {
-        guard let item = pickedImage else { return }
-        pickedImage = nil
-        Task {
-            do {
-                guard let data = try await item.loadTransferable(type: Data.self) else { return }
-                editing.handle.insert([.data(PhotoData.outgoing(data))])
-            } catch {
-                workspace.fail(error)
-            }
+struct CardInsertMenu: View {
+    let editing: CardEditing
+
+    var body: some View {
+        let handle = editing.handle
+        let files = ComposerSource.fileChoices.map { choice in
+            ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { handle.source = choice.source }
         }
+        let variables = editing.hasVariables
+            ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "变量取值", image: .icon(.variables)) { handle.editingVariables = true }])] : []
+        MenuButton(sections: [ChoiceMenu.Section(choices: files)] + variables, press: .button, accessibilityLabel: "添加") { PlusGlyph() }
+            .fixedSize()
     }
 }
 

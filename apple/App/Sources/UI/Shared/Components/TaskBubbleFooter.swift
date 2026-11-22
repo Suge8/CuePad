@@ -8,6 +8,7 @@ struct BubbleFooter: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Stage {
         case agent(Card)
@@ -26,16 +27,34 @@ struct BubbleFooter: View {
     }
 
     var body: some View {
-        ZStack(alignment: .leading) {
-            switch stage {
-            case .agent(let leaf)?: AgentStrip(leaf: leaf).transition(.handOff)
-            case .launching(let kind)?: LaunchStrip(kind: kind).transition(.handOff)
-            case .start(let leaf, let editing)?: StartBar(leaf: leaf, editing: editing).transition(.handOff)
-            case nil: EmptyView()
+        HStack(spacing: 0) {
+            #if os(iOS)
+            if let editing, inserting {
+                CardInsertMenu(editing: editing)
+                    .padding(.leading, ComposerMetrics.glyphInset - Spacing.group)
+                    .transition(Motion.pop(reduceMotion: reduceMotion))
             }
+            #endif
+            ZStack(alignment: .leading) {
+                switch stage {
+                case .agent(let leaf)?: AgentStrip(leaf: leaf).transition(.handOff)
+                case .launching(let kind)?: LaunchStrip(kind: kind).transition(.handOff)
+                case .start(let leaf, let editing)?: StartBar(leaf: leaf, editing: editing).transition(.handOff)
+                case nil: EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, stage == nil ? 0 : Spacing.tight)
+        .padding(.top, stage == nil && !inserting ? 0 : Spacing.tight)
+        .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: inserting)
+    }
+
+    private var inserting: Bool {
+        #if os(iOS)
+        editing?.handle.focused == true
+        #else
+        false
+        #endif
     }
 }
 

@@ -3,15 +3,22 @@ import CueEditor
 import SwiftUI
 import UIKit
 
+@Observable
 final class IOSEditorHandle {
-    fileprivate weak var view: CueTextView?
+    @ObservationIgnored fileprivate weak var view: CueTextView?
     let spot = AttachmentSpot()
-    fileprivate var refocus = false
+    @ObservationIgnored fileprivate var refocus = false
+    fileprivate var focusChanges = 0
+    var source: ComposerSource?
+    var editingVariables = false
 
     var text: String? { view?.storedText }
     var selection: String? { view?.selectedStoredText }
     func insert(_ files: [IncomingFile]) { view?.insert(files) }
-    var focused: Bool { view?.isFirstResponder == true }
+    var focused: Bool {
+        _ = focusChanges
+        return view?.isFirstResponder == true
+    }
     func focus() { view?.becomeFirstResponder() }
     func replace(_ text: String) {
         guard let view else { return }
@@ -34,6 +41,7 @@ struct IOSEditorHost: UIViewRepresentable {
     var fits = false
     var bottomInset: CGFloat = 0
     var editable = true
+    var keyboardBar = true
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
@@ -46,7 +54,12 @@ struct IOSEditorHost: UIViewRepresentable {
         let view = CueTextView(files: services.store.files, theme: theme)
         view.storedText = initialText
         context.coordinator.watching = AttachmentLooks.follow(services, in: view)
-        view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator, plain: onInsertImage == nil)
+        if keyboardBar { view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator, plain: onInsertImage == nil) }
+        context.coordinator.focus = [UITextView.textDidBeginEditingNotification, UITextView.textDidEndEditingNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: view, queue: .main) { [handle] _ in
+                MainActor.assumeIsolated { handle.focusChanges += 1 }
+            }
+        }
         view.accessibilityLabel = String(localized: "正文")
         // 同 `RouteView` 的柔边：那里的 `scrollEdgeEffectStyle` 传不进 UIKit 的滚动视图，默认是带分隔线的实底，滚进页头时一刀切开
         view.topEdgeEffect.style = .soft
@@ -107,7 +120,10 @@ struct IOSEditorHost: UIViewRepresentable {
         if editable, handle.refocus { view.becomeFirstResponder() }
     }
 
-    static func dismantleUIView(_ view: CueTextView, coordinator: KeyboardBar.Actions) { coordinator.watching?.cancel() }
+    static func dismantleUIView(_ view: CueTextView, coordinator: KeyboardBar.Actions) {
+        coordinator.watching?.cancel()
+        coordinator.focus.forEach(NotificationCenter.default.removeObserver)
+    }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: CueTextView, context: Context) -> CGSize? {
         guard fits, let width = proposal.width else { return nil }
@@ -122,6 +138,7 @@ final class KeyboardBar: UIToolbar {
         var insertFile: () -> Void = {}
         var variables: () -> Void = {}
         var watching: Task<Void, Never>?
+        var focus: [any NSObjectProtocol] = []
     }
 
     init(textView: CueTextView, actions: Actions, plain: Bool) {
