@@ -123,8 +123,9 @@ extension CueStore {
     ) { $0.uuid(0) }
   }
 
-  public func cueSaidInHand() throws -> [String] {
-    try select(CueMessage.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(try cueMessagesUnanswered())], orderBy: "createdAt, rowid")
+  public func cueSaidInHand(after moment: Date = .distantPast) throws -> [String] {
+    try select(
+      CueMessage.self, where: "id IN (SELECT value FROM json_each(?)) AND createdAt > ?", [Self.idList(try cueMessagesUnanswered()), moment], orderBy: "createdAt, rowid")
       .map(\.text)
   }
 

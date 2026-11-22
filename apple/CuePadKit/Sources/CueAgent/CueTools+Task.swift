@@ -223,7 +223,7 @@ extension CueTools {
 
   private func start(_ args: Args) async throws -> Result {
     let leaf = try await references.workingLeaf(try args.required("task"))
-    return try await start(leaf, try await Launch(args, tools: self), said: try await store.cueSaidInHand())
+    return try await start(leaf, try await Launch(args, tools: self), said: try await store.cueSaidInHand(after: leaf.createdAt))
   }
 
   private func start(_ leaf: Card, _ launch: Launch, said: [String] = []) async throws -> Result {
