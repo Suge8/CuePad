@@ -105,7 +105,8 @@ public final class CueTextView: UITextView, CueEditorHost {
         let style = theme.scaled(for: traitCollection)
         core.style = style
         backgroundColor = style.backgroundColor
-        textContainerInset = UIEdgeInsets(top: style.verticalInset, left: style.horizontalInset, bottom: style.verticalInset, right: style.horizontalInset)
+        let side = style.horizontalInset(forWidth: bounds.width)
+        textContainerInset = UIEdgeInsets(top: style.verticalInset, left: side, bottom: style.verticalInset, right: side)
         typingAttributes = core.baseAttributes
         core.styleDidChange()
         invalidateIntrinsicContentSize()
@@ -118,7 +119,12 @@ public final class CueTextView: UITextView, CueEditorHost {
     }
 
     public override var bounds: CGRect {
-        didSet { if bounds.width != oldValue.width { core?.settler.restart() } }
+        didSet {
+            guard bounds.width != oldValue.width, let core else { return }
+            let side = core.style.horizontalInset(forWidth: bounds.width)
+            if side != textContainerInset.left { textContainerInset.left = side; textContainerInset.right = side }
+            core.settler.restart()
+        }
     }
 
     /// 所有程序性编辑（插图、删图）的唯一入口：替换文本、放置光标、登记撤销（UITextView 不会为直接改 storage 登记撤销），

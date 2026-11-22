@@ -3,7 +3,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 自己滚动的正文编辑器左下角浮着的那一排：手机、iPad 上聚焦时的「+」，正文里有变量时的变量取值。左缘与正文的字对齐（Mac 的正文按 `maxTextWidth` 居中，跟着居中）。
+/// 自己滚动的正文编辑器左下角浮着的那一排：手机、iPad 上聚焦时的「+」，正文里有变量时的变量取值。左缘与正文的字对齐（正文按 `maxTextWidth` 居中时跟着居中）。
 /// 随内容长高的编辑器（任务气泡）没有这一排：「+」在气泡的底栏，变量的取值行直接摆在正文下面（气泡里开不了第二个气泡）。
 struct CardEditorBar: View {
     let card: Card
@@ -24,7 +24,7 @@ struct CardEditorBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: Self.column(theme).map { $0 + 2 * Self.bleed })
+        .frame(maxWidth: theme.maxTextWidth.map { $0 + 2 * Self.bleed })
         .padding([.horizontal, .bottom], Self.margin(theme))
         .frame(maxWidth: .infinity)
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: inserting)
@@ -42,14 +42,6 @@ struct CardEditorBar: View {
 
     private static func margin(_ theme: CueEditorTheme) -> CGFloat { theme.horizontalInset - bleed }
     private static var bleed: CGFloat { (FloatingGlyph.size - FloatingGlyph.face) / 2 }
-
-    private static func column(_ theme: CueEditorTheme) -> CGFloat? {
-        #if os(macOS)
-        theme.maxTextWidth
-        #else
-        nil
-        #endif
-    }
 }
 
 struct VariablesChip: View {

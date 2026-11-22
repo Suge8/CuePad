@@ -68,6 +68,8 @@ extension EnvironmentValues {
     @Entry var headerHost = HeaderHost.navigationBar
     @Entry var headerGivesWay = false
     @Entry var headerGrown = false
+    /// 页头自己画时在内容顶上让出的高。UIKit 的滚动视图只认系统导航栏，看不到 SwiftUI 的安全区，铺到页头底下的 UIKit 正文按它垫顶
+    @Entry var headerClearance: CGFloat = 0
 }
 
 nonisolated enum FloatingHeaderLayout {
@@ -95,11 +97,11 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
         Group {
             switch host {
             case .sidebar:
-                content.safeAreaPadding(.top, height + Bars.contentGap)
+                content.safeAreaPadding(.top, clearance)
             case .column:
                 content
                     .fadesUnderHead()
-                    .safeAreaPadding(.top, height + Bars.contentGap)
+                    .safeAreaPadding(.top, clearance)
                     .readerHidden(covered)
             case .page, .panel:
                 let bar = PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
@@ -109,7 +111,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 if hasPanel {
                     // 原生栏外的按钮接不到点按；会展开的页头始终留在页面浮层，只让出收起高度。
                     content
-                        .safeAreaPadding(.top, height + Bars.contentGap)
+                        .safeAreaPadding(.top, clearance)
                         .readerHidden(covered)
                         .overlay(alignment: .top) { bar }
                 } else {
@@ -136,9 +138,12 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             }
         }
         .navigationTitle(Text(title))
+        .environment(\.headerClearance, host == .navigationBar ? 0 : clearance)
         .environment(\.headerGivesWay, host != .panel && host != .column && workspace.noticeOnHead)
         .animation(NoticeBanner.giveWay(workspace.noticeOnHead), value: workspace.noticeOnHead)
     }
+
+    private var clearance: CGFloat { height + Bars.contentGap }
 
     private var middle: some View {
         HStack(spacing: Spacing.item) { center }
