@@ -5,7 +5,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 ## 命令
 
 - 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（`xc.sh help` 列出全部命令），提交前跑 `xc.sh check`，紧接着签核的不另跑（签核含它）。它在前台跑到结束，排队与时限都在里面。
-- 调试实例用 `xc.sh shot|rec|run` 起，`run` 起的用 `xc.sh stop` 收；多张图在一次调用里拍（用 `,` 隔开）。给用户试的用 `CUEPAD_RUN_SECONDS=3600` 起，模拟器的窗口在 Xcode 的 Device Hub 里选那一台（Xcode 27 起没有 Simulator.app）。
+- 调试实例用 `xc.sh shot|rec|run` 起，`run` 起的用 `xc.sh stop` 收；多张图在一次调用里拍（用 `,` 隔开）。给用户试的用 `CUEPAD_RUN_SECONDS=3600` 起，开进会话的预览给他看（Mac 实例见 `xc.sh help` 的 run，模拟器用 `cuepad live sim`）。
 - 改代码先开自己的检出（`git worktree add ../CuePad-wt/<名> -b feat/<名>`）再动手：主检出里常有别人没提交的改动，只收合并（提交钩子拦）。合并前的门是本机的 `xc.sh signoff`：推送后跑，过了主干的规则才让 PR 合并；改了再推就重签。合并只用 `xc.sh land`：主干最近一遍红着它就停下，合完快进主检出，被本地改动挡住就留着并在交回里说。
 - 云端 CI 只在合并进主干后跑兜底，不用守着。主干红了先处理：改动造成的修或回退那次合并，偶发的重跑并把证据记进 issue #187。
 - `cuepad --help` 是命令行唯一文档。
