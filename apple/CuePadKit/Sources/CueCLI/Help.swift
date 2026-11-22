@@ -6,7 +6,6 @@ enum Help {
       ("printf '正文' | cuepad card add", "记一条灵感（正文也可用 --body）"),
       ("cuepad task add 写发布说明", "加任务"),
       ("cuepad task list", "看未完成任务"),
-      ("cuepad task done <id>", "完成任务"),
       ("cuepad show a.png --title 改后首页", "把文件发到用户的 CuePad 上看（在 Agent 的命令里运行）"),
     ]
     let width = examples.map(\.0.displayWidth).max() ?? 0

@@ -46,7 +46,6 @@ struct CardEditorScreen: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .ignoresSafeArea(.container, edges: .vertical)
     }
 
     @ViewBuilder private var detail: some View {
