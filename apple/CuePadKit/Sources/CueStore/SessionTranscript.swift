@@ -11,6 +11,8 @@ public struct Recap: Sendable, Equatable, Codable {
   public static let promptLimit = 500
   public static let replyLimit = 1_200
 
+  public static func reply(_ answer: String) -> String { answer.clipped(replyLimit) }
+
   public init(
     lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil, pendingTools: ChatMessage.Tools? = nil, answeredAt: Date? = nil
   ) {

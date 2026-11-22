@@ -159,9 +159,17 @@ nonisolated enum Chat {
     }
 
     static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {
-        func key(_ item: ChatMessage.Tools.Item) -> String? { item.record?.uuidString ?? item.calls?.first }
         let replied = Set(reply?.tools?.items.compactMap(key) ?? [])
         return pending.items.contains { key($0).map(replied.contains) == true }
+    }
+
+    static func round(_ tools: ChatMessage.Tools?) -> String? { tools?.items.lazy.compactMap(key).first }
+
+    private static func key(_ item: ChatMessage.Tools.Item) -> String? { item.record?.uuidString ?? item.calls?.first }
+
+    static func replying(_ session: SessionState, newest: ChatMessage?) -> Bool {
+        guard let reply = session.lastReply, !reply.isEmpty else { return false }
+        return newest.map { Recap.reply($0.text) } != reply
     }
 
     enum ProcessRow: Hashable {

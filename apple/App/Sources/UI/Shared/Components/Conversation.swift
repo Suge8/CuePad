@@ -20,6 +20,7 @@ struct Conversation: View {
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .footnote) private var noticeText = ComposerMetrics.noticeTextHeight
     @State private var opened: PreviewOpening?
+    @State private var roundFolds = RoundFolds()
 
     var body: some View {
         let all = items
@@ -36,6 +37,7 @@ struct Conversation: View {
             ending
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.roundFolds, roundFolds)
         #if os(iOS)
         .environment(\.inlineTextSelection, false)
         #endif

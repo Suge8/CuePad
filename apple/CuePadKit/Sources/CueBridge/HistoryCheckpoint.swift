@@ -202,7 +202,7 @@ extension HistoryCheckpoint {
             self, History.Entry(id: reply.id, seq: reply.seq, at: reply.at), role: .pi, text: reply.text, tools: current.tools.summary(),
             roundStartedAt: current.startedAt)
         recap = Recap(
-            lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: History.clip(reply.text, Recap.replyLimit), pendingPrompt: nil,
+            lastPrompt: recap.pendingPrompt ?? recap.lastPrompt, lastReply: Recap.reply(reply.text), pendingPrompt: nil,
             answeredAt: recap.answeredAt)
         self.reply = nil
     }

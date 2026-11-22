@@ -5,7 +5,8 @@ import SwiftUI
 /// 点开那一行，两句话之间做的步骤在原处插回，先后一目了然。做完的一轮摆在回答上面；在跑的一轮接在对话末尾，
 /// Mac 上正在说的那句（`draft`）跟在最后。只往末尾长：正在说的那句落进过程、回答落进对话都在原处换下，不挪位置。
 /// 一轮里最新的那段话与前面说过的隔开一档（`apart`）：做完的是回答，在跑的是正在说的或刚说完的那句。
-/// 隔开的总是最新那段，它落进过程、落成回答时间距不变，读着的那段不跳
+/// 隔开的总是最新那段，它落进过程、落成回答时间距不变，读着的那段不跳。
+/// 开没开记在对话那一层（`RoundFolds`，按这一轮第一项的身份认，`Chat.round`）：在跑时点开的，回答落下换成回答那一块后照样开着
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     var took: String?
@@ -14,9 +15,19 @@ struct RoundProcess: View {
     var message: UUID?
     var fadesIn = true
     @Environment(\.palette) private var palette
-    @State private var open = DebugHooks.preset.toolsOpen
+    @Environment(\.roundFolds) private var folds
+    @State private var flippedHere = false
+
+    private var fold: Binding<Bool> {
+        let preset = DebugHooks.preset.toolsOpen
+        guard let round = Chat.round(tools), let folds else { return Binding { preset != flippedHere } set: { flippedHere = $0 != preset } }
+        return Binding { preset != folds.flipped.contains(round) } set: { open in
+            if open != preset { folds.flipped.insert(round) } else { folds.flipped.remove(round) }
+        }
+    }
 
     var body: some View {
+        let open = fold.wrappedValue
         let items = tools?.items ?? [], process = Chat.process(tools)
         let parts = Chat.parts(items).filter { if case .steps = $0 { open } else { true } }
         let said = items.indices.filter { items[$0].kind == .said }
@@ -47,8 +58,8 @@ struct RoundProcess: View {
     @ViewBuilder private func summary(_ process: Chat.Process, items: [ChatMessage.Tools.Item]) -> some View {
         if let tools, tools.steps > 0 {
             let listed = items.contains { $0.kind != .said }
-            Fold(open: $open, toggles: listed) {
-                header(process, open: listed ? open : nil)
+            Fold(open: fold, toggles: listed) {
+                header(process, open: listed ? fold.wrappedValue : nil)
                     .accessibilityElement(children: .ignore).accessibilityLabel(Dotted(process.spoken.parts + [took]).spoken)
                     #if os(macOS)
                     .help(process.spoken.visible)
@@ -56,7 +67,7 @@ struct RoundProcess: View {
             } content: {
                 if !tools.images.isEmpty {
                     NoteThread {
-                        ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: open ? nil : 1)
+                        ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: fold.wrappedValue ? nil : 1)
                             .padding(.vertical, Spacing.hair)
                     }
                 }
@@ -154,6 +165,15 @@ private struct LooksRow: View {
             }
         }
     }
+}
+
+@MainActor @Observable
+final class RoundFolds {
+    var flipped: Set<String> = []
+}
+
+extension EnvironmentValues {
+    @Entry var roundFolds: RoundFolds?
 }
 
 extension View {
