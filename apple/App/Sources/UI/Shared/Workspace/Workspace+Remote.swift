@@ -16,7 +16,6 @@ extension Workspace {
         let last = services.settings.remoteLastHost
         if macs.count == 1 { await operate(on: macs[0].hostID) }
         else if let last, macs.contains(where: { $0.hostID == last }) { await operate(on: last) }
-        else if macs.isEmpty { say("还没有 Mac 用过 CuePad", tone: .gone) }
         else { return macs }
         return nil
     }

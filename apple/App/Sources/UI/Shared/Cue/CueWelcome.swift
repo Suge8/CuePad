@@ -1,86 +1,67 @@
 import CueStore
 import SwiftUI
 
+/// Cue 自己开口带你（`CueGuide`）：左边是它说的，右边是你能做的那一下，同对话里它在左、你在右。
 struct CueWelcome: View {
     let intro: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
     @State private var model = CueSettingsModel()
 
     var body: some View {
         let settings = model.settings ?? .empty
-        let hosts = settings.hosts(here: workspace.localHost)
-        let name = workspace.cue.name
-        Group {
-            if intro {
-                let hears = workspace.cue.canHear
-                EmptyState(
-                    mascot: nil, title: "我是 \(name)", message: hears ? "要做什么，直接跟我说，比如：" : .verbatim(message(settings)), waitsForSync: true, bare: true
-                ) {
-                    if hears { CueStarters() } else { steps(settings, hosts) }
-                }
-                .glass(in: .rect(cornerRadius: Radius.sheet))
-            } else {
-                VStack(spacing: Spacing.item) {
-                    Text("启用后 \(name) 接着干活").font(Typography.secondary).foregroundStyle(palette.ink2)
-                    steps(settings, hosts)
-                }
-                .multilineTextAlignment(.center)
-                .padding(Spacing.block)
-                .frame(maxWidth: .infinity)
-                .paper(cornerRadius: Radius.sheet)
+        let guide = CueGuide.of(settings, here: workspace.localHost, canHear: workspace.cue.canHear, services: services)
+        CueSpeech(lines: model.settings == nil ? [] : lines(guide)) { actions(guide, settings) }
+            .cueSettings(model)
+    }
+
+    private func lines(_ guide: CueGuide) -> [CueGuide.Line] {
+        let lines = guide.lines(name: workspace.cue.name, intro: intro)
+        return lines + (model.failure.map { [CueGuide.Line(text: $0, failed: true)] } ?? [])
+    }
+
+    @ViewBuilder private func actions(_ guide: CueGuide, _ settings: CueSettings) -> some View {
+        switch guide {
+        case .ready:
+            CueStarters()
+        case .waiting:
+            EmptyView()
+        case .enable(let host):
+            enabling(host, settings.hosts(here: workspace.localHost))
+        #if os(iOS)
+        case .offline(let status):
+            if status == .noAccount {
+                Button(SyncSummary.settingsTitle) { openURL(SyncSummary.settings) }.buttonStyle(ControlButtonStyle(kind: .primary))
+            }
+        case .install:
+            ShareLink(item: CueSettings.macDownload) { Label("发出 Mac 版的下载链接", icon: .share) }
                 .buttonStyle(ControlButtonStyle(kind: .primary))
-            }
-        }
-        .cueSettings(model)
-        .animation(Motion.fade, value: model.failure)
-    }
-
-    @ViewBuilder private func steps(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
-        #if os(iOS)
-        CueMacSteps(setup: setup(settings)) { enabling(settings, hosts) }
-        #else
-        enabling(settings, hosts)
+        case .agents:
+            EmptyView()
         #endif
-    }
-
-    private func enabling(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
-        VStack(spacing: Spacing.item) {
-            action(settings, hosts)
-            if let failure = model.failure {
-                Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
-    #if os(iOS)
-    private func setup(_ settings: CueSettings) -> CueMacSetup {
-        CueMacSetup(macs: settings.macs, status: services.syncing.state.status, waiting: settings.gate(services).waitingReason)
-    }
-    #endif
-
-    private func message(_ settings: CueSettings) -> String {
-        #if os(iOS)
-        if setup(settings).stuck != nil { return String(localized: "我在你的 Mac 上干活，接上 Mac 就能叫我") }
-        #endif
-        return String(localized: "启用后说一件想做的事，我来开工，要你拿主意时再找你")
-    }
-
-    @ViewBuilder private func action(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
-        if let why = settings.gate(services).waitingReason {
+    private func enabling(_ host: CueSettings.Host?, _ hosts: [CueSettings.Host]) -> some View {
+        VStack(alignment: .trailing, spacing: Spacing.item) {
             HStack(spacing: Spacing.item) {
-                Spinner(.small)
-                Text(why).font(Typography.secondary).foregroundStyle(palette.ink3)
-            }
-        } else {
-            HStack(spacing: Spacing.item) {
-                enableButton(settings, hosts)
                 if model.enabling != nil { Spinner(.small) }
+                if let host {
+                    Button(title(host)) { enable(on: host) }.buttonStyle(ControlButtonStyle(kind: .primary))
+                } else {
+                    hostMenu(hosts, title: String(localized: "选一台 Mac"), kind: .primary)
+                }
             }
-            .disabled(model.enabling != nil)
+            let others = hosts.filter { $0.id != host?.id }
+            if host != nil, !others.isEmpty { hostMenu(others, title: String(localized: "选别的 Mac"), kind: .glass) }
         }
+        .disabled(model.enabling != nil)
+    }
+
+    private func title(_ host: CueSettings.Host) -> LocalizedStringResource {
+        if !host.isHere { return "在「\(host.name)」上启用" }
+        return host.usable ? "在这台 Mac 上启用" : "接入 Agent"
     }
 
     private func enable(on host: CueSettings.Host) {
@@ -93,36 +74,92 @@ struct CueWelcome: View {
         model.choose(host, services)
     }
 
-    @ViewBuilder private func enableButton(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> some View {
-        if let host = primary(settings, hosts) {
-            VStack(spacing: Spacing.item) {
-                Button(host.isHere ? "在这台 Mac 上启用" : "在「\(host.name)」上启用") { enable(on: host) }.disabled(!host.selectable)
-                if !host.selectable { Text(host.note).font(Typography.meta).foregroundStyle(palette.ink3) }
-                let others = hosts.filter { $0.id != host.id }
-                #if os(macOS)
-                let menu = hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, size: .compact))
-                if others.isEmpty { menu.hidden() } else { menu }
-                #else
-                if !others.isEmpty { hostMenu(others, title: String(localized: "选别的 Mac"), surface: ControlSurface(kind: .quiet, size: .compact)) }
-                #endif
-            }
-        } else {
-            hostMenu(hosts, title: String(localized: "选一台 Mac 启用"), surface: ControlSurface(kind: .primary))
-        }
-    }
-
-    private func primary(_ settings: CueSettings, _ hosts: [CueSettings.Host]) -> CueSettings.Host? {
-        guard hosts.count == 1 || settings.profile.hostID != nil || hosts.first?.isHere == true else { return nil }
-        return settings.resumeHost(here: workspace.localHost)
-    }
-
-    private func hostMenu(_ hosts: [CueSettings.Host], title: String, surface: ControlSurface) -> some View {
+    private func hostMenu(_ hosts: [CueSettings.Host], title: String, kind: ControlButtonStyle.Kind) -> some View {
         CueHostMenu(hosts: hosts, use: .enable { enable(on: $0) }, accessibilityLabel: title) {
             HStack(spacing: Spacing.glyph) {
                 Text(title)
                 Chevron(.expand)
             }
-            .modifier(surface)
+            .modifier(ControlSurface(kind: kind))
+        }
+    }
+}
+
+/// Cue 一句一句说出来：与对话里它说的同一种气泡、同一种出字（`MarkdownText` 的 `.newest`），说完了右边才给你那一下。
+/// 冷启动时等开门、它落回云上才开口（`CueOpening`）；之后再来，话已经摆在那。说着时步子变了：相同的开头留着，后面的收回，接着说新的。
+struct CueSpeech<Actions: View>: View {
+    let lines: [CueGuide.Line]
+    @ViewBuilder var actions: Actions
+    @State private var said: [CueGuide.Line] = []
+    @State private var waited = false
+    @State private var talking = false
+    @State private var reveals = RevealLedger()
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 一句的字都落下后到下一句冒出来的停顿（前一句的最后几个字还在显影）：像换了口气，不是一口气念完。
+    private static var breath: Double { 0.28 }
+
+    private struct Script: Equatable {
+        let lines: [CueGuide.Line]
+        let open: Bool
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: CueBubble.joinedGap) {
+            ForEach(Array(said.enumerated()), id: \.element) { index, line in
+                bubble(line, joined: index > 0).transition(arrival)
+            }
+            if !said.isEmpty, said == lines, !talking {
+                actions
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, Spacing.group)
+                    .transition(arrival)
+            }
+        }
+        .environment(\.revealLedger, reveals)
+        .debugSettling(said != lines || talking)
+        .task(id: Script(lines: lines, open: CueOpening.shared.phase == .open)) { await speak() }
+    }
+
+    private var arrival: AnyTransition {
+        reduceMotion ? .opacity : .offset(y: Motion.Surface.shift).combined(with: .opacity)
+    }
+
+    private func speak() async {
+        guard CueOpening.shared.phase == .open else { return waited = true }
+        let kept = zip(said, lines).prefix { $0 == $1 }.count
+        let paced = !reduceMotion && (waited || !said.isEmpty)
+        talking = paced
+        withAnimation(Motion.fade) { said.removeLast(said.count - kept) }
+        for line in lines.dropFirst(kept) {
+            withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { said.append(line) }
+            if paced { guard await pause(.seconds(Double(line.text.count) / Motion.Reveal.pace + Self.breath)) else { return } }
+        }
+        withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { talking = false }
+    }
+
+    private func pause(_ duration: Duration) async -> Bool {
+        do { try await Task.sleep(for: duration) } catch { return false }
+        return true
+    }
+
+    private func bubble(_ line: CueGuide.Line, joined: Bool) -> some View {
+        BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
+            VStack(alignment: .leading, spacing: Spacing.tight) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
+                    if line.busy { Spinner(.small) }
+                    if line.failed {
+                        Text(line.text).font(Typography.reading).foregroundStyle(palette.failure)
+                    } else {
+                        MarkdownText(source: line.text, reveal: .newest).equatable()
+                    }
+                }
+                if let detail = line.detail {
+                    Text(detail).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .cueBubble(joined: joined)
         }
     }
 }

@@ -4270,6 +4270,22 @@
         }
       }
     },
+    "「%@」上接好了 %@。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” has %@ ready."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%1$@」上接好了 %2$@。"
+          }
+        }
+      }
+    },
     "「%@」做完了\n\n%@" : {
       "localizations" : {
         "en" : {
@@ -5258,22 +5274,6 @@
         }
       }
     },
-    "两台登同一个 iCloud" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sign In to the Same iCloud on Both"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "两台登同一个 iCloud"
-          }
-        }
-      }
-    },
     "中" : {
       "localizations" : {
         "en" : {
@@ -5642,18 +5642,18 @@
         }
       }
     },
-    "以后推送代码前先问我" : {
+    "以后推代码前先问我" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Always ask me before pushing code"
+            "value" : "Ask me before pushing code"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以后推送代码前先问我"
+            "value" : "以后推代码前先问我"
           }
         }
       }
@@ -6198,6 +6198,22 @@
         }
       }
     },
+    "你有好几台 Mac，挑一台让我开工。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You have a few Macs. Pick one for me to work on."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你有好几台 Mac，挑一台让我开工。"
+          }
+        }
+      }
+    },
     "你的话发送中" : {
       "localizations" : {
         "en" : {
@@ -6518,18 +6534,18 @@
         }
       }
     },
-    "做一个番茄钟网页，做好截图给我看" : {
+    "做个番茄钟网页，截图给我" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Build a Pomodoro page and screenshot it"
+            "value" : "Build a Pomodoro page, send a screenshot"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "做一个番茄钟网页，做好截图给我看"
+            "value" : "做个番茄钟网页，截图给我"
           }
         }
       }
@@ -6722,6 +6738,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "先在上面作答"
+          }
+        }
+      }
+    },
+    "先在这台 Mac 上接一个吧。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect one on this Mac first."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先在这台 Mac 上接一个吧。"
           }
         }
       }
@@ -7162,6 +7194,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "内置"
+          }
+        }
+      }
+    },
+    "再在它上面接一个 Agent，我借它的手干活。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect an agent on it. I work through its hands."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再在它上面接一个 Agent，我借它的手干活。"
           }
         }
       }
@@ -8038,22 +8086,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "卡住前"
-          }
-        }
-      }
-    },
-    "卡在这一步" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stuck here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "卡在这一步"
           }
         }
       }
@@ -9234,34 +9266,18 @@
         }
       }
     },
-    "启用后 %@ 接着干活" : {
+    "启用我，接着干活。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Turn on %@ to pick up where it left off"
+            "value" : "Turn me on and I'll pick up where we left off."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "启用后 %@ 接着干活"
-          }
-        }
-      }
-    },
-    "启用后说一件想做的事，我来开工，要你拿主意时再找你" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn me on and tell me what you want done. I'll get to work and check with you when a decision is yours."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用后说一件想做的事，我来开工，要你拿主意时再找你"
+            "value" : "启用我，接着干活。"
           }
         }
       }
@@ -9342,6 +9358,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "喇叭"
+          }
+        }
+      }
+    },
+    "嗨，我是 %@。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hi, I'm %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "嗨，我是 %@。"
           }
         }
       }
@@ -9794,22 +9826,6 @@
         }
       }
     },
-    "在 Mac 上接入 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Agents on Your Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 上接入 Agent"
-          }
-        }
-      }
-    },
     "在 Mac 上操作" : {
       "localizations" : {
         "en" : {
@@ -9826,34 +9842,18 @@
         }
       }
     },
-    "在 Mac 上装 CuePad" : {
+    "在 Mac 上装好 CuePad、登同一个 iCloud，我就来了。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install CuePad on Your Mac"
+            "value" : "Install CuePad on your Mac with the same iCloud account, and I'll be right here."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在 Mac 上装 CuePad"
-          }
-        }
-      }
-    },
-    "在 Mac 的 CuePad 里接入 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In CuePad on your Mac, connect %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 的 CuePad 里接入 %@"
+            "value" : "在 Mac 上装好 CuePad、登同一个 iCloud，我就来了。"
           }
         }
       }
@@ -12794,18 +12794,50 @@
         }
       }
     },
-    "我在你的 Mac 上干活，接上 Mac 就能叫我" : {
+    "我住在你的 Mac 上，替你看着 Agent 干活。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I work on your Mac. Connect a Mac and you can call me."
+            "value" : "I live on your Mac and keep your agents working."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "我在你的 Mac 上干活，接上 Mac 就能叫我"
+            "value" : "我住在你的 Mac 上，替你看着 Agent 干活。"
+          }
+        }
+      }
+    },
+    "我住在你的 Mac 上，靠 iCloud 跟手机碰头。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I live on your Mac and meet your phone through iCloud."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我住在你的 Mac 上，靠 iCloud 跟手机碰头。"
+          }
+        }
+      }
+    },
+    "我借 Agent 的手干活。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I work through an agent's hands."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我借 Agent 的手干活。"
           }
         }
       }
@@ -12822,22 +12854,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "我在听"
-          }
-        }
-      }
-    },
-    "我是 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I'm %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "我是 %@"
           }
         }
       }
@@ -12966,22 +12982,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "手机没联网，联网后再试"
-          }
-        }
-      }
-    },
-    "手机记事、拍板，Agent 在 Mac 上干活" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your phone captures and decides; agents work on your Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "手机记事、拍板，Agent 在 Mac 上干活"
           }
         }
       }
@@ -13382,6 +13382,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "找到了，但问版本没有回应，稍后再看"
+          }
+        }
+      }
+    },
+    "找到你的「%@」了。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found your “%@”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到你的「%@」了。"
           }
         }
       }
@@ -17362,6 +17378,22 @@
         }
       }
     },
+    "比比三款笔记 App，写页总结" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compare three note apps in a one-page summary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比比三款笔记 App，写页总结"
+          }
+        }
+      }
+    },
     "永久删除" : {
       "localizations" : {
         "en" : {
@@ -17550,22 +17582,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没换成：%@\n我还用原来的。"
-          }
-        }
-      }
-    },
-    "没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Mac yet? Save ideas and tasks now; they pick up once a Mac connects."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有 Mac 也能先用：记灵感、建任务，Mac 接上后接着做"
           }
         }
       }
@@ -18674,18 +18690,18 @@
         }
       }
     },
-    "用 %@ 做一个番茄钟网页，做好截图给我看" : {
+    "用 %@ 做个番茄钟网页，截图给我" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Have %@ build a Pomodoro page and screenshot it"
+            "value" : "Build a Pomodoro page with %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用 %@ 做一个番茄钟网页，做好截图给我看"
+            "value" : "用 %@ 做个番茄钟网页，截图给我"
           }
         }
       }
@@ -18846,22 +18862,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "留给你"
-          }
-        }
-      }
-    },
-    "登好后 Mac 会出现在这里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once both are signed in, your Mac shows up here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登好后 Mac 会出现在这里"
           }
         }
       }
@@ -20730,18 +20730,18 @@
         }
       }
     },
-    "要做什么，直接跟我说，比如：" : {
+    "要做什么，直接跟我说。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Just tell me what you need. For example:"
+            "value" : "Tell me what you'd like done."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "要做什么，直接跟我说，比如："
+            "value" : "要做什么，直接跟我说。"
           }
         }
       }
@@ -20906,18 +20906,18 @@
         }
       }
     },
-    "让 %@ 调研三款笔记 App 的优缺点，写一页总结" : {
+    "让 %@ 比比三款笔记 App" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Have %@ compare 3 note apps in a one-pager"
+            "value" : "Have %@ compare three note apps"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "让 %@ 调研三款笔记 App 的优缺点，写一页总结"
+            "value" : "让 %@ 比比三款笔记 App"
           }
         }
       }
@@ -20934,6 +20934,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "让它继续"
+          }
+        }
+      }
+    },
+    "让我在「%@」上开工？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Want me to start on “%@”?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让我在「%@」上开工？"
+          }
+        }
+      }
+    },
+    "让我在那儿开工？要你拿主意时，我发通知找你。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Want me to start there? When you need to decide, I'll notify you."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让我在那儿开工？要你拿主意时，我发通知找你。"
           }
         }
       }
@@ -21190,6 +21222,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "语言"
+          }
+        }
+      }
+    },
+    "说一件想做的事，我来开工；要你拿主意时，我再找你。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell me something to do and I'll get going. When you need to decide, I'll find you."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "说一件想做的事，我来开工；要你拿主意时，我再找你。"
           }
         }
       }
@@ -21618,22 +21666,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "读进它的会话记录"
-          }
-        }
-      }
-    },
-    "调研三款笔记 App 的优缺点，写一页总结" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Compare 3 note apps in a one-pager"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调研三款笔记 App 的优缺点，写一页总结"
           }
         }
       }
@@ -22326,22 +22358,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有 Mac 打开过 CuePad，开不了会话：先在 Mac 上打开它"
-          }
-        }
-      }
-    },
-    "还没有 Mac 用过 CuePad" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Mac has used CuePad yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Mac 用过 CuePad"
           }
         }
       }
@@ -23702,7 +23718,7 @@
         }
       }
     },
-    "选一台 Mac 启用" : {
+    "选一台 Mac" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23713,7 +23729,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选一台 Mac 启用"
+            "value" : "选一台 Mac"
           }
         }
       }
