@@ -30,6 +30,24 @@ struct PlusGlyph: View {
     }
 }
 
+struct FloatingGlyph: View {
+    let icon: Icon
+    @Environment(\.palette) private var palette
+
+    static let face: CGFloat = 40
+    static let size: CGFloat = 44
+    static let inset = Spacing.item
+    static var clearance: CGFloat { size + 2 * inset }
+
+    var body: some View {
+        Image(icon).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink)
+            .frame(width: Self.face, height: Self.face)
+            .glass(in: .circle, interactive: true, ink: .clear)
+            .frame(width: Self.size, height: Self.size)
+            .contentShape(.circle)
+    }
+}
+
 struct SendGlyph: View {
     enum Phase: Equatable {
         case idle, ready, sending, stop, stopping

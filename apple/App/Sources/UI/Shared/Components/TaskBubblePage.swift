@@ -89,7 +89,7 @@ private struct TaskEditor: View {
         #if os(macOS)
         editing.fittedField(card, theme: theme)
         #else
-        CardTextField(card: card, editing: editing, theme: theme, fits: true, keyboardBar: false)
+        CardTextField(card: card, editing: editing, theme: theme, fits: true)
         #endif
     }
 }

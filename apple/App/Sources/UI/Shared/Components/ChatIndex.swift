@@ -33,8 +33,8 @@ struct ChatIndex: View {
             shut: .marks(Self.visibleMarks), current: current,
             label: "对话目录", spoken: { ($0.preview, "") }, choose: { jump($0.id) }, expandedChanged: { open = $0 },
             mark: mark, words: words, overflow: { _ in EmptyView() })
-            .padding(.top, JumpToNewest.clearance)
-            .padding(.bottom, bottomInset + JumpToNewest.clearance)
+            .padding(.top, FloatingGlyph.clearance)
+            .padding(.bottom, bottomInset + FloatingGlyph.clearance)
             .opacity(shown ? 1 : 0)
             .allowsHitTesting(shown)
             .readerHidden(keyboard)

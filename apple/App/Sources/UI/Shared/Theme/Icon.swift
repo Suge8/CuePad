@@ -39,7 +39,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case call, microphone, muted
     case fast
     case attachment
-    case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
+    case photo, photoLibrary, camera, pickCards, expandEdit, selectText, variables
     case terminal, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case relay, relayStalled
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked
@@ -150,7 +150,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .pickCards: .ink("conflict")
         case .expandEdit: .ink("cursor")
         case .selectText: .ink("select")
-        case .dismissKeyboard: .ink("keyboard.down")
         case .variables: .ink("braces")
         case .terminal: .ink("terminal")
         case .readFile: .ink("doc")

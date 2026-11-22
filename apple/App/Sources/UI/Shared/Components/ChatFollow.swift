@@ -183,24 +183,16 @@ struct JumpToNewest: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let size: CGFloat = 44
-    static let inset = Spacing.item
-    static var clearance: CGFloat { size + 2 * inset }
-
     var body: some View {
         Button(action: action) {
-            Image(.toLatest).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink)
-                .frame(width: 40, height: 40)
-                .glass(in: .circle, interactive: true, ink: .clear)
+            FloatingGlyph(icon: .toLatest)
                 .overlay(alignment: .topTrailing) {
                     if unseen {
                         StatusDot(color: palette.ink, rim: palette.desk)
-                            .offset(x: -3, y: 3)
+                            .offset(x: -5, y: 5)
                             .transition(Motion.pop(reduceMotion: reduceMotion))
                     }
                 }
-                .frame(width: Self.size, height: Self.size)
-                .contentShape(.circle)
         }
         .buttonStyle(PressStyle(.button))
         .accessibilityLabel(unseen ? "回到最新，有新内容" : "回到最新")
