@@ -665,18 +665,18 @@
         }
       }
     },
-    "%@ 等你拍板" : {
+    "%@ 等你回答" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ needs your call"
+            "value" : "%@ needs your answer"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 等你拍板"
+            "value" : "%@ 等你回答"
           }
         }
       }
@@ -1668,22 +1668,6 @@
         }
       }
     },
-    "%lld 推进中" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld active"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 推进中"
-          }
-        }
-      }
-    },
     "%lld 未完成" : {
       "localizations" : {
         "en" : {
@@ -2366,6 +2350,38 @@
         }
       }
     },
+    "Agent 在等你回答或做完、Cue 回你话时，锁屏会提示你。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’ll get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 在等你回答或做完、Cue 回你话时，锁屏会提示你。"
+          }
+        }
+      }
+    },
+    "Agent 在等你回答或做完、Cue 回你话时，锁屏收不到提示。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You won’t get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 在等你回答或做完、Cue 回你话时，锁屏收不到提示。"
+          }
+        }
+      }
+    },
     "Agent 在等你回答或确认，Cue 带选项来问你或有急事" : {
       "localizations" : {
         "en" : {
@@ -2378,54 +2394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 在等你回答或确认，Cue 带选项来问你或有急事"
-          }
-        }
-      }
-    },
-    "Agent 在等你确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent needs your confirmation"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 在等你确认"
-          }
-        }
-      }
-    },
-    "Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You’ll get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。"
-          }
-        }
-      }
-    },
-    "Agent 在等你确认或做完、Cue 回你话时，锁屏收不到提示。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You won’t get Lock Screen alerts when an agent needs you or finishes, or when Cue replies."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 在等你确认或做完、Cue 回你话时，锁屏收不到提示。"
           }
         }
       }
@@ -2714,22 +2682,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 等你回答"
-          }
-        }
-      }
-    },
-    "Agent 等你确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent needs your OK"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 等你确认"
           }
         }
       }
@@ -10818,18 +10770,18 @@
         }
       }
     },
-    "它此刻在做什么、手上几件活、几件等你拍板，点一下和它说话。" : {
+    "它此刻在做什么、手上几件活、几件等你，点一下和它说话。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "See what Cue is doing, what’s active, and what needs your call. Tap to talk to it."
+            "value" : "See what Cue is doing, what’s active, and what needs you. Tap to talk to it."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "它此刻在做什么、手上几件活、几件等你拍板，点一下和它说话。"
+            "value" : "它此刻在做什么、手上几件活、几件等你，点一下和它说话。"
           }
         }
       }
@@ -12410,7 +12362,7 @@
         }
       }
     },
-    "开启后，Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。" : {
+    "开启后，Agent 在等你回答或做完、Cue 回你话时，锁屏会提示你。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -12421,7 +12373,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "开启后，Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。"
+            "value" : "开启后，Agent 在等你回答或做完、Cue 回你话时，锁屏会提示你。"
           }
         }
       }
@@ -12534,6 +12486,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开新会话交给它"
+          }
+        }
+      }
+    },
+    "开机后再发，写好的先留着" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send once it’s on. Your draft stays here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开机后再发，写好的先留着"
           }
         }
       }
@@ -13578,22 +13546,6 @@
         }
       }
     },
-    "拍板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拍板"
-          }
-        }
-      }
-    },
     "拍照" : {
       "localizations" : {
         "en" : {
@@ -13974,22 +13926,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "推荐"
-          }
-        }
-      }
-    },
-    "推进中" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Active"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推进中"
           }
         }
       }
@@ -19762,38 +19698,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等你在系统设置里允许"
-          }
-        }
-      }
-    },
-    "等你拍板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Needs your call"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等你拍板"
-          }
-        }
-      }
-    },
-    "等你确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Needs your OK"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等你确认"
           }
         }
       }

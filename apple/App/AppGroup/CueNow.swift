@@ -58,12 +58,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var since: Date
         var subagents: Int
         var slot = 0
-        var offline: String? = nil
 
         enum CodingKeys: String, CodingKey { case id, kind, name, since, subagents
-            case slot = "p", offline = "o" }
+            case slot = "p" }
 
-        var label: String { offline.map { String(localized: "「\($0)」没开") } ?? kind.label }
+        var label: String? { kind == .unconfirmed ? nil : kind.label }
 
         var expiry: Date? { kind == .done ? since.addingTimeInterval(CueNow.doneWindow) : nil }
 
@@ -195,7 +194,7 @@ nonisolated extension CueNow.Item.Kind {
 
     var label: String {
         switch self {
-        case .asks: String(localized: "等你拍板")
+        case .asks: String(localized: "等你回答")
         case .reply: String(localized: "新回复")
         case .running: String(localized: "工作中")
         case .delegating: String(localized: "等子代理")

@@ -6,7 +6,7 @@ import Testing
 @Suite(.releasesLibraries)
 struct RuntimeHandoffTests {
     @Test(arguments: [DeliveryMode.send, .start], ["unconfirmed", "future_ack", "pending"])
-    func 未确认交接仍在推进中但不算在跑(mode: DeliveryMode, status: String) async throws {
+    func 未确认交接仍在进行中但不算在跑(mode: DeliveryMode, status: String) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services), store = app.services.store
         defer { app.services.cancelBackgroundWork() }

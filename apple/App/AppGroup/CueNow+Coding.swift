@@ -38,8 +38,7 @@ nonisolated extension CueNow.Decay.Change {
         switch try values.decode(Operation.self) {
         case .update:
             self = .update(slot: try values.decode(Int.self), kind: try values.decode(CueNow.Item.Kind.self),
-                           since: try values.decode(Date.self), subagents: try values.decode(Int.self),
-                           offline: values.isAtEnd ? nil : try values.decode(String.self))
+                           since: try values.decode(Date.self), subagents: try values.decode(Int.self))
         case .replace: self = .replace(try values.decode(CueNow.Item.self))
         case .remove: self = .remove(slot: try values.decode(Int.self))
         }
@@ -48,13 +47,12 @@ nonisolated extension CueNow.Decay.Change {
     func encode(to encoder: any Encoder) throws {
         var values = encoder.unkeyedContainer()
         switch self {
-        case .update(let slot, let kind, let since, let subagents, let offline):
+        case .update(let slot, let kind, let since, let subagents):
             try values.encode(Operation.update)
             try values.encode(slot)
             try values.encode(kind)
             try values.encode(since)
             try values.encode(subagents)
-            if let offline { try values.encode(offline) }
         case .replace(let item):
             try values.encode(Operation.replace)
             try values.encode(item)

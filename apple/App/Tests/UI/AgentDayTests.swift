@@ -38,20 +38,6 @@ struct AgentDayTests {
         await executor.stop()
     }
 
-    @Test func 文字题等你回答_确认与选择题等你确认() async throws {
-        let recorder = try await app.runtimeRecorder(on: "mac-a")
-        let questions: [(String, QuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
-        for (id, kind) in questions {
-            try await recorder.update(
-                sessionID: id, state: .waitingForUser, title: id,
-                question: Question(promptID: "p", kind: .known(kind), text: "问题", options: kind == .select ? ["A", "B"] : []))
-        }
-
-        #expect(try await label("words") == "等你回答")
-        #expect(try await label("yesno") == "等你确认")
-        #expect(try await label("pick") == "等你确认")
-    }
-
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
@@ -145,7 +131,7 @@ struct AgentDayTests {
         #expect(try await title() == "调度")
     }
 
-    @Test func 列表先后_等你确认_出错_工作中_空闲_已结束_可按项目与文字筛() async throws {
+    @Test func 列表先后_等你回答_出错_工作中_空闲_已结束_可按项目与文字筛() async throws {
         let table = try await store.createProject(name: "圆桌", color: "#000000")
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "done", state: .ended, title: "done")

@@ -106,7 +106,7 @@ struct RailHome: View {
                         }
                     }
             }
-            .accessibilityValue(moving > 0 ? Text("\(moving) 推进中") : Text(verbatim: ""))
+            .accessibilityValue(moving > 0 ? Text("\(moving) 工作中") : Text(verbatim: ""))
         }
         .padding(.horizontal, RowMetrics.bleed)
     }

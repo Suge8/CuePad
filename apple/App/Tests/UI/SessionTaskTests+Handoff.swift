@@ -145,7 +145,7 @@ extension SessionTaskTests {
             services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
             return Dictionary(uniqueKeysWithValues: services.liveSessions.live.map { ($0.state.sessionID, workspace.shown($0).label) })
         }
-        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认"])
+        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你回答"])
         #expect(try await store.cueTally().waiting.count == 1)
         let states = try await store.sessionItems(sessionIDs: ["s1", "s2"])
         #expect(states["s1"] != nil && states["s1"]?.state.notify == nil)
@@ -160,18 +160,18 @@ extension SessionTaskTests {
         _ = try await app.runtimeRecorder(on: services.hostID)
         clock.advance(.seconds(1))
         try await eventually("Cue 那台过期、等的变 2 件") { counts.withLock { $0.last } == 2 }
-        #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
+        #expect(try await shown() == ["s1": "等你回答", "s2": "等你回答"])
         try await store.setTier(.full, of: "s3")
         try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
         try await recorder.update(sessionID: "s3", state: .waitingForUser, question: Question(promptID: "p3", kind: .confirm, text: "删旧分支？"))
         #expect(try await store.sessionItems(sessionIDs: ["s3"])["s3"]?.state.notify == .alert(.waitingForUser))
 
         try await store.recordMacPresence(host: "mac-b") { true }
-        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你确认", "s3": "等 Cue 回答"])
+        #expect(try await shown() == ["s1": "等 Cue 回答", "s2": "等你回答", "s3": "等 Cue 回答"])
         #expect(try await store.cueTally().waiting.count == 1)
 
         try await store.updateCueProfile { $0.enabledAt = nil }
-        #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认", "s3": "等你确认"])
+        #expect(try await shown() == ["s1": "等你回答", "s2": "等你回答", "s3": "等你回答"])
         #expect(try await store.cueTally().waiting.count == 3)
     }
 }

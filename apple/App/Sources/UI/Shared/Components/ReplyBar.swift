@@ -26,6 +26,7 @@ struct ReplyBar: View {
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
     @State private var opening: ConfigPick?
+    @State private var asleepNote = BubbleSwitch()
 
     private var draft: ComposerDraft {
         get { services.settings.replyDraft(for: session.id) }
@@ -55,6 +56,7 @@ struct ReplyBar: View {
     private var accepts: ComposerKinds { answering == nil ? .reply : [] }
     private var commands: [SlashCommand] { answering == nil ? catalog?.commands ?? [] : [] }
     private var reachable: Bool { services.syncing.reachesHost }
+    private var macOff: String? { session.macOff(at: services.speech) }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft }
     private var canStop: Bool { session.canStop }
@@ -80,7 +82,7 @@ struct ReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: box, prompt: prompt, promptIcon: wakes ? .wakeSession : nil, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
+                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending || macOff != nil, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
@@ -119,11 +121,12 @@ struct ReplyBar: View {
 
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]
-        switch button {
+        switch macOff == nil ? button : nil {
         case .answer: map[.send] = answer
         case .send(let mode): map[.send] = { send(mode) }
         case .stop, nil: break
         }
+        if macOff != nil { map[.send] = { asleepNote.open = true } }
         #if os(macOS)
         if hasTools {
             map[.model] = { opening = .model }
@@ -157,6 +160,17 @@ struct ReplyBar: View {
     #endif
 
     @ViewBuilder private var sendControl: some View {
+        if let macOff {
+            Button { asleepNote.toggle() } label: { SendGlyph(.asleep) }
+                .buttonStyle(PressStyle(.button))
+                .bubble($asleepNote) { MacAsleepNote(mac: macOff) }
+                .accessibilityLabel("「\(macOff)」没开")
+        } else {
+            sendButton
+        }
+    }
+
+    @ViewBuilder private var sendButton: some View {
         switch button {
         case .stop:
             Button(action: stop) { SendGlyph(stopping ? .stopping : .stop) }
@@ -180,7 +194,7 @@ struct ReplyBar: View {
         }
     }
 
-    private var interrupts: Bool { session.state.known?.isTurnRunning == true }
+    private var interrupts: Bool { session.runtimeState.known?.isTurnRunning == true }
     private static let interruptNote = String(localized: "会打断这一轮，以这句接着做")
     private var sendNote: String { interrupts ? Self.interruptNote : "" }
 
@@ -220,6 +234,20 @@ struct ReplyBar: View {
         if talked { flight?.depart(draft, as: id) }
         workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card, as: id)
         didSend(talked: talked)
+    }
+}
+
+private struct MacAsleepNote: View {
+    let mac: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            Text("「\(mac)」没开").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+            Text("开机后再发，写好的先留着").font(Typography.meta).foregroundStyle(palette.ink2)
+        }
+        .fixedSize()
+        .padding(Spacing.block)
     }
 }
 

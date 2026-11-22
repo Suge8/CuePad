@@ -36,7 +36,7 @@ struct SessionNoticeTests {
         let question = Question(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
-        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你拍板：要覆盖 feed.xml 吗？ 会丢掉手写的条目")
+        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你回答：要覆盖 feed.xml 吗？ 会丢掉手写的条目")
     }
 
     @Test func 歇下后回答还没读到就又动起来_不提示() async throws {

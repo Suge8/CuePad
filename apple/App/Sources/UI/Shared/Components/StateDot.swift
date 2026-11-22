@@ -10,7 +10,7 @@ extension SessionShown {
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.signature
         case .unread, .awaitsReply: palette.replied
-        case .idle, .resting, .fresh, .interrupted, .unknown, .ended: palette.ink3
+        case .idle, .resting, .fresh, .interrupted, .unknown, .offline, .ended: palette.ink3
         }
     }
 
@@ -18,7 +18,7 @@ extension SessionShown {
         switch status {
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): false
         case .asking, .awaitsReply, .failed, .working, .delivery, .unread: true
-        case .cueAsking, .idle, .resting, .fresh, .ended, .interrupted, .unknown: false
+        case .cueAsking, .idle, .resting, .fresh, .ended, .interrupted, .unknown, .offline: false
         }
     }
 
@@ -50,7 +50,7 @@ extension SessionShown {
         case .fresh: .fresh
         case .ended: .ended
         case .interrupted: .interrupted
-        case .unknown: .unknown
+        case .unknown, .offline: .unknown
         }
     }
 }
@@ -123,7 +123,7 @@ extension SessionShown {
         case .idle, .resting: .hidden
         case .interrupted: InkPose(shape: .plug, life: .jitter)
         case .ended: InkPose(shape: .moon, life: .rock)
-        case .delivery, .failed, .fresh, .unknown: nil
+        case .delivery, .failed, .fresh, .unknown, .offline: nil
         }
     }
 

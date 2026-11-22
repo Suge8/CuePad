@@ -74,7 +74,7 @@ struct SessionBoardTests {
 
         let s1 = try #require(made.first { $0.piSessionID == "s1" }).id
         try await moves("s1", after: s1)
-        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "休眠还在路上时它又动了一下（叫它歇时正做着）：不回推进中")
+        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "休眠还在路上时它又动了一下（叫它歇时正做着）：不回进行中")
         try await macAnswersEnds()
         try await moves("s1", after: s1, by: 0)
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "同一毫秒分不出先后，按没动过算")
@@ -82,7 +82,7 @@ struct SessionBoardTests {
         #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"], "歇下之后又醒来")
     }
 
-    @Test func 完成后归档或项目进回收站_休眠在路上的不回推进中_没歇成才回来() async throws {
+    @Test func 完成后归档或项目进回收站_休眠在路上的不回进行中_没歇成才回来() async throws {
         let workspace = Workspace(services: services)
         let project = try await store.createProject(name: "回收", color: "#000000")
         let archived = try await session("s1", title: "修登录")
@@ -97,10 +97,10 @@ struct SessionBoardTests {
         try await workspace.archive(first.id)
         #expect(made.first { $0.piSessionID == "s2" }?.projectID == project.id, "建在会话所在的项目里")
         try await store.trashProject(project.id)
-        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "已经叫它歇了：卡离开看板也不回推进中，不等那台 Mac 做完")
+        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "已经叫它歇了：卡离开看板也不回进行中，不等那台 Mac 做完")
 
         try await macAnswersEnds(slept: false)
-        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/s1", "session/s2"], "没歇成：活着又没有卡代表，回推进中")
+        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/s1", "session/s2"], "没歇成：活着又没有卡代表，回进行中")
     }
 
     @Test func 等你里的无主会话点完成_先问一句_答应了才建卡完成() async throws {

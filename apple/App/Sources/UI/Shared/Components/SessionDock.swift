@@ -18,7 +18,7 @@ struct SessionDock: View {
             QuestionDock(session: session)
             FailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             DockedCard(endIssue?.unconfirmedReason) { reason in
-                Callout(.unknown(), text: String(localized: "休眠结果尚未确认：\(reason)"), docked: true) { recoverEnd }
+                Callout(.unknown, text: String(localized: "休眠结果尚未确认：\(reason)"), docked: true) { recoverEnd }
             }
             DockedCard(endIssue?.failure?.text) { failure in
                 Callout(.failed(.other), text: String(localized: "没能休眠：\(failure)"), docked: true) { recoverEnd }

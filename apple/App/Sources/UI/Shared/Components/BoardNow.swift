@@ -39,7 +39,7 @@ struct BoardWord: View {
     var body: some View {
         if case .context(let meter) = pulse.word {
             ContextFact(meter: meter)
-        } else if let shown = pulse.shown {
+        } else if let shown = pulse.shown, !shown.isOffline {
             Text(shown.label).fontWeight(.semibold).foregroundStyle(pulse.tint(palette))
         }
     }

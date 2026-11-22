@@ -42,11 +42,10 @@ struct RuntimeDisplayTests {
         #expect(offline.agentCount == 0)
         #expect(offline.subagents == 0 && offline.tally.moving == 0 && offline.advancing == 3)
         #expect(offline.isLive && !offline.hasConfirmedActivity)
-        let macOff = "「\(MacAgents.unnamed)」没开"
-        #expect(offline.items.count == 3 && offline.items.allSatisfy { $0.label == macOff }, "\(offline.items.map(\.label))")
-        #expect(snapshot.shown(at: snapshot.at + 601).items.allSatisfy { $0.label == macOff }, "\(snapshot.shown(at: snapshot.at + 601).items.map(\.label))")
+        #expect(offline.items.count == 3 && offline.items.allSatisfy { $0.kind == .unconfirmed }, "\(offline.items.map(\.kind))")
+        #expect(snapshot.shown(at: snapshot.at + 601).items.allSatisfy { $0.kind == .unconfirmed }, "\(snapshot.shown(at: snapshot.at + 601).items.map(\.kind))")
         let board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .unknown(macOff: MacAgents.unnamed) })
+        #expect(board.advancing.allSatisfy { workspace.shown($0.agent!).status == .offline(mac: MacAgents.unnamed) })
         #expect(snapshot.shown(at: snapshot.at + 601).tally.moving == 0)
         #expect(snapshot.shown(at: snapshot.at + 601).isLive && !snapshot.shown(at: snapshot.at + 601).hasConfirmedActivity)
 
@@ -143,7 +142,7 @@ struct RuntimeDisplayTests {
     }
 
 
-    @Test func 同件事的拍板到期不遮住另一台仍在跑的会话_后续快照与即时读取相同() async throws {
+    @Test func 同件事的等你回答到期不遮住另一台仍在跑的会话_后续快照与即时读取相同() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services), store = app.services.store
         let task = try await workspace.createTask("并行推进", in: Project.defaultID)
@@ -170,7 +169,7 @@ struct RuntimeDisplayTests {
         #expect(afterA.shown(at: clock.now + 240).tally.moving == 0)
     }
 
-    @Test func 同一会话绑两任务只数一次子代理_一件拍板及解除不漏另一件_到期归零() async throws {
+    @Test func 同一会话绑两任务只数一次子代理_一件等你回答及解除不漏另一件_到期归零() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services), store = app.services.store
         let first = try await workspace.createTask("第一件", in: Project.defaultID)
@@ -237,7 +236,7 @@ struct RuntimeDisplayTests {
         #expect(alive.state == .known(.compacting))
         let unknown = try #require(try await store.sessionItems(sessionIDs: ["unknown"])["unknown"]?.state)
         #expect(try await !store.runtimeIsConfirmed(unknown))
-        #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown())
+        #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown)
     }
     #endif
 }
