@@ -2136,17 +2136,6 @@
         }
       }
     },
-    "%lld/%lld" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld/%2$lld"
-          }
-        }
-      },
-      "shouldTranslate" : false
-    },
     "3D 模型" : {
       "localizations" : {
         "en" : {
@@ -4757,22 +4746,6 @@
         }
       }
     },
-    "上一件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上一件"
-          }
-        }
-      }
-    },
     "上一句可能已经执行，再说一次可能让 Agent 重复操作。原请求会保留。" : {
       "localizations" : {
         "en" : {
@@ -5041,22 +5014,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一个（→）"
-          }
-        }
-      }
-    },
-    "下一件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下一件"
           }
         }
       }
@@ -14513,22 +14470,6 @@
         }
       }
     },
-    "收起键盘，展开这张卡" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hides the keyboard and expands this card"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起键盘，展开这张卡"
-          }
-        }
-      }
-    },
     "收起（Esc）" : {
       "localizations" : {
         "en" : {
@@ -19641,22 +19582,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "立即同步"
-          }
-        }
-      }
-    },
-    "第 %lld 件，共 %lld 件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld of %2$lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "第 %1$lld 件，共 %2$lld 件"
           }
         }
       }

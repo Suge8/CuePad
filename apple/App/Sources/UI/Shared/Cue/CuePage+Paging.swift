@@ -23,15 +23,13 @@ extension CuePage {
             return max(count, 1)
         }
         return ChatPaging(
-            first: { count(filling: CGSize(width: $0.width, height: $0.height - covered(thread, size: $0)), above: $1) },
+            first: { count(filling: CGSize(width: $0.width, height: $0.height - covered), above: $1) },
             step: { min(count(filling: CGSize(width: $0.width, height: $0.height / 2), above: $1), segment) })
     }
 
-    private static func covered(_ thread: CueThread, size: CGSize) -> CGFloat {
+    private static var covered: CGFloat {
         #if os(macOS)
-        let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
-        let dock = thread.waiting.isEmpty ? 0 : min(CueWaitCard.floor, size.height / 2)
-        return composer + Spacing.replyBottom + dock
+        ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot + Spacing.replyBottom
         #else
         0
         #endif
