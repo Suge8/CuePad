@@ -27,7 +27,7 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "done", "task": a.id.uuidString, "evidence": ["完成"]])
       #expect(try await store.card(a.id)?.status == .done)
       #expect(try await store.card(b.id)?.status == .todo)
-      #expect(try await server.refused("task", ["action": "unknown"]) == "task 没有 unknown：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+      #expect(try await server.refused("task", ["action": "unknown"]) == "task 没有 unknown：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done / tier")
     }
   }
 
