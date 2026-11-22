@@ -52,12 +52,12 @@ struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id) }
+            RoundProcess(tools: tools, took: took, session: session, message: id, fadesIn: fadesIn)
             MarkdownText(source: text, notes: notes).equatable()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+                .contextMenu { menu }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(.rect)
-        .contextMenu { menu }
         .transition(fadesIn ? .entry : .identity)
     }
 
@@ -107,44 +107,29 @@ private struct MachineCard: View {
 }
 
 
-struct DraftReply<Header: View>: View {
-    let text: String
-    @ViewBuilder let header: Header
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            header
-            MarkdownText(source: text).equatable()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .transition(.asymmetric(insertion: .entry, removal: .identity))
-    }
-}
-
-
-struct LiveStatus: View {
+/// 在跑的一轮：过程接在对话末尾，Mac 上正在说的那句跟在最后，子代理与角色在下面。这一轮做完，对话里的回答（`ReplyBlock`）在原处接上同样的排法
+struct LiveRound<Below: View>: View {
     let session: SessionState
+    var draft: String?
+    var swapsInPlace = false
+    let floating: CGFloat
+    @ViewBuilder let below: Below
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            if let ending = Self.ending(of: session, speaking: false) {
-                RoundProcess(tools: session.pendingTools, ending: ending, session: session)
+        let tools = session.runtimeState.known?.hasPendingWork == true ? session.pendingTools : nil
+        VStack(alignment: .leading, spacing: Conversation.spacing) {
+            RoundProcess(tools: tools, draft: draft, session: session, fadesIn: !swapsInPlace)
+                .transition(swapsInPlace ? .asymmetric(insertion: .entry, removal: .identity) : .entry)
+            ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
+                VStack(alignment: .leading, spacing: Spacing.item) {
+                    SubagentList(agents: session.runtimeSubagents)
+                    below
+                }
             }
-            SubagentList(agents: session.runtimeSubagents)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
     }
-
-    static func ending(of session: SessionState, speaking: Bool) -> RoundProcess.Ending? {
-        if speaking { return .speaking }
-        let delegating = session.state == .known(.delegating) && !session.runtimeSubagents.isEmpty
-        guard session.runtimeState.isWorking, !delegating || session.pendingTools != nil else { return nil }
-        return .running
-    }
 }
-
-
 
 extension View {
     func shimmering() -> some View { modifier(Shimmer()) }

@@ -35,8 +35,11 @@ struct ToolLog: Codable, Equatable {
         activity.cache = Tools.Cache(recached: missed > 0 ? missed : nil, context: context, warmUntil: warmUntil, estimated: estimated ? true : nil)
     }
 
-    mutating func say(_ text: String) {
-        activity.record(.init(kind: .said, target: text.clipped(Tools.saidLimit)))
+    mutating func say(_ text: String, at: Date, record: UUID?) {
+        var said = Tools.Item(kind: .said, target: text)
+        said.at = at
+        said.record = record
+        activity.record(said)
     }
 
     var settled: Tools? { activity == Tools() ? nil : activity }

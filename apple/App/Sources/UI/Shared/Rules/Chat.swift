@@ -98,41 +98,55 @@ nonisolated enum Chat {
         return SessionClock.duration(message.at.timeIntervalSince(started))
     }
 
-    struct Process: Equatable {
-        struct Count: Equatable {
-            let kind: ChatMessage.Tools.Kind
-            let count: Int
-            let spoken: String
+    struct Count: Equatable {
+        let kind: ChatMessage.Tools.Kind
+        let count: Int
+        let spoken: String
+    }
+
+    enum ProcessPart: Hashable, Identifiable {
+        case steps(Range<Int>)
+        case said(Int)
+
+        var id: Int {
+            switch self {
+            case .steps(let range): range.lowerBound
+            case .said(let index): index
+            }
         }
-
-        var counts: [Count] = []
-        var steps: String?
-        var recached: String?
-
-        var spoken: Dotted { Dotted(counts.map(\.spoken) + [steps]) }
     }
 
-    static func process(_ tools: ChatMessage.Tools?) -> Process? {
-        guard let tools else { return nil }
-        let recached = tools.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
-        guard tools.steps > 0 else { return recached.map { Process(recached: $0) } }
-        let edits = tools.items.count { $0.kind == .edit && !$0.failed }
-        var counts = [Process.Count(kind: .edit, count: edits, spoken: String(localized: "改了 \(edits) 个文件"))]
-        let complete = tools.steps == tools.items.count { $0.kind != .said }
-        if complete { counts += looks(tools.items) }
-        counts.removeAll { $0.count == 0 }
-        return Process(counts: counts, steps: complete && !counts.isEmpty ? nil : String(localized: "共 \(tools.steps) 步"), recached: recached)
+    static func parts(_ items: [ChatMessage.Tools.Item]) -> [ProcessPart] {
+        var parts: [ProcessPart] = [], start = 0
+        for (index, item) in items.enumerated() where item.kind == .said {
+            if index > start { parts.append(.steps(start..<index)) }
+            parts.append(.said(index))
+            start = index + 1
+        }
+        if items.count > start { parts.append(.steps(start..<items.count)) }
+        return parts
     }
 
-    static func looks(_ items: some Collection<ChatMessage.Tools.Item>) -> [Process.Count] {
+    static func counts(_ items: some Collection<ChatMessage.Tools.Item>) -> [Count] {
+        let edits = items.count { $0.kind == .edit && !$0.failed }
+        return ([Count(kind: .edit, count: edits, spoken: String(localized: "改了 \(edits) 个文件"))] + looks(items)).filter { $0.count > 0 }
+    }
+
+    static func looks(_ items: some Collection<ChatMessage.Tools.Item>) -> [Count] {
         func count(_ kind: ChatMessage.Tools.Kind) -> Int { items.count { $0.kind == kind } }
         let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
         return [
-            Process.Count(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
+            Count(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
             .init(kind: .read, count: reads, spoken: String(localized: "读了 \(reads) 个文件")),
             .init(kind: .search, count: searches, spoken: String(localized: "搜了 \(searches) 次")),
             .init(kind: .other, count: others, spoken: String(localized: "\(others) 次工具")),
         ].filter { $0.count > 0 }
+    }
+
+    static func unlisted(_ tools: ChatMessage.Tools) -> Int { tools.steps - tools.items.count { $0.kind != .said } }
+
+    static func recached(_ tools: ChatMessage.Tools?) -> String? {
+        tools?.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
     }
 
     enum ProcessRow: Hashable {
@@ -142,18 +156,18 @@ nonisolated enum Chat {
 
     static let foldedLooks = 3
 
-    static func rows(_ items: [ChatMessage.Tools.Item], settled: Bool) -> [ProcessRow] {
+    static func rows(_ items: ArraySlice<ChatMessage.Tools.Item>, settled: Bool) -> [ProcessRow] {
         guard settled else { return items.indices.map(ProcessRow.step) }
-        var rows: [ProcessRow] = [], start = 0
+        var rows: [ProcessRow] = [], start = items.startIndex
         func close(at end: Int) {
             rows += end - start >= foldedLooks ? [.looks(start..<end)] : (start..<end).map(ProcessRow.step)
             start = end + 1
         }
-        for (index, item) in items.enumerated() where item.kind.acts || item.kind == .said {
+        for index in items.indices where items[index].kind.acts {
             close(at: index)
             rows.append(.step(index))
         }
-        close(at: items.count)
+        close(at: items.endIndex)
         return rows == [.looks(items.indices)] ? items.indices.map(ProcessRow.step) : rows
     }
 

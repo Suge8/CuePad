@@ -44,6 +44,7 @@ extension Bridge {
         let session = compacting(session, after: previous)
         guard session != previous else { return }
         slot.session = session
+        if previous.state.isTurnRunning, !session.state.isTurnRunning { slot.roundStopped() }
         emit(session.state != previous.state || session.detail != previous.detail ? .stateChanged(session, from: previous.state) : .infoChanged(session))
     }
 

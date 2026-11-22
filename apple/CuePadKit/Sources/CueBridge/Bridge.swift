@@ -11,7 +11,7 @@ public final class Bridge {
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: Session
-        public var draft: LiveDraft? { feed.draft }
+        public var draft: LiveDraft? { feed.latest }
         public var speaking: Bool { feed.speaking }
         private let feed = LiveDraftFeed()
 
@@ -23,6 +23,7 @@ public final class Bridge {
         }
 
         func offer(_ next: LiveDraft?) { feed.offer(next) }
+        func roundStopped() { feed.roundStopped() }
     }
 
     public internal(set) var slots: [Slot] = []
