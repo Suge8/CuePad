@@ -1,51 +1,6 @@
 import CueStore
 import SwiftUI
 
-struct CueQuestionLine: View {
-    let question: String
-    let note: String?
-    @Environment(\.palette) private var palette
-
-    init(wait: CueWait) {
-        (question, note) = wait.session.asked
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            StateGlyph(status: .asking).font(Typography.title).readerHidden(true)
-            VStack(alignment: .leading, spacing: Spacing.tight) {
-                Text(Self.keepingTail(question)).font(Typography.title).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
-                if let note {
-                    Text(Self.keepingTail(note)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel([question, note].compactMap(\.self).joined(separator: "，"))
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// 只给显示：句尾最后 4 个字（汉字一个算一个，英文单词、数字一整段算一个，不算标点）连同其间与其后的标点粘成一块，
-    /// 换行时不会只剩"我选」。"这样的尾巴挂在下一行。块与块之间插字连接符（U+2060，不占宽、不显示）；不插进单词里面：
-    /// 插在字母之间时排版反倒在那里断开（"ma / in"）。没有汉字的（英文界面里 Cue 写的）照常按词折行、不粘：
-    /// 窄格一行只排得下两三个词，几个词粘成一块就比格还宽，排版只能在词中间断（"scr / eenshot"）。存储、通知、读屏、复制都用原文。
-    static func keepingTail(_ text: String) -> String {
-        func latin(_ character: Character) -> Bool { character.isASCII && (character.isLetter || character.isNumber) }
-        guard text.contains(where: { !$0.isASCII && $0.isLetter }) else { return text }
-        var rest = Substring(text), pieces: [Substring] = [], counted = 0
-        while counted < tailLength, let last = rest.last {
-            let length = latin(last) ? rest.reversed().prefix(while: latin).count : 1
-            pieces.insert(rest.suffix(length), at: 0)
-            rest = rest.dropLast(length)
-            if last.isLetter || last.isNumber { counted += 1 }
-        }
-        guard counted == tailLength else { return text }
-        return rest + pieces.joined(separator: "\u{2060}")
-    }
-
-    private static let tailLength = 4
-}
-
 struct CueShots: View {
     let shots: [CueShown]
     let group: String
@@ -86,13 +41,33 @@ struct CueShots: View {
         let split = look.range(of: "：") ?? look.range(of: ": ")
         let parts = split.map { [String(look[..<$0.lowerBound]), String(look[$0.upperBound...])] } ?? [look]
         return VStack(alignment: .leading, spacing: Spacing.hair) {
-            Text(CueQuestionLine.keepingTail(parts.first ?? look)).fontWeight(.semibold).foregroundStyle(palette.ink)
-            if parts.count > 1 { Text(CueQuestionLine.keepingTail(parts[1])).foregroundStyle(palette.ink2) }
+            Text(Self.keepingTail(parts.first ?? look)).fontWeight(.semibold).foregroundStyle(palette.ink)
+            if parts.count > 1 { Text(Self.keepingTail(parts[1])).foregroundStyle(palette.ink2) }
         }
         .font(Typography.meta)
         .fixedSize(horizontal: false, vertical: true)
         .readerHidden(true)
     }
+
+    /// 只给显示：句尾最后 4 个字（汉字一个算一个，英文单词、数字一整段算一个，不算标点）连同其间与其后的标点粘成一块，
+    /// 换行时不会只剩"我选」。"这样的尾巴挂在下一行。块与块之间插字连接符（U+2060，不占宽、不显示）；不插进单词里面：
+    /// 插在字母之间时排版反倒在那里断开（"ma / in"）。没有汉字的（英文界面里 Cue 写的）照常按词折行、不粘：
+    /// 窄格一行只排得下两三个词，几个词粘成一块就比格还宽，排版只能在词中间断（"scr / eenshot"）。存储、通知、读屏、复制都用原文。
+    private static func keepingTail(_ text: String) -> String {
+        func latin(_ character: Character) -> Bool { character.isASCII && (character.isLetter || character.isNumber) }
+        guard text.contains(where: { !$0.isASCII && $0.isLetter }) else { return text }
+        var rest = Substring(text), pieces: [Substring] = [], counted = 0
+        while counted < tailLength, let last = rest.last {
+            let length = latin(last) ? rest.reversed().prefix(while: latin).count : 1
+            pieces.insert(rest.suffix(length), at: 0)
+            rest = rest.dropLast(length)
+            if last.isLetter || last.isNumber { counted += 1 }
+        }
+        guard counted == tailLength else { return text }
+        return rest + pieces.joined(separator: "\u{2060}")
+    }
+
+    private static let tailLength = 4
 }
 
 private struct ShotRow: Layout {

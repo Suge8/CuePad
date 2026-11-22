@@ -143,7 +143,6 @@ final class Workspace {
     var cueDrawer = false
     var railDrawer = false
     @ObservationIgnored var wideFits: WideMetrics.Fits?
-    var cueAsking: String?
     var notice: Notice? {
         didSet { if oldValue?.tone == .pick, notice?.tone != .pick, pickingDock { setDock(nil) } }
     }

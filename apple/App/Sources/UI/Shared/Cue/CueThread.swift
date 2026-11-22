@@ -3,7 +3,6 @@ import SwiftUI
 
 nonisolated struct CueThread: Equatable, Sendable {
     let messages: [CueMessage]
-    let waiting: [CueWait]
     let shots: [UUID: [CueShown]]
     let rows: [Row]
     let joined: Set<UUID>
@@ -14,11 +13,10 @@ nonisolated struct CueThread: Equatable, Sendable {
     static let limit = 200
 
     init(
-        messages: [CueMessage], waiting: [CueWait], shots: [UUID: [CueShown]],
+        messages: [CueMessage], shots: [UUID: [CueShown]],
         unread: Set<UUID>, lines: [UUID: CueMemoryLine]
     ) {
         self.messages = messages
-        self.waiting = waiting
         self.shots = shots
         self.unread = unread
         let rows = Self.rows(messages, shots: shots, lines: lines)
@@ -38,7 +36,6 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     static func read(from store: isolated CueStore) throws -> CueThread {
         let messages = try store.cueMessages(limit: limit)
-        let waits = try CueWait.read(try store.cueWaiting(), handed: try store.cueDuty(), from: store)
         let pointed = messages.filter { !$0.shots.isEmpty }
         let previews = try store.previews(Set(pointed.flatMap { $0.shots.map(\.preview) }))
         var shots: [UUID: [CueShown]] = [:]
@@ -50,7 +47,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         }
         let fired = messages.flatMap { message -> [UUID] in if case .schedule(let fires)? = message.wake { fires.map(\.line) } else { [] } }
         return CueThread(
-            messages: messages, waiting: waits, shots: shots, unread: Set(try store.cueUnread()),
+            messages: messages, shots: shots, unread: Set(try store.cueUnread()),
             lines: Dictionary(try store.cueLines(fired).map { ($0.id, $0) }) { first, _ in first })
     }
 

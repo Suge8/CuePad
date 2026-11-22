@@ -3,7 +3,6 @@ import SwiftUI
 
 struct WaitAnswer: View {
     let session: SessionState
-    var replyElsewhere = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -39,31 +38,19 @@ struct WaitAnswer: View {
     var body: some View {
         switch question?.kind.known {
         case .confirm: answers([.confirmed(false), .confirmed(true)])
-        case .select:
-            answers((question?.options ?? []).map(AnswerValue.option), numbered: replyElsewhere,
-                    other: replyElsewhere && question?.allowsOther == true)
-        case .text: if !replyElsewhere { WaitReply(session: session) }
-        case nil:
-            if !replyElsewhere {
-                chips {
-                    Button("打开会话") { workspace.openSession(session.id, sessionID: session.sessionID) }
-                        .buttonStyle(ControlButtonStyle(kind: .secondary))
-                }
-            }
+        case .select: answers((question?.options ?? []).map(AnswerValue.option), other: question?.allowsOther == true)
+        case .text, nil: EmptyView()
         }
     }
 
-    private func chips(@ViewBuilder _ content: () -> some View) -> some View {
-        ChipFlow { content() }.frame(maxWidth: .infinity, alignment: .trailing)
-    }
-
-    private func answers(_ values: [AnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
+    private func answers(_ values: [AnswerValue], other: Bool = false) -> some View {
         VStack(alignment: .trailing, spacing: Spacing.tight) {
-            chips {
+            ChipFlow {
                 ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                    chip(value, number: numbered && index < 9 ? index + 1 : nil)
+                    chip(value, number: index < 9 ? index + 1 : nil)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .disabled(answering)
             if other { Text("都不是？在下面的回复框里写你的回答").font(Typography.meta).foregroundStyle(palette.ink3) }
             Text(note?.text ?? " ").font(Typography.meta).foregroundStyle(note?.failed == true ? palette.failure : palette.ink3).lineLimit(1)
@@ -71,13 +58,13 @@ struct WaitAnswer: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         #if os(macOS)
-        .focusable(numbered)
+        .focusable()
         .focusEffectDisabled()
         .focused($keyboard)
         .yieldsFocusWhenCovered($keyboard)
-        .onAppear { keyboard = numbered && !covered }
+        .onAppear { keyboard = !covered }
         .onKeyPress(characters: .decimalDigits, phases: .down) { press in
-            guard numbered, let number = Int(press.characters), values.indices.contains(number - 1), !answering else { return .ignored }
+            guard let number = Int(press.characters), values.indices.contains(number - 1), !answering else { return .ignored }
             answer(values[number - 1])
             return .handled
         }
@@ -123,40 +110,5 @@ struct WaitAnswer: View {
                 if pending?.promptID == promptID { pending?.error = error.localizedDescription }
             }
         }
-    }
-}
-
-private struct WaitReply: View {
-    let session: SessionState
-    private let prompt = String(localized: "回答")
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    private var box: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: session.id) }
-    private var canSend: Bool { !box.wrappedValue.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: Spacing.glyph) {
-            TextField(prompt, text: box.text, palette: palette, axis: .vertical)
-                .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
-                .padding(.vertical, Self.textInset)
-                .frame(minHeight: ComposerMetrics.glyphTarget)
-                .onSubmit(send)
-            Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
-                .buttonStyle(PressStyle(.button))
-                .disabled(!canSend)
-                .accessibilityLabel(prompt)
-        }
-        .padding(.leading, Spacing.group).padding(.trailing, Spacing.hair).padding(.vertical, Spacing.hair)
-        .background(palette.fill, in: Radius.nested)
-    }
-
-    /// 字上下各让出的空：一行字（约 16）加两边正好是钮的点按高，多行时最后一行仍落在钮的中线附近。
-    private static let textInset: CGFloat = 12
-
-    private func send() {
-        guard canSend else { return }
-        workspace.answer(session, from: box)
     }
 }
