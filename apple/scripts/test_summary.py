@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """xc.sh test 收尾时给 Agent 看的一页结论。用法：test_summary.py <完整日志> <xc.sh test 的退出码>
 
-只读完整日志（xcodebuild 的原始输出，一次调用里 Kit 与 App 两段都在里面），不改退出码。分两家数：
+读完整日志（xcodebuild 的原始输出，一次调用里 Kit 与 App 两段都在里面），不改退出码；并行跑的日志里没有结果，改读日志末尾点名的结果包。分两家数：
 - Swift Testing：`✔/✘ Test run with N tests …`（有已知问题 `withKnownIssue` 时这类行以 `━` 开头） 给总数，`✘ Test … failed after`、`➜ Test … skipped` 给失败与跳过；
 - XCTest：每个测试包收尾的 `Test Suite 'All tests'|'Selected tests'` 后一行 `Executed N tests, with … skipped and … failures`。
 钉住的 Agent 没装时它的用例跳过、原因里带「未覆盖：」（CueTestSupport 的 PinnedAgent）：单列成「没跑、不算通过的」，不混进普通的跳过。
 按家参数化的用例跳过的那一例（`Test.cancel`）日志里没有任何一行，汇总把整个用例算通过：所以跑过真 Agent 用例时另列没装的家（agents.py status）。
 用例的耗时取 `passed after`（Swift Testing，参数化的取汇总行，不取每个参数一行）与 `passed (x seconds)`（XCTest）。"""
+import json
 import os
 import re
 import subprocess
@@ -59,17 +60,34 @@ for i, line in enumerate(lines):
         elif "Time limit was exceeded" in line:
             first_failure = ("超时", "", [line.strip()])
 
+# 并行跑（-parallel-testing-enabled YES，如 cue-eval.sh）时日志里每条用例只有一行 Test case '…' passed/failed on '…'，没有汇总，也没有失败的原因：
+# 数与首个失败只有结果包里有
+bundle = next((l.strip() for l in reversed(lines) if l.strip().endswith(".xcresult")), None)
+results = None
+if bundle and any(re.match(r"Test case '.+' (passed|failed|skipped) on ", l) for l in lines):
+    read = subprocess.run(["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle], capture_output=True, text=True)
+    if read.returncode == 0:
+        results = json.loads(read.stdout)
+    else:
+        print(f"读不出结果包 {bundle}：{read.stderr.strip()}")
+
 st_skipped = len(skipped)
 st_failed = len(failed_names)
 passed = lambda total, failed, skipped: max(total - failed - skipped, 0)
 ran = st_total + xc_total > 0
 verdict = "通过" if status == 0 else "未通过"
 print(f"\n── 测试结论：{verdict}（退出码 {status}）──")
-if not ran:
+if results:
+    print(f"并行跑，数与首个失败取自结果包：通过 {results['passedTests']}  失败 {results['failedTests']}  跳过 {results['skippedTests']}")
+    if first_failure is None and results["testFailures"]:
+        failure = results["testFailures"][0]
+        first_failure = (failure["testIdentifierString"], "", failure["failureText"].splitlines())
+elif not ran:
     print("没有任何用例的结果：多半是编译失败或没跑起来，看上面的错误；完整日志：" + log_path)
     sys.exit(0)
-print(f"Swift Testing  通过 {passed(st_total, st_failed, st_skipped)}  失败 {st_failed}  跳过 {st_skipped}")
-print(f"XCTest         通过 {passed(xc_total, xc_failed, xc_skipped)}  失败 {xc_failed}  跳过 {xc_skipped}")
+else:
+    print(f"Swift Testing  通过 {passed(st_total, st_failed, st_skipped)}  失败 {st_failed}  跳过 {st_skipped}")
+    print(f"XCTest         通过 {passed(xc_total, xc_failed, xc_skipped)}  失败 {xc_failed}  跳过 {xc_skipped}")
 if first_failure:
     name, where, detail = first_failure
     print(f"首个失败：{name}" + (f"  {where}" if where else ""))
@@ -106,5 +124,6 @@ for reason, names in by_reason.items():
     print(f"跳过 {len(names)} 个用例：{reason}（{'套件' if suites else '用例'} {'、'.join(shown[:3])}{more}）")
 if runtime_warnings:
     print("运行时警告：" + "，".join(f"{k} {v} 条" for k, v in runtime_warnings.items()) + "（日志里搜这个名字）")
-print("最慢 5 个：" + "；".join(f"{d:.2f}s {n}" for d, n in sorted(durations, reverse=True)[:5]))
+if durations:
+    print("最慢 5 个：" + "；".join(f"{d:.2f}s {n}" for d, n in sorted(durations, reverse=True)[:5]))
 print("完整日志：" + log_path)
