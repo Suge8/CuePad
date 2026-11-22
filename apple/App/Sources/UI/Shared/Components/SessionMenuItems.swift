@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 会话页栏头的菜单：三端同一份（宽屏是栏头的右键菜单，手机点页头的标题）。只放这个会话自己的事：收尾（完成、休眠）、改名、归到哪件任务、
-/// 去它在等的那件；置顶、标为未读、并排打开是排列表的事，在会话条、看板与列表的菜单里（`SessionActions`），这里不抄一份。
 struct SessionMenuItems: View {
     let session: SessionState
     let place: String?
@@ -27,7 +25,6 @@ struct SessionMenuItems: View {
                 if let link = task { SessionTaskBindItems(session: session, link: link) }
                 HandoffButton(session: session)
                 #if os(macOS)
-                // 少用的兜底入口；有页面可看时栏头有那颗钮，这里不再给第二个入口
                 if workspace.livesHere(session), workspace.liveButton(session.id) == nil {
                     Button("打开活预览", icon: .livePreview) { workspace.openLivePreview(session) }
                 }
@@ -42,7 +39,6 @@ struct SessionMenuItems: View {
 }
 
 extension Workspace {
-    /// 完成就是做完了：会话绑着的事都做完了就结束它。
     func completeTask(_ id: UUID) {
         attempt { try await self.complete(id) }
     }

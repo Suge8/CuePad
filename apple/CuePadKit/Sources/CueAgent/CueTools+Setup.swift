@@ -42,7 +42,6 @@ extension CueTools {
     }
   }
 
-  /// 写 `model` 时回到这家默认的写法。
   static let defaultModel = "default"
 
   private func setBrain(_ args: Args) async throws -> String {
@@ -107,7 +106,6 @@ extension CueTools {
     return (["改好了：\(Self.brainLine(profile, agent: agent))"] + notes + [when]).joined(separator: "；") + "。"
   }
 
-  /// "Pi · anthropic/claude-opus-5-5 · 强度 low · fast 关 · 名字 Cue"：model 为 nil 写这家的默认是哪个。
   static func brainLine(_ profile: CueProfile, agent: MacAgent?) -> String {
     let fallback = agent.flatMap { agent in agent.model.map { "默认（\(agent.kind.modelRef($0))）" } } ?? "默认"
     let model = profile.model ?? fallback
@@ -115,7 +113,6 @@ extension CueTools {
     return "\(profile.runtime.known?.name ?? profile.runtime.rawValue) · \(model) · 强度 \(effort) · fast \(profile.fast ? "开" : "关") · 名字 \(profile.name)"
   }
 
-  /// Cue 新建的项目用的颜色：同新建项目表单的第一种（App 的 `Palette.projectColors`）。
   static let newProjectColor = "#D9774B"
 
   private func setProject(_ args: Args) async throws -> String {
@@ -150,7 +147,6 @@ extension CueTools {
     return done.joined(separator: "，") + "。"
   }
 
-  /// folder 写的路径：`cleared` 是解除（nil）；`~` 展开、要是这台 Mac 上已有的文件夹，存标准写法。
   private func folderPath(_ raw: String) throws -> String? {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed != Self.cleared else { return nil }
@@ -165,7 +161,6 @@ extension CueTools {
     return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
   }
 
-  /// 请这台 Mac 做一键整理（`AgentLibrary.automaticOrders`），等结果同说话（`spoken`）。
   private func tidy() async throws -> Result {
     let host = try await host()
     guard let library = try await store.agentLibrary(host: host) else { throw Failure("这台 Mac 还没报过技能与规则：稍后再看 setup look skills") }

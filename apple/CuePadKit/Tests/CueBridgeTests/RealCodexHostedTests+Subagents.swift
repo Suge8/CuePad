@@ -24,7 +24,6 @@ extension RealCodexHostedTests {
             let log = ChangeLog(rig.bridge)
 
             try await rig.bridge.send(SessionMessage(text: "Spawn one subagent called pong and tell me what it said."), to: id)
-            // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
             try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && log.states.contains(.thinking) && log.states.last == .settled }
             #expect(log.settles == 1, "\(log.states)")
             let roster = try #require(rig.bridge.session(id: id)?.subagents)
@@ -46,9 +45,6 @@ extension RealCodexHostedTests {
         }
     }
 
-    /// 子代理的请求停在闸门上，代替原来让它 sleep：主会话先答 DISPATCHED 歇在“等子代理”，放行后补一轮才歇下。
-    /// 假模型派完活立刻答完（真模型要几秒），这一轮结束时 CuePad 可能还没认出子代理：要先认清再歇下，不先报一次歇下。
-    /// `childUnreadableWhileParentRuns`：这一轮结束前子线程的 `thread/read` 都读不到（`CodexReadFault`）。
     @Test(arguments: [false, true]) func aSubagentLeftRunningIsReadBackBeforeSettling(childUnreadableWhileParentRuns: Bool) async throws {
         try await withCodexRig(model: "gpt-6-luna", readFault: childUnreadableWhileParentRuns ? .whileParentRuns : nil) { rig in
             let gate = rig.model.gate()
@@ -65,7 +61,6 @@ extension RealCodexHostedTests {
             try await rig.bridge.send(SessionMessage(text: "Spawn one subagent called fruit and do not wait for it."), to: id)
 
             try await gate.reached()
-            // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
             try await eventually("这一轮结束、在等子代理") { rig.bridge.session(id: id)?.state == .delegating && log.states.last == .delegating }
             #expect(log.settles == 0, "\(log.states)")
             #expect(rig.bridge.session(id: id)?.subagents.map(\.name) == ["fruit"])
@@ -80,7 +75,6 @@ extension RealCodexHostedTests {
                 rig.model.requests.filter(main).count > asked && rig.bridge.session(id: id)?.state == .settled && log.states.last == .settled
             }
             #expect(log.settles == 1, "\(log.states)")
-            // 歇下就绪（`SessionState.answered`）：派活那一轮的收尾早于补的那一轮的开始（CuePad 发出空输入的时刻），那一轮的收尾不早于它
             let settled = try #require(rig.bridge.session(id: id))
             let turn = try #require(settled.turnStartedAt), answered = try #require(try rig.transcript(settled).recap.answeredAt)
             #expect(dispatched < turn && turn <= answered, "\(dispatched) \(turn) \(answered)")

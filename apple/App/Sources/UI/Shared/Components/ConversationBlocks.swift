@@ -38,7 +38,6 @@ struct BlankChat: View {
 }
 
 
-/// 新到的淡入；`fadesIn` 为 false 时（它原位换下正在说的话，见 `DraftReply`）直接出现。
 struct ReplyBlock: View {
     let id: UUID
     let text: String
@@ -79,7 +78,6 @@ struct MachineCards: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            // 存进对话时总是整块的信封；认不出时（别的扩展的纯文字）整条当一块，不丢字
             ForEach(Array((MessageEnvelope.parse(text) ?? [MessageEnvelope(name: "", body: text)]).enumerated()), id: \.offset) { _, envelope in
                 MachineCard(note: MachineNote(envelope))
             }
@@ -109,7 +107,6 @@ private struct MachineCard: View {
 }
 
 
-/// `header` 占着说完后那条回答上方经过那一行的位置（同样高，见 `RoundProcess`），所以落库时原位换下、正文不动。换下与清掉都是直接拿掉——落库的那条同一帧直接出现（不淡入），两份不会叠着出现。
 struct DraftReply<Header: View>: View {
     let text: String
     @ViewBuilder let header: Header
@@ -139,8 +136,6 @@ struct LiveStatus: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// 正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；在等子代理时子代理那一行汇总就是进展，没做过步骤就不另写一块"子代理工作中"。
-    /// 不在说话时此刻在做的由对话末尾的角色说（`LiveFigure`），这一块只列做过的几步。
     static func ending(of session: SessionState, speaking: Bool) -> RoundProcess.Ending? {
         if speaking { return .speaking }
         let delegating = session.state == .known(.delegating) && !session.runtimeSubagents.isEmpty
@@ -155,8 +150,6 @@ extension View {
     func shimmering() -> some View { modifier(Shimmer()) }
 }
 
-/// 此刻在做的那一句（在想、读哪个文件、跑哪条命令）：换成下一句时旧的很快让位，新的从下面浮上来、由虚到实，读作"接着做了下一件"；
-/// 字上走着流光（`shimmering`）。字号、行数由外面给。减弱动态效果时先淡完再淡入（`handOff`）。
 struct DoingLine: View {
     let text: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -170,7 +163,6 @@ struct DoingLine: View {
 }
 
 extension AnyTransition {
-    /// 新的一句浮上来：位移、模糊、透明一起落定（只挪半行，不是从别处飞来）；旧的一句只淡、让得比新的来得快，两句不叠成一团。
     static let rise = AnyTransition.asymmetric(
         insertion: .modifier(active: Rise(away: true), identity: Rise(away: false)).animation(Motion.nudge.delay(Motion.Fade.yield)),
         removal: .opacity.animation(Motion.yield))

@@ -1,8 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// 隔离起真 Claude Code（钉住的版本）：配置目录、HOME、XDG 目录都在 `root` 里，模型是本进程的假模型（`FakeModel`，经 `ANTHROPIC_BASE_URL`），
-/// 登录是假密钥、不带订阅令牌，辅助流量关掉，零网络；绝不碰 ~/.claude。Kit 的测试台与 App 的流程测试共用这一份。
 public enum ClaudeSandbox {
   public static let apiKey = "sk-ant-api03-cuepad-test-key-not-real-00000000"
   public static let model = "haiku"

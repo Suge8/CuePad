@@ -1,8 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
 
-/// 要放进正文或输入框的一个附件：拖入、选来的文件按文件给（边读边算哈希、直接拷，不整个读进内存），截图、浏览器复制的图、
-/// 相册的照片按字节给；手机上粘贴、拖入的条目按条目给（`pasted`，取出来时才存）。
 public enum IncomingFile: Sendable {
     case file(URL)
     case data(Data)

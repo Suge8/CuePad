@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// Mac 的窗口内浮层没有系统的 `dismiss`，两端的弹层内容都用它。交进浮层内容的环境前按那一层认（`of`：呈现它的那一处的 token 或条目 id），按它比较：呈现处每更新一次都新建一个闭包，闭包没法比，按闭包比的话浮层里读它的视图次次重算；同一层的关法不变，比出相等时读者留着的旧闭包关的也是这一层。
 struct ClosePanel: Equatable {
-    /// 不可变、只拿来比（token 或条目 id）：比较不在主线程上也读得了。
     nonisolated(unsafe) let id: AnyHashable?
     let run: @MainActor () -> Void
 
@@ -18,20 +16,14 @@ struct ClosePanel: Equatable {
 
 extension EnvironmentValues {
     @Entry var closePanel = ClosePanel {}
-    /// 这一层上面有开着的模态浮层（Mac 的窗口内浮层，`PanelHost.covers`；iOS 的弹层是系统的，恒为假）：
-    /// 被盖住的输入框不要焦点——出现时的自动聚焦、焦点请求都先看它（盖上时交出见 `yieldsFocusWhenCovered`）。
     @Entry var panelCovered = false
-    /// 由两端的浮层宿主一处报（`panelHost`），抽屉的 Esc 据此让位（`DrawerCatcher`）。
     @Entry var escapeTaken = false
 }
 
 enum PanelStyle: Equatable {
     case sheet
-    /// 只铺遮罩，内容自己带底（Mac 新会话的输入框：玻璃外面再套一张浮层的纸是两层框）；从刚点的那一下（`from`，窗口坐标）长出来，没有那一下从自己上沿长出。
-    /// iOS 没有用它的地方，同 sheet。
     case bare(from: CGPoint?)
     case fullScreen
-    /// 点外面或 Esc 关、那一下照常落到下面；iOS 不是系统 sheet。从控件长出的用 `bubble(isPresented:)`，它替控件量框。
     case bubble(BubbleSource, width: BubblePlacement.Width = .fitting)
 
     var modal: Bool {
@@ -57,12 +49,9 @@ extension View {
 
 private struct Shown: Identifiable { let id = true }
 
-/// 抽屉的面（Cue 的右缘抽屉 `CueDock`、会话条的左缘抽屉 `RailDrawer`，只这一份）：底色连同面板阴影、朝窗口里那一侧一道发丝边，
-/// 都铺到安全区外，内容照样排在安全区里。宽由内容定。底色随里面放的是什么：Cue 是桌面底，会话条是侧栏底。
 struct DrawerSurface: ViewModifier {
     var edge = HorizontalEdge.trailing
     var ground: KeyPath<Palette, Color> = \.desk
-    /// 画不画：Cue 那一块放得下时是右边那一栏、不是抽屉（`CueDock`），面不画、块不换。
     var shown = true
     var bleed = EdgeInsets()
     @Environment(\.palette) private var palette

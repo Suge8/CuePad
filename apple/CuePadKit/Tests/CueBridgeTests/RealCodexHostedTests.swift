@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 真 Codex（钉住的版本）+ 假模型：发送、权限、结束后恢复、停止四条流程，外加配置、失败、起名、技能、计划模式提问。
 @MainActor
 @Suite(RealAgents.needs(.codex), RealAgents.tiered)
 struct RealCodexHostedTests {
@@ -43,7 +42,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 正在说的话按身份认落库（`LiveDraft.record`）：同一轮里先说完的说明已写进会话文件，最终回答还在出字时不算落库，说完落盘后才算。
     @Test func theFinalAnswerIsStillSpeakingAfterACommentaryOfTheSameTurnHasBeenWritten() async throws {
         try await withCodexRig { rig in
             let hold = rig.model.gate()
@@ -108,7 +106,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 命令、改文件、MCP 以外的工具（这里是看图）在跑时同样显示在做什么。
     @Test func viewingAnImageShowsAsAToolWithItsFileName() async throws {
         try await withCodexRig { rig in
             let picture = rig.codex.work.appending(path: "kiwi-picture.png")

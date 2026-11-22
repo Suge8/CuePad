@@ -7,13 +7,11 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 时间用手动推进的钟：到点翻状态靠 App 自己的那一次睡眠，不靠测试去重读。会话在 mac-b、Cue 运行在 mac-cue，都要经同步。
 @MainActor
 @Suite(.releasesLibraries)
 struct ReceiptTests {
     let clock = ManualTiming()
 
-    /// 真实的同步代码连内存里的 iCloud 替身，能整个断开（拉取、上传都报网络失败），能替 mac-b 写回结果。
     actor WeakCloud: SyncCloud {
         let inner: SimulatedCloud
         var down = false
@@ -101,7 +99,6 @@ struct ReceiptTests {
         return try #require(try await services.store.deliveryRequests().first)
     }
 
-    /// 把钟拨到 `target`（记录的时刻是真实时间，钟从测试开始时起走，所以按时刻拨，不按秒数）：等 App 的那一次睡眠睡下再拨。
     private func advance(to target: Date) async throws {
         try await clock.waitForSleeper()
         clock.advance(.seconds(target.timeIntervalSince(clock.now)))
@@ -177,7 +174,6 @@ struct ReceiptTests {
         try await eventually("会话行是已发出") { row(services)?.label == "已发出" }
         #expect(try await presence(services) == .sending(.sent))
 
-        // 手机还只看到 pending，Mac 也可能已经领取：上传过的旧快照不能靠删除来授权重发。
         await workspace.resend(.request(first), restoringInto: services.settings.replyDraftBinding(for: target.id)).value
         #expect(workspace.notice?.isError == true)
         #expect(try await store.deliveryRequests(toSession: target.sessionID).map(\.id) == [first.id])
@@ -205,7 +201,6 @@ struct ReceiptTests {
         try await eventually("回执回来") { try await trip(of: first, services) == .delivered }
         try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
 
-        // 派发期限从服务器收下起算（恢复后传上去的那一刻），不从断网时写下算
         let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline).addingTimeInterval(Speech.receiptLimit)
         try await advance(to: expires.addingTimeInterval(-1))
         #expect(try await trip(of: second, services) == .sent)
@@ -229,7 +224,7 @@ struct ReceiptTests {
             try await eventually("同步状态 \(status)") { services.syncing.state.status == status }
         }
         try await enableCue(in: store)
-        try await store.recordMacPresence(host: "mac-cue") { false }  // 断网前同步来的：那台已睡（断网时本机说不准，不说它在睡觉）
+        try await store.recordMacPresence(host: "mac-cue") { false }
         let target = try await session(in: store)
         services.startSync()
         services.startSpeechClock()
@@ -251,9 +246,9 @@ struct ReceiptTests {
         try await clock.waitForSleeper()
         clock.advance(.seconds(121))
         #if os(iOS)
-        try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }  // 醒来时已过两分钟，不再拉
+        try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }
         #else
-        try await eventually("拉取醒来又睡下") { app.sync.syncNows > 1 && clock.sleeperCount > 0 }  // Mac 在等就一直拉
+        try await eventually("拉取醒来又睡下") { app.sync.syncNows > 1 && clock.sleeperCount > 0 }
         #endif
         #expect(try await trips() == [.sending, .sending])
         #expect(row(services)?.status == .delivery(.inTransit(.sending)))
@@ -261,10 +256,9 @@ struct ReceiptTests {
         #expect(try await presence(services) != .asleep)
         let syncs = app.sync.syncNows
 
-        try await store.recordMacPresence(host: "mac-cue") { true }  // Cue 那台其实醒着（断网时没同步来）
+        try await store.recordMacPresence(host: "mac-cue") { true }
         try await setSync(.idle)
         try await eventually("恢复") { services.speech.reachableSince != nil }
-        // 钟没动：恢复时立即同步的那一拉也是新窗口的开头，之后按节奏的拉取睡在新窗口的第一个间隔里，不另拉
         try await eventually("恢复时立即同步，拉取重新开始") { app.sync.syncNows == syncs + 1 && clock.sleeperCount > 0 }
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行回到发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
@@ -273,7 +267,6 @@ struct ReceiptTests {
         clock.advance(.seconds(Speech.sendLimit - 1))
         #expect(try await trips() == [.sending, .sending])
         #expect(try await presence(services) == .sending(.sending))
-        // 同步通着也不能凭缺少上传回执断言未交出：对 Cue 说的是未确认；投送请求按自己的派发期限，还在路上
         clock.advance(.seconds(1))
         let since = try #require(services.speech.reachableSince)
         try await eventually("发送等待到点") { services.speech.now >= since.addingTimeInterval(Speech.sendLimit) }

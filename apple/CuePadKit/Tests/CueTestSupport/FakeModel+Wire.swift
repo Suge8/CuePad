@@ -2,7 +2,6 @@
 import Foundation
 import Network
 
-/// 读一个 HTTP/1.1 请求（`Content-Length` 或分块的正文）。
 struct HTTPMessage {
   let method: String
   let path: String
@@ -33,7 +32,6 @@ struct HTTPMessage {
     }
   }
 
-  /// 收齐了（读到长度为 0 的那块）才有值
   private static func dechunk(_ data: Data) -> Data? {
     var body = Data(), at = data.startIndex
     while let line = data[at...].range(of: Data("\r\n".utf8)) {
@@ -47,7 +45,6 @@ struct HTTPMessage {
     return nil
   }
 
-  /// 对方关了或出错为 nil
   static func receive(_ connection: NWConnection) async -> Data? {
     await withCheckedContinuation { continuation in
       connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { data, _, done, error in
@@ -75,7 +72,6 @@ struct Wire: Sendable {
     await send("HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\nconnection: close\r\n\r\n")
   }
 
-  /// 等到 Agent 断开
   func disconnected() async {
     while await HTTPMessage.receive(connection) != nil {}
   }
@@ -87,7 +83,6 @@ func jsonText(_ object: Any) -> String {
   String(decoding: (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data("{}".utf8), as: UTF8.self)
 }
 
-/// 一步答复按请求的协议写出去。
 struct Encoder {
   let api: FakeRequest.API
   let request: FakeRequest
@@ -130,7 +125,6 @@ struct Encoder {
 
   private func arguments(_ arguments: [String: any Sendable]) -> String { jsonText(arguments) }
 
-  /// `stream` 说完那几段之后：没有闸门就等 Agent 断开、不收尾（false）；有闸门就等放行，放行了收尾（true），先断开的不收尾
   private func finishes(after gate: FakeGate?) async -> Bool {
     guard let gate else { await wire.disconnected(); return false }
     return await gate.pass(unless: wire.disconnected)
@@ -172,7 +166,6 @@ struct Encoder {
     }
     let base: [String: Any] = ["id": "resp_\(id)", "object": "response", "created_at": 0, "model": request.model, "tools": [], "metadata": [:]]
     guard await event("response.created", ["response": base.merging(["status": "in_progress", "output": []]) { $1 }]) else { return }
-    /// 说一条消息：`parts` 逐段出字，`gate` 同 `FakeReply.stream`
     func message(_ message: String, _ parts: [String], phase: String?, index: Int, gate: FakeGate? = nil, waits: Bool = false) async -> [String: Any]? {
       let text = parts.joined()
       let phased: [String: Any] = phase.map { ["phase": $0] } ?? [:]

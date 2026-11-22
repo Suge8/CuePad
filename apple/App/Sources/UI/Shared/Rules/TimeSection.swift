@@ -1,6 +1,5 @@
 import Foundation
 
-/// 会话历史按结束时间从新到旧分页，所以分段只在末尾增长，下一页不会插进上面的段。
 nonisolated enum TimeSection: Sendable {
     case today, yesterday, thisWeek, thisMonth, earlier
 
@@ -14,8 +13,6 @@ nonisolated enum TimeSection: Sendable {
         }
     }
 
-    /// 昨天先于本周、本月判断：周一的昨天、月初的昨天都算昨天。一周从周一算起（`Calendar.mondayFirst`）。
-    /// 其他设备的时钟可能快于本机：未来时间按今天分组，不改原始时间或顺序。
     static func of(_ date: Date, now: Date, calendar: Calendar = .current) -> TimeSection {
         let date = min(date, now)
         let calendar = calendar.mondayFirst

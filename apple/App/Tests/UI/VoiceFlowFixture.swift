@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 只替换语音服务与设备边界；开始、派活、读库、恢复与投送都走窗口实际使用的 Workspace。
 @MainActor
 final class VoiceFlowFixture {
     final class Media: VoiceMedia {
@@ -49,7 +48,6 @@ final class VoiceFlowFixture {
     var controls: [Control] = []
     var received: ((Result<VoiceWire.Event, VoiceWire.SidebandClosed>) -> Void)?
     var connectError: VoiceWire.Failure?
-    /// 每一通建通话时交给服务端的音色
     var voices: [CueVoice] = []
     var access: () async throws -> CodexAccess = {
         let payload = Data(#"{"exp":4102444800,"https://api.openai.com/auth":{"chatgpt_account_id":"isolated-test"}}"#.utf8).base64EncodedString()
@@ -60,19 +58,16 @@ final class VoiceFlowFixture {
 
     init(_ services: AppServices) { workspace = Workspace(services: services) }
 
-    /// 请求在库里的那条记录（送达回执都写在它上面）
     func stored(_ id: UUID? = nil) -> CueMessage? {
         guard let message = call.record.requests.first(where: { id == nil || $0.message == id })?.message else { return nil }
         return try? workspace.services.store.snapshot { try $0.cueMessages([message]).first }.value
     }
 
-    /// 通话详情此刻的样子：与 `VoiceHost` 同一份投影与库记录。
     func details() throws -> CueVoicePresentation {
         let state = workspace.voiceViewState, ids = state.recordIDs
         return state.reading(try workspace.services.store.snapshot { try $0.cueMessages(ids) }.value).presentation()
     }
 
-    /// 那条没落库的请求在详情里的恢复动作
     func recovery(of delegation: String) -> VoiceAction? {
         voiceRecord.requests.first { $0.id == delegation }.map { .recover(.unrecorded(session: $0.origin, request: $0.rowID)) }
     }
@@ -86,7 +81,6 @@ final class VoiceFlowFixture {
         workspace.startVoiceCall()
     }
 
-    /// 手机打进来、媒体接通到"在听"：Mac 上手机那一路的通话。手机之后的帧由测试按 `signal.peer` 的租约注入。
     func answer(_ signal: FakeVoiceSignaling) async throws {
         prepare()
         let voice = workspace.services.voice, session = VoiceSessionID(UUID())
@@ -97,7 +91,6 @@ final class VoiceFlowFixture {
     }
 
     private func prepare() {
-        // 通话挂断后仍留在服务里（`VoiceService.call`），连同这些依赖：弱持有替身，不然替身、它的工作区与服务互相攥着放不掉
         workspace.services.voice.makeCall = { [weak self] dependencies, record in
             var dependencies = dependencies
             dependencies.access = { [weak self] in

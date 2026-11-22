@@ -7,10 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 多日记忆：Cue 已值了两周班，库里预置这两周的历史（对话与每轮经过一千五百条以上，若干做完的任务与会话回复，记忆九十多行），
-/// 远超一次视图能原样放下；启用 Cue 之前写好，新班次从库里接上（记忆视图与最近对话的视图）。
-/// 在不同年纪埋下事实：13 天前他顺口说的事、9 天前会话报告里顺带的细节、5 天前他否掉的方案与理由、2 天前 Cue 答应他的事、1 天前他改过的偏好。
-/// 开跑前等 Cue 静下来（`settleDown`），再逐件问起；缓存时长缩短，场景里插几段静止模拟隔了一阵才回来（冷醒来）。跑法见 apple/scripts/cue-eval.sh。
 @Suite(.releasesLibraries, .enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalDaysTests {
     @Test func 多日记忆() async throws {
@@ -28,10 +24,8 @@ private final class Days: EvalScript, Playable {
         已值两周班，逐件问起不同年纪的事：13 天前顺口说的考级日期、9 天前 CI 报告里的镜像版本、5 天前否掉的 S3 与理由、\
         2 天前答应的告诉他访问量、1 天前改成中文的提交信息；冷醒来换新后不重做、不重复问
         """
-    /// 缓存时长缩短；他走开的时长比它长，回来就是冷醒来，中途若冒出别的醒来，他回来时离那次请求也已过了缓存时长，仍是冷醒来。
     static let cacheLifetime = Duration.seconds(20)
     static let away = Duration.seconds(40)
-    /// 开跑前要静这么久：紧跟着的醒来（巡视这类）在这段里冒出来；又要远短于缓存时长：最后一次请求到那一轮做完还有几秒，静 15 秒第一问就冷了（实测）
     static let quiet = Duration.seconds(5)
 
     private let history: DaysHistory
@@ -83,7 +77,6 @@ private final class Days: EvalScript, Playable {
         try await snapshot("补记 \(DaysScript.notedLater.count) 条后")
     }
 
-    /// 预置的待合并块在刚启用那一轮（新会话的第一轮）里合。
     private func settleDown() async throws {
         while true {
             try await eventually("Cue 没有在跑的轮") { self.eval.rounds.allSatisfy { $0.finishedAt != nil } }
@@ -104,7 +97,6 @@ private final class Days: EvalScript, Playable {
         snapshots.append((label, .now, memory.summaries.count, CueMemoryView(memory).entries.count))
     }
 
-    /// Cue 的轮里写了摘要的轮（后台做梦写的不在内）
     private func merges() async -> [[String: Any]] {
         let all = eval.rounds
         let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
@@ -155,7 +147,6 @@ private final class Days: EvalScript, Playable {
             Check(.memory, "5 天前否掉的：会话问迁不迁 S3，答留在 R2", s3Answers == ["B"]),
             Check(.memory, "5 天前否掉的理由：贵、团队没人熟 AWS（答出至少一条）", reasons.contains(/贵|成本|费用|AWS|不熟|没人熟/), note: reasons.isEmpty ? "（没回）" : ""),
             Check(.memory, "1 天前改的偏好：派活时带的是新的（中文提交信息）", preference.hasPrefix("带了新的"), note: "——\(preference)"),
-            // 引号里的是他从前的原话（"比之前「用英文写」的新"），不算答成英文
             try await recalled("1 天前改的偏好：问起时答中文", key.language, fabricated: { EvalReading.unquoted($0).contains("英文") }) {
                 EvalReading.unquoted($0).contains("中文") && !EvalReading.unquoted($0).contains(/现在.{0,6}英文|用英文写/)
             },

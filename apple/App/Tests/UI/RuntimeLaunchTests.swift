@@ -19,10 +19,9 @@ struct RuntimeLaunchTests {
         try await recorder.update(sessionID: "gone", state: .thinking, title: "做到一半的", hosted: true, process: identity)
         try input.fileHandleForWriting.close()
         process.waitUntilExit()
-        try await store.recordMacPresence(host: TestApp.hostID) { false }  // 上次退出时写下的离线
+        try await store.recordMacPresence(host: TestApp.hostID) { false }
 
         let services = app.relaunch()
-        // 第一帧画的就是打开资料库时当场读到的这一页（`LiveSessions.init`），还没开始跟库
         let first = Dictionary(uniqueKeysWithValues: services.liveSessions.items.map { ($0.state.sessionID, $0) })
         let workspace = Workspace(services: services)
         let resting = workspace.shown(try #require(first["resting"])), gone = workspace.shown(try #require(first["gone"]))

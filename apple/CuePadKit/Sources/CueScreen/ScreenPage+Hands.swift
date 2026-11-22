@@ -1,6 +1,5 @@
 #if os(macOS)
 extension ScreenPage {
-  /// 手指、鼠标与键盘。
   static let hands = #"""
     // 按着的那根指头（或鼠标左键）。`gesture`：桌面窗口上的手指先不算按下，看它接下来是点、是滚、还是按住。
     // `pinch`：桌面窗口上落了第二根手指，这两根是在摆画面（`view`），不送进去

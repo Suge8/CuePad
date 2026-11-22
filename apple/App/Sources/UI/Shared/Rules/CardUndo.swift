@@ -3,7 +3,6 @@ import Foundation
 
 typealias Undo = @MainActor () async throws -> Void
 
-/// 怎么拨回去是 Store 层的规则（`CueStore.undo`，回执在改动的同一个事务里读到），界面只负责把它挂到提示上。
 extension CueStore {
     func merging(_ idea: UUID, into task: UUID) async throws -> Undo {
         undoing(try mergeIdea(idea, into: task))
@@ -19,7 +18,6 @@ extension CueStore {
         return { try await self.undo(change, of: id, stillAt: slot, after: previous) }
     }
 
-    /// 读与改在 actor 的同一段里。置顶只有开与关，认不出"还是那一次"：此刻不是那次改成的样子就不撤、报"已改过"，不装作撤了。
     func pinning(_ id: UUID, _ pinned: Bool) async throws -> Undo {
         try updateCard(id) { $0.isPinned = pinned }
         return {
@@ -28,7 +26,6 @@ extension CueStore {
         }
     }
 
-    /// 本来就做完了的没有可撤的。`unreached`：该跟着休眠、那台 Mac 却说了离开的会话（`completeTask(_:sleepingAt:)`）。
     func completing(_ id: UUID, at moment: Speech.Moment) async throws -> (status: TaskStatus, undo: Undo?, unreached: [SessionState]) {
         let done = try card(id)?.completedAt != nil
         let (status, unreached) = try completeTask(id, sleepingAt: moment)

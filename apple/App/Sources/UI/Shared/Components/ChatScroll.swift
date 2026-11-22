@@ -30,7 +30,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
     @State var held: CGFloat?
-    /// 还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次（`ChatFollow.holdingChanged`）。
     @State var sliding: Task<Void, Never>?
     @State var lift = ContentLift()
     @State var leftAt: Key?
@@ -49,8 +48,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     }
 
     var body: some View {
-        // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
-        // 宽屏（iPad、Mac 宽窗口）首帧就是居中的栏，不会先按窄边距排一帧再挪
         GeometryReader { proxy in
             ScrollViewReader { reader in
                 let padding = bottomPadding
@@ -66,8 +63,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 }
                     .defaultScrollAnchor(.bottom, for: .initialOffset)
                     .defaultScrollAnchor(.bottom, for: .alignment)
-                    // 贴着最新时内容一变高矮就在同一次排版里停在新的最新处（`pinned`）：新来的一条插进来的那一帧就排在终位、从说话那一边的角长出来，
-                    // 不先排在回复框的玻璃后面（被折射成怪字）再滑上来。滚走了、正在和 iCloud 对（`holding`）时不锚，正在读的不动
                     .defaultScrollAnchor(pinned ? .bottom : nil, for: .sizeChanges)
                     .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
                     .safeAreaPadding(.horizontal, margin(proxy.size.width))
@@ -89,8 +84,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         let screen = geometry.containerSize.height.rounded()
                         offset.set(read: max(0, read.rounded()), end: (geometry.contentSize.height - geometry.containerSize.height).rounded(), container: screen)
                         let tracked = anchor.track(read: read, height: geometry.containerSize.height, keeping: keeping)
-                        // 越线按跟过正在读的那一条之后的位置算：改宽、上面排开一批的那一下，没跟过去的可见区可能正落在最新处或最早那头附近，
-                        // 按它报的话贴底、排开更早的会被误触发
                         let settled = read + tracked.shift
                         let distance = max(0, (geometry.contentSize.height - settled - geometry.containerSize.height).rounded())
                         return Reading(
@@ -116,16 +109,11 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             }
                             follow.wrappedValue.prepended(nearOldest: reading.nearOldest)
                         }
-                        // 跳去了某一条、你还没滚过：内容这时才变高矮（它上面的图读到了真实的比例、更早的一段排开）的话偏移不动、那一条被推走，重新对准它。
-                        // 变高矮常晚于跳的那一下：图的比例读到之前按猜的排；打开时排开更早的一段也常与跳挤在相邻两帧
                         if grown != 0, !follow.wrappedValue.scrolling, let target = follow.wrappedValue.target {
                             reader.scrollTo(target.id, anchor: target.anchor)
                             return
                         }
-                        // 发出的话到了：替回复框留着的留白收起（下一次排版）。只会从有到无，不成排版的反馈环
                         if held != nil, grown > 0 { held = nil }
-                        // 贴着最新、用户没在滚时离最新处远了是这里自己要补滚（内容长高、回复框长高、留白收起），补滚途中照"在最新处"报：
-                        // 不然贴底状态先变后变回来，读它的对话与页面跟着重算两遍
                         let following = follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling
                         var next = follow.wrappedValue
                         // 算用户滚走的只有偏移真的挪了的那次：手指按着、甩着的期间可见区变高矮（键盘、输入框随贴底状态收起与展开）、内容边距变了，

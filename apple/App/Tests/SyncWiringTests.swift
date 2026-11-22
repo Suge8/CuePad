@@ -74,7 +74,7 @@ struct SyncWiringTests {
     @Test(arguments: [SyncResolution.uploadLocal, .eraseLocal])
     func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
-        let accountChanges = NotificationCenter()  // 全进程的通知会叫醒并行的别的测试
+        let accountChanges = NotificationCenter()
         let app = TestApp(sync: .built { CloudSync(store: $0, accountChanges: accountChanges) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)
@@ -104,7 +104,6 @@ struct SyncWiringTests {
         }
     }
 
-    /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。
     @Test
     func 同步一直不返回时_下拉刷新到时限就停() async throws {
         let clock = ManualTiming()
@@ -135,7 +134,6 @@ struct SyncWiringTests {
         try await services.store.resolveConflict(copy: copy.id, keep: .original)
         try await eventually("services.syncing.conflicts.isEmpty") { services.syncing.conflicts.isEmpty }
     }
-    /// 冲突副本只由同步产生、没有公开入口：直接在库文件里把副本指回原卡。
     private func markConflict(copy: UUID, of original: UUID) throws {
         var db: OpaquePointer?
         defer { sqlite3_close(db) }

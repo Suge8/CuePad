@@ -1,9 +1,6 @@
 import Foundation
 
 public enum CueLines {
-    // 有文字的行只有一条规则，实现在私有的 `text(of:)`：不是分割线（`---`），且除图片引用
-    // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字；文件链接算它的文件名。
-
     static func isTitleLine(_ line: String) -> Bool { !text(of: line).isEmpty }
 
     static func contentLines(_ stored: String) -> [String] {
@@ -16,14 +13,12 @@ public enum CueLines {
 
     static func text(of line: String) -> String {
         guard !CueFormat.isRule(line) else { return "" }
-        // 绝大多数行没有附件引用：不必拆成记号再拼回去
         var text = line
         if CueFormat.hasAttachments(line) { text = CueFormat.parse(line).map(\.shownText).joined() }
         let object = String(UnicodeScalar(CueFormat.objectCharacter)!)
         return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    /// 第一个有文字的行是标题，其余（文字与图片，原样）是要交代给 Agent 的话；只有那一行时为 nil。
     public static func split(_ stored: String) -> (title: String, rest: String?) {
         var lines = stored.components(separatedBy: "\n")
         guard let index = lines.firstIndex(where: isTitleLine) else { return (stored, nil) }
@@ -33,7 +28,6 @@ public enum CueLines {
         return (heading, hasContent ? rest : nil)
     }
 
-    /// `split` 反过来；话是空白时只有标题。
     public static func joined(title: String, rest: String?) -> String {
         guard let rest, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return title }
         return title + "\n" + rest
@@ -46,9 +40,6 @@ public enum CueLines {
     }
 }
 
-/// 名字（任务、子任务、会话名）多长：按显示宽度，汉字、假名、谚文、全角符号与表情算 2，其余算 1，不超过 `limit`（约 12 个汉字）。
-/// Cue 写的名字超了退回给它重写（不截断：截出来的半句话等于假装写成了）；机器生成的（会话名生成的任务名、按任务名起的会话名）用 `clipped`；
-/// 你手打的不限。
 public enum CueName {
     public static let limit = 24
 
@@ -76,8 +67,6 @@ public enum CueName {
     }
 }
 
-/// 卡片的标题与摘要（唯一规则，App、小组件、命令行共用）。卡片没有标题字段：标题 = 首个有文字的行（`CueLines.isTitleLine`）去掉开头的 `#`；
-/// 摘要只取标题之后的第一段：一张卡只露出开头那一段，卡与卡之间才看得出差别。
 public struct CueSummary: Equatable, Sendable {
     static let previewLimit = 240
     public static let snippetLead = 12
@@ -86,9 +75,7 @@ public struct CueSummary: Equatable, Sendable {
     public var preview: String
     public var linkHost: String?
 
-    /// 展示层可在截断之前解释 Markdown 格式，避免把一对强调符号截断后当作字面星号。默认保留原文。
     public init(_ stored: String, inline: (String) -> String = { $0 }) {
-        // 只读到标题之后第一段的末尾为止：长正文的后半段不用解析
         var lines = Lines(rest: Substring(stored))
         title = inline(Self.title(from: &lines))
         var paragraph: [String] = []
@@ -105,7 +92,6 @@ public struct CueSummary: Equatable, Sendable {
             .map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
     }
 
-    /// 只要标题时用它（`Card.heading`、各处的卡片名字）：读到第一个有文字的行就停，不解析摘要与链接。
     public static func title(of stored: String) -> String {
         var lines = Lines(rest: Substring(stored))
         return title(from: &lines)
@@ -118,7 +104,6 @@ public struct CueSummary: Equatable, Sendable {
         return ""
     }
 
-    /// 正文按 `\n` 逐行取有文字的部分（`CueLines.text(of:)`），用到哪行切到哪行：不先把整篇切成数组。
     private struct Lines: IteratorProtocol {
         var rest: Substring?
 
@@ -130,9 +115,6 @@ public struct CueSummary: Equatable, Sendable {
         }
     }
 
-    /// 搜索结果里的摘要：标题之后的全部文字里第一处命中（不分大小写）离开头较远时，从命中处往前留 `snippetLead` 字截起、前面加"…"，
-    /// 让人看到为什么搜到它；没命中、命中在开头附近或只在标题里时就是普通摘要（`whole` 时是标题之后的全文）。
-    /// iOS 的搜索结果与 Mac ⌘K 的预览同用这一个；`whole` 给预览面板：不截到 `previewLimit`，保留换行。
     public static func snippet(_ stored: String, matching terms: [String], whole: Bool = false) -> String {
         let body = rest(stored, separator: whole ? "\n" : " ")
         let hit = terms.filter { !$0.isEmpty }.compactMap { body.range(of: $0, options: .caseInsensitive)?.lowerBound }.min()
@@ -152,7 +134,6 @@ public struct CueSummary: Equatable, Sendable {
 }
 
 extension String {
-    /// 至多 `limit` 个字符，超出的以省略号结尾（省略号算在内）。
     public func clipped(_ limit: Int) -> String {
         count <= limit ? self : String(prefix(limit - 1)) + "…"
     }

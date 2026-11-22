@@ -27,8 +27,6 @@ struct DeliveryPayloadTests {
                 && mac.services.syncing.state.status == .idle && mac.services.syncing.state.reconciled
         }
         try await mac.services.executor.start()
-        // 用独立 SQLite 写者精确落在第一次发送登记之前，等价于尚未交出的 pending 被原子撤回。
-        // 只撤回指定内容，后续正常请求不受这个故障影响。
         try RawDB(phone.services.location.databaseURL).exec("""
             CREATE TRIGGER withdraw_before_send BEFORE INSERT ON syncRecords
             WHEN NEW.recordType = 'deliveryRequests' AND NEW.sentModifiedAt IS NOT NULL

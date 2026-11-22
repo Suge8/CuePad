@@ -7,8 +7,6 @@ import Testing
 @testable import CueBridge
 
 extension RealOpenCodeTests {
-    /// 用户的服务先开着，终端里也开了会话：只有 CuePad 开的会话上桥、进索引；接入停了再开（同 App 重启），靠资料库里记下的托管认回它，
-    /// 首条消息还在，终端的会话照样不理；用户的服务不随接入停，CuePad 拉起的才停。
     @Test func reconnectingRecognisesOnlyHostedSessionsAndOnlyTheServiceCuePadStartedIsStopped() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             var mirror = SessionMirror(recorder: StateRecorder(store: store, hostID: "mac"))
@@ -30,12 +28,11 @@ extension RealOpenCodeTests {
 
             await runtime.stop()()
             #expect(sandbox.service?.pid == userService.pid && kill(userService.pid, 0) == 0, "用户的服务不动")
-            // 第二次重开时会话索引已是最新、不再读对话：首条消息只能从读到哪了里取
             for _ in 0..<2 {
                 let reconnected = sandbox.runtime(bridge, store)
                 try reconnected.start()
                 try await eventually("重新接上托管的会话") { session(bridge) != nil }
-                await quietPeriod(.seconds(2))  // 终端的会话被接上、首条消息丢掉都没有事件可等
+                await quietPeriod(.seconds(2))
                 #expect(bridge.sessions.map(\.sessionID) == [hosted])
                 #expect(session(bridge)?.firstMessage?.contains("HOSTED") == true, "首条消息：\(String(describing: session(bridge)?.firstMessage))")
                 #expect(try await store.indexedSession(terminal) == nil)
@@ -53,7 +50,6 @@ extension RealOpenCodeTests {
         }
     }
 
-    /// 升级前留在库里的非托管历史（索引与已结束的记录）：托管会话的快照、重连、删除都不动它，投送也读不了它的对话。
     @Test func anUnhostedSessionLeftInTheIndexStaysThroughSnapshotReconnectAndDeletion() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let foreign = IndexedSession(
@@ -71,7 +67,7 @@ extension RealOpenCodeTests {
                 let indexed = try await store.indexedSession(hosted)
                 return try await replies(store, hosted).last?.contains("OWN") == true && indexed != nil
             }
-            await quietPeriod(.seconds(2))  // 快照后的回填对账没有事件可等
+            await quietPeriod(.seconds(2))
             #expect(try await kept(), "连上后的回填删了非托管的历史")
             await #expect(throws: BridgeError.unknownSession(foreign.id)) { try await runtime.transcript(of: foreign, files: store.files) }
 
@@ -163,7 +159,6 @@ extension RealOpenCodeTests {
         }
     }
 
-    /// 恢复：说过话的托管会话结束、接入与后台服务都停了，重新接入后接着它说，模型收到的对话里带着之前说过的。
     @Test(.tags(.smoke)) func aSessionEndedAndItsServiceStoppedResumesWithItsConversation() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-r", name: nil, model: nil, thinking: nil)

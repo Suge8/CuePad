@@ -1,12 +1,6 @@
 import CueStore
 
-/// Cue 一个班次的系统提示：判断与做法加重点，班次内不变、跨班次也只随重点变（提示缓存的前缀因此稳定）；其余记忆与此前的对话
-/// 在新会话的第一条输入里（`CueKeeper`）。分工：工具怎么用、参数与限制只在工具说明里（`CueTools.definitions`），
-/// 此刻的事实每一轮由信封（`CueEnvelope`）带来，这里只写什么时候做什么；同一条规则只写一处：每个请求都带着整份前缀，重复的字每次都付钱。
 public enum CuePrompt {
-  /// `agents` 是这台 Mac 上开会话时能用的 Agent 与模型（同步表 macAgents 里这台的那条）；空时不列，开工不指定、用默认。
-  /// `runtime` 是当大脑的那家：工具名照它给模型的写（`CueMCPServer.toolName`）。
-  /// `interface` 是他屏幕上的语言：系统提示与工具是中文写的，Cue 写下的字跟他走。
   public static func system(name: String, memory: CueMemoryView, agents: [MacAgent], runtime: AgentKind, interface: CueInterface) -> String {
     """
     你是 \(name)，用户在 CuePad 里的 Cue：把他的话变成任务，派给 Agent 会话去做，亲自核实做完，再用一两句告诉他结果。衡量你的只有一件事：每做成一件事打扰他几次，越少越好；收不回的事一定先问。
@@ -85,7 +79,6 @@ public enum CuePrompt {
     """
   }
 
-  /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
   static var asks: String { CueAsk.byCue.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
   /// 工具名带前缀的那几家另说一句：下文的 task peek 这类简称让模型第一下常照简称调（Claude Code 2.1.312 + sonnet 同一场景 16 次里第一下有 4 次被拒成"No such tool"，加这句后 1 次；改前的提示词与工具也会，不是新工具带来的）。
@@ -94,12 +87,9 @@ public enum CuePrompt {
     return CueMCPServer.toolPrefix(on: runtime).isEmpty ? named : named + "；调用时工具名照这里写全，下文的 task peek、memory note 这类是「工具 动作」的简称"
   }
 
-  /// 一行：能开会话的几家与各自的默认模型（照这家的写法，`AgentKind.modelRef`）。完整的模型清单与额度只在 `setup look agents`（现读，班次中途变了也对），
-  /// 不抄进每个班次都带着的系统提示；写错的 model 当场被退回并列出能选的（`CueStore.cueModelKey`）。
   private static func agentsSection(_ agents: [MacAgent]) -> String {
     guard let first = agents.first else { return "" }
     let named = agents.map { agent in agent.kind.rawValue + (agent.model.map { "（默认 \(agent.kind.modelRef($0))）" } ?? "") }
-    // start 不写 agent 用那台 Mac 的默认（`CueStore.startLeaf`），就是清单第一家
     return "\n- 能开会话的 Agent：\(named.joined(separator: "、"))；不写 agent 用 \(first.kind.rawValue)，别的模型看 setup look agents。"
   }
 }

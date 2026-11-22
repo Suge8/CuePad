@@ -2,7 +2,6 @@
 import AppKit
 import WebKit
 
-/// 无 nib 的标准主菜单。⌘N 已是添加灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
     static func install() {
         let main = build()
@@ -49,7 +48,6 @@ enum MainMenu {
             .item("进展", #selector(AppDelegate.showProgress(_:)), "T"),
             // macOS 标准的显示/隐藏侧栏；不用 ⌘\：常见的 1Password 把它占作全局快捷键，按键到不了 App
             .item("侧栏", #selector(AppDelegate.toggleCueSidebar(_:)), "s", [.control, .command]),
-            // 右边那一栏（Cue）：同 SwiftUI 检查器的系统惯例（`InspectorCommands` 的 ⌃⌘I），与 ⌃⌘S 成对
             .item("右栏", #selector(AppDelegate.toggleCueColumn(_:)), "i", [.control, .command]),
             .item("切换栏焦点", #selector(WideColumnView.switchWideFocus(_:)), "\t", [.control]),
             .item("会话移到左边", #selector(WideColumnView.moveWideLeft(_:)), "\u{F702}", [.command, .option]),
@@ -68,7 +66,6 @@ enum MainMenu {
         return main
     }
 
-    /// 会话回复框的快捷键：动作经响应链交给回复框的文字区（`GrowingTextView.performReplyShortcut`），回复框没聚焦时停用。
     private static func replyMenu() -> NSMenuItem {
         let menu = NSMenu(title: String(localized: "回复"))
         for key in ReplyShortcut.allCases {

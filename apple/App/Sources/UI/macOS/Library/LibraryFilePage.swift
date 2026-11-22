@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 打开时先在看不见时挂好（编辑器要接过键盘），下一帧再淡入：淡入的每一帧只剩改透明度。
 struct LibraryFileLayer: View {
     @Environment(Workspace.self) private var workspace
 
@@ -16,7 +15,6 @@ struct LibraryFileLayer: View {
     }
 }
 
-/// 正文读库里那台写下的那一条（`LibraryFileText`），对上快照的哈希才载入、才跟。
 private struct LibraryFilePage: View {
     let file: LibraryFile
     @Environment(Workspace.self) private var workspace

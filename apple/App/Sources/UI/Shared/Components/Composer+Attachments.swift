@@ -3,9 +3,8 @@ import CueText
 import SwiftUI
 
 extension Composer {
-    /// "＋"，或调用方换上的那一颗（`lead`）：同一颗钮，换的只是字形、底与点了做什么，换时字形原地替换、底渐变。
     var plus: some View {
-        let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
+        let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
         let files = accepts.contains(.files) ? ComposerSource.fileChoices.map { choice in
             ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { source = choice.source }
         } : []
@@ -20,7 +19,6 @@ extension Composer {
         }
         .disabled(lead?.enabled == false)
         .fixedSize()
-        // 格子撑在钮外面：撑在标签里时悬停的底是整格那么大
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
     }
 
@@ -33,29 +31,31 @@ extension Composer {
             ChoiceMenu.Choice(title: "展开编辑", image: .icon(.expandEdit)) { expand(outbox) },
             ChoiceMenu.Choice(title: "不带了", image: .icon(.remove), destructive: true) { drop(outbox) },
         ])] : []
-        return HStack(spacing: 0) {
-            AttachmentButton(label: "带上：\(name)", menu: menu, open: { previewing = outbox }) {
-                HStack(spacing: Spacing.item) {
-                    Image(.pickCards).foregroundStyle(palette.ink3)
-                    VStack(alignment: .leading, spacing: Spacing.hair) {
-                        Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        if accepts.contains(.files), attached > 0 {
-                            Text("\(attached) 个附件").font(Typography.caption).foregroundStyle(palette.ink3)
-                        }
+        return AttachmentButton(label: "带上：\(name)", menu: menu, open: { previewing = outbox }) {
+            HStack(spacing: Spacing.item) {
+                Image(.pickCards).foregroundStyle(palette.ink3)
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    if accepts.contains(.files), attached > 0 {
+                        Text("\(attached) 个附件").font(Typography.caption).foregroundStyle(palette.ink3)
                     }
-                    Spacer(minLength: 8)
                 }
-                .padding(.leading, removable ? Spacing.group : Spacing.tight).frame(minHeight: removable ? 44 : nil)
-                .contentShape(.rect)
+                Spacer(minLength: 0)
             }
+            .padding(.leading, removable ? Spacing.group : Spacing.tight).padding(.trailing, removable ? Self.chipHeight : 0)
+            .frame(minHeight: removable ? Self.chipHeight : nil)
+            .contentShape(.rect)
+        }
+        .overlay(alignment: .trailing) {
             if removable {
-                Button("不带了", icon: .remove) { drop(outbox) }
-                    .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
-                    .frame(width: 44, height: 44).contentShape(.rect)
-                    .buttonStyle(PressStyle(.button))
+                Button { drop(outbox) } label: {
+                    Label("不带了", icon: .remove).labelStyle(.iconOnly).foregroundStyle(palette.ink2)
+                        .frame(width: ComposerMetrics.glyphTarget, height: ComposerMetrics.glyphTarget).contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(.button))
+                .padding(.trailing, (Self.chipHeight - ComposerMetrics.glyphTarget) / 2)
             }
         }
-        // 交出去的那件任务本身（去不掉的那条）是这块面板的标题，不铺底：面板已经是一张卡。带上的别的才是一块块能拿掉的东西
         .background(removable ? palette.fill : .clear, in: shape)
     }
 
@@ -84,8 +84,8 @@ extension Composer {
     }
 
     static var stripSide: CGFloat { 64 }
+    static var chipHeight: CGFloat { 44 }
 
-    /// 存的途中发出的话，附件随这句发出（`Workspace.importFiles`）。
     func add(_ incoming: [IncomingFile]) { workspace.importFiles(incoming, into: $draft) }
 
     func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
@@ -106,7 +106,6 @@ private struct AttachmentPop: ViewModifier {
     }
 }
 
-/// 不接受卡片的（随手记）不挂，Mac 上也就不需要浮层宿主（菜单栏面板没有）。`on` 对一个输入框是定值，不会来回换结构。
 struct CardPanels<Picker: View, Preview: View>: ViewModifier {
     let on: Bool
     let picking: Binding<Bool>

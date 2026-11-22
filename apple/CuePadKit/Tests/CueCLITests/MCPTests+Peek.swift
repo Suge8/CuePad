@@ -86,9 +86,8 @@ extension MCPTests {
       func shown(_ step: Card) async throws -> Bool { try await server.call("task", ["action": "peek"]).contains("· \(step.heading) ›") }
 
       _ = try await store.completeTask(first.id)
-      #expect(try await shown(second))  // 在做第二步
+      #expect(try await shown(second))
       _ = try await store.completeTask(second.id)
-      // 完成时刻直接给定先后（毫秒）：取的是最后做完的那一步，不是排在最后的那一步
       func finish(_ step: Card, atMinute minute: Int) throws {
         try RawDB(sandbox.directory.appending(path: "cuepad.db"))
           .exec("UPDATE cards SET completedAt = \(1_800_000_000_000 + minute * 60_000) WHERE id = '\(step.id.uuidString.lowercased())'")

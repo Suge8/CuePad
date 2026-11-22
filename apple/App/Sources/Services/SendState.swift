@@ -8,21 +8,17 @@ import Foundation
 /// 会话用 Pi 自己的会话 id 认：会话结束后它还是同一个，同一个会话重新打开也不变（桥上的连接 id 含进程号，每次打开都是新的）。
 struct AgentTarget: Equatable {
     var session: String
-    /// nil 为本机；会话不在线时请那台 Mac 唤醒它。
     var host: String?
 }
 
-/// 发到哪只有一条规则（`CueStore.handOffPlan`）。不碰界面提示：成败由调用方说。
 @Observable
 final class SendState {
-    /// `ended`：不在线的会话（已结束的，或托管着、进程歇着的），发送时由它所在那台 Mac 的执行器在后台唤醒。
     enum Route {
         case local(CueBridge.Session)
         case remote(SessionState)
         case ended(host: String?)
     }
 
-    /// key 是桥上的连接 id；归属由 Store 按工作目录判定。
     private(set) var projects: [String: UUID] = [:]
     @ObservationIgnored private let services: AppServices
 
@@ -56,7 +52,6 @@ final class SendState {
         services.bridge.session(sessionID: sessionID)
     }
 
-    /// 正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径（`MacExecutor`）。提示只说写出了，到哪了看任务那一行。
     func destination(to target: AgentTarget, card: UUID?) -> (listener: Listener, handed: Dotted) {
         let name = sessionName(target.session)
         let (listener, wakes): (Listener, Bool) = switch route(of: target.session, host: target.host) {

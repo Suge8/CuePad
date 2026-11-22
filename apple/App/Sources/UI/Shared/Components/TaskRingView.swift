@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 进度只画在圈上，行尾不写"n/m"。
 struct TaskRingView: View {
     let status: TaskStatus?
     let done: Bool
@@ -27,9 +26,6 @@ struct TaskRingView: View {
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
     }
 
-    /// 推进中有两种样子：有 Agent 正在这一步上跑（`running`）是一段靛青的弧绕着圈转（同 `Spinner` 的那一种，不放循环动效时是静止的靛青整圈）；
-    /// 试过同分段圈的扫光：单独一圈没有墨色的段衬着，扫光的间隙里比没开工的圈还淡。
-    /// 标了推进中、此刻没人在跑是外圈加右半边实心的半满圆，静止。
     private var open: some View {
         let line = max(1.4, size * 0.095)
         return ZStack {
@@ -50,7 +46,6 @@ struct TaskRingView: View {
     private func segments(_ steps: TaskProgress) -> some View {
         let line = max(1.4, size * 0.095), count = steps.total
         let gap = min(0.04, 0.25 / Double(count))
-        // 圆帽会向缝里各伸半个线宽；小尺寸或密集分段改用平端，不能把步骤粘成整圈。
         let rounded = CGFloat(gap) * .pi * size * 0.88 > line * 1.2
         return ZStack {
             ForEach(0..<count, id: \.self) { index in

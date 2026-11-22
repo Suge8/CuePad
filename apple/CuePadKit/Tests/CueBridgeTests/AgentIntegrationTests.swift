@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 检测 Agent 只在临时目录里：各家的配置目录经它们自己认的环境变量指到临时目录，`pi` 是报版本的假脚本；绝不碰真实的 ~/.pi、~/.claude 等。
 struct AgentIntegrationTests {
     let root: URL
     let paths: PiPaths
@@ -45,7 +44,6 @@ struct AgentIntegrationTests {
         #expect(await integration().status(of: kind).presence == presence)
     }
 
-    /// 时限用手动钟，命令真被问到之后才推进。
     @Test func anAgentThatDoesNotAnswerTheVersionIsUnresponsiveNotMissing() async throws {
         let asked = root.appending(path: "asked")
         try TestScript.install("#!/bin/sh\n. \"$0.env\"\ntouch \"$ASKED\"\nexec sleep 300\n", at: bin.appending(path: "pi"), variables: ["ASKED": asked.path])
@@ -60,7 +58,6 @@ struct AgentIntegrationTests {
         #expect(await status.presence == .unresponsive)
     }
 
-    /// 只看安装脚本会用的 Node（PATH 里第一个）：免得点了安装才被脚本拒。
     @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
         let later = root.appending(path: "later-bin")
         try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)

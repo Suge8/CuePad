@@ -1,7 +1,6 @@
 import SwiftUI
 
 extension ChatScroll {
-    /// Mac 上可见区变矮是拖窗口，要跟手、当下补。
     #if os(iOS)
     static var followsKeyboard: Bool { true }
     #else
@@ -22,7 +21,6 @@ extension ChatScroll {
     /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
     var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
-    /// 读数闭包与 action 都在主线程（`onScrollGeometryChange` 的读数闭包不要求跨线程，在主线程上的这个类型就是这条保证）；它不是状态，写它不触发任何更新。
     final class ScrollOffset {
         private(set) var read: CGFloat = 0
         private(set) var end: CGFloat = 0
@@ -47,7 +45,6 @@ extension ChatScroll {
                 reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false, moved: delivered.map { $0.read != read } ?? true)
         }
 
-        /// 第一回有它时只记下：打开时已在的（对话读进来那一下）不算新到。
         func arrived(_ arrival: UUID?) -> Bool {
             guard let arrival else { return false }
             defer { self.arrival = arrival }
@@ -62,7 +59,6 @@ extension ChatScroll {
         var nearNewest: Bool
         var beyondScreen: Bool
         var nearOldest: Bool
-        /// 内容的高，不含让出回复框的那段（它变高变矮是回复框的事，不滑）。
         var height: CGFloat
         var floating: CGFloat
         var anchor: ChatAnchor.Tracked
@@ -94,7 +90,6 @@ extension ChatScroll {
         }
     }
 
-    /// 贴底已由 `ChatFollow` 当场记上，这里只管滚过去。
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
         held = sent ? bottomInset : nil
         withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }

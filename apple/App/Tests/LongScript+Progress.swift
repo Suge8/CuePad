@@ -76,7 +76,6 @@ extension LongScript {
         后端那 21 个测试也重跑了一遍，都还是绿的。接下来做 /reset 页。
         """
 
-    /// 提交了没有照 Cue 这一遍对它交代的（`EvalReading.asksToCommit`）：Cue 每遍交代的不一样，写死哪一种都有几遍收不了尾
     static func bumpDone(committed: Bool) -> String {
         let today = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         return """
@@ -106,7 +105,6 @@ extension LongScript {
             """
     }
 
-    /// 补上版本号之后 Cue 还要的（实测是提交与模板关系）：照它最新的交代答提交，说清两个模板的关系，证据再贴一遍
     static func wrapFollowUp(committed: Bool) -> String {
         """
         \(committed ? "提交好了，没有推送" : "按你说的没提交、没有推送")。模板：新的 reset.mjml 用 mj-include 引进 verify.mjml 那套页眉、按钮与页脚，\

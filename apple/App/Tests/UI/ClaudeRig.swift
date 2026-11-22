@@ -9,7 +9,6 @@ import Testing
 @testable import CuePad
 @testable import CueBridge
 
-/// App 装上真 Claude Code（钉住的版本，`ClaudeSandbox` 隔离、假模型回 `ECHO <你的话>`）的流程测试台：全部状态落在临时目录，不碰 ~/.claude。
 @MainActor
 final class ClaudeRig {
     let work: URL
@@ -20,7 +19,6 @@ final class ClaudeRig {
     var store: CueStore { services.store }
     var runtime: ClaudeCodeRuntime { services.runtimes[.claudeCode] as! ClaudeCodeRuntime }
 
-    /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 sh 脚本，真的在 `$REAL`，脚本所在目录是 `bin`（经 `TestScript`，内容里不写本次运行的路径）
     init(wrapper: String? = nil, hostedIdle: Duration = AgentTimeouts.hostedIdle) async throws {
         try PinnedAgent.claude.require()
         let root = TestLibraries.makeDirectory()
@@ -37,7 +35,6 @@ final class ClaudeRig {
         }
         self.bin = bin
         let paths = PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets, binDirectory: root.appending(path: "home/.local/bin"))
-        // 其余 Agent 的目录也指到临时目录：不读这台 Mac 上真实的会话
         let agentPaths = AgentPaths(pi: paths, environment: environment.merging([
             "CODEX_HOME": root.appending(path: "codex").path, "OPENCODE_CONFIG_DIR": root.appending(path: "opencode").path,
             "GROK_HOME": root.appending(path: "grok").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path,
@@ -64,7 +61,6 @@ final class ClaudeRig {
         self.bridge = bridge
     }
 
-    /// 搭好、起 App 跑 `body`，不论成败都收掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(wrapper: String? = nil, hostedIdle: Duration = AgentTimeouts.hostedIdle, _ body: (ClaudeRig) async throws -> Void) async throws {
         let rig = try await ClaudeRig(wrapper: wrapper, hostedIdle: hostedIdle)
         do {
@@ -77,7 +73,6 @@ final class ClaudeRig {
         await rig.shutdown()
     }
 
-    /// 托管的进程按 runtime 的收法收；外壳在 `bin/pids` 里记下的（修坏了时 runtime 收不掉的那种）按 pid 结束。
     func shutdown() async {
         let followers = services.cancelBackgroundWork()
         _ = await services.beginShutdown()()

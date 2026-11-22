@@ -19169,6 +19169,22 @@
         }
       }
     },
+    "灵感或任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idea or Task"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灵感或任务"
+          }
+        }
+      }
+    },
     "灵感，含附件" : {
       "localizations" : {
         "en" : {
@@ -24597,22 +24613,6 @@
         }
       }
     },
-    "选一条灵感或任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose an Idea or Task"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选一条灵感或任务"
-          }
-        }
-      }
-    },
     "选中一段，在菜单里点“批注”" : {
       "localizations" : {
         "en" : {
@@ -24801,22 +24801,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择这个项目的文件夹，在其中运行的 Agent 会话会归到这个项目，新会话也开在这里"
-          }
-        }
-      }
-    },
-    "选灵感或任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Idea or Task"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选灵感或任务"
           }
         }
       }

@@ -1,8 +1,6 @@
 import Foundation
 
-/// 缺前提时在旁边等：取附件、等现有会话就绪。两种等待都不抓一份期限，到点从库里重读（`untilDue`），锚点只有一个（`DeliveryRequest.dispatchDeadline`）。
 extension DeliveryExecutor {
-  /// 订阅同一份派发期限；锚点尚未落定就等它，删除则取消等待，不能把两者当作到期。
   func untilDue(_ id: DeliveryRequest.ID) async throws {
     for try await expired in store.observe({ store -> Bool? in
       guard let request = try store.deliveryRequest(id) else { return nil }
@@ -22,8 +20,6 @@ extension DeliveryExecutor {
     return isExpired(current)
   }
 
-  /// 在旁边把这条请求的附件取齐，至迟到派发期限：取到了再过一遍队列（文件不在库里，库的变化叫不醒执行器），取不来、取过了仍不在、到期都按失败写回。
-  /// 等附件时请求仍是 `pending`：`preparing` 只许等现有会话、不许唤醒（`MacDeliveryPreparation`），等附件不该带上这条限制。
   func fetch(_ keys: [String], for request: DeliveryRequest) {
     guard started, !Task.isCancelled, !fetching.has(request.id) else { return }
     fetching.put(request.id, .spawn { [fetchFile, files = store.files] id in
@@ -42,9 +38,8 @@ extension DeliveryExecutor {
   }
 
   private func fetched(_ request: DeliveryRequest, _ id: UUID, failure: ShownText?) async {
-    // 先写回再让位：位置空出来之后期限监视才会接手，不抢着写没有原因的到期
     if let failure { await finish(request, .failed(failure)) }
-    guard fetching.release(request.id, id) else { return }  // 停下了
+    guard fetching.release(request.id, id) else { return }
     enqueue()
   }
 

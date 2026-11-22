@@ -5,7 +5,6 @@ nonisolated enum IslandType {
     static let count = Font.system(size: 15, weight: .semibold, design: .rounded)
     /// 紧凑态右位的钟定宽（放得下 "59:59"）：岛的右缘不随秒数伸缩，过一小时收字号。系统给一侧 52pt 上下，再宽就挤掉状态栏的图标。
     static let clockWidth: CGFloat = 44
-    /// 展开态行尾那只钟的宽（放得下 "59:59"）：各行的图形对成一列，过一小时收字号。
     static let rowClockWidth: CGFloat = 36
     static let marker = Font.system(size: 12, weight: .semibold)
     static let narrowSide: CGFloat = 28
@@ -14,7 +13,6 @@ nonisolated enum IslandType {
     static let reading = Font.system(size: 28, weight: .bold, design: .rounded)
     static let readingGlyph = Font.system(size: 17, weight: .bold)
     static let clock = Font.system(size: 28, weight: .bold, design: .rounded)
-    /// 紧凑态右位等你时那颗实色胶囊里的钟：字宽加两边的留白仍在 52pt 以内。
     static let chipClock = Font.system(size: 14, weight: .bold, design: .rounded)
     static let chipClockWidth: CGFloat = 38
     static let question = Font.system(size: 16, weight: .bold)
@@ -31,6 +29,5 @@ nonisolated enum IslandType {
     static let posterTime = Font.system(size: 14.5, weight: .semibold, design: .rounded)
     static let posterGlyph = Font.system(size: 13, weight: .semibold)
     static let posterTick = Font.system(size: 20, weight: .bold)
-    /// 行尾那只钟的宽（放得下 "59:59"），过一小时收字号。
     static let posterTimeWidth: CGFloat = 42
 }

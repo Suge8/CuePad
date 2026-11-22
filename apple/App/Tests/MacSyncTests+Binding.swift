@@ -8,8 +8,6 @@ import Testing
 @testable import CueBridge
 
 extension MacSyncTests {
-    // 绑定由 Mac 执行（只有它有完整路径），写入只有这一条：本机的目录绑定
-
     func bound(_ bind: BindRequest) async throws -> DeliveryRequest {
         try await services.executor.start()
         let request = try await services.store.requestBind(bind, title: "App", on: TestApp.hostID)

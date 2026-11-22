@@ -1,4 +1,3 @@
-/// 计数的写法：为 0 时不写（nil）——0 是噪音，眼睛要先读到再把它排除。
 nonisolated enum CountCopy {
     static func hits(_ total: Int) -> String { String(localized: "\(total) 条") }
 

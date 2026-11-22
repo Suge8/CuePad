@@ -7,14 +7,10 @@ import UIKit.UIGestureRecognizerSubclass
 /// 比半秒短这么多仍不误触：手指落下就滑的归滚动（0.2 秒里挪出了容许范围，这里就不认了）。
 /// 垫在那一列底下的一个空视图，手势挂在窗口上。
 struct BoardLift: UIViewRepresentable {
-    /// 挂着不看的页不认。
     let enabled: Bool
-    /// 这一点上有没有拖得动的卡：没有就不认，空白处按住再滑照样是滚动。点都在窗口坐标里。
     let hits: (CGPoint) -> Bool
-    /// 拎起来了为真。
     let began: (CGPoint) -> Bool
     let moved: (CGPoint) -> Void
-    /// 松手为真；被系统收走（菜单出来、来电）为假。
     let ended: (Bool) -> Void
 
     func makeUIView(context: Context) -> Anchor { Anchor() }
@@ -43,7 +39,6 @@ struct BoardLift: UIViewRepresentable {
             window?.addGestureRecognizer(press)
         }
 
-        /// 这一页盖在别的东西下面（推进去的页、弹出的面板）时手指落不到它身上，也不认。
         fileprivate func accepts(_ finger: UITouch, at point: CGPoint) -> Bool {
             var page: UIView = self
             while let above = page.superview, !(page.next is UIViewController) { page = above }
@@ -63,7 +58,6 @@ struct BoardLift: UIViewRepresentable {
         private var claimed = false
 
         private static let hold: TimeInterval = 0.2
-        /// 拎起来之前手指挪出这么远就不是按住（同系统长按的容许位移）；拎起来之后挪出 `slop` 算是在拖。
         private static let still: CGFloat = 10
         private static let slop: CGFloat = 4
 
@@ -78,7 +72,6 @@ struct BoardLift: UIViewRepresentable {
 
         @objc private func raise() {
             guard state == .possible, finger != nil else { return }
-            // 各列各有一个，拖动的状态只有一份：没拎起来（另一根手指正拖着一张）就不跟，不然这根手指挪的、放下的是那一张
             guard anchor?.lift?.began(start) == true else { return state = .failed }
             lifted = true
         }
@@ -91,7 +84,6 @@ struct BoardLift: UIViewRepresentable {
                 return
             }
             if !claimed {
-                // 没挪开之前不报位置：松手还算点按，报了的话挨着邻卡按一下、手一抖就排了序
                 guard far > Self.slop else { return }
                 claimed = true
                 // 按名字认：这几个没有公开的类型。改了名认不出来时，拖得慢的那几次菜单照旧弹出来（它的容许位移比看上去大，实测每秒 27 点仍弹）。

@@ -40,7 +40,6 @@ enum PageSnapshots {
     }
 }
 
-/// 缩略图与网页快照只此一套磁盘缓存：库的缓存目录（`LibraryLocation.caches`）下的 `CuePadLooks/`，按键名认（缩略图"哈希@框"、快照"哈希.page"）；系统可随时清，清了下次再出。内容按哈希定，存下就不会过时。
 enum LookFiles {
     nonisolated static func url(_ key: String, in caches: URL) -> URL {
         caches.appending(path: "CuePadLooks", directoryHint: .isDirectory).appending(path: "\(key).png")
@@ -54,7 +53,6 @@ enum LookFiles {
         return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
 
-    /// 写不成就算了，下次再出。
     @concurrent static func store(_ image: CGImage, as key: String, in caches: URL) async {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return }

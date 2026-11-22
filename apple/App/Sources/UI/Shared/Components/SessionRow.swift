@@ -1,9 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 历史卡第二行都没有也留着：张张卡一样高，长列表扫下去节奏不断。
-/// 名字优先，窄处先截名字，标志与时长一直留着。
-/// 窄处时长与上下文读数用等宽数字，状态词长短不同也不挪；辅助字号下两层的行尾（时长、上下文）各换到下一行（`MetaLine`）。
 struct SessionRow: View {
     let session: SessionState
     let project: Project?
@@ -11,7 +8,6 @@ struct SessionRow: View {
     var end: Speech.Trip?
     var rename: DeliveryRequest?
     var task: String?
-    /// 你看过以后整行不再是"没能送达"，但只要还有，时长前留一个胭脂的小折回箭头，与会话页顶栏同一个数（`Chat.undeliveredNote`）。
     let undelivered: Int
     var style = Style.compact
     @Environment(AppServices.self) private var services
@@ -145,7 +141,6 @@ struct SessionRow: View {
     private static let leadIn = 6
 }
 
-/// 行只随自己的数据重算（调用处挂 .equatable()）：会话列表里一个会话的状态变了，别的行不必再排一遍。
 extension SessionRow: Equatable {
     static func == (a: Self, b: Self) -> Bool {
         a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename && a.task == b.task
@@ -153,7 +148,6 @@ extension SessionRow: Equatable {
     }
 }
 
-/// 换状态时淡入淡出。静态内容卡：不加阴影与描边，靠纸比桌面亮一档分层。
 struct SessionCard: ViewModifier {
     var wash: Color?
     @Environment(\.palette) private var palette

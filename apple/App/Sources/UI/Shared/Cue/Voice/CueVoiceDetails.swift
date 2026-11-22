@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// 有界详情列未落库问题和朗读记录；活动通话可从标题旁直接结束。Mac 与手机同一份。
-/// 结果只给辨认摘录，正文沿用原聊天的 SpeechBubble。
 struct CueVoiceDetails: View {
-    /// 浮层持有内容视图；在 body 内读取，保证开着详情时也观察接通与提交状态。
     let presentation: () -> CueVoicePresentation?
     let action: (VoiceAction) -> Void
     @Environment(\.palette) private var palette
@@ -23,7 +20,6 @@ struct CueVoiceDetails: View {
                     .opacity(presentation.active ? 1 : 0)
                     .readerHidden(!presentation.active)
             }
-            // 只在通话中写此刻的状态：结束了不留"通话已结束"，异常结束由提示条说
             if presentation.active {
                 Text(presentation.title).font(Typography.body).foregroundStyle(palette.ink2)
             }

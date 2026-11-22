@@ -11,14 +11,12 @@ final class TaskFoldAnchor {
     fileprivate static let barID = "taskFoldBar"
     /// 滚动区的高度（含顶栏、底栏底下那一截：`scrollTo(id:anchor:)` 的锚点按整个滚动区算，Mac 与 iOS 实测）：只随窗口变，不随滚动变。
     fileprivate var height: CGFloat = 0
-    /// 页面停在顶上：收起时不用滚（收走的都在那一行上面，留不住也不会被夹到别处），也就不多一次整页更新。
     fileprivate var atTop = true
     fileprivate var bar: CGRect?
     private var pending: (() -> Void)?
 
     func collapse(_ fold: Binding<TaskFold>, scrolling position: Binding<ScrollPosition>) {
         guard let bar, !atTop else { return withTransaction(\.disablesAnimations, true) { fold.wrappedValue.showsAll = false } }
-        // 锚点 u：那一行上沿 + u × 行高 对齐滚动区上沿 + u × 滚动区高，解出让上沿留在原处的 u
         let room = height - bar.height
         let anchor = UnitPoint(x: 0, y: room > 0 ? bar.minY / room : 0)
         pending = { withTransaction(\.disablesAnimations, true) { position.wrappedValue.scrollTo(id: Self.barID, anchor: anchor) } }

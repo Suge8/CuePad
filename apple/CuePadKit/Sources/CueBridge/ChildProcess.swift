@@ -20,10 +20,6 @@ public final class ChildProcess: Sendable {
         /// 组长先退出时，组里剩下的（没跟着走的子进程、外壳下的真 Agent）同样 SIGTERM、宽限 `AgentTimeouts.endGrace` 后 SIGKILL，不留孤儿；
         /// 等它退出的（`exited`、`waitForExit`）等到整组都走，退出码是组长的
         case group
-        /// 新会话：App 所在会话与进程组的信号碰不到它，认领（`release()`）之后 App 退出、崩溃它照常在（后台托管的 Pi）。
-        /// 认领之前它的生死跟着起它的这一方：中转留一个看守读 `holdFD` 上只有本进程握着写端的管道，没等到认领就读到 EOF
-        /// （这个对象没了、App 退出或崩溃）时结束它，SIGTERM 后宽限 `AgentTimeouts.endGrace` 再 SIGKILL。否则起到一半 App 就没了、
-        /// 而它的扩展又没接手（没载入、目录已删）时，它既不会空闲自退也没人认，成了一直空转的孤儿
         case detached
     }
 
@@ -51,23 +47,17 @@ public final class ChildProcess: Sendable {
     struct State {
         var inputOpen = true
         var stopping = false
-        /// SIGTERM 只发一次：停它时发过的，组长退出时不再补
         var terminated = false
         var killed = false
-        /// 组长已退出、组里还有人时，到点强杀的那一段
         var deadline: Task<Void, Never>?
         var status: Int32?
         var waiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     }
-    /// 回收与读事件的回调和调用方共享（`Mutex` 不可复制，放进引用里）
     final class Shared: Sendable { let state = Mutex(State()) }
     private let shared = Shared()
     private let errors: ErrorTail?
     private let hold: Mutex<Int32?>
 
-    /// `environment` 是完整的环境（nil 继承本进程的）；`directory` 为 nil 时用本进程的工作目录。
-    /// 标准错误只留末尾（`stderrTail`）给退出原因，`keepErrors` 为 false 时丢掉。脱离 App 的进程只读到认领为止
-    /// （起不来的原因都在这之前），之后由看守接着读走丢掉：App 退出后它不收 EPIPE，也没有越写越大的文件。
     init(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil,
         placement: Placement, input inputMode: Input = .null, output outputMode: Output = .null, keepErrors: Bool = true,
@@ -185,7 +175,6 @@ public final class ChildProcess: Sendable {
         }.value
     }
 
-    /// 超时与没能启动都是 nil，只在两者不必分开时用。
     @concurrent public static func run(
         _ executable: URL, _ arguments: [String], directory: URL? = nil, environment: [String: String]? = nil, timeout: Duration? = nil,
         timing: Timing = .system, collect: Bool = true
@@ -196,7 +185,6 @@ public final class ChildProcess: Sendable {
         return (status, output)
     }
 
-    /// 等它退出，返回退出码（被信号结束为 nil）；不随调用方取消提前返回。
     public func waitForExit() async -> Int32? {
         _ = await Task { await exited(within: nil) }.value
         return status
@@ -221,7 +209,6 @@ public final class ChildProcess: Sendable {
         }
     }
 
-    /// 请它马上退出、不等：SIGTERM，宽限 `AgentTimeouts.endGrace` 过了还没走就 SIGKILL（自成进程组的都按组发）。之后等它退出的一定等得到。
     public func end() {
         terminate()
         Task { [self] in
@@ -251,8 +238,6 @@ public final class ChildProcess: Sendable {
         Self.deliver(pid, SIGKILL, group: placement == .group, shared: shared)
     }
 
-    /// 等进程退出，返回退出原因（退出码或信号与标准错误的末尾，各端按自己的语言显示）；是 `stop()` 让它退出的返回 nil。
-    /// 可以多处一起等，不随取消提前返回。
     func exited() async -> ShownText? {
         _ = await Task { await exited(within: nil) }.value
         let (status, stopping) = shared.state.withLock { ($0.status ?? -1, $0.stopping) }
@@ -268,7 +253,6 @@ public final class ChildProcess: Sendable {
 
     var stderrTail: String { errors?.text ?? "" }
 
-    /// 等进程退出，至多 `limit`（nil 不限时，按 `timing` 量）；退出了返回 true。到点或调用方取消时不管有没有退出都立刻返回 false，好接着升级信号。
     func exited(within limit: Duration?) async -> Bool {
         guard let limit else { return await waitForExitSignal() }
         return await withTaskGroup(of: Bool?.self) { group in
@@ -299,7 +283,6 @@ public final class ChildProcess: Sendable {
     }
 }
 
-/// 用一个起好的进程（或连着进程的连接）办一件事：办完返回或抛错，都先把它停掉。
 func withStopped<Resource, T>(_ resource: Resource, stop: (Resource) async -> Void, _ body: (Resource) async throws -> T) async throws -> T {
     do {
         let value = try await body(resource)

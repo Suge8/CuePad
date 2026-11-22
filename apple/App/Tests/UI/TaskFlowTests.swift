@@ -115,10 +115,10 @@ struct TaskFlowTests {
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
         #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
         #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")
-        _ = try await store.withdrawDelivery(try #require(launch).id)  // 本机不执行：开新会话的去向核对完即可
+        _ = try await store.withdrawDelivery(try #require(launch).id)
 
         try await workspace.complete(second.id)
-        #expect(try await requests(.end).isEmpty)  // "发版"还没开工，默认接着用它
+        #expect(try await requests(.end).isEmpty)
         try await workspace.complete(third.id)
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
@@ -151,7 +151,6 @@ struct TaskFlowTests {
 
     // MARK: 撤销与批量
 
-    /// 撤了会盖掉回执之后写的改动，所以不撤。
     @Test func 撤销前任务已改过_不撤并提示() async throws {
         let workspace = Workspace(services: rig.services)
         let check = try await store.createTask("上线前检查")
@@ -211,19 +210,16 @@ struct TaskFlowTests {
         #expect(try await store.card(release.id)?.completedAt == nil)
         #expect(try await store.card(notes.id)?.completedAt == nil)
 
-        // 连着挪两步、连着撤两步：撤后一步不该让前一步撤不回
         workspace.move(notes.id, to: .under(site.id), after: nil)
         try await eventually("挪过去了") { try await store.card(notes.id)?.parentID == site.id }
         workspace.move(notes.id, to: .top(project: Project.defaultID), after: nil)
         try await eventually("挪到顶层了") { try await store.card(notes.id)?.parentID == nil }
         try await eventually("记下了") { undoManager.undoActionName == "移动" }
         undoManager.undo()
-        // 两步在测试里可能落进同一次事件、记成一组：一次撤完的就不用再撤
         try await eventually("后一步撤了") { try await store.card(notes.id)?.parentID != nil }
         if undoManager.canUndo { undoManager.undo() }
         try await eventually("前一步也撤了") { try await store.card(notes.id)?.parentID == release.id }
 
-        // 直接做完子任务会带着上级开始；撤了，上级回到待办
         try await workspace.complete(notes.id)
         #expect(try await store.card(release.id)?.status == .inProgress)
         undoManager.undo()

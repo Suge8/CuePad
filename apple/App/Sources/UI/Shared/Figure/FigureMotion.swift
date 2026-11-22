@@ -3,12 +3,9 @@ import simd
 
 nonisolated enum FigurePose: Equatable {
     case listening, thinking, tool, compacting, delegating
-    /// 一轮刚停、回复还没到：轻轻一跳等着交棒（`LiveFigure` 的 `lingering`）。
     case done
 }
 
-/// Cue 此刻的动作：姿势各项用弹簧追目标（略过冲再回来）、换姿势先蹲后弹，加上波纹、火星这些点缀。
-/// 每帧给出一份 `FigureUniforms` 与一串点，画在显卡上（`FigureCanvas`）。一个实例只活一次出场：拼起（或本来就在）→ 在场 → 碎开。
 final class FigureMotion {
     private enum Life { case arriving, here, leaving }
 
@@ -36,7 +33,6 @@ final class FigureMotion {
         last = t
     }
 
-    /// 换姿势：迸几颗火星、脚下一圈波纹、先往下一蹲。
     func set(_ next: FigurePose, at t: Double) {
         guard next != pose else { return }
         pose = next
@@ -52,7 +48,6 @@ final class FigureMotion {
         lifeAt = t
     }
 
-    /// 停在一帧（减弱动态效果、省电、看不见时）：各项直接到位，不留飞行中的格子。
     func settle() {
         values = Self.target(pose)
         velocity = .init()
@@ -63,10 +58,8 @@ final class FigureMotion {
         particles = []
     }
 
-    /// 还在过渡里（拼起、碎开、刚换姿势、环转快了甩火星）就要 60 帧，平时 30 帧就够顺。
     func busy(at t: Double) -> Bool { life != .here || t - stateAt < 1.5 || pose == .tool }
 
-    /// 返回这一帧的参数、点缀，以及前多少个点缀画在格子下面（脚下的光）。
     func step(at t: Double, dark: Bool) -> (FigureUniforms, [FigureSprite], Int) {
         let dt = Float(min(max(t - last, 0.001), 0.07))
         last = t
@@ -76,7 +69,7 @@ final class FigureMotion {
         accent = accent.map { mix($0, accentTarget, t: 1 - exp(-dt * 4)) } ?? accentTarget
         var target = Self.target(pose)
         miniAngle += 1.5 * dt * values[Key.minis]
-        if values[Key.minis] > 0.3 {   // 迷你方块绕着转时眼睛跟着前面那个看
+        if values[Key.minis] > 0.3 {
             let front = sin(miniAngle) < 0 ? miniAngle : miniAngle + .pi
             target[Key.lookX] = cos(front) * 0.9
             target[Key.lookY] = 0.1
@@ -119,7 +112,6 @@ final class FigureMotion {
         return (u, sprites, under)
     }
 
-    /// 身子中心比画布中心低多少、脚底在哪（世界坐标）。
     private static let off: Float = 0.08, floor: Float = -0.98
 }
 
@@ -149,7 +141,6 @@ extension FigureMotion {
         }
     }
 
-    /// 把这一帧的点写进 `sprites`（沿用上一帧的存储），返回前多少个画在格子下面。
     private func decorate(t: Double, dt: Float, colors: FigureColors, lift: Float, hop: Float) -> Int {
         sprites.removeAll(keepingCapacity: true)
         let n = FigureLayout.tiles, tile = Float(FigureLayout.tile), s = Float(FigureLayout.size), accent = accent ?? colors.hl
@@ -160,7 +151,6 @@ extension FigureMotion {
         case .arriving: min(1, age / 0.9)
         case .leaving: max(0, 1 - age / 0.5)
         }
-        // 脚下的光：跳起来时变小变淡
         let poolAlpha = (1 - hop * 3) * (dark ? 0.55 : 0.32) * presence
         let row = (0.5 - (Self.floor - Self.off + 0.06) / span) * Float(n) - 0.5
         if poolAlpha > 0 {
@@ -174,7 +164,6 @@ extension FigureMotion {
             }
         }
         let under = sprites.count
-        // 换姿势时脚下扩出一圈像素波纹，吸在格子上
         let wave = Float(t - pulseAt) / 0.75
         if wave < 1, life != .leaving {
             let e = 1 - pow(1 - wave, 3), rx = s * (0.26 + 0.3 * e), ry = rx * 0.2
@@ -203,13 +192,13 @@ extension FigureMotion {
         guard life == .here else { return }
         let s = Float(FigureLayout.size), roll = Float.random(in: 0..<1)
         switch pose {
-        case .listening where roll < 5 * dt:   // 你的话从输入框那边飘上来
+        case .listening where roll < 5 * dt:
             particles.append(Particle(x: Float(FigureLayout.origin.x) + s * Float.random(in: 0.25..<0.75), y: Float(FigureLayout.canvas.height),
                                       vx: Float.random(in: -3..<3), vy: -36, gravity: 0, life: 1.5, max: 1.5, color: colors.r3))
-        case .thinking where roll < 1.6 * dt:   // 头顶冒念头
+        case .thinking where roll < 1.6 * dt:
             let p = point(0.4, 0.78, lift: lift)
             particles.append(Particle(x: p.x, y: p.y, vx: Float.random(in: 5..<10), vy: -14, gravity: 0, life: 1.8, max: 1.8, color: colors.r2, grows: true))
-        case .tool where roll < 16 * dt:   // 环转快了甩出火星
+        case .tool where roll < 16 * dt:
             let a = ringAngle + Float.random(in: 0..<0.6), c = point(0, -0.2, lift: lift)
             particles.append(Particle(x: c.x + cos(a) * s * 0.4, y: c.y + sin(a) * s * 0.07, vx: -sin(a) * 64, vy: cos(a) * 12 - 22, gravity: 70, life: 0.6, max: 0.6,
                                       color: [Self.ember, colors.r3, [1, 1, 1]].randomElement()!))

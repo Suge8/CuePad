@@ -2,9 +2,6 @@ import CueStore
 import Foundation
 import Synchronization
 
-/// 能往前跳的真钟：`now` 是真实的此刻加上跳过的时长，睡着的照真钟醒，`jump` 让跳过之后到点的马上醒。
-/// 给有真进程（真 Pi、`cuepad mcp`）的用例省掉真等：钟只往前跳，那些进程照真钟写下的时刻永远不晚于它；
-/// 不像 `ManualTiming` 那样停住，没跳的时候和真钟一样走。
 public final class JumpTiming: Sendable {
   private struct State {
     var skipped: TimeInterval = 0
@@ -44,7 +41,6 @@ public final class JumpTiming: Sendable {
     }
   }
 
-  /// 等下一次跳（`skipped` 之后已经跳过就当场返回）；被取消时返回。
   private func jumped(since skipped: TimeInterval) async {
     let id = UUID()
     await withTaskCancellationHandler {

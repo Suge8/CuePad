@@ -8,8 +8,6 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// （不用先问的例外只在记忆里）。回答你的一轮只响一次：问你的那一轮响的是"等你"（正文是要你定什么），那一轮的回复不再响；
-    /// 你选完它回的那一轮照常响它的原话（你说完多半已离开 App）。
     @Test func 等你被回答_Cue被唤醒_以后都不用问记成重点记忆() async throws {
         let rig = try await Rig()
         try await rig.say("请问我一个问题")
@@ -26,12 +24,11 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 醒来出错多是网络偶发：先不告诉你、基线不前移，隔一会儿再醒。
     @Test func 自己醒来出错后隔一会儿重试() async throws {
         let rig = try await Rig(failingOnce: ["醒来：刚启用"], prepare: Rig.handOverWork)
         try await rig.message(.cue, containing: "我看了一眼", skippingBackoff: true)
         #expect(rig.model.errors == 1)
-        try await rig.settleTask(titled: "修好登录页 先出一次错")  // 假模型据此第一次报错
+        try await rig.settleTask(titled: "修好登录页 先出一次错")
         try await rig.message(.cue, containing: "登录页那边歇下了", skippingBackoff: true)
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().allSatisfy { !$0.text.contains("bad things happened") })
@@ -49,7 +46,7 @@ extension CueHostTests {
 
     @Test func 自己醒来做完_告诉你结果() async throws {
         let rig = try await Rig()
-        try await rig.settleTask(titled: "修好登录页 请收一下")  // 假模型据此 done
+        try await rig.settleTask(titled: "修好登录页 请收一下")
         let report = try await rig.message(.cue, containing: "做完了")
         #expect(report.choices == nil && report.text.contains("- 登录测试全过"))
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) && rig.model.answered("结果已告诉用户") }

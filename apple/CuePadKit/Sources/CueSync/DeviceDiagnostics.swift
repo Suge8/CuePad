@@ -1,12 +1,8 @@
 import CloudKit
 import Foundation
 
-/// 一台设备的一份诊断文件（MetricKit 的原始 JSON、本机记下的主线程卡住、最近日志），经你自己的 iCloud 私有库送到你的 Mac（App 的 `DiagnosticInbox` 落成文件）。
-/// 单独一个区（`DiagnosticZone`），不进业务同步区：已发出的版本拉到会当未知类型报给你（同 `RelaySecret`）。一份文件一条记录；
-/// 每台只写、只删自己的（发送方留几份由它定，删掉的同样删云上的），Mac 读全部。
 public struct DeviceDiagnostic: Equatable, Sendable {
   public var device: String
-  /// 给人看的设备名，Mac 落盘时按它分目录。
   public var deviceName: String
   public var file: String
   public var content: Data
@@ -47,7 +43,6 @@ public struct DiagnosticChanges: Sendable {
   public var saved: [DeviceDiagnostic]
   public var deleted: [DeviceDiagnostic.Key]
   public var token: Data
-  /// 从头读的（没给令牌，或令牌已失效、区不在）：`saved` 就是云上的全部，本地多出来的都该删。
   public var complete: Bool
 }
 
@@ -74,7 +69,6 @@ enum DiagnosticZone {
     return DeviceDiagnostic(device: key.device, deviceName: name, file: key.file, content: content)
   }
 
-  /// 拉到底，一次交回。只有几十份、每份至多 `DeviceDiagnostic.maxBytes`，不分页给调用方。
   static func changes(since token: Data?, in cloud: any SyncCloud) async throws -> DiagnosticChanges {
     var token = token
     var complete = token == nil
@@ -87,7 +81,6 @@ enum DiagnosticZone {
         (token, complete, saved, deleted) = (nil, true, [:], [])
         continue
       } catch let error as CKError where error.code == .zoneNotFound {
-        // 还没有哪台送过（或换了账号）：云上什么都没有
         return DiagnosticChanges(saved: [], deleted: [], token: Data(), complete: true)
       }
       for record in batch.modifications where record.recordType == recordType {
@@ -116,7 +109,6 @@ extension CloudDatabase {
     try await diagnostics.changes(since: token.flatMap { $0.isEmpty ? nil : $0 }, keys: [DiagnosticZone.nameField, DiagnosticZone.contentField])
   }
 
-  /// 每台只写自己的记录、每次都是整份新建（不带服务器版本）：覆盖写。卡住记录恢复后原地改写、上一批部分传成后重传，都是改已有的记录。
   func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
     do {
       return try await diagnostics.upload(saving: saving, deleting: deleting, policy: .allKeys).throwingZoneMissing()
@@ -137,8 +129,6 @@ extension SentRecords {
 }
 
 extension CloudSync {
-  /// 本机的诊断传上去、云上删掉本机已不留的。等账号认好再发（同 `relaySecret`）；同步被限流时不另发请求，抛 `RetryHeld`，
-  /// 诊断自己被限流的同样让同步按服务器给的时刻等（同一台设备共用一份限流）。没传成的整批抛出，由调用方下次再对一遍。
   public func sendDiagnostics(saving: [DeviceDiagnostic], deleting: [DeviceDiagnostic.Key]) async throws {
     let cloud = try await usableCloud(for: .upload(urgent: false))
     let sent: SentRecords
@@ -147,20 +137,18 @@ extension CloudSync {
     } catch {
       throw await heldIfThrottled(error)
     }
-    let unknown = Set(sent.failedDeletes.filter { $0.error.code == .unknownItem }.map(\.id))  // 云上本来就没有
+    let unknown = Set(sent.failedDeletes.filter { $0.error.code == .unknownItem }.map(\.id))
     if let failure = sent.failedSaves.first?.error ?? sent.failedDeletes.first(where: { !unknown.contains($0.id) })?.error {
       throw await heldIfThrottled(failure)
     }
   }
 
-  /// 等账号认好（同 `relaySecret`），返回资料所属的 iCloud 账号：发送方按它记传过哪些，换了账号就从头传。
   public func diagnosticsAccount() async throws -> String {
     _ = try await usableCloud(for: .upload(urgent: false))
     guard let account = try await coordinator.store.syncState(SyncCoordinator.accountKey) else { throw CancellationError() }
     return String(decoding: account, as: UTF8.self)
   }
 
-  /// 各台送来的诊断自 `token` 以来的变化（nil 从头读）。
   public func diagnosticChanges(since token: Data?) async throws -> DiagnosticChanges {
     let cloud = try await usableCloud(for: .pull)
     do {

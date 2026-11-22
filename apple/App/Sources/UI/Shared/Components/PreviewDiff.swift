@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 行不折、整块横着滚（代码折了行就认不出缩进），行底铺到最长那一行（`UnifiedDiff.widest`），滚到哪颜色都连得上；只排看得见的那些行，几万行的改动也照样打开。
 struct PreviewDiff: View {
     let file: URL
     @State private var viewport: CGFloat = 0
@@ -80,7 +79,6 @@ struct DiffRow: View {
     private var signColor: Color { if case .added = line.kind { palette.replied } else { palette.failure } }
 }
 
-/// 改动的符号与底色只在这里：全屏的改动与一步的详情共用。
 extension UnifiedDiff.Line.Kind {
     var changed: Bool {
         switch self {

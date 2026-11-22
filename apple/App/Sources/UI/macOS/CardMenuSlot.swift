@@ -2,11 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 编辑浮层开着时栏头右端的"⋯"：那张卡的操作（iPad 的编辑页自己那一排有，`HeaderHost.panel`）。卡还没读到时钮在、置灰。
 struct CardMenuSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    /// 外层 nil 是还没读到。
     @State private var opened: Card??
     @State private var inspirationSharing = InspirationSharing()
 

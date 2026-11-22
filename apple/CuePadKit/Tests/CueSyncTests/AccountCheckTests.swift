@@ -6,7 +6,6 @@ import Testing
 
 @testable import CueSync
 
-/// 串行：网络回来是全进程的，同一套里并行会互相叫醒。
 @Suite(.serialized) struct AccountCheckTests {
   let fixture = try! Fixture()
   let cloud = ScriptedCloud()
@@ -18,7 +17,7 @@ import Testing
     let stale = Promise<Void>()
     await cloud.script(name: { n in
       guard n == 1 else { return "B" }
-      try await stale.value()  // 变化之前发出的那次：答复还是原来的账号
+      try await stale.value()
       return "simulated"
     })
     changeAccount()
@@ -30,7 +29,7 @@ import Testing
     changeAccount()
     try await eventually("另认出是另一个账号") { await sync.coordinator.status == .needsDecision(.accountSwitched) }
     stale.resolve(.success(()))
-    _ = await first.value  // 旧的那次收尾（它晚到的答复被丢弃）
+    _ = await first.value
     #expect(await sync.coordinator.status == .needsDecision(.accountSwitched))
     #expect(await !cloud.inner.saved.contains(name(card)))
     await sync.stop()
@@ -69,7 +68,7 @@ import Testing
     changeAccount()
     try await eventually("第一次在认名字") { await cloud.nameCalls == 1 }
     let hold = StoreHold()
-    let blocker = Task.detached { [store] in await store.occupy(hold) }  // 占住资料库：第一次停在读本地记下的账号
+    let blocker = Task.detached { [store] in await store.occupy(hold) }
     try await eventually("资料库被占住") { hold.holding.load(ordering: .relaxed) }
     answered.resolve(.success(()))
     await quietPeriod(.milliseconds(200))
@@ -108,12 +107,11 @@ import Testing
     await sync.stop()
   }
 
-  /// 不等账号那条的退避：离线久了它长到几分钟。
   @Test func 认不了账号时网络回来_当场再认() async throws {
     await cloud.script(status: { _ in throw URLError(.notConnectedToInternet) })
     let sync = make()
     await sync.start()
-    for _ in 0..<8 { await sync.recheckNow() }  // 连着失败几次，退避长过这个测试能等的
+    for _ in 0..<8 { await sync.recheckNow() }
     await cloud.script()
 
     NetworkReturns.simulateReturn()
@@ -186,7 +184,6 @@ final class StoreHold: Sendable {
 }
 
 extension CueStore {
-  /// 在资料库自己的队列上等到放开：排在它后面的读写都等着。
   fileprivate func occupy(_ hold: StoreHold) {
     hold.holding.store(true, ordering: .relaxed)
     while hold.busy.load(ordering: .relaxed) { usleep(1000) }
@@ -207,7 +204,6 @@ actor ScriptedCloud: SyncCloud {
     inner = SimulatedCloud([floor])
   }
 
-  /// 之后的答复（nil：交给替身），次数从头数。
   func script(status: (@Sendable (Int) async throws -> CKAccountStatus)? = nil, name: (@Sendable (Int) async throws -> String)? = nil) {
     (self.status, self.name, statusCalls, nameCalls) = (status, name, 0, 0)
   }

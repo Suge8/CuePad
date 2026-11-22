@@ -42,7 +42,7 @@ struct IsolationTests {
 
         window.setFrame(NSRect(x: 200, y: 220, width: 700, height: 500), display: false)
         try await eventually("窗口位置存进设置") {
-            NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: window)  // 订阅的任务何时到位不定：到位前发的丢了就再发
+            NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: window)
             return settings.windowFrame(for: "main") != nil
         }
 

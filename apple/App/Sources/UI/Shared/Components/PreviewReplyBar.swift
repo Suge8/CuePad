@@ -1,9 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页说出去的是一句普通的话"关于「标题」：……"（Cue 的输入框没有批注）。
-/// 会话里点"回复"不关预览：那颗钮原地变成只写给这一份的一行，写的话记成这一份的批注（`AppSettings.annotate`），随会话的下一句发出；
-/// 收起后钮上就是那句话，再点接着改。不把会话的回复框搬进来：里面别的草稿与批注和这一份摆在一起，分不出这句话是回哪一份的。
 struct PreviewReplyBar: View {
     let reply: PreviewReply
     let preview: PreviewItem
@@ -33,10 +30,8 @@ struct PreviewReplyBar: View {
                     PreviewNoteField(prompt: String(localized: "批注这一份"), text: said) {
                         settings.annotate(preview, $0, in: entry, for: session.id)
                     } done: { fold(true) }
-                        // 翻到下一份时这一份的先记下、收起
                         .id(preview.id)
                         #if os(macOS)
-                        // 点外面与 Esc 先收起这一行，再按一次才关预览
                         .grownInPlace(isPresented: $writing) { fold(true) }
                         #endif
                         .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottom)))
@@ -97,7 +92,6 @@ struct PreviewReplyBar: View {
     }
 }
 
-/// 怎么收起都记下（回车、交出键盘、点外面、翻页、关预览）：写了一半的话不丢。
 private struct PreviewNoteField: View {
     let prompt: String
     @State var text: String

@@ -1,19 +1,15 @@
 import CueStore
 import SwiftUI
 
-/// 清单里的一步，点开在原位看里面：命令全文或改动，下面是输出的末尾（`ToolCallDetail`）。
-/// 会话所在的 Mac 上当场回会话文件取；别的设备上请那台 Mac 取了写在这一步上、随同步回来（做完的一轮才行，`CueStore.requestStep`）。
 struct StepRow: View {
     let item: ChatMessage.Tools.Item
     let session: SessionState
-    /// 做完的一轮是哪条回答；在跑的一轮为 nil。
     let message: UUID?
     let index: Int
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var opened: Opened?
-    /// 这一次点开要去取（每点开一次换一个）：取的任务随这一行走，行没了、收起了就不再等。
     @State private var fetching: UUID?
 
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
@@ -24,16 +20,13 @@ struct StepRow: View {
                 row(open: opened != nil)
             } content: {
                 switch opened {
-                // 取到了却是空的：这一步没有命令、改动与文字输出（看了一张图、搜了一下网）
                 case .ready(let detail): if beyondTitle(detail).isEmpty { note(Text("这一步没有更多内容")) } else { StepDetail(detail: beyondTitle(detail)) }
                 case .missing(let why): note(Text(why))
-                // 本机读是毫秒级的，读的那一下不另画；向 Mac 取要几秒
                 case .loading: if !services.holdsSteps(of: session) { note(Text("正在从 Mac 取").shimmering()) }
                 case nil: EmptyView()
                 }
             }
             .task {
-                // 等画面就绪、对话贴到最新处之后再点：和人点的时机一样
                 guard message != nil, DebugHooks.preset.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 open()
             }
@@ -71,7 +64,6 @@ struct StepRow: View {
         opened = nil
     }
 
-    /// 命令与标题那一行一样时不再写一遍，开着时标题放开写全。
     private var titleIsCommand: Bool {
         if case .ready(let detail) = opened { detail.command?.trimmingCharacters(in: .whitespacesAndNewlines) == item.target } else { false }
     }
@@ -84,7 +76,6 @@ struct StepRow: View {
 
     private static var late: String { String(localized: "详情没同步过来，再点一次") }
 
-    /// `over`：等过了头才同步到的详情照样换上，不要你再点一次。
     private func land(_ fetched: Opened, over waited: Opened = .loading) {
         guard opened == .loading || opened == waited else { return }
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { opened = fetched }
@@ -102,7 +93,6 @@ struct StepRow: View {
             #endif
             guard let message else { return }
             try await services.fetchStep(index, of: message, in: session)
-            // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
             try await Task.sleep(for: .seconds(10))
             land(.missing(Self.late))
         } catch is CancellationError {
@@ -143,7 +133,6 @@ private struct StepDetail: View {
         }
     }
 
-    /// 命令的结论在最后：先露末尾十二行那么高（按排出来的高算，窄栏里折了行的长行也算进去），更早的点开才往上长。
     @ViewBuilder private var output: some View {
         let dropped = Text("更早的输出未显示").font(Typography.caption).foregroundStyle(palette.ink3)
         let text = Text(detail.output).foregroundStyle(palette.ink2).selectable().fixedSize(horizontal: false, vertical: true)
@@ -165,7 +154,6 @@ private struct StepDetail: View {
         }
     }
 
-    /// 连着的同一种行并成一块，一块一个底色；段与段之间（`@@`）空一行。Mac 只交来一串 `+`/`-` 行、几段用 `@@` 隔开（没有文件抬头），按一段来读。
     private static func runs(_ diff: String) -> [(kind: UnifiedDiff.Line.Kind, text: String)] {
         let source = diff.hasPrefix("@@") || diff.hasPrefix("diff ") || diff.hasPrefix("--- ") ? diff : "@@\n" + diff
         var runs: [(kind: UnifiedDiff.Line.Kind, rows: [String])] = []

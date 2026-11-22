@@ -4,7 +4,6 @@ import SwiftUI
 import CueBridge
 #endif
 
-/// 会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
 struct SessionChat: View {
     let session: SessionState
     let digest: SessionDigest

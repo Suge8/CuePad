@@ -4,8 +4,6 @@ import SwiftUI
 import AppKit
 #endif
 
-/// 产品代码通往调试画面的唯一入口：截图验收的启动预设、性能打点与几处测量钩子都经这里，产品视图不认识 `DebugScene`、
-/// 也不写 `#if DEBUG`。Release 构建里预设全是空、钩子什么都不做（这个文件两种构建都编译，调试画面本身只在 Debug 里）。
 enum DebugHooks {
     struct Preset {
         var searchText = ""
@@ -13,19 +11,14 @@ enum DebugHooks {
         var toolsOpen = false
         var stepOpen: Int?
         var crashSheet = false
-        /// 演示 Mac 在本机库里接手发到 Mac 的话：隔离模式没有同步也送得到。
         var demoMac = false
-        /// 说的话按同步一直通着算（`SpeechClock`）：演示 Mac 在本机库里接手、走 Cue 流程演示（`-CuePadCueFlow`）或摆 Cue 的话在路上（`-CuePadCuePresence sending`），又没装同步替身时（替身自己报通断，`-CuePadSync`）。
         var alwaysReachable = false
         var modelMenu = false
         var cueFocus = false
         var taskFold = TaskFold()
-        /// 整个窗口按"减弱动态效果"画（`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
         var reducesTransparency = false
-        /// 整个窗口按最大的辅助字号画，同上不碰系统设置。
         var largestType = false
-        /// 整个窗口按"增强对比度"画，同上不碰系统设置。
         var highContrast = false
         /// 当作读屏开着（`-CuePadReader YES`）：只给提示条，与真开着旁白同一条路（`NoticeCapsule`），模拟器的旁白没有设置开关、Mac 上那是用户的全局设置。
         var readerOn = false
@@ -48,9 +41,7 @@ enum DebugHooks {
         /// 贴这一边的边缘索引一出现就展开成面板（`-CuePadIndexOpen`）。
         var indexOpen: HorizontalEdge?
         #if os(iOS)
-        /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: AlertStatus?
-        /// 搜索页的会话那一节一打开就列全。
         var searchListsSessions = false
         var quietAlerts = false
         #endif
@@ -120,7 +111,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 演示库里的会话记在演示的 Mac 上（`DebugScene.demoHosts`）：活预览把它们也当这台的会话认服务。Release 为空。
     static var liveHosts: [String] {
         #if DEBUG
         DebugScene.args.demo ? DebugScene.demoHosts : []
@@ -197,7 +187,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上主窗口当它露着（`ViewerKeeper.followExposure`）；不建菜单栏图标（`AppDelegate`）、不注册全局快捷键（`AppServices.register`）：那是用户的菜单栏与按键，一天上百次的起停不该碰。
     static var scripted: Bool {
         #if DEBUG
         DebugScene.readyFile != nil
@@ -223,12 +212,10 @@ enum DebugHooks {
         #endif
     }
 
-    /// 稍后做一件摆画面的事（如编辑器载入后选中一段）：Debug 里记作"还在摆"，截图的就绪标记等它做完。
     static func later(_ delay: Duration = .zero, fileID: String = #fileID, line: Int = #line, _ work: @escaping @MainActor () -> Void) {
         #if DEBUG
         DebugScene.later(delay, fileID: fileID, line: line, work)
         #else
-        // 被取消（App 收场）就不做了
         Task {
             try await Task.sleep(for: delay)
             work()
@@ -237,7 +224,6 @@ enum DebugHooks {
     }
 
     #if os(iOS)
-    /// 推入页的整条导航栏让开、回来（`BarFade`）：Debug 里往标准错误记一行左缘右滑返回此刻还开不开（手势本身没法合规地驱动，验收看这一行）。
     static func barFaded(_ hidden: Bool, navigation: UINavigationController?) {
         #if DEBUG
         let pop = navigation?.interactivePopGestureRecognizer
@@ -247,7 +233,6 @@ enum DebugHooks {
         #endif
     }
 
-    /// iPad 上名牌长开、收起时 Cue 那一块以外藏没藏（`SplitRoot`）：Debug 里往标准错误记一行，验收看这一行（旁白本身不自动化）。
     static func readerLayers(outsideCue: Bool, drawer: Bool) {
         #if DEBUG
         FileHandle.standardError.write(Data("reader-hidden outside-cue=\(outsideCue) cue-in-drawer=\(drawer)\n".utf8))
@@ -255,7 +240,6 @@ enum DebugHooks {
     }
     #endif
 
-    /// 抽屉的 Esc 钮挂没挂（`DrawerCatcher`）：Debug 里往标准错误记一行，验收看这一行（外接键盘的 Esc 不自动化）。
     static func drawerEscape(hung: Bool) {
         #if DEBUG
         FileHandle.standardError.write(Data("drawer-escape hung=\(hung)\n".utf8))
@@ -286,7 +270,6 @@ enum DebugHooks {
     }
 
     #if DEBUG
-    /// `importDelay` 停的秒数：启动时取 `-CuePadImportDelay`；测试在进程里改它（不碰偏好域）。
     static var importDelaySeconds = DebugScene.args.driveOpts.importDelay
     #endif
 
@@ -306,7 +289,6 @@ enum DebugHooks {
     }
 
     #if os(macOS)
-    /// 全屏预览的翻页开始接本窗口的滚动（`PageInput`）：`-CuePadClick` 合成的滑动先过它（`DebugScene.scrollGate`）。
     static func previewScrolls(_ takes: @escaping (NSEvent) -> Bool) {
         #if DEBUG
         DebugScene.scrollGate = takes
@@ -352,7 +334,6 @@ enum DebugHooks {
     }
 
     #if os(macOS)
-    /// 主窗口的类：Debug 里是不被系统夹回屏幕内的 `DebugWindow`（`-CuePadOffscreen`）。
     #if DEBUG
     typealias MainWindowClass = DebugWindow
     #else
@@ -382,7 +363,7 @@ enum DebugHooks {
         let source = DispatchSource.makeProcessSource(identifier: parent, eventMask: .exit, queue: .global())
         source.setEventHandler(handler: terminate)
         source.resume()
-        if getppid() != parent { terminate() }  // 装上之前它就退了
+        if getppid() != parent { terminate() }
         return source
         #else
         nil

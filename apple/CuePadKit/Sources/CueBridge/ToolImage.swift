@@ -9,15 +9,11 @@ import UniformTypeIdentifiers
 /// （`CueStore.pruneMessages`）。缩小为的是同步：Mac 上传每一份，手机在 Wi-Fi 上自动取小的；Pi 读图时只缩到 2000 像素、4.5MB 以内，
 /// 截屏多的一天原图能有上百 MB，缩到长边 `maxPixels` 后一张约 `keptBytes`，同步量少一个数量级，手机全屏看界面截图仍清楚。
 enum ToolImage {
-    /// 长边至多这么多像素：手机全屏（约 1300 像素宽）看得清，Mac 上看不糊
     static let maxPixels = 1600
-    /// 本来就不大于这么多字节、长边也不超的原样存：不重新编码（同一份在别处存过时还是同一个键）
     static let keptBytes = 150_000
     /// 缩小后的编码：HEIC 留得住透明，同样清楚时约是 JPEG 的一半
     static let quality = 0.7
 
-    /// 各家把图写成地址时（Codex 的 `image_url`、OpenCode 工具结果的 `uri`）：`data:<类型>;base64,<数据>` 取数据，`file://` 读那个本机文件；
-    /// 别的地址（网络图片）不取。
     static func data(at uri: String) -> Data? {
         if uri.hasPrefix("data:") {
             guard let comma = uri.firstIndex(of: ","), uri[..<comma].hasSuffix(";base64") else { return nil }

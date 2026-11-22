@@ -44,7 +44,6 @@ extension ChildProcess {
             }
         }
 
-        /// 之后的输出由别的读者接走或进程收到 EPIPE。
         func stop() { source.cancel() }
 
         var text: String {

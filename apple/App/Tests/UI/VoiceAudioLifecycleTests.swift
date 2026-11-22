@@ -3,7 +3,6 @@ import CueStore
 import Testing
 @testable import CuePad
 
-/// #99：手机的按钮入口与隔离库；媒体、中转、远端及权限等待用替身。
 @Suite(.releasesLibraries, .serialized) @MainActor struct VoiceAudioLifecycleTests {
     final class Media: VoiceMedia {
         var onEvent: (VoicePeer.Event) -> Void = { _ in }
@@ -102,7 +101,6 @@ import Testing
         try await fixture.checkLibrary()
     }
 
-    /// 拨给另一版信令的 Mac，它接听报的版本不同：手机挂断并显示"请更新"。
     @Test func 另一版的Mac接听_挂断并说请更新() async throws {
         let media = Media(), fixture = try await Fixture(makeMedia: { media })
         defer { fixture.app.services.cancelBackgroundWork() }

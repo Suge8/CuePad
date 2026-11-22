@@ -18,7 +18,6 @@ import AppKit
 /// （`NSScrollView` 的放大与回弹都走系统自己的那一套）；滑动先过全屏页的翻页（`scrollGate`）。
 /// 物理触控板的力度与惯性合成不了：惯性滚动、手指停住再松开这类节奏只能人工验。
 extension DebugScene {
-    /// 全屏预览的翻页先看一下这次滚动（`PageInput`，开着时才有）：接下了为 true。
     static var scrollGate: ((NSEvent) -> Bool)?
 
     static func gesture(_ step: String, in window: NSWindow) async -> Bool {
@@ -63,7 +62,6 @@ extension DebugScene {
             }
             send(magnify(n[0], n[1], in: window, phase: 4, by: 0))
         case ("jump", 3), ("jump", 4):
-            // 贴底跟随的对话据这两个通知知道是"用户在滚"，不把偏移拉回去；滚动交给那里的滚动视图一份不挂窗口的滚动，一下挪完
             guard let target = window.contentView?.superview?.hitTest(NSPoint(x: n[0], y: window.frame.height - n[1]))?.enclosingScrollView else { break }
             NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: target)
             let steps = Self.frames / 2, dx = n.count > 3 ? -n[3] / Double(steps) : 0
@@ -103,7 +101,6 @@ extension DebugScene {
                 hid(wheel(at, phase: 2, momentum: 0, dx: dx, dy: dy))
             }
             hid(wheel(at, phase: 4, momentum: 0, dx: 0, dy: 0))
-            // 松手后的惯性：每帧按 0.92 衰减（同触控板的手感量级），约 0.6 秒
             var (mx, my) = (dx, dy)
             for index in 0..<72 {
                 await Task.wait(for: Self.hidFrame)
@@ -179,7 +176,6 @@ extension DebugScene {
     private static let gesturePhase = CGEventField(rawValue: 132)!
     private static let magnification = CGEventField(rawValue: 113)!
 
-    /// 点按与按键排进事件队列（同真点：本地事件监听在取事件时看到它们）；手势与滚动当场派发，按窗口里那一点交给那里的视图。
     private static func queue(_ event: NSEvent?) {
         if let event { NSApp.postEvent(event, atStart: false) }
     }

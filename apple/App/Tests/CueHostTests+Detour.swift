@@ -8,7 +8,6 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// 重置时刻正赶在 Cue 对账途中（它又试了一次 Claude Code）走过：不能因为排定时器时已过就漏掉，等到下一次重起（一小时后）才换回。
     @Test func 额度用完换到另一家_重置时刻一到换回你选的模型与强度() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let resets = try await stuckPi(rig, resetsIn: 60, alongside: [.claudeCode])
@@ -26,7 +25,7 @@ extension CueHostTests {
         #expect(rig.health?.runtime == .claudeCode)
 
         rig.launches.whenTryingElsewhere { [clocks = rig.clocks] in clocks.jump(to: resets) }
-        try #require(rig.services.cue.keeper).input.yield(.kick)  // 你的话等着交：对账时再试一次 Claude Code
+        try #require(rig.services.cue.keeper).input.yield(.kick)
         try await rig.message(.cue, containing: "收到：你好")
         let home = try #require(try await rig.store.cueProfile())
         #expect(home.runtime == .known(.pi) && home.model == "fake/fake-model-2" && home.effort == .known(.high))
@@ -53,9 +52,8 @@ extension CueHostTests {
         let profile = try #require(try await rig.store.cueProfile())
         #expect(profile.runtime == .known(.pi) && profile.model == "fake/fake-model-2" && profile.effort == .known(.high))
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
-        // 远处排一个定时：好了之后手上没有排着的时刻，对账后不睡下就等不到
         _ = try await rig.store.noteCueLine("下周的事", source: .you, remindAt: rig.clock.now.addingTimeInterval(7 * 86_400))
-        rig.jump(by: .seconds(120))  // 再过两个慢速周期：好了就留下，不再换
+        rig.jump(by: .seconds(120))
         try await rig.reconciled()
         #expect(rig.health?.runtime == .pi)
         #expect(try await rig.count("收到：你好") == 1)
@@ -101,7 +99,6 @@ extension CueHostTests {
 
     enum Stuck: Sendable { case message, schedule }
 
-    /// 它起不来、快的重试还没用完（你的话等着交时每次对账都马上再试一次，快的那几次留得够多），Pi 就到了重置时刻，换回 Pi 做完卡着的那件。
     @Test(arguments: [Stuck.message, .schedule])
     func 换家后做完卡着的那件_说一句恢复了_不说起不来(_ stuck: Stuck) async throws {
         let rig = try await Rig(timing: { ($0.restarts, $0.slowRestarts) = (Array(repeating: .seconds(3600), count: 8), [.seconds(3600)]) })

@@ -2,8 +2,6 @@
 import CueStore
 import Foundation
 
-/// 接着会话时先取会话索引里记下的名字与首条消息（`remembered`，不在这里读会话文件）。
-/// 托管会话的让出与空闲退出由桥决定（`Bridge` 的托管会话一节）。
 @MainActor
 public final class ClaudeCodeRuntime: AgentRuntime {
     private let bridge: Bridge
@@ -15,7 +13,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private let hosted: HostedProcesses
     private let timing: Timing
 
-    /// - Parameter brief: 每次起它都追加进系统提示（`SessionBrief`）。
     public init(
         bridge: Bridge, paths: AgentPaths, store: CueStore, brief: String, claude: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
@@ -75,15 +72,12 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return (claude, locator.environment(launching: claude, overrides: paths.environment))
     }
 
-    /// 没连上就抛错：进程先退出、握手超时，或调用方取消（投送到了截止时刻）。没连上的都收掉自己起的进程（只收它：
-    /// 按会话收会收到别人的），不留一个不在桥上的进程占着这个会话（之后接着它时被当成在别处开着，或再起一个同写会话文件）。
     private func launch(
         sessionID: String, arguments: [String], model: ModelKey? = nil, in directory: URL, launchToken: String?,
         known: (name: String?, firstMessage: String?)? = nil, admission: HostedProcesses.Admission
     ) async throws -> Session.ID {
         let claude = try await executable()
         let session = ClaudeHostedSession(bridge: bridge, processes: hosted, timing: timing)
-        // 交给会话的附件在工作目录外（`AttachmentFiles.directory`）：读它不用再问
         let process = try await session.host(
             executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false), "--append-system-prompt", brief], directory: directory,
             environment: claude.environment)
@@ -119,7 +113,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
 }
 
 public enum ClaudeCodeError: Error, Equatable, ShownError {
-    /// 附它的退出原因；`stop()` 让它退的没有
     case exited(ShownText?)
     case listingFailed
 

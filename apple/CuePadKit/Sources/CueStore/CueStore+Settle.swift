@@ -6,7 +6,6 @@ extension CueStore {
     try apply(try CardLinks(db, around: tasks).repairs(touching: Set(tasks)))
   }
 
-  /// 把收敛结果写进库（版本比旧的大由库保证，见 `CueStore.guards`）。
   func apply(_ repairs: CardLinks.Repairs) throws {
     let now = Date.stamp
     for (id, link) in repairs.links.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {

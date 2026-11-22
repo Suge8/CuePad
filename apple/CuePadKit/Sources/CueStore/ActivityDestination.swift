@@ -38,8 +38,6 @@ extension ActivityDestination: Record, SyncedColumns {
 }
 
 extension CueStore {
-  /// 优先由 Cue 所在的 Mac 发布；从未选过 Cue 的 Mac 时，用在线设备中标识最小的那台，避免每台都给同一个岛发一份。
-  /// 已选的 Mac 离线不换写者：另一台同步来的摘要可能还旧，活动按自己的 stale-date 显示过时。
   public func activityPublisher() throws -> String? {
     if let host = try cueProfile()?.hostID { return host }
     let now = timing.now()
@@ -48,8 +46,6 @@ extension CueStore {
     return online.first?.hostID
   }
 
-  /// 各台手机的推送地址（活动的与开岛的）；过期的照样读出，由发布方据此知道那只岛没了。到该收、到过期的时刻由发布方自己醒：
-  /// 到点重读读到的还是这几行，订阅不会为它再叫一次。
   public func activityDestinations() throws -> [ActivityDestination] { try select(ActivityDestination.self, orderBy: "device") }
 
   /// 开岛的令牌系统会换：只留最新一份。
@@ -89,7 +85,6 @@ extension CueStore {
     }
   }
 
-  /// 旧活动结束的回调不能删掉新活动刚写下的地址。
   @discardableResult
   public func removeActivityDestination(device: String, activityID: String? = nil) throws -> ActivityDestination? {
     try write {

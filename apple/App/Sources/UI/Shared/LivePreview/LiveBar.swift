@@ -1,10 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 浮在网页上的玻璃栏：重新载入（载入中是停止）、地址、点选、手机宽、在浏览器里打开；载入进度是贴着下沿的一条细线。
-/// 宽屏上末端是并排里每一块都有的 ×（`PaneClose`），与左边会话栏头上打开它的那颗钮（`WideSessionTitle`）是同一个开合。
-/// 宽屏上开头是"放大"（`Workspace.toggleLiveFill`）：这块屏长到盖过左边的会话，那时这颗换成"放回右半"（左边栏头那颗钮被盖住，点不到）。
-/// iPad 同 Mac，只是没有手机宽与在浏览器里打开（Safari 连不到 Mac 的 localhost）；手机上是收起、后退、前进、地址、重新载入、点选（收起只在这里：页头那颗钮被这一页盖住了）。
 struct LiveBar: View {
     let preview: LivePreview
     @Environment(Workspace.self) private var workspace
@@ -62,8 +58,6 @@ struct LiveBar: View {
     }
 }
 
-/// 地址：平时居中写 `localhost:5173/路径`；点一下就地改，回车载入，Esc 或点开别处放弃。
-/// 改的时候认出的其余服务挨着输入框列在下面（气泡），一行一个地址，点一个就换过去。
 private struct LiveAddressField: View {
     let preview: LivePreview
     @State private var editing = false
@@ -106,7 +100,6 @@ private struct LiveAddressField: View {
                     editing = true
                 } label: {
                     Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
-                        // 两边让出状态标的位置：它来去时地址不挪
                         .padding(.horizontal, Spacing.group + LiveDriven.width)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(.capsule)
@@ -130,7 +123,6 @@ private struct LiveAddressField: View {
     private func go(_ url: URL) { preview.retarget(.init(url: url, source: .typed)) }
 }
 
-/// Agent 这几秒在看、在点这一页（`LivePreview.driven`）：地址前面那个会话在跑时的状态标，压在地址框的边上，不占栏里的位置。
 private struct LiveDriven: View {
     static let size: CGFloat = 7
     static var width: CGFloat { size * 1.8 }
@@ -143,7 +135,6 @@ private struct LiveDriven: View {
     }
 }
 
-/// 认出的其余服务：一行一个地址，不加说明。
 private struct LiveCandidates: View {
     let urls: [URL]
     let pick: (URL) -> Void
@@ -167,14 +158,12 @@ private struct LiveCandidates: View {
     }
 }
 
-/// 载入进度：贴着玻璃栏下沿的一条细线（按栏的胶囊裁，两头随圆角收），载完淡出。
 private struct LiveProgress: View {
     let value: Double
     let shown: Bool
     @Environment(\.palette) private var palette
 
     private static let thickness: CGFloat = 2
-    /// 刚开始载、还没有进度时先露出的一截：一按下去就看得到在载。
     private static let start = 0.08
 
     var body: some View {

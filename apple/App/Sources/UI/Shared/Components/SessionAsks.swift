@@ -30,7 +30,6 @@ private struct RenameSheet: View {
             .focused($focused)
             .submitLabel(.done)
             .onSubmit(commit)
-            // 会话名是标识（atlas、deploy-2），不是句子：自动更正会把 atlas 改成 atlas’s，首字母大写也不对
             .autocorrectionDisabled()
             #if os(iOS)
             .textInputAutocapitalization(.never)
@@ -123,15 +122,12 @@ private struct SessionAsks: ViewModifier {
 
     private func end(_ session: SessionState) { Task { await workspace.end(session) } }
 
-    /// 这一种在问时是它的会话；关掉时只清自己这一种（另一种已经换上来就不动）。
     private func asked(_ pick: @escaping (SessionAsk) -> SessionState?) -> Binding<SessionState?> {
         Binding { workspace.sessionAsk.flatMap(pick) } set: { if $0 == nil, workspace.sessionAsk.flatMap(pick) != nil { workspace.sessionAsk = nil } }
     }
 }
 
 extension View {
-    /// 正显示这张卡完成圈（或看板卡）的视图挂它，认领这张卡的完成问句（`Workspace.confirmComplete`）：问的是这张卡时挨着这里弹出，
-    /// 同一张卡同时显示在几处时最后出现的那一处认领。`task` 为 nil 时不认领。Mac 不认领：确认框本来就在窗口居中（`dialog`），挂在哪里都一样，省得每个圈都挂一份。
     func completionAsks(claiming task: UUID?) -> some View {
         #if os(iOS)
         modifier(CompletionClaim(task: task))
@@ -150,7 +146,6 @@ private struct CompletionClaim: ViewModifier {
     }
 }
 
-/// 完成前那一问只有这一份：挂在认领者上（`claim`）或窗口上（`window`，出没人认领的）。
 private struct CompletionAsks: ViewModifier {
     enum Spot: Equatable { case window, claim(UUID) }
 
@@ -173,7 +168,6 @@ private struct CompletionAsks: ViewModifier {
                 guard case .claim(let task) = spot else { return }
                 workspace.completionClaims[task]?.removeAll { $0 == token }
                 if workspace.completionClaims[task]?.isEmpty == true { workspace.completionClaims[task] = nil }
-                // 问着的时候认领它的视图没了（列表收起、换页）：这一问作罢，同取消
                 if mine != nil { workspace.sessionAsk = nil }
             }
     }
@@ -186,7 +180,6 @@ private struct CompletionAsks: ViewModifier {
     private var busy: (session: SessionState, sleeps: Bool)? { if case .agent(let session, let sleeps) = mine { (session, sleeps) } else { nil } }
     private var steps: TaskProgress? { if case .steps(let progress) = mine { progress } else { nil } }
 
-    /// 关掉时只清自己这一种（另一种已经换上来就不动）。
     private func asking(_ kind: @escaping (CompletionAsk) -> Bool) -> Binding<Bool> {
         Binding { mine.map(kind) ?? false } set: { if !$0, mine.map(kind) == true { workspace.sessionAsk = nil } }
     }

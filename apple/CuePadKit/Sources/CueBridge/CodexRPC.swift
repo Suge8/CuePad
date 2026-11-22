@@ -11,13 +11,11 @@ final class CodexRPC {
     private let replies = PendingReplies<Int, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: CodexRPCError.timedOut)
     private var reader: Task<Void, Never>?
     var onNotification: ((String, JSONValue) -> Void)?
-    /// 服务端请求（方法、请求 id、参数）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
     /// 一个线程正在说的这条回答（`LiveDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）；起点是这一项开始（`item/started`）时 Codex 自己的时刻（通知的 `emittedAtMs`，与会话文件同一时钟），落库按这一项的 id 认（`LiveDraft.record`）；正常说完的留着。
     /// 过程中的说明（`phase` 为 commentary）说完就清，不等下一项开始：说明不进对话（`CodexHistory` 只收 final_answer），留着换不下。
     var onDraft: ((_ threadID: String, LiveDraft?) -> Void)?
     private var drafts: [String: DraftParts] = [:]
-    /// 只调一次
     var onClose: (() -> Void)?
 
     private init(_ process: ChildProcess) {
@@ -36,7 +34,6 @@ final class CodexRPC {
         return text + images.map { ["type": "image", "url": .string("data:\($0.mimeType);base64,\($0.data.base64EncodedString())")] }
     }
 
-    /// 握手失败或超时时停掉这个进程再抛错。`spawned` 在进程起来、握手之前调（托管的在这里登记，`HostedProcesses.admit`），抛错时同样停掉。
     static func launch(
         _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
         spawned: (ChildProcess) async throws -> Void = { _ in }
@@ -55,7 +52,6 @@ final class CodexRPC {
         return rpc
     }
 
-    /// 握手；失败或超时时停掉进程、等它走完再抛错。
     private func handshake() async throws {
         do {
             try await call("initialize", [
@@ -70,7 +66,6 @@ final class CodexRPC {
         send(["method": "initialized"])
     }
 
-    /// 服务端回错误抛 `server`，连接先断了抛 `closed`，没有及时回应抛 `timedOut`。
     @discardableResult
     func call(_ method: String, _ params: JSONValue) async throws -> JSONValue {
         nextID += 1
@@ -86,7 +81,6 @@ final class CodexRPC {
         send(["id": id, "result": result])
     }
 
-    /// 关掉并等到进程真的走了：关了输入还不走就 SIGTERM，再不走结束它的进程组（`ChildProcess.stop`）。
     func shutdown() async {
         await process.stop()
         await reader?.value
@@ -114,7 +108,6 @@ final class CodexRPC {
         }
     }
 
-    /// 增量本身到此为止（不再交给 `onNotification`），返回 true。
     private func drafted(_ method: String, _ params: JSONValue, emitted: Date?) -> Bool {
         guard let thread = params["threadId"]?.string else { return false }
         switch method {

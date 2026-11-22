@@ -2,7 +2,6 @@
 import AppKit
 import CueEditor
 
-/// 系统剪贴板（复制不是发送，不写发送记录；复制整张卡见 `Workspace.copy`）。
 enum Clipboard {
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
@@ -20,7 +19,6 @@ enum Clipboard {
         guard pasteboard.writeObjects([item]) else { throw ClipboardError.writeFailed }
     }
 
-    /// 剪贴板条目持有它，直到下一次复制。
     private final class RichText: NSObject, NSPasteboardItemDataProvider {
         /// 附件按先后装进富文本，合计不过这么多字节，装不下的文件只写名字：实测一份超过 256MiB 的数据剪贴板就交不出去
         /// （250MiB 的文件拼出 263MB 照常粘出，260MiB 的拼出约 274MB 时粘贴方拿到的是空），整份富文本连同文字都没了。

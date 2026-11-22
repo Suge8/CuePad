@@ -26,8 +26,6 @@ import SwiftUI
 /// 只能管铺满的行；系统 `List` 的选中——Mac 上是灰胶囊、压不过墨色体系（见 `Sidebar`），手机上要整页换成 `List`。
 nonisolated enum RowMetrics {
     #if os(iOS)
-    /// 触控：手指点得准的最小高（HIG 44）；
-    /// 接了触控板的 iPad 也是这一档——手指随时会点，iPadOS 自己的侧栏也不因指针改行高。
     static let height: CGFloat = 44
     static let bleed: CGFloat = 10
     #else
@@ -55,20 +53,14 @@ extension View {
         modifier(RowHighlight(selected: selected, pressed: false, cell: false))
     }
 
-    /// 调用处只给怎么画。行里能画的用 `row()`；手机的行挂着轻扫、被裁在自己的框里，伸出行框的底只能这样画在外面。
     func rowPlate(@ViewBuilder _ plate: @escaping (ConcentricRectangle) -> some View) -> some View {
         modifier(RowPlate(plate: plate))
     }
 
-    /// 露出与收起时行里的字一个都不挪、不换行、不让位。挂在行的内容上（`row()` 或 `RowStyle` 之内）：读的是这一行的 `rowHovered`。
-    /// 操作垫一块与悬停的行同色的实底（行所在那层的底叠悬停的淡底，`Palette.fill`），盖住压到的字；靠字那一侧淡入一截，不切断半个字。
-    /// 竖直居中的（单行的行尾）实底铺满行高，像行本身；贴底的（多行的记忆）只垫操作那一条。`when` 为假时这一行没有要露的（悬停也不垫底）。
-    /// 被否决的：露出时插进行里（任务行的"开始"挤窄标题、把时间挤掉，"更早"的删除挤掉摘要）；透明占位（不露时也占着行尾，窄列里标题白白少一截）。
     func hoverReveal(_ alignment: Alignment = .trailing, when shows: Bool = true, @ViewBuilder _ actions: () -> some View) -> some View {
         overlay(alignment: alignment) { HoverReveal(shows: shows, fills: alignment.vertical == .center, actions: actions()) }
     }
 
-    /// 行尾那格字（日期）在操作露出时让出位置：操作垫的底只有操作那么宽，比它宽的字会从底下露出半截。`when` 同 `hoverReveal` 的。
     func yieldsToReveal(when shows: Bool = true) -> some View { modifier(RevealYield(shows: shows)) }
 
     func rowContainer(_ shape: some RoundedRectangularShape, flush: Bool = false) -> some View {
@@ -85,9 +77,7 @@ extension View {
 
 extension EnvironmentValues {
     @Entry var rowHovered = false
-    /// 整行是一颗按钮、底由里面的 `row()` 画时，按下经它交给那块底（`RowOpenStyle`）。
     @Entry var rowPressed = false
-    /// 行所在那一层的底色（悬停露出的操作垫的实底照它调，`hoverReveal`）：纸面（`paper()`）里是纸，别处是页面底。
     @Entry var rowSurface: Color?
     @Entry fileprivate var rowFit = RowFit()
 }
@@ -112,7 +102,6 @@ private struct HoverReveal<Actions: View>: View {
             actions
                 .frame(maxHeight: fills ? .infinity : nil)
                 .background {
-                    // 垫的底照行自己的画法叠（那层的底上盖悬停的淡底），不另算一个合成色：算出来的差一级，暗处看得出一块方的
                     ZStack { surface ?? palette.desk; palette.fill }
                         .compositingGroup()
                         .padding(.leading, -RowMetrics.revealFade)

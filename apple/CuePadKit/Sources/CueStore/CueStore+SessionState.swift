@@ -1,7 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// `catalog`：`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，不必每次状态变化都去比一遍几十 KB 的清单。
   func writeSessionState(
     sessionID: String, hostID: String, bootID: String?, content: SessionSnapshot, catalog: AgentCatalog?, writesCatalog: Bool, notify: AlertKind?
   ) throws {
@@ -11,13 +10,10 @@ extension CueStore {
       record.catalogID = catalog?.id
       if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let notify {
-        // 这是刚收到的真实报告事件；presence 可能尚未写到，不能据此吞掉这次一次性通知。读取当前状态仍严格按 lease 派生。
         var event = record
         event.runtimeUntil = now
         record.notify = try push(notify, event)
       }
-      // 摘要不归这里写：它是对话的投影，只由 `writeTranscript` 写（新记录插入时先空着）
-      // 最后一轮的开始与开轮的那句不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它，开它的还是那句
       let assignments = SessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "createdForTaskID" && $0 != "restoredAt" && $0 != "notify" && !SessionState.recapColumns.contains($0) }
         .map { ["turnStartedAt", "turnDelivery", "turnByCue"].contains($0) ? "\($0) = COALESCE(excluded.\($0), piSessionStates.\($0))" : "\($0) = excluded.\($0)" }
@@ -41,9 +37,6 @@ extension CueStore {
     }
   }
 
-  /// 一个会话的进程没了（不是你结束的：歇满被请退出、崩溃、被杀）：托管的记为歇着（仍可唤醒、不进历史），
-  /// 其余记为已结束、进历史；记录上手上还有活（在跑一轮、等你确认、子代理还在跑）的都记为做到一半被打断（`WorkState.interrupted`）。
-  /// `bootID` 是见证这次收尾的系统启动（`close`）。
   func loseSessionState(host: String, sessionID: String, bootID: String?, at now: Date) throws {
     try write {
       try close(where: "id = ?", [SessionState.recordID(sessionID: sessionID)], boot: bootID, at: now)
@@ -52,8 +45,6 @@ extension CueStore {
     }
   }
 
-  /// 源端实际结束与所覆盖请求同事务确认；集合由领取时固定，不能按写入时的请求、状态快照或时间扩大。
-  /// 托管标记留着：结束了也算这台托管过（`hostedSessionIDs`）；读它的对账、收尾都只看没收尾的记录，已结束的不会被当成在线。
   func endSessionState(host: String, sessionID: String, bootID: String?, at now: Date, confirming requests: Set<UUID>) throws {
     try write {
       try db.run(
@@ -69,8 +60,6 @@ extension CueStore {
     }
   }
 
-  /// 确实没了的三种：记下的进程不是那一个了；记录是上一次系统启动见证的；托管的歇着或出错、却没记着进程的（托管的进程都由 CuePad 起、记着，只在收尾时删掉；更早的版本收尾时还清掉了见证的启动）。
-  /// 其余不动：记下的进程还在的（托管的 Pi 不随 App 退出），与没记下进程、又没有死亡证据的，都由桥重新连上后接着写，或在进程退出时收尾。返回可沿用的状态与计时：旧 boot 与无证据的历史不带给新进程。
   func reconcileSessionStates(host: String, bootID: String?, running: (SessionProcess) -> Bool, at now: Date) throws -> [String: (state: WorkState, times: SessionTimes)] {
     try write {
       let before = try db.query(
@@ -108,8 +97,6 @@ extension CueStore {
     }
   }
 
-  /// 托管的上一轮出错的仍是出错、原因留着；被打断与已结束的起点是此刻，托管的本来就歇着或出错的不动起点（“多久前”仍从那时算起）。托管标记照旧：托管的被打断了也由本机在后台唤醒。
-  /// 写下见证收尾的系统启动（`boot`）：托管的歇着是这台 Mac 亲手收尾的事实，同一次启动里它在线就确认（`runtimeIsConfirmed`），Cue 照常对它说话、发话在后台唤醒它。
   private func close(where condition: String, _ arguments: [any SQLBindable], boot: String?, at now: Date) throws {
     let failed = "(hosted = 1 AND state = '\(WorkState.error.rawValue)')"
     let state = """
@@ -125,8 +112,6 @@ extension CueStore {
       """, [now, boot, Date.stamp] + arguments)
   }
 
-  /// 进程不在了的记录不留的东西：此刻的说明、问题、通知、计时、子代理。它报过的模型与命令（目录记录）留着：发话、换模型会在后台唤醒它，
-  /// 回复框照这份列模型、认命令（`Slash.line`）。
   private static let cleared = "detail = NULL, question = NULL, notify = NULL, busySince = NULL, subagents = NULL, failure = NULL"
 
   private static let hadWork = """
@@ -176,14 +161,11 @@ public struct SessionProcess: Equatable, Sendable {
     return SessionProcess(pid: pid, startedAt: Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec))
   }
 
-  /// 还是那一个进程在跑（pid 被复用的不算）。
   public var isRunning: Bool { Self.running(pid: pid) == self }
   #endif
 }
 
 extension SessionState {
-  /// 一份进程报告落在已记下的这一条（`stored`）上：报告管的换成报告的，报告不管的（为哪件任务开、恢复于、摘要、创建时刻、目录清单）照旧。
-  /// 落库（`writeSessionState`，那里 `stored` 为 nil，不管的列由 upsert 留着）与 Mac 界面读桥上的实时状态都只经这里；`now` 只给还没记下的当创建时刻。
   public init(_ content: SessionSnapshot, over stored: SessionState?, hostID: String, bootID: String?, at now: Date) {
     self = stored ?? SessionState(
       id: SessionState.recordID(sessionID: content.sessionID), sessionID: content.sessionID, hostID: hostID, title: "", projectID: nil,
@@ -212,7 +194,6 @@ extension SessionState {
     self.bootID = bootID
   }
 
-  /// 桥上正连着的这一刻（Mac 界面）：连着就是证明，不设期限。
   public func connected() -> SessionState {
     var state = self
     state.runtimeUntil = .distantFuture
@@ -220,13 +201,11 @@ extension SessionState {
   }
 }
 
-/// 加一个会话字段：这里加一个属性，桥上产出时填上，再在 `SessionState.init(_:over:hostID:bootID:at:)` 落到记录上。
 public struct SessionSnapshot: Paced {
   public let sessionID: String
   public var state: WorkState
   public var detail: String?
   public var title = ""
-  /// 不同步，记录上只写文件夹名。
   public var directory: String?
   public var projectID: UUID?
   public var question: Question?
@@ -249,8 +228,6 @@ public struct SessionSnapshot: Paced {
     self.times = times
   }
 
-  /// 这一刻说不上来、不等于没有的几项（为 nil 时沿用上一次写下的）：一轮的开始与开它的那句（中途重连的进程从头记起）、认领标识
-  /// （接着的进程不带）、上下文余量（换模型的间隙）、项目（工作目录此刻不在哪个项目里）。
   mutating func keepingUnknown(from previous: SessionSnapshot) {
     turnStartedAt = turnStartedAt ?? previous.turnStartedAt
     turnOpener = turnOpener ?? previous.turnOpener
@@ -271,8 +248,6 @@ public struct SessionSnapshot: Paced {
     written.map { $0.modelState.models != modelState.models || $0.commands != commands } ?? true
   }
 
-  /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、一轮的开始、认领标识）的样子：它变了才值得绕开写入节流（`Pace`）。
-  /// 一轮的开始在工作中变了不急着写：歇下立即写，带着的就是最后一轮的。
   var steady: SessionSnapshot {
     var steady = self
     steady.state = .settled

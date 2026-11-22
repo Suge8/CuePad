@@ -2,7 +2,6 @@
 import CueStore
 import Foundation
 
-/// 撤销倒着放回；整理之后又有人动过这些文件（改了合并的规则、换了链接、在放回的位置上又建了东西），撤销就整个不做（`changedSinceTidy`），不盖掉后来的改动。
 public struct LibraryUndo: Sendable {
     enum Step: Sendable {
         case moved(from: URL, to: URL)
@@ -48,7 +47,6 @@ struct LibraryTidying {
         }
     }
 
-    /// 搬走的若就在读不到的几家读的位置上，链接正好补上空出的位置。
     private mutating func moveSkill(_ move: SkillMove) throws {
         let from = URL(filePath: move.skill.path), to = URL(filePath: move.to)
         guard !FileManager.default.fileExists(atPath: to.path) else { return }
@@ -67,8 +65,6 @@ struct LibraryTidying {
         undo.steps.append(.linked(link, to: skill))
     }
 
-    /// 各家原生读、会挡住链接或重复读的那几份（`GlobalFile.retires`）并进来以后进废纸篓（链接只挪链接，它指的文件不动），
-    /// 各家的链接位置换成链到共享那份的链接。
     private mutating func mergeGlobal(_ tidy: LibraryTidy, retiring: Set<InstructionSource.Origin>) throws {
         let shared = places.globalInstructions
         try write(tidy.merged(retiring: retiring, texts: texts) ?? "", to: shared)

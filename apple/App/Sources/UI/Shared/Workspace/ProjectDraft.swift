@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 新建时绑哪个文件夹两端不同（Mac 本机选，手机请那台 Mac 绑），由 `save` 的 `created` 接着做。
 struct ProjectDraft {
     let project: Project?
     var name: String
@@ -24,10 +23,8 @@ struct ProjectDraft {
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
-    /// 名称是空的不写、返回 false（表单不关）；写库出错交给 `attempt`。
     func save(in workspace: Workspace, created: @escaping @MainActor (UUID) async throws -> Void) -> Bool {
         guard canSave else { return false }
-        // 名字没改就留存的那份：默认项目显示的是这台设备语言的名字，原样存回去就成了改名
         let name = trimmedName == project?.shownName ? project?.name ?? trimmedName : trimmedName
         let store = workspace.services.store, existing = project?.id, icon = icon.rawValue, color = color
         workspace.attempt {

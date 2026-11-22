@@ -36,7 +36,6 @@ extension DebugHooks {
         #endif
     }
 
-    /// `-CuePadVoiceFailProjection` 的那段时间里，Mac 发给手机的投影当发送失败（像中转慢、发不出去），手机的链路照常。
     static func voiceProjectionSend() throws {
         #if DEBUG
         if let until = DebugScene.projectionFailsUntil, ContinuousClock.now < until { throw URLError(.timedOut) }

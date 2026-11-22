@@ -1,9 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 这就是最后一层，不再有点开的：不是按钮、没有按压。打开明细本身就会刷新，不另放刷新钮。
-/// 配色只用墨：余量足是次要墨色，用过七成是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）。
-/// 读数在新观测到达、变陈旧与每个窗口的重置时刻变化时才变（`Moments` 睡到 `nextReset(after:)`）；没有常驻动画与周期定时器。
 struct QuotaDetail: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -43,7 +40,6 @@ struct QuotaDetail: View {
 extension QuotaDetail {
     static let bubblePadding = Spacing.block
 
-    /// 会话条气泡的宽：两个账号起放得下两栏（`QuotaColumns`），否则一栏、同别的气泡最宽那一档。定宽：读数随时间变，宽不跟着跳。
     static func bubbleWidth(accounts: Int) -> BubblePlacement.Width {
         .fixed(accounts > 1 ? QuotaColumns.column * 2 + QuotaColumns.gap + bubblePadding * 2 : BubblePlacement.maxWidth)
     }
@@ -63,9 +59,6 @@ private struct QuotaEmpty: View {
     }
 }
 
-/// 账号放得下就排成两栏：按顺序（`QuotaMeter.ordered`）一块块放进当时较矮的那一栏，一样高放左栏（块高矮不一，按行对齐会留空洞）。
-/// 每块落在当时最矮那栏的底下，所以各块上沿随顺序只增不减：从上往下扫就是定好的顺序，读屏同序。
-/// 位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
 struct QuotaColumns: Layout {
     static let column: CGFloat = 248
     static let gap = Spacing.part
@@ -100,12 +93,10 @@ struct QuotaColumns: Layout {
     }
 }
 
-/// 一个账号：标志、产品名与套餐一行（同一产品有几个账号时接账号名，要标出的状态靠右），下面读数与窗口各占定好的行数。
 private struct QuotaAccount: View {
     let meter: QuotaMeter
     @Environment(\.palette) private var palette
 
-    /// 随动态字体放大：图标跟着字放大，定宽的列在大字号下放不下，压到账号名上。
     @ScaledMetric(relativeTo: .subheadline) private var iconColumn: CGFloat = 20
     private static let iconGap = Spacing.item
 
@@ -232,9 +223,6 @@ struct QuotaRing: View, Animatable {
     }
 }
 
-/// 整排是一颗按钮，点它展开明细（展开在哪由所在的地方定）；`open` 只给读屏说展开没有。
-/// 还没有可画的环时（还没有额度记录）环的位置写"额度"二字，照样能点，点开明细那里说怎么才会有（`QuotaDetail`）：一颗空环读不出是什么。
-/// 两个字与一颗环差不多宽，菜单栏面板不变宽；手机那块玻璃第一次有额度时窄几点，只变这一次。
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat

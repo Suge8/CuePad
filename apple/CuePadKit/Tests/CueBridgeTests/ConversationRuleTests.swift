@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 取自真 Codex 0.162 会话文件的形状。
 struct ConversationRuleTests {
     private func codexFile(_ events: [[String: Any]]) throws -> URL {
         let url = try makeTempDirectory().appending(path: "rollout.jsonl")

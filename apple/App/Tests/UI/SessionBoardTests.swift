@@ -19,15 +19,12 @@ struct SessionBoardTests {
         return try #require(try await store.sessionItems(sessionIDs: [id])[id]?.state)
     }
 
-    /// 会话在这件任务完成之后有了新状态：时刻显式排在完成之后（收起按时刻严格先后判定，不靠真实时钟走过一毫秒）。
-    /// `by` 为 0 时与完成同一毫秒。
     private func moves(_ sessionID: String, after task: UUID, by seconds: TimeInterval = 1) async throws {
         let done = try #require(try await store.card(task)?.completedAt)
         let at = done.addingTimeInterval(seconds)
         try await rig.runtimeRecorder(on: Self.mac).update(sessionID: sessionID, state: .thinking, times: SessionTimes(stateSince: at, busySince: at))
     }
 
-    /// 那台 Mac 办完在路上的休眠（同 `MacExecutor.end`：记为已结束、确认请求）；`slept` 为 false 时按没歇成写回。别的请求不碰会话。
     private func macAnswersEnds(slept: Bool = true) async throws {
         let recorder = try await rig.runtimeRecorder(on: Self.mac)
         let executor = DeliveryExecutor(store: store, hostID: Self.mac, onIssue: { Issue.record("执行器意外上报：\($0)") }) { request, _ in
@@ -107,7 +104,6 @@ struct SessionBoardTests {
     }
 
     @Test func 等你里的无主会话点完成_先问一句_答应了才建卡完成() async throws {
-        // 在问你只认宿主在线时报的（`runtimeUntil`）
         try await rig.runtimeRecorder(on: Self.mac).update(sessionID: "q1", state: .waitingForUser, title: "要不要推送")
         let board = try await TaskBoard.read(from: store)
         let held = try #require(board.held.first { $0.session.sessionID == "q1" })

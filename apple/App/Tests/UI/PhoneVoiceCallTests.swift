@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机通话对迟到、作废、失败的信令：只有属于这一通、这一条命令的才动它。替身见 `PhoneVoiceFixture`。
 @Suite(.releasesLibraries, .serialized) @MainActor struct PhoneVoiceCallTests {
     @Test func cancelledCommandLateAckMustNotHangUp() async throws {
         let (app, voice, signal, media) = try await connectedPhone()
@@ -56,7 +55,6 @@ import Testing
         #expect(signal.sent.contains { if case .media(.hangup(reason: .networkFailed)) = $0 { true } else { false } })
     }
 
-    /// 上一通的拒收包、投影与媒体回调都到不了新的一通。
     @Test func oldSessionSignalsCannotTouchTheNewCall() async throws {
         var nextMedia = FakeVoiceMedia()
         let (app, voice, signal, media) = try await connectedPhone(makeMedia: { nextMedia })
@@ -88,7 +86,6 @@ import Testing
         #expect(signal.sent.contains { if case .media(.hangup(reason: .timedOut)) = $0 { true } else { false } }, "Successful transport must receive the timeout hangup")
     }
 
-    /// iPhone 进后台、锁屏不结束通话：媒体与 Mac 的信令都留着，之后照常挂断。
     @Test func backgroundKeepsTheCall() async throws {
         let (app, _, signal, media) = try await connectedPhone()
         defer { app.services.cancelBackgroundWork() }

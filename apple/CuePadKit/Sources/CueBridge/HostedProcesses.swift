@@ -23,7 +23,6 @@ final class HostedProcesses {
         var leaving: Task<Void, Never>?
     }
 
-    /// 拿到它时还没被 `stop()`：登记时这一代还在才登记得上。
     struct Admission {
         fileprivate let era: Int
     }
@@ -32,31 +31,25 @@ final class HostedProcesses {
     private let timing: Timing
     private let resumptions = Resumptions()
     private var entries: [pid_t: Entry] = [:]
-    /// 每次 `stop()` 换一代；停着（nil）时拿不到 `Admission`
     private var era: Int? = 0
     private var eras = 0
 
-    /// `timing` 量停这一轮的时限；收进程的宽限按起进程时给它的钟（`ChildProcess`）。
     init(bridge: Bridge, timing: Timing) {
         self.bridge = bridge
         self.timing = timing
     }
 
-    /// 有进程的会话（含已下桥、还在收的）
     var sessionIDs: Set<String> { Set(entries.values.compactMap(\.sessionID)) }
 
     func start() {
         if era == nil { era = eras }
     }
 
-    /// 停着时抛 `CancellationError`。
     func admission() throws -> Admission {
         guard let era else { throw CancellationError() }
         return Admission(era: era)
     }
 
-    /// 进程一起来就登记（不等握手、不等连上：`stop()` 也收得到它）；进程退出时摘掉。
-    /// `admission` 之后被 `stop()` 过就不登记：收掉它，抛 `CancellationError`。开新会话时会话 id 还不知道，连上后 `adopt`。
     func admit(_ process: ChildProcess, for sessionID: String?, _ admission: Admission) async throws {
         guard era == admission.era else {
             await process.stop()
@@ -85,7 +78,6 @@ final class HostedProcesses {
                     try await withTaskCancellationHandler { try await stopping.value } onCancel: { stopping.cancel() }
                 }
             } catch {
-                // 照样关输入收进程，结束早已报了成功：会话记录里少了这一轮被停下的标记，只留这条记录
                 Self.log.error("\(session.agent.rawValue, privacy: .public) \(session.sessionID, privacy: .public) 收尾前没能停下这一轮：\(String(describing: error), privacy: .public)")
             }
             await process.stop()
@@ -93,7 +85,6 @@ final class HostedProcesses {
         entries[session.pid] = entry
     }
 
-    /// 各家的 `resume` 在会话不在桥上时经这里起进程：`start` 在这个会话的旧进程收完之后跑，拿到的 `Admission` 用来登记它起的进程。
     func resume(_ sessionID: String, start: @escaping @MainActor (Admission) async throws -> Session.ID) async throws -> Session.ID {
         try await resumptions.resume(sessionID) { [self] in
             let admission = try admission()
@@ -108,7 +99,6 @@ final class HostedProcesses {
         }
     }
 
-    /// App 退出、接入断开：连同在收的、起到一半的一起收（`ChildProcess.stop()` 可以并发调），到 `start()` 之前不再起。
     func stop() -> @concurrent @Sendable () async -> Void {
         if era != nil {
             eras += 1

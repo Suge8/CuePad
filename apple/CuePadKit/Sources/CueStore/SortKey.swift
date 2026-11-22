@@ -1,12 +1,8 @@
-/// 分数索引：字符串按字节序排序，任意两个键之间总能再插入一个键，
-/// 因此移动一项只改它自己的键，多设备并发排序不会互相覆盖。
-/// 键的最后一位永不为 "0"（否则其前面无法再插入）。
 enum SortKey {
   private static let digits = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
   private static let base = digits.count
   private static let middleDigit = base / 2
 
-  /// 严格位于 lower 与 upper 之间的键；`nil` 表示对应一侧无界。lower >= upper（并发产生了相同键）时返回 nil。
   static func between(_ lower: String?, _ upper: String?) -> String? {
     if let lower, let upper, lower >= upper { return nil }
     let low = (lower ?? "").utf8.map(value)

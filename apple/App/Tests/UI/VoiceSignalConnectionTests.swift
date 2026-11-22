@@ -4,7 +4,6 @@ import Testing
 @testable import CuePad
 
 @MainActor struct VoiceSignalConnectionTests {
-    /// 同一设备每次连上都换新租约；收过的包、已换绑或已退役的旧租约发来的包都打不开，新租约的照常打开。
     @Test func replayedAndStaleLeasePacketsAreRefused() throws {
         let key = SymmetricKey(size: .bits256)
         let a = VoiceSignalConnection(room: "isolated", challenge: "same", device: .init("a"), key: key)

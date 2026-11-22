@@ -15,7 +15,6 @@ final class Duty: EvalScript, Playable {
         """
 
     static let renewAt = 42_000
-    /// 提示缓存的时长缩短：他走开（`away`）比它长，回来就是冷换新；剧本平常两步之间远比它短
     static let cacheLifetime = Duration.seconds(30)
     static let away = Duration.seconds(45)
 
@@ -126,7 +125,6 @@ final class Duty: EvalScript, Playable {
             try await login.deliver(pageShot("MailHog：两封邮件并排", ["左：验证你的邮箱（注册验证邮件）", "右：重置你的密码（重置邮件）", "同一页眉、按钮样式与页脚"]), title: "重置邮件与注册验证邮件并排", rig: rig)
             try await login.settle(LongScript.loginDone, rig: rig)
         }
-        // 它记得升版本号、没收尾：会话补上（提交了没有照 Cue 交代的），还不收就再答一次它追问的，让托付（忘记密码做完才删 SendGrid）有个兑现的时候
         let loginClosed = { (step: Step) in self.calls(step, "task", ["done"]).contains { !$0.call.failed && self.target($0.args) === login } }
         var closed = finish, wrapUp = [finish]
         if !loginClosed(finish) {

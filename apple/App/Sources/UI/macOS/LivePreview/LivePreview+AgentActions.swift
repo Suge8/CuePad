@@ -5,12 +5,10 @@ import WebKit
 
 extension LivePreview {
 
-    /// 一个动作：等用户停手、做、等页面安定，回执附上跳转与这一下之后的新报错。
     func agentAct(_ act: Act, mark: (tint: String, ink: String)) async throws -> LiveChannel.Reply {
         try await agentReady()
         try requireLocal()
         let waited = try await waitForUser()
-        // 等的这几秒里页面可能自己跳到了外网
         try requireLocal()
         let start = record.end, from = web.url
         agent.acting = true
@@ -23,9 +21,9 @@ extension LivePreview {
         case .upload(let ref, let files): text = try await upload(ref, files, mark: mark)
         case .eval(let code): text = try await evaluate(code)
         }
-        if waited > .milliseconds(100) { text += "（先等用户停手 \(Self.seconds(waited))）" }
         await settle()
-        if case .fill(let ref, let value) = act { text += await verified(ref, value) }
+        if case .fill(let ref, let value) = act { text = await verified(ref, value, did: text) }
+        if waited > .milliseconds(100) { text += "（先等用户停手 \(Self.seconds(waited))）" }
         if let url = web.url, url != from {
             text += "\n页面到了 \(url.absoluteString)"
             if !LiveAddress.isLocal(url) { text += "\n这是外网地址：之后不替你操作，snapshot、screenshot、console 还能用" }
@@ -58,7 +56,6 @@ extension LivePreview {
             do {
                 let landed = try await call("return await cue.disarm()", in: target.document, stopsOnAsk: true, stopsOnLeave: true)
                 if landed["seen"] as? Bool != true {
-                    // 原生事件没进这份文档：什么也没点到，退回合成的
                     _ = try await call("return cue.click({ n })", ["n": target.n], in: target.document, stopsOnAsk: true)
                     how = "（真实鼠标事件没进到页面里，退回了脚本合成的点击）"
                 } else if landed["got"] as? Bool != true {
@@ -86,18 +83,18 @@ extension LivePreview {
         return done["did"] as? String ?? ""
     }
 
-    /// `fill` 之后页面安定了再看一眼那个框：值不是填的这段、核对不了的，回执里都说。
-    private func verified(_ ref: String, _ value: String) async -> String {
+    private func verified(_ ref: String, _ value: String, did: String) async -> String {
         let current = await untilCurrent()
         // 弹着对话框时脚本停着，读不了
-        guard asks.isEmpty else { return "" }
+        guard asks.isEmpty else { return did }
         guard let target = try? target(ref), let kept = try? await call("return cue.value({ n })", ["n": target.n], in: target.document, within: .seconds(1)) else {
-            return "\n填完之后这个框不在了，没核对上它收没收下：cuepad live snapshot 看一眼"
+            return did + "\n填完之后这个框不在了，没核对上它收没收下：cuepad live snapshot 看一眼"
         }
-        // 下拉框不核对
-        guard let now = kept["value"] as? String else { return "" }
-        if now != value.replacingOccurrences(of: "\r\n", with: "\n") { return "\n页面安定后它的值是 \(kept["shown"] as? String ?? "")，不是填的这段" }
-        return current ? "" : "\n页面还在换内容，没核对上它收没收下"
+        guard let now = kept["value"] as? String else { return did }
+        if now != value.replacingOccurrences(of: "\r\n", with: "\n") {
+            return "\(kept["what"] as? String ?? ref) 没填进去：页面安定后它的值是 \(kept["shown"] as? String ?? "")，不是填的这段"
+        }
+        return current ? did : did + "\n页面还在换内容，没核对上它收没收下"
     }
 
     func press(_ key: String, _ ref: String?, mark: (tint: String, ink: String)) async throws -> String {
@@ -110,7 +107,6 @@ extension LivePreview {
             await flash(target, String(localized: "Agent 按 \(key)"), mark)
             return done["did"] as? String ?? ""
         }
-        // 没给引用：按在此刻有焦点的那份文档里（焦点在框里时是那个框）
         guard let main = record.main, let document = record.documents[main] else { throw LiveRefusal("页面还没载出来") }
         let done = try await call("return cue.press({ n: null, key })", ["key": key], in: document)
         return done["did"] as? String ?? ""
@@ -133,11 +129,9 @@ extension LivePreview {
         return "\(done["did"] as? String ?? "") 交了 \(files.count) 个文件：\(files.map(\.lastPathComponent).joined(separator: "、"))"
     }
 
-    /// 命令行交来的内容写进这个预览自己的临时目录，页面拿到的是这里的文件：页面读文件（提交、FileReader）在交过之后，留到预览释放。
     private func keep(_ uploads: [LiveChannel.Upload]) throws -> [URL] {
         let folder = uploadFolder.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // 每个文件各占一层：不同目录里的同名文件不互相盖掉
         return try uploads.enumerated().map { index, upload in
             let name = URL(filePath: upload.name).lastPathComponent
             guard !name.isEmpty, name != "..", name != "." else { throw LiveRefusal("文件名不对：\(upload.name)") }
@@ -198,7 +192,6 @@ extension LivePreview {
         }
     }
 
-    /// 框里的一点换到主框的视口里：一层层加上 iframe 内容区的位置，每一层都核对那一点上最上面的就是这个 iframe（被挡住的框不点）。
     func mainPoint(of target: Aim, _ point: CGPoint) async throws -> CGPoint {
         var point = point, token = target.token
         while let host = agent.page?.hosts[token] {
@@ -214,7 +207,6 @@ extension LivePreview {
         return point
     }
 
-    /// 动作之后等页面安定：先给事件处理与渲染一拍，再等载入与请求回来（最多 5 秒；弹了对话框就不等），最后再给一拍渲染。
     private func settle() async {
         try? await Task.sleep(for: .milliseconds(40))
         let deadline = ContinuousClock.now + .seconds(5)

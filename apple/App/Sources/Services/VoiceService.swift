@@ -3,8 +3,6 @@ import Foundation
 import Observation
 import os
 
-/// AppServices 持有唯一通话 owner；页面离开、App 进后台与锁屏都不结束通话（iOS 声明了后台音频），只有挂断、中断或连接断了才结束。
-/// Mac 投影决定业务阶段；本机麦克风、静音确认和电平从不上传，也不据此推断远端正在处理或朗读。
 @Observable final class VoiceService {
     @ObservationIgnored unowned let services: AppServices
     @ObservationIgnored let signaling: (any VoiceSignaling)?
@@ -21,10 +19,8 @@ import os
     }
     #if os(macOS)
     var call: VoiceCall?
-    /// 测试与调试换掉付费模型与设备的接缝
     @ObservationIgnored var makeCall: @MainActor (VoiceCall.Dependencies, VoiceRecord) -> VoiceCall = DebugHooks.makeVoiceCall
     var session: VoiceSessionID? { call.map { VoiceSessionID($0.session) } }
-    /// 只登记当前租约的展示接收者，挂断后仍可收更新；不保留业务副本。
     @ObservationIgnored var projectionReaders: [VoiceDeviceID: VoiceSignalHeader] = [:]
     @ObservationIgnored var remote: VoiceRemoteMedia?
     @ObservationIgnored var observing: Task<Void, Never>?
@@ -36,7 +32,6 @@ import os
     @ObservationIgnored let makeMedia: () -> any VoiceMedia
     @ObservationIgnored var phone: VoicePhoneSession?
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
-    /// 本机媒体终态不改写 Mac 的业务投影。
     var phoneEnd: VoiceCallProjection.Phase?
     var muted = false
     var muting = false
@@ -89,7 +84,6 @@ import os
     var phase: VoiceCallProjection.Phase? {
         #if os(iOS)
         if let issue { return .failed(issue) }
-        // 先读结束再看在不在关：phone 不在观察里，`finish` 撤下 phone 后只改 phoneEnd，关着时没读过它的视图会一直停在"正在结束"
         let ended = phoneEnd
         if closing { return .closing }
         if let ended { return ended }
@@ -110,7 +104,6 @@ import os
         #endif
     }
 
-    /// 通话还在（连接中、通着或正在关）：中转为它留着，进后台不断开（`AppServices.prepareForBackground`）。
     var isLive: Bool {
         #if os(macOS)
         call?.isLive == true
@@ -119,7 +112,6 @@ import os
         #endif
     }
 
-    /// 试听与通话互斥：通话在连、通着或在关时不放，开始一通先停试听。
     var canPreview: Bool { canStart && !isLive }
 
     func playPreview(_ voice: CueVoice) throws {
@@ -178,7 +170,6 @@ import os
     func receive(_ event: VoiceRelayEvent) async {
         switch event {
         case .received(let received):
-            // 换绑只认这一处：同一设备、同一通话从新租约来的任何一帧（命令、结果、媒体）都说明对端回来了
             rebind(received.header)
             if case .commandResult(let result) = received.payload {
                 if let wait = pending[result.command], wait.session == received.header.session,

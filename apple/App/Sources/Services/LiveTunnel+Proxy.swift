@@ -9,18 +9,13 @@ import Synchronization
 private nonisolated let log = Logger(subsystem: AppIdentity.id, category: "live")
 
 extension LiveTunnel {
-    /// 去 Mac 的路：Mac 答来的入口（`LiveSignal.Door`）里连得上的那个地址（`LiveLink` 探出来），与这张票据。
     nonisolated struct Route: Sendable {
         let key: SymmetricKey
         let ticket: Data
         let mac: NWEndpoint
-        /// Mac 在局域网上的地址：页面直接写它们的也走隧道。
         let addresses: Set<String>
-        /// 这一条路：断了的报告说的是哪一条（`Break`），换过路后到的旧报告不算。
         let id = UUID()
 
-        /// 经这条路连到 Mac 上的 `host:port`：验过票、Mac 放行并连上了那个口才返回。票据不认、连不上 Mac 报给 `report`（`LiveLink` 重新探路）；
-        /// Mac 没放行、那个口没人接抛 `LiveTunnelError.answer`。
         func dial(host: String, port: UInt16, report: AsyncStream<Break>.Continuation) async throws -> NWConnection {
             let remote = NWConnection(to: mac, using: LiveTunnel.parameters(key: key))
             let answer: Answer
@@ -43,33 +38,26 @@ extension LiveTunnel {
         }
     }
 
-    /// 走某条路的连接断了：Mac 答票据不认（`answer`），或连不上、连着的出错断了（nil）。
     nonisolated struct Break: Sendable {
         let route: UUID
         let answer: Answer?
     }
 
-    /// 只听回环、带随机口令的 SOCKS5 代理（RFC 1928 + RFC 1929），设给预览那一份网页数据（`LivePreview`）：同机别的应用连得上回环口，没有口令进不来。
-    /// 目标是 Mac 本机的（`isMac`）走隧道，别的（字体、CDN）由手机直连。回环地址的页面不经它，靠 `mirror`。
     nonisolated final class Proxy: Sendable {
         let user = "cuepad"
         let password = UUID().uuidString
         private let listener: NWListener
         private let route = Mutex<Route?>(nil)
-        /// 手机自己回环上照搬的口（`mirror`），按端口记着。
         private let mirrors = Mutex<[UInt16: Mirror]>([:])
-        /// 照搬的口开好了、开不了有变化：回环地址的页面要它的口开好了才载（`LiveLink`）。
         let mirrored: AsyncStream<Mirrored>
         private let mirroring: AsyncStream<Mirrored>.Continuation
 
-        /// `open`：两族的监听口都起来了。`taken`：开不了，这台设备上有别人占着（另一个窗口的预览、别的应用），每 `remirror` 再试。
         struct Mirrored: Equatable, Sendable {
             var open: Set<UInt16> = []
             var taken: Set<UInt16> = []
         }
 
         private struct Mirror {
-            /// 这一次开的：重开过、不要了之后到的旧回调不算。
             let id = UUID()
             var listeners: [NWListener] = []
             var ready = 0
@@ -77,7 +65,6 @@ extension LiveTunnel {
         }
 
         private static let remirror = Duration.seconds(3)
-        /// 隧道不通了（票据不认、Mac 的口连不上、连着的被网络打断）：`LiveLink` 重新探路。
         let broken: AsyncStream<Break>
         private let report: AsyncStream<Break>.Continuation
 
@@ -173,7 +160,6 @@ extension LiveTunnel {
             return mirror
         }
 
-        /// 一个监听口起来了或开不了。开不了的整口关掉，过 `remirror` 还要它就重开。
         private func settle(_ port: UInt16, _ id: UUID, failed: Bool) {
             let closing = mirrors.withLock { mirrors -> [NWListener]? in
                 guard var mirror = mirrors[port], mirror.id == id, !mirror.failed else { return nil }
@@ -196,9 +182,7 @@ extension LiveTunnel {
         private static func forward(_ local: NWConnection, port: UInt16, route: Route?, report: AsyncStream<Break>.Continuation) async {
             do {
                 try await local.established(within: .seconds(5))
-                // 还没有去 Mac 的路：关掉，网页视图当连不上，`LivePreview.watch` 下一秒再试
                 guard let route else { return local.cancel() }
-                // 连 Mac 上哪个地址由 Mac 按会话定（`Workspace.admitLive`），这里只说得出端口
                 let remote = try await route.dial(host: "localhost", port: port, report: report)
                 Splice(local, remote) { remoteFailed in if remoteFailed { report.yield(.init(route: route.id, answer: nil)) } }.start()
             } catch {
@@ -206,7 +190,6 @@ extension LiveTunnel {
             }
         }
 
-        /// 网页视图的代理配置：代理不通时不绕过它直连（`allowFailover`）。回环地址本来就不经代理（`mirror`）。
         func configuration(port: UInt16) -> ProxyConfiguration {
             var proxy = ProxyConfiguration(socksv5Proxy: .hostPort(host: .ipv4(.loopback), port: .init(rawValue: port)!))
             proxy.applyCredential(username: user, password: password)
@@ -214,7 +197,6 @@ extension LiveTunnel {
             return proxy
         }
 
-        /// 本机名、回环地址与 Mac 在局域网上的地址：都是 Mac 那台机器上的。
         static func isMac(_ host: String, addresses: Set<String>) -> Bool {
             let host = host.lowercased()
             if host == "localhost" || host.hasSuffix(".localhost") || host == "::1" || addresses.contains(host) { return true }
@@ -228,7 +210,7 @@ extension LiveTunnel {
                 let (host, port) = try await local.bounded(.seconds(5)) { try await handshake(local, user: user, password: password) }
                 let remote: NWConnection
                 if isMac(host, addresses: route?.addresses ?? []) {
-                    guard let route else { return refuse(local, 3) }  // 网络不可达：还没有去 Mac 的路
+                    guard let route else { return refuse(local, 3) }
                     do {
                         remote = try await route.dial(host: host, port: port, report: report)
                     } catch LiveTunnelError.answer(let answer) {
@@ -246,7 +228,6 @@ extension LiveTunnel {
                     }
                 }
                 try await local.write(Data([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
-                // 去 Mac 的那条出错断了（换网、Wi-Fi 断了一下、Mac 睡了）是隧道断过：页面的长连接就这样没的，等它下一个请求失败才发觉就晚了
                 let mac = isMac(host, addresses: route?.addresses ?? []) ? route?.id : nil
                 Splice(local, remote) { remoteFailed in if remoteFailed, let mac { report.yield(.init(route: mac, answer: nil)) } }.start()
             } catch {
@@ -258,7 +239,6 @@ extension LiveTunnel {
             local.send(content: Data([5, code, 0, 1, 0, 0, 0, 0, 0, 0]), completion: .contentProcessed { _ in local.cancel() })
         }
 
-        /// 问候、认口令、读 CONNECT：返回要连的主机与端口。口令不对回失败并断开。
         private static func handshake(_ local: NWConnection, user: String, password: String) async throws -> (String, UInt16) {
             let hello = try await local.read(2)
             let methods = try await local.read(Int(hello[hello.startIndex + 1]))
@@ -332,7 +312,6 @@ extension NWConnection {
         }
     }
 
-    /// 读写挂住的连接到时取消（读写随之以错误返回）：手机、Mac 都不为一条不说话的连接一直等。
     nonisolated func bounded<T: Sendable>(_ limit: Duration, _ work: () async throws -> T) async throws -> T {
         let timer = Task { [weak self] in
             try await Task.sleep(for: limit)

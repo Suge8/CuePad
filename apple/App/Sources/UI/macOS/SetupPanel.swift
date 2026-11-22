@@ -4,8 +4,6 @@ import CueBridge
 import CueStore
 import SwiftUI
 
-/// 打开时与回到 App 时重新检测这台的 Agent（用户可能刚在终端里登录了 Pi、装了 Node.js）；打开后第一次问完之前只写检测中：不先给勾选再在启用时报错。
-/// 每行写它会做什么，点按钮就是同意。
 struct SetupPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -57,7 +55,7 @@ struct SetupPanel: View {
         .onAppear { withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) { shown = true } }
         .observing(services.store, into: $here, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
         .task {
-            let activations = NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification)  // 第一次检测途中切回来的也要再测
+            let activations = NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification)
             await workspace.recheckAgents()
             checked = true
             for await _ in activations { await workspace.recheckAgents() }
@@ -155,7 +153,6 @@ struct SetupPanel: View {
         }
     }
 
-    /// 勾得上、却问不出能不能用的原因：照样接得上，但不写出来就像接上就能用。
     private func unusable(_ kind: AgentKind) -> String? { mac.problem(kind)?.description }
 
     private func action(_ title: LocalizedStringResource, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {

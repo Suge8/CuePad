@@ -59,7 +59,6 @@ enum PreviewWebGuard {
 
     static let blank = URL(string: "about:blank")!
 
-    /// 拦截规则；装不上就抛出，没有"不设防"的退路。
     static func rules() async throws -> WKContentRuleList {
         guard let rules = try await WKContentRuleListStore.default().compileContentRuleList(
             forIdentifier: "cuepad.preview.offline", encodedContentRuleList: blockEverythingButInline)
@@ -76,7 +75,6 @@ enum PreviewWebGuard {
 
     static func mimeType(of file: URL) -> String { AttachmentKey.type(ofName: file.lastPathComponent)?.preferredMIMEType ?? "text/html" }
 
-    /// 不上屏的渲染用 `WebPage`（没有视图也能导出画面）；上屏的是 `OfflineWebView`。
     static func page(for file: URL) async throws -> WebPage {
         var configuration = WebPage.Configuration()
         configuration.websiteDataStore = .nonPersistent()
@@ -87,7 +85,6 @@ enum PreviewWebGuard {
         return page
     }
 
-    /// 文件最大 20 MB，读取不占主线程。
     @concurrent static func read(_ file: URL) async throws -> Data { try Data(contentsOf: file) }
 
     private struct InlineOnly: WebPage.NavigationDeciding {
@@ -250,12 +247,10 @@ extension OfflineWebView: NSViewRepresentable {
     func updateNSView(_ view: WKWebView, context: Context) {}
 }
 #else
-/// 载完之前盖着缩略图的画面（`previewLook`），从缩略图飞出来的第一帧就有图（网页的是桌面宽的首屏、文稿的是纸面，与重排后的页不一样，只当占位）。
 extension OfflineWebView: UIViewRepresentable {
     static let edges = Edge.Set.all
     func makeUIView(context: Context) -> WKWebView {
         let view = make(context.coordinator)
-        // 垫桌面色、盖住整页：页面画出一部分时不从缩略图四周露出来（两层字）
         let cover = PreviewCover(look: context.environment.previewLook, ground: UIColor(context.environment.palette.desk))
         cover.frame = view.bounds
         cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]

@@ -34,7 +34,6 @@ extension DebugScene {
         }
         box.wrappedValue.text = String(localized: "把重连用例也跑一遍，结果贴给我", table: "Demo")
         if args.driveOpts.importDelay > 0 {
-            // 这句带一个还在存的附件（`DebugHooks.importDelay` 拉长）：按下发送时它还没存好
             let url = FileManager.default.temporaryDirectory.appending(path: String(localized: "季度复盘.txt", table: "Demo"))
             try Data(String(localized: "季度复盘的要点", table: "Demo").utf8).write(to: url)
             workspace.importFiles([.file(url)], into: box)
@@ -46,11 +45,9 @@ extension DebugScene {
         switch speech {
         case "sent": workspace.speak(to: listener, from: box) { $0.stored }
         case "trips":
-            // 会话在哪台就发给哪台（`CueStore.speak`），所以直接写请求、指给那台不接手的
             guard case .session(let target, _, _, _) = listener, let ref = target.ref else { return }
             _ = try await services.store.requestDelivery(box.wrappedValue.text, to: target, on: Self.idleMac, mode: .send)
             box.wrappedValue.text = ""
-            // 这一页的话都有了着落再报就绪：交给 demo-mini 的有了结果，发给不接手的那台的传上了替身
             let settled = services.store.observe { store in
                 try store.deliveryRequests(toSession: ref).allSatisfy { !$0.isOpen || $0.hostID == Self.idleMac && $0.reachedServer }
             }
@@ -92,13 +89,11 @@ extension DebugScene {
         await executor.stop()
     }
 
-    /// `trips` 那一句发去的 Mac：演示库里没有它的执行器，话只到服务器（已发出）。
     nonisolated private static let idleMac = "demo-studio"
 
     static func pressSendIfAsked(session: Bool, _ press: () -> Void) async {
         if !session, cueFlows { return await pressForCueFlow(press) }
         guard args.driveOpts.speech == "press", (scene == "session") == session else { return }
-        // 等的这几秒里输入框可能重建（页面换了身份）：旧的那个任务被取消，不能再按、再量，否则一次按下记成两条
         guard await Task.wait(for: .seconds(args.driveOpts.pressAfter ?? 3)) else { return }
         guard let log = args.driveOpts.flightLog.map({ URL(fileURLWithPath: $0) }) else { return press() }
         await running("量按下发送") { try await measureFlight("press", seconds: flightProbe, into: log, act: press) }

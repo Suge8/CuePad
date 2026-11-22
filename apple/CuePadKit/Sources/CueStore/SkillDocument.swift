@@ -1,16 +1,8 @@
 import Foundation
 
-/// 一份 SKILL.md：开头 `---` 之间的 frontmatter 与之后的正文。读名字与说明、文件页写回（只换 name、description 与正文）都只经这里；
-/// 四家最严的格式判定在 CueBridge 的扫描。
-/// - 读：顶层的 `name`、`description` 按 YAML 的标量读（普通、单双引号、`|` `>` 块与跨行的折叠，`SkillDocument+YAML`）；
-///   块写法末尾的换行不算（名字与说明是一段字，不是文件）。没有收尾 `---` 的不算 frontmatter，整份是正文。
-/// - 写：没改的那一项、其余键、注释、空行与换行符（`\r\n` 的文件写回仍是 `\r\n`）一个字节不动；改了的只换掉那个键占的几行，
-///   原来没有的加在 frontmatter 第一行。三样都没改时写回的就是原文（文件页据此判断有没有改动）。
-/// - 正文交给编辑器时换行一律是 `\n`，收尾 `---` 后的空行不算正文，写回时原样放回。
 public struct SkillDocument: Equatable, Sendable {
   public let name: String?
   public let description: String?
-  /// 收尾那条 `---` 之后的正文，不含紧跟着的空行（文件页的正文从第一行字起，不空出一行）；没有 frontmatter 时是全文
   public let body: String
   private let text: String
   private let header: Header?
@@ -24,13 +16,10 @@ public struct SkillDocument: Equatable, Sendable {
     let fields: [Key: Field]
   }
 
-  /// 一个键在原文里占的地方与它原来带的引号。值写在下一行起时，键那行到值之间的注释、空行不在其中。
   private struct Field: Equatable, Sendable {
-    /// 换成新的 `键: 值` 的那段：键那行到值的末尾（值写在下一行时只到冒号），行尾的注释不在其中
     let key: Range<String.Index>
     let value: Range<String.Index>?
     let quote: Character?
-    /// 这个键下面还留着注释行：换成块写法会把它们读进值里
     let commented: Bool
   }
 
@@ -52,8 +41,6 @@ public struct SkillDocument: Equatable, Sendable {
       let start = index
       index += 1
       guard let first = line.first, !" \t#".contains(first), let colon = line.firstIndex(of: ":") else { continue }
-      // 缩进的与夹在中间的空行接着这个键；冒号后没有值时，值从下一个不是注释、空行的行起。
-      // 属于值的几行按值的写法定，前后的注释行与末尾的空行都不算
       while index < end, lines[index].first.map({ " \t".contains($0) }) ?? true { index += 1 }
       let after = line[line.index(after: colon)...]
       let inline = !after.trimmingCharacters(in: .whitespaces).isEmpty && !after.trimmingCharacters(in: .whitespaces).hasPrefix("#")
@@ -61,7 +48,6 @@ public struct SkillDocument: Equatable, Sendable {
       let head = inline ? after : valueLine < index ? lines[valueLine] : ""
       var last = valueLine < index ? valueLine + 1 + Self.valueLines(head, rest: lines[valueLine + 1..<index]) : valueLine
       while last > valueLine + 1, Self.isComment(lines[last - 1], blankOnly: true) { last -= 1 }
-      // 只占键那一行的值，后面的行尾注释也留着
       let comment = inline && last == start + 1 ? Self.trailingComment(after) : nil
       let commented = comment != nil || !inline && !after.allSatisfy({ $0 == " " || $0 == "\t" })
         || (start + 1..<index).contains { ($0 < valueLine || $0 >= last) && !Self.isComment(lines[$0], blankOnly: true) }
@@ -82,7 +68,6 @@ public struct SkillDocument: Equatable, Sendable {
     body = Self.unix(text[bodyStart...])
   }
 
-  /// 换掉名字、说明与正文后的全文：没变的原样，其余键与行不动；原来没有 frontmatter 时，名字与说明有字的才写进新加的一段。
   public func with(name: String, description: String, body: String) -> String {
     let newline = text.contains("\r\n") ? "\r\n" : "\n"
     let start = header?.bodyStart ?? text.startIndex
@@ -114,13 +99,11 @@ public struct SkillDocument: Equatable, Sendable {
     return result + body
   }
 
-  /// 只有空白（`blankOnly` 为假时也算只有注释）的一行：不是值
   private static func isComment(_ line: Substring, blankOnly: Bool = false) -> Bool {
     let content = line.trimmingCharacters(in: .whitespaces)
     return content.isEmpty || (!blankOnly && content.hasPrefix("#"))
   }
 
-  /// 顶格的 `---`（后面只许空白）：缩进的是块写法里的字
   private static func isFence(_ line: Substring) -> Bool {
     line.hasPrefix("---") && line.dropFirst(3).allSatisfy { $0 == " " || $0 == "\t" }
   }

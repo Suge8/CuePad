@@ -5,23 +5,20 @@ enum ComposerMetrics {
     static let slot: CGFloat = 56
     static let textTop: CGFloat = 17
     static let textBottomOpen: CGFloat = 4
-    /// 工具排只有一种高：＋、主钮与胶囊（`chipHeight`）同高、同一条中线。＋ 与主钮比胶囊大一圈时，一排看着是两套东西。
     #if os(iOS)
     static let glyph = ControlSize.compact.height
     #else
     static let glyph: CGFloat = 32
     #endif
-    /// Mac 上点得到的就是那颗圆：悬停的底按点按区画，比圆大一圈时是圆外一块方圆底。
     #if os(iOS)
     static let glyphTarget: CGFloat = 44
     #else
     static let glyphTarget = glyph
     #endif
-    /// 右下角那颗圆钮（点得到的那一圈）离右边与离下边一样远；任务气泡底下那颗"开始"排在同一个位置。
+    static let glyphEdge = (slot - glyph) / 2
     static let glyphInset = (slot - glyphTarget) / 2
     static let noticeSpacing = Spacing.tight
     static let noticePadding = Spacing.item
-    /// 会话页对话末尾按动态字号缩放它（`Conversation`），外边距不缩放。
     static let noticeTextHeight: CGFloat = 2 * 16 + noticeSpacing
 
     static func noticeClearance(textHeight: CGFloat) -> CGFloat {
@@ -50,7 +47,6 @@ struct ComposerHeight {
         var version: Int
     }
 
-    /// 只留这一版里问过、撑满过上限的，别的作废：动画里一帧一个宽度，不留着越攒越多。
     mutating func textChanged() {
         fits = fits.filter { $0.value.version == version && $0.value.filled != nil }
         version += 1
@@ -98,14 +94,9 @@ extension String {
     }
 }
 
-/// 一个输入框一个值，调用方按场景给。
 enum ComposerForm: Equatable {
-    /// 一直是两层、工具排一直在：浮起的输入框（新会话、交给 Agent）、Mac 菜单栏面板、Mac 会话回复框。
     case open
-    /// 空着又没聚焦时收成一行；有内容时两层，`opensOnFocus` 时聚焦也展开（Mac 底部输入栏；手机会话回复框：
-    /// 有工具排时聚焦就展开，没有时聚焦了也保持一行，打了字再长）。
     case line(opensOnFocus: Bool)
-    /// 没聚焦时收成短胶囊（＋ 与一行提示，有草稿写"草稿：第一行"），点它聚焦后同 `line`（手机会话页在看历史时）。
     case capsule(opensOnFocus: Bool)
 
     var opensOnFocus: Bool {
@@ -117,8 +108,6 @@ enum ComposerForm: Equatable {
 
     var isCapsule: Bool { if case .capsule = self { true } else { false } }
 
-    /// 此刻是两层（展开）还是一行、胶囊：输入框自己的形状与挂在它上沿的说明（`composerNotice`）都按这一处。
-    /// 批注排在头部、收着时也露出（`Composer.keepsHeader`），不撑开文字那一块。
     func expanded(focused: Bool, draft: ComposerDraft, accepts: ComposerKinds) -> Bool {
         if isCapsule && !focused { return false }
         return self == .open || focused && opensOnFocus || !draft.isEmpty(accepting: accepts.subtracting(.notes))
@@ -126,14 +115,12 @@ enum ComposerForm: Equatable {
 }
 
 extension View {
-    /// 不进排版：挂在上沿一条零高的线上，叠放的东西多高都不改这一块的高。排进来的话它一出一收这一块就当帧变高变矮，浮在它上面的对话跟着跳；对话页上盖住的是对话末尾常驻那一行的位置（`ChatLiveSlot` 按它的高让出），不是内容。
     func floatingAbove(@ViewBuilder _ content: () -> some View) -> some View {
         overlay(alignment: .top) {
             Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) { content().padding(.bottom, Spacing.item) }
         }
     }
 
-    /// 只是说明、不接点按：后面的对话照常滚、照常点。
     func composerNotice(_ shown: Bool, @ViewBuilder _ notice: () -> some View) -> some View {
         floatingAbove {
             if shown {

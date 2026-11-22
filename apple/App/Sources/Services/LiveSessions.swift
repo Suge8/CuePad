@@ -2,39 +2,25 @@ import CueStore
 import Foundation
 import Observation
 
-/// 此刻有事的 Pi 会话（同步记录里在线的，加上还有话发给它的已结束会话，即 `SessionQuery.current`）：整个 App 一份，一个订阅读一次，各处不各自订阅、各读一页：
-/// 读一页要查会话、项目、最近的投送请求、改名与没送达的话，会话状态每变一次，订阅了几处就读几遍。
-/// 下面这些由 `items` 推出，各自相等就不写——读它们的视图只在自己用的那份变了才重算。
 @Observable
 final class LiveSessions {
-    /// 第一份在 App 打开资料库时当场读到（`init`），之后从它接着订阅：没有"还没读到"这一态。
     private(set) var items: [SessionListItem] = []
     private(set) var total = 0
     private(set) var live: [SessionListItem] = []
     private(set) var current: [SessionListItem] = []
-    /// 以下几项都按 Pi 的会话 id；`recorded` 只有在线的（`live`）。
     private(set) var recorded: [String: SessionState] = [:]
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var answers: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
-    /// 停着、这次停下 Cue 交出去的那一处还没做完的会话在等谁；各处都经 `Workspace.handoff(of:)` 读它。
     private(set) var handoffs: [String: CueHandoff] = [:]
-    /// Cue 在值班时的那一份（`CueStore.cueDuty`，与会话一起读；它那台 Mac 的在线期限到点由订阅重读）。不在值班为 nil。
     private(set) var cue: CueDuty?
-    /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个。iOS 上没有。
     private(set) var recentlyEnded: [SessionState] = []
-    /// 最近一次交给（`CueRelayStage` 画）：比已算过的更新的交给（`CueFlight.Facts`），`at` 变成新的就播一次；打开资料库时已有的不算。
-    /// 叫醒那一路不在这里（`CueWatch.wake`）。
-    /// 与会话一起读：重排"在做"那一列的那次写入（话在路上、新会话出现）与这次接力同一份到达界面，量落点时那一列已经排好。
     private(set) var flight: CueFlight?
-    /// 与接力事实同一次读到，界面不另起订阅等待目标进入会话条。
     private(set) var rail = SessionRailData(waiting: [], advancing: [])
-    /// 各会话的看过与标未读（`Mark`，按会话 id）：与会话同一次读到，状态与新回复不会一前一后地变。
     private(set) var marks: [String: SessionMarks] = [:]
     @ObservationIgnored private var seen: Date?
     private let launchedAt = Date()
-    /// 结束会话的那台 Mac（本机，见 `Page`）；iOS 为 nil。
     private let host: String?
     @ObservationIgnored private let start: Snapshot<Page>
     @ObservationIgnored private var page: Page
@@ -48,7 +34,6 @@ final class LiveSessions {
         apply(start.value, at: moment)
     }
 
-    /// 这个会话正在问的那道题已有的作答请求；题换了、没答过为 nil。
     func answer(to session: SessionState) -> DeliveryRequest? {
         guard let promptID = session.answerableQuestion?.promptID, let request = answers[session.sessionID], request.answer?.promptID == promptID else { return nil }
         return request
@@ -78,7 +63,6 @@ final class LiveSessions {
         }
     }
 
-    /// 此刻变了（到点、同步通断）按手里那页重推：读的东西不随此刻变，"在做"与没送达的按此刻推。
     func follow(_ services: AppServices) async throws {
         let since = launchedAt, host = host, clock = services.speechClock
         let ticking = Task { for await moment in Observations({ clock.moment }) { self.apply(self.page, at: moment) } }
@@ -120,7 +104,6 @@ extension AppServices {
         follow(reporting: { .syncUnavailable(String(localized: "读取在线会话失败，会话状态不再更新：\(String(describing: $0))")) }) {
             try await self.liveSessions.follow(self)
         }
-        // 通知中心由 App 代理接上（`alerts`，手机上晚于这里）：之前的那几次看过等下一次变化再收
         follow { for await marks in Observations({ self.liveSessions.marks }) { await self.alerts?.dismissSeen(marks) } }
     }
 }

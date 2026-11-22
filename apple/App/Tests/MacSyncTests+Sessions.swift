@@ -109,7 +109,6 @@ extension MacSyncTests {
             SessionMessage(text: "看这张设计稿", images: [MessageImage(mimeType: "image/png", data: png)], deliveryID: shown.id.uuidString)
         ])
 
-        // 文件在原处换成一行"附件：文件名（路径）"，路径是附件目录里本机那份
         let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)-方案.pdf")
         try Data("%PDF-1.4 方案".utf8).write(to: source)
         let pdf = try services.store.files.store(fileAt: source)
@@ -154,7 +153,6 @@ extension MacSyncTests {
         let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
         let turn = Date.now.addingTimeInterval(-30 * 60)
-        // Cue 开的这一轮：他开的停下不报给 Cue（`leaveHisStops`）
         let delivery = UUID()
         try await store.recordSend("发版", to: SendTarget(kind: .piSession, name: "发版", ref: "s1"), delivery: delivery, origin: .known(.cue))
         let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn, deliveryID: delivery)
@@ -165,7 +163,7 @@ extension MacSyncTests {
                 sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: turn.addingTimeInterval(60))))
             try await services.stateRecorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
         }
-        try services.reconcileLaunch()  // 更新后的 App 启动对账
+        try services.reconcileLaunch()
         let mark = try await store.lastWrite()
         let consuming = Task { try await services.consumeSessionChanges(changes) }
         defer { await consuming.stop() }
@@ -179,12 +177,9 @@ extension MacSyncTests {
                 sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
         }
         old.close(bye: "reload")
-        // 新旧实例同一个 id，歇着的那一例旧实例也满足下面的等待：先等它下桥，下面看到的才是新扩展
         try await eventually("旧扩展下桥") { services.bridge.session(sessionID: "s1") == nil }
-        // 重新载入的扩展带着原来的起点（扩展的 `Carried`）；这期间做完了一轮的、从读不懂的旧扩展升上来的报此刻
         try await rig.host.connect("s1", cwd: "/work/app", since: running || upgrading ? nil : settled, sessionFile: file.path)
 
-        // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
         try await eventually("桥上以新扩展接回") { services.bridge.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
         let live = try #require(services.bridge.session(sessionID: "s1"))
         let stored = try await eventually(store, { try $0.allSessionStates().first }, until: {
@@ -207,7 +202,7 @@ extension MacSyncTests {
         #expect(stored.state == .known(ended ? .ended : .settled))
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
-        #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
+        #expect(catalog?.models.isEmpty ?? true)
         #expect(Slash.line(of: ComposerDraft(text: "/default"), in: catalog?.commands ?? [], for: stored) == "/default")
     }
 }

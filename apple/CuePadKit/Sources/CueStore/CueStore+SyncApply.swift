@@ -12,7 +12,7 @@ extension CueStore {
           if let key = try apply(change) { removedKeys.append(key) }
           try db.exec("RELEASE remote")
         } catch let error as SQLiteError where error.isTransient {
-          throw error  // 库写满、读写出错：不是这条坏了，整次落库失败、令牌不动，同步层之后再来
+          throw error
         } catch CueStoreError.readOnlyLibrary {
           throw CueStoreError.readOnlyLibrary
         } catch {
@@ -64,7 +64,6 @@ extension CueStore {
         attachment = try db.first("SELECT hash, format FROM attachments WHERE id = ?", [key.id]) { AttachmentKey.make(hash: $0.text(0), format: $0.text(1)) }
       }
       if key.table == .cards, let id = UUID(uuidString: key.id) { try releaseDeliveryBindings(of: [id]) }
-      // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的）归默认项目
       if key.table == .projects, let id = UUID(uuidString: key.id) { try dropProjects([id]) }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
@@ -75,7 +74,6 @@ extension CueStore {
     }
   }
 
-  /// 冲突：本机有未推送的改动时 `modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。本机自己上传的版本回来（回声）不是并发编辑：由交出去与服务器收下的修改时间认出（`applyVersion`）。排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data, serverAt: Date?) throws {
     if remote.table == .deliveryRequests {
       try applyIncomingDelivery(remote, systemFields: systemFields, serverAt: serverAt)
@@ -86,15 +84,12 @@ extension CueStore {
 
   func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
     var remote = remote
-    // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
-    // 早于多家接入的会话记录不带来源，是 Pi：本机库升级时补过却没传上去（不改 modifiedAt），云端那份可能仍缺，空着读会话记录时崩溃
     if remote.table == .piSessionStates, (remote.fields["agent"] ?? .null) == .null { remote.fields["agent"] = .text(AgentKind.pi.rawValue) }
     let table = remote.table
     let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
       ($0.intOrNil(0), $0.intOrNil(1))
     } ?? (nil, nil)
-    // 交出去而结果没回到本机的那一版回来了（崩溃、回包丢失）：服务器收下了它，记账；本机的行不动
     if remote.modifiedAt == sent {
       if remote.modifiedAt > (pushed ?? .min) { try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt) }
       return
@@ -128,7 +123,6 @@ extension CueStore {
     if table == .piSessionStates {
       let winner = remote.modifiedAt >= local.modifiedAt || pushed.map({ local.modifiedAt <= $0 }) == true ? remote : local
       var merged = winner
-      // 一经记下不撤：别处后写的那一版可能还没有它（状态报告不写这两列，见 `writeSessionState`）
       for column in ["createdForTaskID", "restoredAt"] {
         if let kept = [local, remote].lazy.compactMap({ $0.fields[column] }).first(where: { $0 != .null }) { merged.fields[column] = kept }
       }
@@ -147,8 +141,6 @@ extension CueStore {
       return
     }
 
-    // 远端不比本机已记下的推送版本新：是本机自己上传过的版本（回声）或更旧的，本机已有更新的编辑，没有什么要合并的。
-    // 别的设备并发编辑的版本晚于本机上次同步的版本，不会落在这里。
     if let pushed, remote.modifiedAt <= pushed { return }
 
     let remoteWins = remote.modifiedAt >= local.modifiedAt
@@ -190,8 +182,6 @@ extension CueStore {
     try apply(try CardLinks(db).repairs(touching: changed))
   }
 
-  /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。副本是灵感（不带状态、上级与会话），
-  /// 不会在看板上多出一条任务。
   private func insertConflictCopy(of loser: SyncRow, keeping winner: SyncRow) throws {
     let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID = ?", [winner.fields["projectID"] ?? .null]) { $0.textOrNil(0) } ?? nil
     let now = Date.stamp
@@ -208,7 +198,6 @@ extension CueStore {
     try overwrite(SyncRow(table: .cards, fields: fields))
   }
 
-  /// 仍被引用的保留：引用它的记录也许马上就到。删不掉的作为失败报告。
   private func removeFiles(of keys: [String]) throws -> [RemoteFailure] {
     guard !keys.isEmpty else { return [] }
     var failures: [RemoteFailure] = []

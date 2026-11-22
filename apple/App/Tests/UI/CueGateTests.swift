@@ -44,8 +44,8 @@ struct CueGateTests {
         defer { await following.stop() }
 
         #expect(try await gate() == .waiting("正在从 iCloud 同步…"))
-        #expect(workspace.cue.now.quietLine == "正在从 iCloud 同步…")  // Cue 此刻（侧栏名片、菜单栏面板、小组件）：不说"还没启用"
-        for moving in [false, true] {  // Cue 页的启用（`CueWelcome`）、接入面板、设置的选择器与改 Mac 的确认都调它
+        #expect(workspace.cue.now.quietLine == "正在从 iCloud 同步…")
+        for moving in [false, true] {
             await #expect(throws: CueEnableError.unsynced) { try await services.enableCue(on: TestApp.hostID, moving: moving) }
         }
         #expect(try await store.cueProfile()?.enabledAt == nil)
@@ -69,8 +69,8 @@ struct CueGateTests {
         await #expect(throws: CueEnableError.runsElsewhere("Mac Studio")) { try await services.enableCue(on: TestApp.hostID, moving: false) }
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
 
-        model.moving = nil  // 确认框按下按钮先收起自己（`DialogCard.run`），再做按钮的事
-        model.confirm(move, services)  // "改在这台运行"
+        model.moving = nil
+        model.confirm(move, services)
         try await eventually("改在这台运行") { try await store.cueProfile()?.activeHost == TestApp.hostID }
         #expect(model.failure == nil)
     }
@@ -84,7 +84,7 @@ struct CueGateTests {
         model.moving = nil
         model.confirm(move, services)
         try await eventually("原因写在那一行") { model.failure != nil }
-        #expect(model.failure?.hasPrefix("没有能当 Cue 的 Agent：") == true)  // 各家为什么的全文在 `CueEnableTests`
+        #expect(model.failure?.hasPrefix("没有能当 Cue 的 Agent：") == true)
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
     }
 }

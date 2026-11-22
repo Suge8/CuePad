@@ -48,7 +48,6 @@ extension DebugScene {
         _ = try await store.addPreviews([(try file(String(localized: "测试报告.pdf", table: "Demo"), reconnectReportPDF()), String(localized: "重连测试报告", table: "Demo"))], sessionID: "deploy")
     }
 
-    /// 每次启动都往 scratch 会话追加的交付物：库已有数据时 `seedIfFresh` 不再写，不能挂在它下面；要从空起配新的 `CUEPAD_SHOT_LIBRARY`。
     static func seedScratchFiles(_ store: CueStore) async throws {
         if let kinds = args.allKinds { try await seedAllKinds(store, upTo: Int(kinds)) }
         if let media = args.previewMedia { try await seedPreviewMedia(store, from: media) }
@@ -65,7 +64,6 @@ extension DebugScene {
             return url
         }
         let filler = Data("placeholder".utf8)
-        // 字节与别处的截图不同：附件按内容存一份，同样的字节会被别的演示数据重新写回来
         let away = phonePNG(covered: true) + Data("away".utf8)
         let batches = try [
             [file(String(localized: "模型.usdz", table: "Demo"), filler), file(String(localized: "还在路上.png", table: "Demo"), away)],
@@ -84,7 +82,6 @@ extension DebugScene {
         }
     }
 
-    /// 录预览页的缩放、切图、播放与翻页用真内容：大图、真视频、多页 PDF（演示数据里的视频只是占位的字节）。
     private static func seedPreviewMedia(_ store: CueStore, from directory: String) async throws {
         let files = try FileManager.default.contentsOfDirectory(at: URL(filePath: directory), includingPropertiesForKeys: nil)
         let named = files.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.lastPathComponent < $1.lastPathComponent }

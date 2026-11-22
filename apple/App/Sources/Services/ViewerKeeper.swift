@@ -20,14 +20,11 @@ import os
 /// 退出（`signOff`）不经主线程：退出收尾时主线程可能正被占着；之后界面再报的都不写。
 @MainActor @Observable
 final class ViewerKeeper {
-    /// 开着的会话页：会话记录 id；`sessionID` 是 Pi 的会话 id，只有记录 id 的入口（点通知进来）不带，写时从记录里取。
     nonisolated struct Page: Hashable, Sendable {
         let id: UUID
         let sessionID: String?
     }
 
-    /// Mac 上人不在跟前的原因：几样可能同时成立（锁着屏时屏幕亮了还是锁着），都过去了才算回来。`elsewhere`：他最近来到的是别的设备；
-    /// `covered`：主窗口整个被盖住或收起（有没有焦点都不算）。
     nonisolated enum Away: Hashable, Sendable {
         case asleep, screenOff, locked, idle, elsewhere, covered
     }
@@ -48,15 +45,12 @@ final class ViewerKeeper {
     private var cueShown: Set<UUID> = []
     private var away: Set<Away> = []
 
-    /// 人在跟前、看得到主窗口（手机上总是）：界面判断"这一页在不在屏上"读它。
     var present: Bool { away.isEmpty }
 
     #if os(macOS)
-    /// 主窗口被盖住，而且人也不在跟前：只是被盖住、人在用别的 App 时不算（`MainShellWindow.parkWhileUnseen`）。
     var unseen: Bool { away.contains(.covered) && !away.isDisjoint(with: [.asleep, .screenOff, .locked, .idle, .elsewhere]) }
     #endif
 
-    /// 此刻算开着的页：人不在跟前时一概为空。
     var viewing: Viewing {
         present ? Viewing(sessions: Set(shown.values.flatMap(\.self)), cue: !cueShown.isEmpty) : Viewing()
     }
@@ -76,13 +70,11 @@ final class ViewerKeeper {
         (changes, changed) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
     }
 
-    /// 一个窗口开着的会话页（空数组：没开着，或窗口不在前台）。开着哪个变了就由 `keep` 当场写。
     func show(_ pages: [Page], in window: UUID) {
         shown[window] = pages.isEmpty ? nil : Set(pages)
         moved()
     }
 
-    /// 一处 Cue 页在不在看（`token` 是那一处自己的标记）：任一处在看就算开着。
     func showCue(_ on: Bool, by token: UUID) {
         if on { cueShown.insert(token) } else { cueShown.remove(token) }
         moved()
@@ -99,7 +91,7 @@ final class ViewerKeeper {
             (distributed, Notification.Name("com.apple.screenIsLocked"), .locked, true),
             (distributed, Notification.Name("com.apple.screenIsUnlocked"), .locked, false),
         ]
-        let events = sources.map { source, name, reason, gone in (source.notifications(named: name), reason, gone) }  // 在第一次写下之前订上
+        let events = sources.map { source, name, reason, gone in (source.notifications(named: name), reason, gone) }
         #endif
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask { for await _ in self.changes { try await self.publish() } }
@@ -107,14 +99,12 @@ final class ViewerKeeper {
             for (marks, reason, gone) in events {
                 group.addTask { for await _ in marks { await self.mark(reason, gone) } }
             }
-            // 脚本起的实例没人碰键鼠，同主窗口被盖住一样不算离开（`followExposure`）：不然闲着 10 分钟后拍到的是“没人在看”的画面
             if !DebugHooks.scripted { group.addTask { await self.followIdle() } }
             group.addTask { try await self.followElsewhere() }
             #endif
         }
     }
 
-    /// 当场写下此刻开着哪些页并传完（手机进后台时：挂起后就传不出去了）。
     func settle() async {
         do { try await publish() } catch { Self.log.error("没能写下这台设备开着的会话：\(error.localizedDescription, privacy: .public)") }
     }
@@ -135,7 +125,6 @@ final class ViewerKeeper {
         return await sync?.send(recordNames: [id.uuidString.lowercased()]) ?? true
     }
 
-    /// 他来到了这台（`CueStore.arrive`），当场传出去：别的 Mac 据此让位。
     func arrive() async {
         guard let device else { return }
         do {
@@ -156,7 +145,6 @@ final class ViewerKeeper {
 
 #if os(macOS)
 extension ViewerKeeper {
-    /// 10 分钟：比读完一段回复、想一想再回的时间长，与常见即时通讯"多久没动静算离开"同一个量级。
     static let idleAfter: TimeInterval = 10 * 60
 
     /// 键盘鼠标 `idleAfter` 没动就算不在跟前，回来的第一下输入就回来。
@@ -175,8 +163,6 @@ extension ViewerKeeper {
         }
     }
 
-    /// 他去了别的设备（`CueStore.leftFor`）：算人不在跟前，回到这台的第一下键盘鼠标先记下来到这台、再回来。
-    /// 来到这台写进库后判断随之变回，所以订阅里的下一个值就是"没去别处"。
     private func followElsewhere() async throws {
         guard let device else { return }
         for try await left in store.observe({ [device] in try $0.leftFor(device: device) }) where left {
@@ -188,7 +174,6 @@ extension ViewerKeeper {
         }
     }
 
-    /// 下一下键盘鼠标输入（在别的 App 里与在 CuePad 里的都算）；任务取消时也返回。
     private static func nextInput() async {
         let (inputs, input) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel, .keyDown, .flagsChanged]
@@ -210,7 +195,6 @@ extension ViewerKeeper {
         return await sync?.send(recordNames: [Viewer.recordID(device: device).uuidString.lowercased()]) ?? true
     }
 
-    /// 报这个窗口导航最上面的会话页，跟着主窗口露没露在屏上；脚本起的实例窗口排在最后，当它露着。
     func follow(_ workspace: Workspace) async {
         let window = UUID()
         let exposure = Task { await followExposure(workspace.services.windowShell) }

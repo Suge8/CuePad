@@ -5,11 +5,9 @@ import CueStore
 import Foundation
 import Observation
 
-/// `AgentIntegration` 之上唯一的一份：各家的检测、安装与登录。接入与否记在 `AppSettings.connectedAgents`（`AppServices.connectAgents`）。
 @Observable
 final class AgentIntegrations {
     private(set) var statuses: [AgentKind: AgentStatus] = [:]
-    /// 在后台装、登录的那几家（接入面板的"安装""登录"）与没做成的原因；做成了就没有这一项，之后看检测与探测。
     private(set) var jobs: [AgentKind: AgentJob] = [:]
     /// 在等你在浏览器里登录完的进程：再点一次登录先结束旧的（Codex 的登录占着固定端口）。
     @ObservationIgnored private var logins: [AgentKind: ChildProcess] = [:]
@@ -27,7 +25,6 @@ final class AgentIntegrations {
         statuses[kind] = await integration.status(of: kind)
     }
 
-    /// 检测时挑中的那个（`AgentStatus.executable`），开会话、起大脑、问模型都用它。
     func executable(_ kind: AgentKind) async -> URL? {
         if statuses[kind] == nil { await detect(kind) }
         return statuses[kind]?.executable
@@ -43,7 +40,6 @@ final class AgentIntegrations {
         }
     }
 
-    /// 没装上的原因记在 `jobs`（脚本输出的最后一句）。
     func installAgent(_ kind: AgentKind) async {
         jobs[kind] = .installing
         let result = await integration.runInstaller(kind, statuses[kind]?.presence ?? .notFound)
@@ -68,7 +64,7 @@ final class AgentIntegrations {
             let process = try await integration.startLogin(kind, executable: executable)
             logins[kind] = process
             let status = await process.waitForExit()
-            guard logins[kind] === process else { return }  // 被重来的那次换掉了
+            guard logins[kind] === process else { return }
             logins[kind] = nil
             jobs[kind] = status == 0 ? nil : .failed(String(localized: "没登录成功"))
         } catch {
@@ -92,7 +88,6 @@ final class AgentIntegrations {
 }
 
 extension AppServices {
-    /// 装完再问一遍这台各家能不能用、写进库（开会话、启用 Cue 读它）。
     func installAgent(_ kind: AgentKind) async throws {
         await agents.installAgent(kind)
         try await macAgents.record(redetecting: true)
@@ -100,18 +95,14 @@ extension AppServices {
 
     func isConnected(_ kind: AgentKind) -> Bool { settings.connectedAgents.contains(kind) }
 
-    /// 只记下来，读它的会话记录由 `indexAgents` 跟着做。
     func connectAgents(_ kinds: some Sequence<AgentKind>) { settings.connectedAgents.formUnion(kinds) }
 
     func disconnectAgent(_ kind: AgentKind) { settings.connectedAgents.remove(kind) }
 
-    /// 接入面板里勾得上的：检测过、能用、还没接入；不碰真实世界时只有配置目录经环境变量换走了的那几家（`AgentIntegration.touches`）。
     var connectableAgents: [AgentKind] {
         AgentKind.allCases.filter { agents.integration.touches($0) && agents.status($0)?.isAvailable == true && !isConnected($0) }
     }
 
-    /// 旧版写进用户目录的 cuepad 技能（`AgentIntegration.legacySkillKinds`）：先把它记着的几家记成接入，再删掉它。
-    /// 删不掉的照报，文件还在，下次启动再来一遍。
     func retireLegacySkill() {
         let integration = agents.integration
         guard let kinds = integration.legacySkillKinds() else { return }
@@ -127,7 +118,6 @@ extension AppServices {
 enum AgentJob: Equatable {
     case installing
     case loggingIn
-    /// 上次没做成的原因（下次动手时清掉）
     case failed(String)
 }
 #endif

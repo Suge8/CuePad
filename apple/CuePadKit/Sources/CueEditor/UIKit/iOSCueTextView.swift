@@ -9,9 +9,7 @@ import UniformTypeIdentifiers
 @MainActor
 public final class CueTextView: UITextView, CueEditorHost {
     public let files: any CueFileStore
-    /// 设计基准样式；字号会按系统字号档位（Dynamic Type）缩放后使用。
     public var theme: CueEditorTheme { didSet { applyTheme() } }
-    /// 用户编辑后的新正文；程序设置 `storedText` 与输入法组合期间不触发。
     public var onChange: ((String) -> Void)?
     public var onSelectionChange: ((Bool) -> Void)?
     public var selectedStoredText: String? { core.stored(in: selectedRange) }
@@ -52,7 +50,6 @@ public final class CueTextView: UITextView, CueEditorHost {
         configure()
         applyTheme()
         observe()
-        // 点附件：只在点中文件牌（或还没到的图片）时才开始，系统定光标、弹键盘的那几个手势要等它不成立才动
         let tap = UITapGestureRecognizer(target: self, action: #selector(tappedAttachment(_:)))
         tap.delegate = menu
         addGestureRecognizer(tap)
@@ -68,7 +65,7 @@ public final class CueTextView: UITextView, CueEditorHost {
 
     private func configure() {
         allowsEditingTextAttributes = false
-        smartDashesType = .no  // 分割线 `---`、`--flag` 不能被替换成破折号
+        smartDashesType = .no
         smartQuotesType = .no
         smartInsertDeleteType = .no
         autocorrectionType = .no
@@ -117,7 +114,6 @@ public final class CueTextView: UITextView, CueEditorHost {
 
     private func editDidFinish() {
         core.flushHighlight()
-        // 组合中的拼音只是标记文本，提交后才是内容，不上报
         if !isLoading, markedTextRange == nil { onChange?(storedText) }
     }
 
@@ -171,7 +167,6 @@ private final class MenuDelegate: NSObject, UITextViewDelegate, UIGestureRecogni
         return view.attachment(at: gestureRecognizer.location(in: view)) != nil
     }
 
-    /// 系统的手势（定光标、成为第一响应者弹键盘）等点附件的手势不成立才动：点在附件上光标不动、键盘不弹。
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
         other.view === gestureRecognizer.view || other.view?.isDescendant(of: gestureRecognizer.view!) == true
     }

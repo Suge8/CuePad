@@ -4,7 +4,6 @@ import ActivityKit
 import AppIntents
 #endif
 
-/// 实时活动只传 Cue 此刻，保留 now 信封；远程由 Mac 推出，本地演示由 App 推出，小组件进程只画。
 nonisolated struct CueActivityState: Codable, Hashable, Sendable {
     var now: CueNow
 
@@ -14,7 +13,6 @@ nonisolated struct CueActivityState: Codable, Hashable, Sendable {
 #if os(iOS)
 nonisolated struct CueActivityAttributes: ActivityAttributes {
     typealias ContentState = CueActivityState
-    /// 推送地址的原始到期起点，不随内容或令牌更新续期；缺少元数据的活动不注册远程地址。
     var startedAt: Date? = .now
     var remoteUpdates: Bool?
 }

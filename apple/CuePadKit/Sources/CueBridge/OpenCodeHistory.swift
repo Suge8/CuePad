@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// OpenCode 会话里的一条消息（`GET /api/session/{id}/message`）。会话不在文件里，在它服务的库里，所以经接口按页读。
 struct OpenCodeMessage: Decodable, Sendable {
     var id: String
     var type: String
@@ -34,7 +33,6 @@ struct OpenCodeMessage: Decodable, Sendable {
         var text: String?
         var id: String?
         var name: String?
-        /// 工具调用的状态；文字与思考的 `state` 是提供方的私有状态，不解
         var state: ToolState?
 
         private enum Keys: String, CodingKey { case type, text, id, name, state }
@@ -53,7 +51,6 @@ struct OpenCodeMessage: Decodable, Sendable {
         var status: String
         var input: OpenCodeToolInput?
         var error: OpenCodeFailure?
-        /// `uri` 是 data: 或 file:// 地址，取不出的为 nil。
         var images: [Data?] = []
 
         private struct Block: Decodable {
@@ -69,16 +66,13 @@ struct OpenCodeMessage: Decodable, Sendable {
             status = try c.decode(String.self, forKey: .status)
             input = try c.decodeIfPresent(OpenCodeToolInput.self, forKey: .input)
             error = try c.decodeIfPresent(OpenCodeFailure.self, forKey: .error)
-            // 结果的形状不认得时当没有图，不连累这一步
             let blocks = (try? c.decodeIfPresent([Block].self, forKey: .content)) ?? []
             images = blocks.filter { $0.type == "file" && $0.mime?.hasPrefix("image/") == true }.map { $0.uri.flatMap(ToolImage.data(at:)) }
         }
     }
 
-    /// 这条的时刻：助手的一步取说完的那一刻（与各家对话里回答的时刻同一规则，回答上的"用时"从你说话算到它），其余取建立的那一刻。
     var at: Date { Date(timeIntervalSince1970: (time.completed ?? time.created) / 1000) }
 
-    /// 还在写的（助手这一步没完、压缩还在跑）不读：读到它为止，下次从它重读。
     var isComplete: Bool {
         switch type {
         case "assistant": time.completed != nil
@@ -97,18 +91,14 @@ enum OpenCodeHistory {
     /// 你拒绝了权限确认时工具的出错原因（2.0.29；那一步随之带着 `aborted` 的错误停下）
     static let declinedTool = "The user declined this tool call"
 
-    /// 先后只认消息在对话里的位置：排队的话入队时就拿到了消息 id，送进对话却在后面
-    /// （插的话、它前面那轮的回答都排在它前头），所以既不按 id 比“读过没有”，也不拿 id 当 seq。
     struct Checkpoint: Codable, Sendable {
         var cursor: String?
-        /// 下一条消息的位置，也就是它的 seq
         var position: Int64 = 0
         var history = HistoryCheckpoint()
     }
 
     private static let pageSize = 100
 
-    /// `files` 是你的消息里的图片存进的附件目录。读到还没写完的一条就停：游标停在它前一条之后，下次从它重读。
     @concurrent static func read(
         _ client: OpenCodeClient, _ info: OpenCodeSessionInfo, from checkpoint: Checkpoint?, files: AttachmentFiles
     ) async throws -> (checkpoint: Checkpoint, transcript: SessionTranscript) {
@@ -174,7 +164,6 @@ enum OpenCodeHistory {
         case "compaction" where message.status == "completed":
             cp.compacted(entry, into: &transcript)
         case "idle":
-            // 一轮彻底结束；还没有回答就结束的：被停下的与各家同一规则，出错的与 Pi 出错一样以空回答结束
             guard cp.round != nil else { return }
             if message.outcome == "interrupted" { cp.interrupted(entry, into: &transcript) } else { cp.answered("", entry, into: &transcript) }
         default: break

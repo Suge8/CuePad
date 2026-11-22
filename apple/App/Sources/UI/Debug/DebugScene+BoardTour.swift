@@ -11,7 +11,6 @@ extension DebugScene {
 
     private static func boardTour(_ store: CueStore) async throws {
         guard let task = try await TaskBoard.read(from: store).todo.first?.task else { return }
-        // 每一步停留的时长是演示节奏，不是在等别的事
         let recorder = demoRecorder(store)
         func pause() async { await Task.wait(for: .seconds(2.5)) }
         if let last = try await store.projects().last(where: { !$0.isPinned && !$0.isDefault }) {
@@ -24,7 +23,6 @@ extension DebugScene {
             try await store.setStatus(started.id, .inProgress)
             break
         }
-        // 在等你、不带 CuePad 答得了的问题：Cue 值班时也不归它答，算拍板（`SessionState.asksYou`）
         func session(_ state: WorkState) async throws {
             _ = try await recorder.update(sessionID: "renew", state: state, title: "renew", directory: "renew")
         }

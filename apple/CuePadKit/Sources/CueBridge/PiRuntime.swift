@@ -2,11 +2,6 @@
 import CueStore
 import Foundation
 
-/// 托管的进程是 CuePad 起的 Pi：它自己管生死，CuePad 只是连上去看和发的客户端。
-/// - 启动时显式加载随包的桥扩展（`PiExtensionBundle.url`），不经 Pi 扩展目录；终端里开的 pi 不加载它，与 CuePad 无关；
-/// - 脱离 App（`ChildProcess.Placement.detached`）：连上桥后认领它，之后 App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；认领之前 App 没了，它随之结束（这时它还什么都没收到）；
-/// - 经环境变量 `CUEPAD_HOSTED`（值是空闲多少秒后退出，格式见 README「协议」）告诉扩展，空闲满时限就自己退出；
-/// - 有哪些托管会话只看桥（hello 里的 pid），这里不记进程；结束由桥做（`Bridge` 的托管会话一节）。
 @MainActor
 public final class PiRuntime: AgentRuntime {
     private let bridge: Bridge
@@ -18,8 +13,6 @@ public final class PiRuntime: AgentRuntime {
     private let timing: Timing
     private let resumptions = Resumptions()
 
-    /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
-    /// - Parameter brief: 每次起它都追加进系统提示（`SessionBrief`）。
     public init(
         bridge: Bridge, paths: PiPaths, brief: String, pi: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
@@ -36,10 +29,8 @@ public final class PiRuntime: AgentRuntime {
 
     public func start() {}
 
-    /// 托管的 Pi 会话不随 CuePad 退出（新会话组、空闲由扩展自退），没有要关的。
     public func stop() -> @concurrent @Sendable () async -> Void { {} }
 
-    /// 认领后的托管进程脱离 App；App 更新后也一样，它歇下时从同一路径换上新扩展、重新连回。
     public var hostedSessionsOutliveApp: Bool { true }
 
     /// 等它连上桥后返回。会话名、模型与思考强度是 Pi 的启动参数（`--name`、`--model`、`--thinking`），给了就一起生效；模型不存在、没登录这类起来就退出的，抛 `exited` 并带上 Pi 的原话。
@@ -61,10 +52,9 @@ public final class PiRuntime: AgentRuntime {
 
     nonisolated static let hostedVariable = "CUEPAD_HOSTED"
 
-    /// 启动并等它的会话连上桥；进程先退出或超时（这时让它退出）都抛错。
     private func launch(_ arguments: [String], in directory: URL, environment: [String: String]) async throws -> Session {
         guard let executable = await pi() else { throw AgentRuntimeError.notInstalled(.pi) }
-        let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
+        let changes = bridge.changes()
         let environment = await locate().environment(
             launching: executable,
             overrides: paths.launchEnvironment.merging(environment) { $1 }.merging([Self.hostedVariable: String(idleLimit.components.seconds)]) { $1 })
@@ -104,9 +94,7 @@ public final class PiRuntime: AgentRuntime {
 }
 
 public enum PiHostError: Error, Equatable {
-    /// 后台启动的 Pi 还没连上就退出了（Pi 在标准错误里说的最后一句；没说为 nil）
     case exited(String?)
-    /// 等了很久 Pi 都没连上（已让它退出）
     case notConnected
 }
 

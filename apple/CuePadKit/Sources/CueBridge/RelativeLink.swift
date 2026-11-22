@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// CuePad 建的符号链接都是相对的（Claude Code 的技能链接、各家全局规则的链接）：整个家目录搬走、换了挂载点也照样指得到。
 enum RelativeLink {
     static func make(at link: URL, to target: URL) throws {
         let parent = link.deletingLastPathComponent()

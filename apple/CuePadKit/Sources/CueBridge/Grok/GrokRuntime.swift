@@ -36,7 +36,6 @@ public final class GrokRuntime: AgentRuntime {
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
-    /// 终端里还开着它时不接：两个进程会同写一份会话记录。
     public func resume(_ session: IndexedSession) async throws -> Session.ID {
         try await host.resume(session) { [home] in
             if Self.openSessions(in: home).contains(session.id) { throw AgentRuntimeError.openElsewhere }

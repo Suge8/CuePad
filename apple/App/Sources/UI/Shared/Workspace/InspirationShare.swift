@@ -3,8 +3,6 @@ import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 分享只消费调用那一刻的不可变正文。
-/// 单张最多 32 百万像素、最长边 16000 像素：超过时在分配位图之前明确失败，避免拖住主线程或被系统杀掉。
 enum InspirationShare {
     private static let filenameByteLimit = 180
     private static let scale: CGFloat = 2
@@ -90,7 +88,6 @@ enum InspirationShare {
         return url
     }
 
-    /// 缓存可能被回收；分享持有自己的文件副本，字节不变，系统分享面板里也不会暴露内容哈希。
     @concurrent private static func copyOriginals(_ files: [URL], title: String, into artifacts: InspirationFiles) async throws -> [URL] {
         let directory = artifacts.directory
         return try files.enumerated().map { index, file in

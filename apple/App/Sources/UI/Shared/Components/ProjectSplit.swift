@@ -1,13 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 项目页的两块怎么摆（三端同一份）：窄时任务在上、灵感墙在下；宽到 `sideBySide` 时任务在左、墙在右——宽窗口里一条任务栏靠左、右边整片空着，像页没排完。
-/// 是排版不是两套视图：Cue 那一栏开合让宽度跨过这条线时，两块是挪过去的（`ProjectSplit` 带动画），任务区的开合也留着。
 struct ProjectSplit<Content: View>: View {
     var project: Project?
     let gap: CGFloat
     @ViewBuilder let content: Content
-    /// 上一帧量到的宽够不够并排；nil 是还没量到，头一帧由排版自己按宽度定，不从上下排滑过来。
     @State private var side: Bool?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -22,7 +19,6 @@ struct ProjectSplit<Content: View>: View {
 }
 
 struct ProjectColumns: Layout {
-    /// 上下排时两块之间的距离。
     var gap: CGFloat
     var side: Bool?
 
@@ -43,7 +39,6 @@ struct ProjectColumns: Layout {
 
     private func frames(_ subviews: Subviews, width: CGFloat) -> [CGRect] {
         if subviews.count == 2, side ?? (width >= Self.sideBySide) {
-            // 任务栏只占三成：标题多是一行短字，再宽中间就空出一条沟，两块像不相干
             let lead = min(400, max(320, width * 0.3)), rest = width - lead - Self.gutter
             return [
                 CGRect(x: 0, y: 0, width: lead, height: subviews[0].sizeThatFits(ProposedViewSize(width: lead, height: nil)).height),
@@ -59,7 +54,6 @@ struct ProjectColumns: Layout {
     }
 }
 
-/// 位置只由顺序与宽度推出，不记"哪张在哪列"：墙上的顺序本身是稳定的（`WallArrangement`：同一次打开里编辑过的卡原地不动），记分列的话删卡、改成任务留下的空列会一直空着。
 struct MasonryLayout: Layout {
     var minColumnWidth: CGFloat = 220
     var maxColumns = 4

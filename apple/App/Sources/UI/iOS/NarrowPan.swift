@@ -2,7 +2,6 @@
 import SwiftUI
 import UIKit
 
-/// 只存手势的呈现进度；侧栏开合的权威值仍是 `Workspace.navigation`。
 @Observable
 final class NarrowSlide {
     var progress: CGFloat = 0
@@ -16,7 +15,6 @@ final class NarrowSlide {
     }
 }
 
-/// 只在根上横拖；推入页把返回完全交给系统。
 struct NarrowPan: UIGestureRecognizerRepresentable {
     let slide: NarrowSlide
     let workspace: Workspace
@@ -94,7 +92,6 @@ struct NarrowPan: UIGestureRecognizerRepresentable {
     }
 }
 
-/// 只向本窗口交还键盘，不影响其他场景的输入焦点。
 struct NarrowKeyboard: UIViewRepresentable {
     let sidebarOpen: Bool
 

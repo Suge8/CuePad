@@ -3,15 +3,12 @@ import CueStore
 import Foundation
 import os
 
-/// 收下的记录带着第一次收下的时刻（`creationDate`，按 `now` 的钟），上传的回执与之后的拉取都是这一份：投送请求的派发期限从它算。
 actor SimulatedCloud: SyncCloud {
   private var zone: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
   private var tombstones: [CKRecord.ID: (seq: Int, recordType: String)] = [:]
   private var seq = 0
-  /// 诊断区（`DiagnosticZone`）：与同步区各自记，拉同步区拉不到它。
   private var diagnostics = SideZone()
   private var account = "simulated"
-  /// nil：认账号一直没有回音。
   private var status: CKAccountStatus? = .available
   private(set) var accountChecks = 0
   private var uploadsFail = false
@@ -47,7 +44,7 @@ actor SimulatedCloud: SyncCloud {
   func accountStatus() async -> CKAccountStatus {
     accountChecks += 1
     guard let status else {
-      try? await Task.sleep(for: .seconds(3600))  // 被取消时认账号的一方已当场抛出（`withDeadline`），这里的结果不用
+      try? await Task.sleep(for: .seconds(3600))
       return .couldNotDetermine
     }
     return status
@@ -111,7 +108,6 @@ actor SimulatedCloud: SyncCloud {
     return diagnostics.upload(saving: saving, deleting: deleting)
   }
 
-  /// 同步区以外的区：只有序号与墓碑，不带收下时刻与文件。
   private struct SideZone {
     var exists = false
     var records: [CKRecord.ID: (seq: Int, record: CKRecord)] = [:]
@@ -198,7 +194,6 @@ extension CKRecord {
     return stamped
   }
 
-  /// 同 CloudKit：拉取与按 ID 取只要列，不带文件。
   var withoutFile: CKRecord {
     guard self[RecordMapper.fileKey] != nil, let copy = copy() as? CKRecord else { return self }
     copy[RecordMapper.fileKey] = nil

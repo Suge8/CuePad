@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// 宽屏栏头里这一页自己的那颗钮（Mac 与 iPad 同一个，`WideColumnHead`）；栏里的页不在自己那一排另给（`HeaderHost.column` 不画页的右端）。
-/// 不设"⋯"：一页的操作要么直接是一颗钮，要么挨着它管的那块内容。项目页的在标题旁（`WideProjectHeading`），别的页没有。
-
-/// 进展页的项目范围（筛选的图形，选了项目时角上是那个项目），排在列头那一排的开头：先选范围再看四列，
-/// 右端留给滑到 Cue 浮板下面的列，压在最后一列的列头上会盖住列名。那一页别的操作各在原处——归档做完的在已完成那一列的列头，接入 Agent 在设置。
 struct ProjectScopeSlot: View {
     @Environment(Workspace.self) private var workspace
 
@@ -21,8 +16,6 @@ struct ProjectScopeSlot: View {
     }
 }
 
-/// 回收站页的清空（一把扫帚：垃圾桶是"回收站"与"删除"的图形，再用它分不出是清空）。长什么样由所在的那一排定。
-/// 不按页面数据置灰：栏头拿不到页面读的库，抄一份过来就是第二个事实源；没有可清空的时候点了什么也不发生。
 struct EmptyTrashButton: View {
     @Environment(Workspace.self) private var workspace
 
@@ -33,7 +26,6 @@ struct EmptyTrashButton: View {
 }
 
 extension View {
-    /// 清空回收站的确认只此一份：宽屏栏头与手机页头的圆钮都只是把它打开（`Workspace.confirmsEmptyTrash`），挂在回收站页上。
     func emptyTrashConfirmation(_ workspace: Workspace) -> some View {
         dialog(
             "永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash,

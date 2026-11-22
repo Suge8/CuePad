@@ -16,56 +16,39 @@ import AppKit
 /// - 平时点睛是这一处前景色的次一级（层级渲染：墨色前景时就是次墨），不用另上色；单色场合（系统菜单、工具栏）照系统。
 /// - 反白符号（`filled`）不按层着色，调用方给两种颜色时按层上色。
 nonisolated enum Icon: Hashable, Sendable {
-    // 导航与页面入口
     case cue
     case idea, task, session, search, settings, archive, trash, sidebar
-    /// 收起、放回右边那一栏（Mac 的 Cue 栏）：侧栏左右翻过来
     case rightColumn
     case agent, all, filter, extensionNote
-    /// 技能与规则（侧栏底下那颗、Cue 面板那一行）；规则（AGENTS.md）一份
     case skill, instruction
-    // 状态
     case waiting, failure, undelivered, onTheWay, replied, fresh, ended, interrupted, unknown, gone
-    /// 压缩上下文：两块板夹着弹簧。正在压缩的状态与"现在压缩"那颗钮同一个图形（往里收的箭头单看认不出是压缩，删了）
     case compacting
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
-    // 任务与卡片操作
     case complete, reopen, restore, undo, start, add, indent, outdent, link, unlink
     case projects, folder, unbindFolder, pin, unpin, emptyTrash
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict
-    /// 这一页的说明（问号圆钮，点开是气泡）；同名的技能（几份，去重）
     case help, duplicate
-    // 输入、发送与会话
     case send, save, checked, stop, endSession, wakeSession, handOff, delivered, retry, toLatest, fetching, renew
-    /// 提示缓存冷了、还热着（回复框里上下文旁那一句的记号，`CacheNote`）
     case cold, warm
     case declined, mac, yourAnswer, above, floated, earlier, recent
-    /// 引用一份预览回话（长按、右键与全屏页的"回复"）；用网易 UU 远程到这台 Mac 上操作
     case reply, remoteMac
-    /// 会话旁边的活预览（一扇浏览器窗）；它那条栏上的手机宽、在浏览器里打开、点选页面元素
     case livePreview, phoneWidth, openInBrowser, pickElement, enlarge, shrink
-    /// 和 Cue 通话（手机输入框空着时发送钮那一位、Mac 工具排末尾）；通话条上的麦克风开着、已静音
     case call, microphone, muted
-    /// 加速（模型的快速档，工具排里那颗开关）
     case fast
-    /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
     case attachment
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
     case terminal, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case relay, relayStalled
-    // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked
     case name, voice, sounds, hotkey, talkToCue, appearance, language, updates, launchAtLogin
-    // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
     case project(ProjectIcon)
 
     private enum Source {
         case ink(String)
-        /// 自家的反白符号：记号在第一层、实心底在第二层（同系统的 *.circle.fill），不按层级渲染，调用方给两种颜色时按层上色。
         case filled(String)
     }
 
@@ -74,7 +57,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .cue: .ink("mascot")
         case .idea: .ink("idea")
         case .task: .ink("task")
-        // 思考中（Cue 页那一行）用在跑的心电线静止形：在跑与歇着（省略号）从此不共用图形
         case .session, .pondering: .ink("session")
         case .search: .ink("search")
         case .settings: .ink("settings")
@@ -225,7 +207,6 @@ nonisolated enum Icon: Hashable, Sendable {
     }
     #endif
 
-    /// `Label(_:icon:)` 的图标位：读屏念的是标签的字（只画图标时字挂在它上面），不念资源名。
     fileprivate var labelImage: Image {
         switch source {
         case .ink(let name): Image(Self.ink(name)).symbolRenderingMode(.hierarchical)
@@ -275,7 +256,6 @@ nonisolated private extension ProjectIcon {
     }
 }
 
-/// `Label` 等的泛型参数也叫 Icon，扩展里用这个名字指本类型。
 typealias AppIcon = Icon
 
 extension Image {
@@ -295,7 +275,6 @@ extension View {
 }
 
 extension Label where Title == Text, Icon == Image {
-    // 带图标的标签、按钮、菜单：界面字收 LocalizedStringResource（字面量与算好的本地化字都行），String 原样显示
     init(_ title: LocalizedStringResource, icon: AppIcon) {
         self.init { Text(title) } icon: { icon.labelImage }
     }

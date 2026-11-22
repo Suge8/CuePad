@@ -8,25 +8,19 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Cue 在 Mac 上值班，端到端：真实的 Pi 当大脑（RPC），真实的 `cuepad mcp`（App 里的那份）读写同一个隔离库，
-/// 模型是本进程里的假 OpenAI 端点（按剧本回，零网络），执行器开的会话由假扩展扮演（`RecordingHost`）。
-/// Pi 的配置在临时目录（`PI_CODING_AGENT_DIR`），不碰 ~/.pi 与真实资料库。
-/// 钉住的 Pi（`PinnedAgent.pi`，`xc.sh agents install pi` 装进专用缓存），真 Pi 的测试共用
 nonisolated let realPi = PinnedAgent.pi.executable
 
 extension Trait where Self == ConditionTrait {
-    /// 钉住的 Pi 没装时跳过（原因以「未覆盖：」开头，xc.sh 汇总后列出）；完整矩阵时照跑，起 Pi 时失败
     static var pinnedPi: Self { .enabled(if: PinnedAgent.pi.uncovered == nil, Comment(rawValue: PinnedAgent.pi.uncovered ?? "")) }
 }
 
 @Suite(.releasesLibraries, .pinnedPi, .serialized)
 struct CueHostTests {
-    /// 不是等写入歇下才交。不量时长：写入到交出去为止一直在继续，交不出去由测试时限报。
     @Test func 库正忙时你的话马上送进Cue() async throws {
         let rig = try await Rig()
         let store = rig.store
         let busy = Task {
-            let recorder = StateRecorder(store: store, hostID: "mac-busy", minInterval: .zero)  // 每次都当场写：不留合并的定时写入（它攥着库到间隔结束）
+            let recorder = StateRecorder(store: store, hostID: "mac-busy", minInterval: .zero)
             var round = 0
             while !Task.isCancelled {
                 round += 1

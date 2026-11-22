@@ -59,11 +59,8 @@ enum LiveAgentScript {
     })();
     """#
 
-    /// 引用是数字（原生端拼上页面代号成了 `a5`）：同一份文档里元素活着编号就不变；元素被重绘替换、上次快照里它的"角色 + 名称"独一份时，新元素接过这个编号。
-    /// 编号从原生给的 `seed` 往后发：一页里主框与各个框共用一串数，引用不用带框号。
     static let agent = "(() => {\n" + reading + "\n" + acting + "\n})();"
 
-    /// 点、填、按与高亮：接在 `reading` 后面，同一个作用域。
     private static let acting = #"""
       // 与快照里那一行同一个说法
       const describe = el => {
@@ -202,7 +199,7 @@ enum LiveAgentScript {
       // 输入框此刻的值（原生在 `fill` 之后、页面安定了再核对一遍）；下拉框与别的不算
       const value = ({ n }) => {
         const el = resolve(n);
-        return el.isContentEditable || el.localName === "input" || el.localName === "textarea" ? held(el) : {};
+        return el.isContentEditable || el.localName === "input" || el.localName === "textarea" ? { ...held(el), what: describe(el) } : {};
       };
 
       const focusable = () => [...document.querySelectorAll("a[href], button, input, select, textarea, [tabindex], [contenteditable]")]

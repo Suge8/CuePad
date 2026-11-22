@@ -14,12 +14,10 @@ extension EnvironmentValues {
     @Entry var wideWindowID: UUID?
 }
 
-/// 拖进主区的一块上放下会怎样：插在这一块左边、右边，或换掉它。
 enum WideDropZone: Equatable {
     case before, replace, after
 }
 
-/// 拖着经过主区时放下会怎样：落在哪一块的哪一边、放下后导航成什么样（占位按它画，`WideDropFeedback`）。每个窗口一份（`Workspace.dropTarget`）。
 struct WideDropTarget: Equatable {
     let column: Workspace.Column
     let zone: WideDropZone
@@ -27,11 +25,9 @@ struct WideDropTarget: Equatable {
     let next: WideNavigation
 }
 
-/// 一块接拖放时这次拖的是什么（`drag` 认这一次：Mac 的拖动序号）。`pane` 读出来前为 nil，读出来不是主区接的（任务卡）为 `.some(nil)`。
 final class WideDropState {
     var drag: Int?
     var pane: WideNavigation.Beside??
-    /// 右端压在 Cue 浮板下面多宽：落点只按露出来的那截算。
     var under: CGFloat = 0
 }
 
@@ -40,10 +36,6 @@ final class WideDropState {
 enum WideDrop {
     static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
 
-    /// 拖到第 `column` 块、横向在它宽的 `fraction` 处：两侧各四分之一是插在旁边，中间是换掉它；放不了、放了不变、放下后藏起来的不接（nil）。
-    /// 主区不是会话时只有主区那一块接会话，灵感卡的落点归页里（项目页、看板）；最左那块被一条灵感盖着时会话放上去就是边聊边看（`WideNavigation.dropping`）。
-    /// 最左只能是会话：灵感拖到最左那块上只插在它右边。看得见的放满了（`wideShown`）只能换：插进来会挤掉最右那块，占位却在别处，看不出谁会没了。
-    /// `dragged` 读出来之前按类型拿一块新的顶替（只差在已在主区的那块是挪过去）。
     static func target(_ types: Set<UTType>, dragged: WideNavigation.Beside??, at fraction: CGFloat, in column: Workspace.Column, workspace: Workspace) -> WideDropTarget? {
         guard case .wide(let state) = workspace.navigation else { return nil }
         let session = types.contains(DraggedColumn.type) || types.contains(.cuepadSession)
@@ -134,7 +126,6 @@ extension WideDrop {
 #if os(iOS)
 extension WideColumnController: UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        // 看板、项目页的卡片落点在主区浏览页里，与这个接收器挂在同一个托管视图上：主区不是会话时带卡片的拖放（有会话的任务卡也带会话）归它们
         guard slot.column != nil, workspace.session(in: .main) != nil || !session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) else { return false }
         return session.hasItemsConforming(toTypeIdentifiers: WideDrop.types.map(\.identifier))
     }
@@ -187,13 +178,9 @@ extension WideColumnController: UIDropInteractionDelegate {
 }
 #endif
 
-/// 排在窗口最顶那一排（`Chrome.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
-/// 名牌后面紧跟着最左那块的活预览钮（会话有页面可看时；开着是强调色），同项目页栏头名字后面跟着它的钮（`WideProjectHeading`）。
 struct WideSessionTitle: View {
     let title: String
-    /// 会话所在的项目，写在名字前面，点它去那个项目的页（同项目页栏头里的"项目"回列表）。
     let project: Project?
-    /// 栏头平时只写名字；已结束是这一页与在跑的会话唯一的不同，名字后面标出来。
     var ended = false
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
@@ -212,10 +199,8 @@ struct WideSessionTitle: View {
         .windowDragArea()
     }
 
-    /// 最左那块收起时右边第一个会话顶上来（`WideNavigation.close`）：右边没有会话时它就是主区此刻的页，不给收起，换去处靠会话条。
     private var closes: Bool { column != .main || !workspace.besideSessions.isEmpty }
 
-    /// 名字那一块是浮在对话上的玻璃胶囊（同手机页头中间那块），对话从它下面滑过去。
     private var name: some View {
         HStack(spacing: Spacing.glyph) {
             if let project {
@@ -255,8 +240,6 @@ struct WideSessionTitle: View {
     }
 }
 
-/// 并排里一块的收起（会话、灵感、活预览三种块同一个）：一颗 ×，排在这一块名牌那个玻璃胶囊的末端。
-/// 悬停的底是一个圆，离胶囊上下沿与末端同样 `inset`：与胶囊的圆头同心，宽出图标一圈又不伸出圆角。
 struct PaneClose: View {
     let action: () -> Void
     @Environment(\.palette) private var palette
@@ -280,7 +263,6 @@ struct PaneClose: View {
     }
 }
 
-/// 栏头里浮在内容上的玻璃圆钮（对话从下面滑过，不带框的钮压在字上看不清）：平时次要色，开着的开关是强调色。
 struct HeadTool: View {
     let label: LocalizedStringResource
     let icon: Icon
@@ -300,13 +282,9 @@ struct HeadTool: View {
 
 extension EnvironmentValues {
     @Entry var headInset = EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: Spacing.page)
-    /// 主区右端压在 Cue 浮板下面多宽（宽屏的根给）。别的页整页让出它；看板只按让出后的宽分列，放不下横滑时列滑到浮板下面。
     @Entry var underCue: CGFloat = 0
 }
 
-/// 拖着经过主区时，放下后那一块会在哪、多宽：按放下后的导航排一遍（`WideMetrics` 的 `navigation`），一块透明的玻璃占位浮在那里、底下的页透出来。
-/// 插进来时别的几块会让窄，占位就是让完之后它的位置与宽，不是指针下那一块的一半。指针在几个落点之间挪时占位连续地伸缩滑过去，不跳；收起时在原处淡出。
-/// 排在宽屏的根上（`MainWindow`、`SplitRoot`）：插在两块之间的占位横跨两块，挂在一块里会被那一块的框裁掉。
 struct WideDropFeedback: View {
     let window: CGFloat
     @Environment(Workspace.self) private var workspace

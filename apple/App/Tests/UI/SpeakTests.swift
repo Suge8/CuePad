@@ -43,7 +43,6 @@ struct SpeakTests {
         return DraftFile(key: try files.store(fileAt: url), name: name)
     }
 
-    /// 把你这句话的写下时刻挪到 `ago` 秒前：时限从真实的此刻起算，不等一分钟。
     private func backdate(_ message: CueMessage, by ago: TimeInterval) throws {
         try RawDB(app.services.location.databaseURL).exec(
             "UPDATE cueMessages SET createdAt = \(Int((Date.now.timeIntervalSince1970 - ago) * 1000)) WHERE id = '\(message.id.uuidString.lowercased())'")
@@ -72,9 +71,9 @@ struct SpeakTests {
         #expect(said.map(\.text) == ["看看发布"])
         let message = try #require(said.first)
         #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
-        #expect(try await presence() == .sending(.sending))  // Cue 页头与气泡同一个"在路上"
+        #expect(try await presence() == .sending(.sending))
 
-        try await store.markCueMessagesDelivered([message.id])  // Cue 运行的那台 Mac 交给了它
+        try await store.markCueMessagesDelivered([message.id])
         let delivered = try #require(try await youSaid().first)
         #expect(Said.cue(delivered, host: "mac-cue").trip(at: .always(at: .now)) == .delivered)
     }
@@ -128,16 +127,16 @@ struct SpeakTests {
         #expect(try await presence().isUnconfirmed)
         #expect(try await store.cueDuty() != nil)
 
-        try await store.recordMacPresence(host: "mac-cue") { false }  // 那台 Mac 将睡眠：标成离线，同步到这里
+        try await store.recordMacPresence(host: "mac-cue") { false }
         #expect(try await presence() == .asleep)
         let digest = try await CueDigest.read(from: store)
         let snapshot = CueNow(digest, at: .always(at: late), local: .init(waiting: nil, here: nil))
         #expect(snapshot.isLive)
         #expect(!snapshot.hasConfirmedActivity)
-        #expect(try await store.cueDuty() == nil)  // 值班与"在睡觉"同一条
-        #expect(try await presence(reachable: false) == .sending(.sending))  // 本机同步不通：这句排着、仍在路上，不判没送到
+        #expect(try await store.cueDuty() == nil)
+        #expect(try await presence(reachable: false) == .sending(.sending))
 
-        try await store.recordMacPresence(host: "mac-cue", bootID: boot) { true }  // 醒来续上在线，收下你的话
+        try await store.recordMacPresence(host: "mac-cue", bootID: boot) { true }
         try await store.markCueMessagesDelivered([message.id])
         try await store.setCueState(.thinking, hostID: "mac-cue", bootID: boot)
         #expect(Said.cue(try #require(try await youSaid().first), host: "mac-cue").trip(at: .always(at: late)) == .delivered)

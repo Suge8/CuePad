@@ -21,7 +21,6 @@ import Testing
 
   private func millis(_ date: Date) -> Int64 { Int64((date.timeIntervalSince1970 * 1000).rounded()) }
 
-  /// 在已推送之后再编辑一次：返回该记录此刻的 modifiedAt（毫秒），用来构造"更新/更旧/同刻"的远端版本。
   private func editCard(_ card: Card, body: String? = nil, pinned: Bool? = nil) async throws -> Int64 {
     await nextMillisecond()
     try await store.updateCard(card.id) {
@@ -41,7 +40,7 @@ import Testing
 
   @Test
   func remoteRecordsAreInsertedInOneTransactionAndWakeObservers() async throws {
-    try await rig.simulatePush()  // 新库的默认项目先传上去
+    try await rig.simulatePush()
     let subscribed = Signal()
     let woken = Task { [store] in
       try await eventually(store, { try $0.cards(in: Project.defaultID).map(\.body) }, subscribed: subscribed) { $0 == ["from other device"] }
@@ -54,9 +53,9 @@ import Testing
 
     _ = try await woken.value
     #expect(Set(try await store.projects().map(\.name)) == ["Remote", "默认"])
-    #expect(try await store.search("other device").cards.count == 1)  // 搜索索引跟随
+    #expect(try await store.search("other device").cards.count == 1)
     let delta = try await rig.reconcileDelta()
-    #expect(delta.saves.isEmpty && delta.deletes.isEmpty)  // 刚收到的不会被当成本机改动推回去
+    #expect(delta.saves.isEmpty && delta.deletes.isEmpty)
   }
 
   @Test(arguments: [false, true])
@@ -72,7 +71,7 @@ import Testing
 
   @Test func localPermanentDeletionIsNotResurrectedByAnIncomingSave() async throws {
     let card = try await pushedCard()
-    try await store.purgeCard(card.id)  // 服务器上还有，删除待推送
+    try await store.purgeCard(card.id)
 
     try await fetched(remoteRecord(.cards, id: card.id, cardFields(body: "late", modifiedAt: 9_000_000_000_000)))
 
@@ -115,7 +114,6 @@ import Testing
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, body: "local version")
 
-    // 本机较新时：另一台设备在本机上次同步之后、本机编辑之前改的
     try await fetched(remoteRecord(.cards, id: card.id, cardFields(body: "remote version", modifiedAt: local + (remoteIsNewer ? 1_000 : -1))))
 
     let conflict = try #require(try await store.conflicts().first)
@@ -137,7 +135,6 @@ import Testing
     #expect(try await store.cards(in: Project.defaultID).count == 1)
   }
 
-  /// 留原卡见 App 的 `SyncWiringTests`。
   @Test func keepingTheCopyPutsItsBodyOnTheOriginalAndDropsTheCopy() async throws {
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, body: "local")
@@ -173,7 +170,7 @@ import Testing
 
     _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.unknownItem))], deleted: [], failedDeletes: []))
 
-    #expect(try await rig.reconcileDelta().saves == [rig.id(card.id)])  // 忘掉系统字段，重新作为新记录上传
+    #expect(try await rig.reconcileDelta().saves == [rig.id(card.id)])
   }
 
   @Test func confirmedDeletesAndAlreadyGoneRecordsAreForgotten() async throws {
@@ -194,12 +191,12 @@ import Testing
     let card = try await pushedCard()
     let client = try #require(try await rig.coordinator.record(for: rig.recordID(card.id)))
     _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
-    _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))  // 停下后重试又报同一个错
+    _ = await rig.coordinator.sent(SentRecords(saved: [], failedSaves: [(client, CKError(.permissionFailure))], deleted: [], failedDeletes: []))
 
     guard case .failed = await rig.coordinator.status else {
       Issue.record("status should be .failed, got \(await rig.coordinator.status)")
       return
     }
-    #expect(await rig.coordinator.issues.count == 1)  // 同一个错只进问题列表一次
+    #expect(await rig.coordinator.issues.count == 1)
   }
 }

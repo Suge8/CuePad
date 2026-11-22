@@ -2,7 +2,6 @@ import CloudKit
 import CueStore
 import Foundation
 
-/// 文件在这里另取（附件记录随拉取先入库，不带文件）、带进度，验过哈希才放进附件目录（`AttachmentFiles.adopt`）。记录在不等于文件在本机：本机有没有只看附件目录。
 actor FileFetcher {
   static let parallel = 2
   static let phoneAutoLimit = 10 << 20
@@ -14,10 +13,8 @@ actor FileFetcher {
   private var known: [String: Attachment] = [:]
   private var running: [String: Task<URL, any Error>] = [:]
   private var automatic: Set<String> = []
-  /// 不再取的（坏了、在 iCloud 被删了）与那时的记录：用到时取的照样抛出这个错，记录变了（另一台重传）或没了（删除拉到了）就忘掉。
   private var skipped: [String: (attachment: Attachment, error: any Error)] = [:]
   private var demand: [String: Int] = [:]
-  /// 用到时要取、记录还没到的：停下时随这一代结束一起答（`fetch` 抛 `notSyncing`）。
   private var waiters: [(key: String, answer: Promise<Attachment>)] = []
   private var tasks: [Task<Void, Never>] = []
   private let generation: SyncGeneration
@@ -52,7 +49,6 @@ actor FileFetcher {
     running.values.forEach { $0.cancel() }
   }
 
-  /// 停下同步（要你决定、要更新、没有账号）抛 `FileFetchFailure.notSyncing`；被取消就抛出。
   func fetch(_ key: String) async throws -> URL {
     do {
       return try await fetching(key)
@@ -70,13 +66,13 @@ actor FileFetcher {
     try await admitted()
     let attachment: Attachment
     if let found = known[key] { attachment = found } else { attachment = try await record(of: key) }
-    try await admitted()  // 等记录的时候可能停下了、或被要求等
+    try await admitted()
     if let url = files.fileURL(for: key) { return url }
     return try await generation.outcome(of: running[key] ?? begin(attachment, automatic: false))
   }
 
   private func admitted() async throws {
-    let due = coordinator.retryDue.stream()  // 先订阅：看条件时跨了 actor，其间结束的那次不漏
+    let due = coordinator.retryDue.stream()
     while true {
       guard !generation.isOver, await coordinator.canSync else { throw FileFetchFailure.notSyncing }
       if await coordinator.admits(.fileDownload(urgent: true)) { return }
@@ -84,14 +80,13 @@ actor FileFetcher {
       do {
         try await generation.outcome(of: next)
       } catch {
-        next.cancel()  // 等它真的退出：下一轮不与它同时读 `due`
+        next.cancel()
         _ = await next.result
         throw error
       }
     }
   }
 
-  /// 一个用到时取的调用方不等了：没人在等、也不是自动取的那一趟随之取消。
   private func release(_ key: String) {
     let left = (demand[key] ?? 1) - 1
     demand[key] = left > 0 ? left : nil
@@ -155,7 +150,7 @@ actor FileFetcher {
     board.set(key, .download, 0)
     do {
       let record = try await cloud.downloadFile(coordinator.recordID(name)) { board.set(key, .download, $0) }
-      guard let record else { throw skip(attachment, key, CKError(.unknownItem)) }  // 这期间被删了：删除随下一拉到
+      guard let record else { throw skip(attachment, key, CKError(.unknownItem)) }
       guard let file = (record[RecordMapper.fileKey] as? CKAsset)?.fileURL else {
         throw await broken(attachment, key, detail: String(localized: "附件记录没有文件"))
       }
@@ -169,7 +164,7 @@ actor FileFetcher {
     } catch where skipped[key] != nil {
       throw error
     } catch where Task.isCancelled || error is CancellationError {
-      throw CancellationError()  // 用到时取的调用方不等了：CloudKit 报的取消不归类、不让同步等
+      throw CancellationError()
     } catch {
       await coordinator.hold(await coordinator.failed(error), waiting: false)
       throw error

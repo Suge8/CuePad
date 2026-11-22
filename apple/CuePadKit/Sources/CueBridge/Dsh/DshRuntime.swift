@@ -68,10 +68,8 @@ public final class DshRuntime: AgentRuntime {
     }
 }
 
-/// 大脑的系统提示、只读工具与临时存储都在启动参数指的补丁与环境里（`DshLaunch`），`session/new` 照标准。
 struct DshDialect: ACPDialect {
     var patch: DshLaunch.Patch = .brain
-    /// 插件回"歇着，走 session/prompt"的错误码（`dsh-cuepad.mjs` 的 `steer`）
     static let idle = -32001
 
     var agent: AgentKind { .dsh }
@@ -82,7 +80,6 @@ struct DshDialect: ACPDialect {
         return ACPBrainSetup(environment: try DshLaunch.brainEnvironment(in: directory, prompt: config.systemPrompt, model: config.model), meta: nil)
     }
 
-    /// 插件回这句消息的 id，它被一轮收下时报 `_cuepad/claimed`（`dsh-cuepad.mjs`）。
     @MainActor func steer(_ text: String, images: [MessageImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
         let images: [JSONValue] = images.map { ["mimeType": .string($0.mimeType), "data": .string($0.data.base64EncodedString())] }
         do {

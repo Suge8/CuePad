@@ -5,9 +5,6 @@ import Foundation
 import Observation
 import OSLog
 
-/// GPT Live 负责听说与筛选，只有 delegation 派活；派出的请求与 Cue 的结果记在 `VoiceRecord`。
-/// 一通一个，结束后不复用：挂断后仍跟随库里这一通派出请求的结果，直到下一通开始；下一通从空记录开始，上一通的请求留在聊天里。
-/// 已提交或半途失败的结果须明确请求再说。
 @Observable
 final class VoiceCall {
     static let log = Logger(subsystem: AppIdentity.id, category: "voice")
@@ -20,7 +17,6 @@ final class VoiceCall {
         case codex(CodexAccessError)
         case wire(VoiceWire.Failure)
         case microphoneDenied, timedOut
-        /// 媒体那端带着原因结束（本机的声音断了、手机那端被来电收走声音、没给麦克风……），原因原样投影给手机
         case media(VoiceEndReason)
         case closed(String), server(String), other(String)
     }
@@ -49,7 +45,6 @@ final class VoiceCall {
     private(set) var assistantTurns: Set<String> = []
     private var inputSamples: [Double] = []
     private var outputSamples: [Double] = []
-    /// 50ms 一点，保留最近 1.8 秒；静音不呈现输入，远端出声时呈现输出。
     var samples: [Double] { outputActive ? outputSamples : isMuted ? [] : inputSamples }
     private(set) var userTurn: String?
     let record: VoiceRecord
@@ -57,7 +52,6 @@ final class VoiceCall {
     private(set) var audioMs = 0
     private(set) var usedPercent: Double?
     @ObservationIgnored var mark: (String) -> Void = { _ in }
-    /// 收尾完成（声音与连接都已停下）时调一次
     @ObservationIgnored var ended: () -> Void = {}
     @ObservationIgnored let dependencies: Dependencies
     @ObservationIgnored private var peer: (any VoiceMedia)?
@@ -74,7 +68,6 @@ final class VoiceCall {
     enum Input {
         case prepared(VoiceWire.Call, CodexAccess)
         case failed(Failure)
-        /// 连接时限到了：处理时已就绪就不算（就绪与到时可能同时排在输入里）
         case deadline
         case peer(VoicePeer.Event)
         case wire(Result<VoiceWire.Event, VoiceWire.SidebandClosed>)
@@ -95,7 +88,6 @@ final class VoiceCall {
         case .finished(let end): return end
         case .ready: break
         }
-        // 助手回合是协议事实，不是播放游标；电平只驱动本机波形，句间静音不能结束回合。
         return assistantTurns.isEmpty ? .listening : .speaking
     }
 
@@ -107,7 +99,6 @@ final class VoiceCall {
     var canRepeat: Bool { channel != nil }
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
-    /// 只能开始一次；media 给了就用它（手机打进来的那一路），没给按 `Dependencies.source` 建本机的。
     func start(session: UUID = UUID(), media: (any VoiceMedia)? = nil) {
         guard !started else { return }
         started = true
@@ -125,7 +116,6 @@ final class VoiceCall {
         }
     }
 
-    /// 输入从起点就有人消费；连接时限包含凭证、权限、建连和控制连接，挂断不等它们返回。
     private func run() async {
         record.call = self
         do { try record.begin() }
@@ -225,7 +215,6 @@ final class VoiceCall {
     }
 
     private func finish(_ end: Phase) async {
-        // 界面只说归类后的原因（`VoiceService.issue(for:)`），上游原文只进日志
         if case .failed(let failure) = end { Self.log.error("voice call failed: \(String(describing: failure), privacy: .public)") }
         let previous = connection
         connection = .closing(end)
@@ -252,19 +241,16 @@ final class VoiceCall {
         ended()
     }
 
-    /// 库读不了：还通着就以这个原因结束。
     func fail(_ failure: Failure) {
         if isLive { inputs.continuation.yield(.failed(failure)) }
     }
 
-    /// 这条结果的来源后来认出不是这几通派的：正在提交的那次作废。
     func withdraw(_ message: UUID) {
         guard outgoing?.message == message else { return }
         outgoing?.task.cancel()
         outgoing = nil
     }
 
-    /// 明确重说：只认这一通（mediaSession）还连着时，规则同自动朗读（`VoiceRecord.requeue`）。
     func repeatReply(_ id: UUID, mediaSession: VoiceSessionID) throws -> VoiceCommandResult.Outcome {
         guard VoiceSessionID(session) == mediaSession, canRepeat else { return .rejected(reason: .originalMissing) }
         let outcome = try record.requeue(id)
@@ -272,7 +258,6 @@ final class VoiceCall {
         return outcome
     }
 
-    /// 可见结果与传输分开推进。send 结束只记本机提交；异步服务端错误仍会使已提交结果变为未确认。
     func drain() {
         guard let channel, outgoing == nil, let next = record.takeQueued(delegations: delegations) else { return }
         let outgoingMessage: VoiceWire.Outgoing = next.delegation.map { .reply(delegation: $0, text: next.text) } ?? .say(next.text)

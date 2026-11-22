@@ -5,24 +5,20 @@ public struct CueProfile: Equatable, Sendable {
   public var hostID: String?
   public var runtime: Open<AgentKind>
   public var model: String?
-  /// 全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
   public var effort: Open<ThinkingLevel>?
   public var fast: Bool
   public var voice: Open<CueVoice>
   public var enabledAt: Date?
   public var modifiedAt: Date
 
-  /// 在值班的那台 Mac：启用了才有（停用后 `hostID` 还留着，但谁都不该再替 Cue 派活）。
   public var activeHost: String? { enabledAt == nil ? nil : hostID }
 
   public var callVoice: CueVoice { voice.known ?? .default }
 
-  /// 唯一规则：启用了，运行它的那台 Mac 在线，大脑也没停在起不来（`state` 不是出错）。值班时会话等的回答 CuePad 答得了就归 Cue，不算等你（`SessionState.asksYou`）。
   public func onDuty(_ state: CueState?, hostOnline: Bool) -> Bool { activeHost != nil && hostOnline && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
   public static let recordID = DeterministicID.uuid("cue-profile")
-  /// 它在 CloudKit 里的记录名（通知服务扩展取 Cue 的名字用）。
   public static var syncRecordName: String { recordID.uuidString.lowercased() }
 
   public init(
@@ -62,7 +58,6 @@ extension CueProfile: Record, SyncedColumns {
 public enum CueEnableError: LocalizedError, Equatable {
   case noRuntime(String)
   case runsElsewhere(String)
-  /// 这台的库还没和 iCloud 对过一遍：不知道 Cue 是否已在别的 Mac 上启用（App 层判断，`AppServices.enableCue`）
   case unsynced
   case noMac
 

@@ -27,7 +27,6 @@ public final class ProcessExit: Sendable {
 
   public var value: Int32 { get async { await value(within: nil)! } }
 
-  /// 至多等 `limit`（nil 不限），没退出为 nil。
   public func value(within limit: Duration?) async -> Int32? {
     await withCheckedContinuation { continuation in
       let id = when { continuation.resume(returning: $0) }
@@ -39,7 +38,6 @@ public final class ProcessExit: Sendable {
     }
   }
 
-  /// 同步等到退出（不能 await 的地方用，如静态初始化）：信号量由退出回调放开，不靠 RunLoop。
   public var blockingValue: Int32 {
     let exited = DispatchSemaphore(value: 0)
     let box = StatusBox()
@@ -51,7 +49,6 @@ public final class ProcessExit: Sendable {
     return box.status
   }
 
-  /// 信号量前后各写一次、读一次，不会同时访问
   private final class StatusBox: @unchecked Sendable { var status: Int32 = -1 }
 
   private func when(_ waiter: @escaping @Sendable (Int32?) -> Void) -> UUID? {

@@ -18,7 +18,6 @@ extension CloudDatabase {
   func resumedFileUploads() async throws -> [ResumedUpload] {
     var found: [ResumedUpload] = []
     for id in try await container.allLongLivedOperationIDs() {
-      // 这个进程自己加的还在跑（停下又开始同步）：结果照常回到加它的那一处，不再加一次
       guard !Self.ownOperations.withLock({ $0.contains(id) }),
         let operation = try await container.longLivedOperation(for: id) as? CKModifyRecordsOperation,
         let records = operation.recordsToSave, records.allSatisfy({ $0.recordID.zoneID == zoneID })
@@ -38,7 +37,7 @@ extension CloudDatabase {
       found.withLock {
         $0 = switch result {
         case .success(let record): .success(record)
-        case .failure(let error as CKError) where error.code == .unknownItem: .success(nil)  // 这期间被删了
+        case .failure(let error as CKError) where error.code == .unknownItem: .success(nil)
         case .failure(let error): .failure(error)
         }
       }

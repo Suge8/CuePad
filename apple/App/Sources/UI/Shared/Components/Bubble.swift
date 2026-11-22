@@ -1,19 +1,17 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    @Entry var bubbleInset: CGFloat = 0
+}
+
 nonisolated enum BubbleSource: Equatable {
-    case control(CGRect)
-    /// 从一行里点的那一下（任务行这类）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半个列表行高（`BubblePlacement.reach`）让开整行；
-    /// 尾巴靠左角对着那一下，气泡往右铺（顺着读的方向，不往回盖住侧栏）。
-    /// `left`：按在一栏清单里时气泡的左沿（`PressPoint.lane`）——同一栏里点哪一条、点在标题的哪个字上，气泡都落在同一条竖线上。
+    case control(CGRect, inset: CGFloat = 0)
     case press(CGPoint, left: CGFloat? = nil)
     case unanchored
     case bottom
 }
 
-/// 不摆左右：摆在旁边会盖住被点的那一行、尾巴落在字上。
-/// 不量自己的高：摆在上面时按底边对齐（`bottom`）——摆法从不读回排版的结果，没有几何读数回写的环。
 nonisolated struct BubblePlacement: Equatable {
-    /// 内容会翻页、会换的（任务气泡、"更多"）或自己排几栏的（额度明细）给定宽（`fixed`），翻页、换一条时宽不跳；随内容（`fitting`）的一两行说明不铺成一大块。都不超过容器。
     enum Width: Equatable {
         case fitting
         case fixed(CGFloat)
@@ -36,8 +34,6 @@ nonisolated struct BubblePlacement: Equatable {
     var leads = false
     var left: CGFloat?
 
-    /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
-    /// 横向摆法要等量出内容的宽（`frame(ideal:)`，`BubbleStage` 排的时候算），竖向这里就定。
     init(source: BubbleSource, container: CGRect, insets: EdgeInsets, width: BubblePlacement.Width = .fitting) {
         let bounds = CGRect(
             x: insets.leading, y: insets.top,
@@ -57,8 +53,10 @@ nonisolated struct BubblePlacement: Equatable {
             side = 1
             sheet = true
             return
-        case .control(let frame):
+        case .control(let frame, let inset):
             target = frame.offsetBy(dx: -container.minX, dy: -container.minY)
+            minX += inset
+            maxX -= inset
         case .press(let point, let lane):
             target = CGRect(x: point.x - container.minX, y: point.y - container.minY - Self.reach, width: 0, height: Self.reach * 2)
             leads = true
@@ -107,7 +105,6 @@ nonisolated struct BubblePlacement: Equatable {
         return (x(width: width), width)
     }
 
-    /// 左沿只由宽定：气泡的形状（`BubbleShape`）拿到自己的宽就画得出尾巴，不读回摆的位置。
     private func x(width: CGFloat) -> CGFloat {
         if sheet { return minX }
         guard let anchor else { return (minX + maxX - width) / 2 }
@@ -134,7 +131,6 @@ nonisolated struct BubblePlacement: Equatable {
     }
 
     static let rise: CGFloat = 8
-    /// 同新会话、记任务的输入卡。
     static let radius = Radius.field
     static let reach: CGFloat = RowMetrics.height / 2
     // 尾巴根离圆角起弧处再让一点，尾巴不骑在弧上
@@ -192,6 +188,14 @@ nonisolated struct BubbleShape: Shape {
     }
 }
 
+extension View {
+    func bubbleFoot() -> some View { containerValue(\.bubbleFoot, true) }
+}
+
+extension ContainerValues {
+    @Entry fileprivate var bubbleFoot = false
+}
+
 struct BubbleFrame<Content: View, Area: View>: View {
     let placement: BubblePlacement
     @ViewBuilder let content: Content
@@ -199,9 +203,27 @@ struct BubbleFrame<Content: View, Area: View>: View {
 
     var body: some View {
         let card = RoundedRectangle(cornerRadius: placement.radius)
-        ScrollView { content }
-            .scrollBounceBehavior(.basedOnSize)
-            .debugScrollsToMiddle()
+        Group(subviews: content) { parts in
+            let feet = parts.filter(\.containerValues.bubbleFoot)
+            let scroll = ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
+                .scrollBounceBehavior(.basedOnSize)
+                .debugScrollsToMiddle()
+            if feet.isEmpty {
+                scroll
+            } else {
+                // 钉着的那块排在滚动区下面、不压在它上面；滚着的内容到它跟前那一小截淡出，不被一条直线切断（不滚时这一截是内容自己的下边距）。
+                // 否决过：系统的栏（`safeAreaBar`）——滚着的字从钉着的那块后面透出来，叠在它的字上。
+                VStack(spacing: 0) {
+                    scroll.mask {
+                        VStack(spacing: 0) {
+                            Rectangle()
+                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Spacing.item)
+                        }
+                    }
+                    ForEach(feet) { $0 }
+                }
+            }
+        }
             .frame(minWidth: placement.narrowest, alignment: .topLeading)
             .clipShape(card)
             .rowContainer(card)
@@ -211,7 +233,6 @@ struct BubbleFrame<Content: View, Area: View>: View {
     }
 }
 
-/// 只排一次，不读回排版结果。
 struct BubbleStage: Layout {
     var floor: CGFloat?
     var ceiling: CGFloat = 0
@@ -240,8 +261,6 @@ nonisolated private struct BubbleSpot: LayoutValueKey {
     static let defaultValue: BubblePlacement? = nil
 }
 
-/// 从控件长出的气泡开没开（`bubble(isPresented:)` 绑 `open`，控件点了 `toggle`）：点气泡外收起时按下的就是开关的话，
-/// 松开时开关又要打开它——刚在这一下收起的不再打开（`PressPoint.reopens`）。
 struct BubbleSwitch {
     var open: Bool { didSet { if oldValue, !open { closedAt = .now } } }
     private var closedAt: ContinuousClock.Instant?

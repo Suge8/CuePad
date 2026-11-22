@@ -1,23 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`）；此刻在做的那一步来自会话状态（`detail`），由对话末尾的角色说（`LiveFigure`），这里不列。
-/// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
-/// 工具结果里有图时，标题行下面挂着这一轮的图（`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     let ending: Ending
     let session: SessionState
-    /// 做完的一轮是哪条回答（别的设备点开一步时请 Mac 写在它上面，`StepRow`）；在跑的一轮为 nil。
     var message: UUID?
     @Environment(\.palette) private var palette
     @State private var open = DebugHooks.preset.toolsOpen
 
     nonisolated enum Ending: Equatable {
         case took(String)
-        /// Mac 上正在出字：这一块是草稿的标题。
         case speaking
-        /// 在跑，此刻在做的由对话末尾的角色说（`LiveFigure`）：这里只列做过的几步，不再写一遍。
         case running
 
         static let speakingShown = SessionShown(state: .known(.thinking)).speaking(true)
@@ -60,7 +54,6 @@ struct RoundProcess: View {
     }
 
     private static let imageSide: CGFloat = 64
-    /// 手机最窄的对话列放得下的一排，三端同一个数。
     private static let imageRow = 4
 
     private func spoken(_ process: Chat.Process) -> String {
@@ -120,7 +113,6 @@ struct RoundProcess: View {
         }
     }
 
-    /// 会话里的几类；Cue 的动作只在 Cue 页的经过里（`CueTrace.icon`），会话里没有。
     static func icon(_ kind: ChatMessage.Tools.Kind) -> Icon {
         switch kind {
         case .edit: .editFile

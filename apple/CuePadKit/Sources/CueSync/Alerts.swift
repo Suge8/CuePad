@@ -12,7 +12,6 @@ public struct AlertTap: Equatable, Sendable {
     self.sessionState = sessionState
   }
 
-  /// 通知中心里归哪一组：同一会话的提示（锁屏推送与本机通知）叠成一组，不刷屏。
   public var thread: String { sessionState.uuidString.lowercased() }
 }
 
@@ -20,8 +19,6 @@ public enum CloudAlert: Equatable, Sendable {
   case session(AlertTap)
   case cue(message: UUID)
 
-  /// 不是这里订阅的通知为 nil。
-  /// Cue 的消息出通知就是在等你（`AlertRoute.kind` 同一条）。
   public var kind: AlertKind {
     switch self {
     case .session(let tap): tap.kind
@@ -43,25 +40,19 @@ public enum CloudAlert: Equatable, Sendable {
   }
 }
 
-/// 锁屏通知的具体文案：服务端只能发通用句（会话名、问题是加密字段），手机上的通知服务扩展收到后
-/// 取回触发它的记录，在设备上解密，改写成"会话名 + 问题（或这一轮说的话）"。取不到就保持通用句。
 public enum AlertText {
   /// 正文至多这么多字：锁屏通知收起时四行上下，再长系统自己截。
   static let bodyLimit = 160
 
-  /// 读不出会话名时为 nil（保持通用句）。
   public static func content(for record: CKRecord, kind: AlertKind) -> (title: String, body: String)? {
     let fields = record.encryptedValues
     guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
     let question = (fields["question"] as? String).flatMap(Question.init(stored:))?.text
     let failure = record["state"] as? String == WorkState.error.rawValue ? fields["detail"] as? String : nil
-    // 同 `SessionState.answered`：这一轮的回答还没读进这条记录时，`lastReply` 是上一轮的
     let answered = (record["turnStartedAt"] as? Int64).flatMap { started in (record["answeredAt"] as? Int64).map { $0 >= started } } ?? false
     return content(title: title, question: question, reply: answered ? fields["lastReply"] as? String : nil, failure: failure, kind: kind)
   }
 
-  /// `reply` 只给这一轮的回答（`SessionState.answered`）。做完了与待回复对你是同一件事（那个会话停了、有新回复），同一句；
-  /// 在等你拍板的那一轮还没做完，没有它的回答可写。
   public static func content(title: String, question: String?, reply: String?, failure: String?, kind: AlertKind) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
@@ -71,8 +62,6 @@ public enum AlertText {
     }
   }
 
-  /// 通知正文：前几行去掉 Markdown 记号连成一段，代码块、表格与分隔线跳过。只取首行不行：真实库 3291 条回复里，首行带 ** 或反引号的三成、
-  /// 不足 12 字的（"好的。""## 结论"）三成。
   static func gist(_ text: String?) -> String? {
     var fenced = false, gist = ""
     for raw in (text ?? "").split(whereSeparator: \.isNewline) where gist.count < bodyLimit {
@@ -87,7 +76,6 @@ public enum AlertText {
   }
 }
 
-/// 文案规则只在 `CueAlert`，这里只读出材料。
 public enum CueAlertText {
   public static func content(message: CKRecord, profile: CKRecord?) -> (title: String, body: String)? {
     func decoded<T: Decodable>(_ key: String, as type: T.Type) -> T? {
@@ -120,23 +108,18 @@ protocol SubscriptionStore: Sendable {
 /// 查询订阅是 schema 的一部分：改定义（谓词、选项、通知文案 key）要重新部署到生产，见 apple/CloudKit/AGENTS.md。
 struct AlertSubscriptions {
   static let flagField = "notify"
-  /// 本前缀下的订阅都是这里管的（多余的删掉）。
   static let prefix = "cuepad."
   static let waitingID = prefix + "pi.waiting"
   static let settledID = prefix + "pi.settled"
   static let replyID = prefix + "pi.reply"
-  /// 该你接、你正在 Mac 上开着的会话：静默推送（与上面三个按 `AlertPush` 分开，一条只命中一个）。
   static let sessionWakeID = prefix + "pi.wake"
   static let cueID = prefix + "cue"
-  /// Cue 对你说的、不出通知的话：静默推送（与 `cueID` 按 `CuePush` 分开，一条只命中一个）。
   static let cueSaidID = prefix + "cue.said"
   static let resultID = prefix + "delivery.result"
-  /// 通知的本地化文案 key（App 的 String Catalog 里手动加的通用句）：改写不成时显示它们。
   private static let waitingKey = "pi_alert_waiting", settledKey = "pi_alert_settled", replyKey = "pi_alert_reply", cueKey = "cue_alert"
 
   let zoneID: CKRecordZone.ID
 
-  /// 谓词用到的字段（按表）：字段名只写在谓词里这一处。
   static let queriedColumns: [Table: Set<String>] = AlertSubscriptions(zoneID: CloudSync.zoneID).desired().reduce(into: [:]) { columns, subscription in
     guard let table = subscription.recordType.flatMap(Table.init(rawValue:)), let field = (subscription.predicate as? NSComparisonPredicate)?.leftExpression.keyPath
     else { preconditionFailure("订阅谓词只用一个字段的比较：\(subscription.predicate)") }
@@ -157,7 +140,6 @@ struct AlertSubscriptions {
     ]
   }
 
-  /// 每个订阅各建各的，一个被拒（如生产环境还没部署的）不挡别的。账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面；全是连不上的（`SyncFault`）是连不上，不算没建成。
   func ensure(in store: any SubscriptionStore) async -> AlertSubscriptionStatus {
     let existing: [CKSubscription.ID: CKSubscription]
     do { existing = try await store.subscriptions() } catch { return Self.status([(nil, error)]) }
@@ -194,7 +176,6 @@ struct AlertSubscriptions {
     let info = CKSubscription.NotificationInfo()
     info.alertLocalizationKey = key
     info.soundName = "default"
-    // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题、Cue 说的话（加密字段只能在设备上读）
     info.shouldSendMutableContent = true
     info.shouldSendContentAvailable = true
     subscription.notificationInfo = info

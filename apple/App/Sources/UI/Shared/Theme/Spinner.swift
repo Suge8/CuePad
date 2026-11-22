@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// 全 App 唯一的等待转圈（发送中、送达中、读下一页、正在开…）：一段弧（`LoopLayer` 的 `orbit`），交给渲染服务转，App 进程不参与；
-/// 不用系统 `ProgressView`，全 App 的转圈是同一个样子、同一个颜色。不放循环动效时（`LoopsPlay`）是一段静止的弧。读屏读作"请稍候"，旁边的文字说在等什么。
 struct Spinner: View {
     enum Size {
         case mini, small, regular
@@ -37,8 +35,6 @@ struct Spinner: View {
     }
 }
 
-/// 全 App 唯一的"话在路上"。`size` 是框的边长，飞机占它的 86%。
-/// `landed`：话已经出了这台设备（已发出、送达中，`DeliveryShown.Transit`），飞机停着不飞。
 struct OnTheWay: View {
     let size: CGFloat
     let color: Color

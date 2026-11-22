@@ -17,7 +17,6 @@ public actor CloudSync {
   let coordinator: SyncCoordinator
   /// 连上 iCloud（`SyncCloud`）：`start()` 里才连，没有 entitlement 的进程一建容器就崩。
   private let connect: @Sendable () -> any SyncCloud
-  /// 听 `CKAccountChanged` 的那一个：测试给自己的，免得全进程的通知叫醒并行的别的测试（通知一到闸门就关）。
   private let accountChanges: NotificationCenter
   enum Phase {
     case idle
@@ -27,15 +26,12 @@ public actor CloudSync {
   }
   var phase = Phase.idle
   private let transfers = TransferBoard()
-  /// 还没收尾的停止：`start` 等它收尾才建新一代（新旧发送者不并存，`RecordSender`）。
   private var stopping: Task<Void, Never>?
   private var startWaiters: [Promise<Bool>] = []
-  /// 每认完一次账号、每次停下给一个：等账号认好的（`relaySecret`）据此再看能不能同步。
   let accountChecks = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   static let alertRetryInterval = Duration.seconds(60)
   static let log = Logger(subsystem: AppIdentity.id, category: "sync")
 
-  /// 只有 iOS 建立：Mac 不注册推送，靠等待理由驱动的拉取。App 需要请求通知权限并注册远程通知。
   #if os(iOS)
   static let subscribesToAlerts = true
   #else
@@ -52,18 +48,12 @@ public actor CloudSync {
     self.connect = connect
   }
 
-  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
   public nonisolated var stateUpdates: AsyncStream<SyncState> { coordinator.stateUpdates }
 
-  /// 每次服务器收下本机的一批改动给出一个，不补之前的。
   public nonisolated var acceptedUpdates: AsyncStream<Void> { coordinator.acceptances.stream() }
 
-  /// 附件文件此刻在路上的（按 key，见 `FileTransfer`）：先给当前快照，之后每次变化给新快照。一个 key 离开快照就是那一趟结束了，
-  /// 文件在不在本机看附件目录（取完了就在；传完的本来就在）。
   public nonisolated var fileTransfers: AsyncStream<[String: FileTransfer]> { transfers.stream }
 
-  /// 这个附件文件在本机的位置：没有就现在从 iCloud 取（不看手机自动取的条件），附件记录还没到就等它到（发出的设备还在传），
-  /// 服务器要求等就等到点；没开始同步的等开始。这台不同步（没认过账号、停下了）抛 `FileFetchFailure.notSyncing`，文件坏了抛 `.damaged`，网络与 iCloud 的失败原样抛出；被取消就抛出。
   public func fetchFile(_ key: String) async throws -> URL {
     guard await started() else {
       try Task.checkCancellation()
@@ -76,7 +66,6 @@ public actor CloudSync {
     return try await fileFetcher.fetch(key)
   }
 
-  /// 开始了（true）；还没开始的等到开始，等的时候被取消、或停下了（含等的时候停下）为 false。
   private func started() async -> Bool {
     switch phase {
     case .running: return true
@@ -101,7 +90,6 @@ public actor CloudSync {
   var parts: Parts? { if case .connected(let parts) = running?.link { parts } else { nil } }
   var connected: Bool { parts != nil }
 
-  /// 改 `generation` 那一代；那一代已经结束的什么都不改，返回 nil。
   @discardableResult
   func update<T>(_ generation: SyncGeneration, _ change: (inout Run) -> T) -> T? {
     guard case .running(var run) = phase, run.generation === generation else { return nil }
@@ -123,7 +111,6 @@ public actor CloudSync {
     )
   }
 
-  /// 本代的后台任务：登记在 `Run` 里，`stop` 取消并等它；那一代已经结束的不起。
   func spawn(_ generation: SyncGeneration, _ body: @escaping @Sendable () async -> Void) {
     guard !generation.isOver else { return }
     let id = UUID()
@@ -134,7 +121,6 @@ public actor CloudSync {
     update(generation) { $0.background[id] = task }
   }
 
-  /// 第一个调用方返回时认完（认不了的这里自己按退避再认）；认的途中再调的当场返回。
   public func start() async {
     await stopping?.value
     if case .running = phase { return }
@@ -143,9 +129,7 @@ public actor CloudSync {
     phase = .running(run)
     await coordinator.use(run.gate)
     await coordinator.loadToken()
-    guard !generation.isOver else { return }  // 读令牌期间停下了
-    // 先在这里订上、再起任务：任务真正跑起来可能晚过第一次认完账号（机器忙时线程被抢占），订阅放在任务里，其间换的账号就收不到，
-    // 按认到的旧账号一直往新账号里传
+    guard !generation.isOver else { return }
     let due = coordinator.retryDue.stream(), network = NetworkReturns.stream()
     let accountChanged = accountChanges.notifications(named: .CKAccountChanged)
     run.watchers = [
@@ -155,7 +139,7 @@ public actor CloudSync {
           self.recheckIfWaiting(generation, for: .networkReturned)
         }
       },
-      Task { for await _ in due { await self.parts?.puller.due() } },  // 没连上就没拉过，没有欠着的
+      Task { for await _ in due { await self.parts?.puller.due() } },
       Task { [weak self] in
         for await _ in accountChanged { await self?.recheck(generation) }
       },
@@ -165,7 +149,6 @@ public actor CloudSync {
     await connectNow()
   }
 
-  /// 等开始的调用方得到"没在同步"，等账号认好的（`relaySecret`）抛出。
   public func stop() async { await stop(becoming: .stopped) }
 
   private func stop(becoming next: Phase) async {
@@ -193,9 +176,6 @@ public actor CloudSync {
     await teardown.value
   }
 
-  /// 立即同步：拉一次（返回时拉完），顺带让发送者发一轮（不等，守着它的重试时刻）；`start()` 之前来的等开始了再拉，本代还没认过账号的先认。
-  /// 通知订阅没建成的话顺带在后台重试。
-  /// 返回本次拉取的结果；账号、暂停与退避导致的未拉取不是成功，不能从全局同步状态反推。
   @discardableResult
   public func syncNow() async throws -> SyncPullResult {
     guard await started() else {
@@ -210,28 +190,23 @@ public actor CloudSync {
     if Self.subscribesToAlerts, await coordinator.alertSubscription != .active, !generation.isOver,
       running?.alertsAttemptedAt.map({ ContinuousClock.now - $0 >= Self.alertRetryInterval }) ?? true
     {
-      update(generation) { $0.alertsAttemptedAt = .now }  // 任务起来之前再来的不另起
+      update(generation) { $0.alertsAttemptedAt = .now }
       spawn(generation) { await self.ensureAlertSubscriptions(run.cloud, generation) }
     }
     await parts.sender.kick()
     return try await parts.puller.pull()
   }
 
-  /// 马上传这几条（同一次写入写出的一起，一个请求）：不进攒批窗口、不等后台那批；返回时它们都有了结果
-  /// （全被服务器收下为 true，离线等没传成的为 false，之后优先重试）。要传什么（保存还是删除）由库推导：本机删掉的就是删除。
   @discardableResult
   public func send(recordNames: Set<String>) async -> Bool {
     guard let sender = parts?.sender else { return false }
     return await sender.send(recordNames)
   }
 
-  /// 把待推送全部发出去，返回时这一轮结束。
   public func push() async {
     await parts?.sender.flush()
   }
 
-  /// 处理 `.needsDecision`：先停下这一代（旧代的拉取、上传不会在清库、重置之后写进来），处理完重新开始同步。处理失败也重新开始（仍停在要你决定）。
-  /// 处理期间有人 `stop` 的不再开始。
   public func resolve(_ resolution: SyncResolution) async throws {
     await stop(becoming: .resolving)
     do {

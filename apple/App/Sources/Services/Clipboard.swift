@@ -1,6 +1,5 @@
 import Foundation
 
-/// 要复制的一条：文字与附件按先后排（存储格式正文 `CueFormat` 拆出来的那几段）。本机没有的附件由拼它的一方写成名字（`AppServices.copy`）。
 nonisolated struct ClipboardContent: Sendable, Equatable {
     enum Segment: Sendable, Equatable {
         case text(String)

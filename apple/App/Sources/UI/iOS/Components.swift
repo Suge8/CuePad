@@ -6,7 +6,6 @@ import UIKit
 extension View {
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
-    /// `project` 为 nil（还没同步到）时没有菜单。
     func projectActions(_ project: Project?, cornerRadius: CGFloat) -> some View {
         modifier(ProjectContextMenu(project: project, cornerRadius: cornerRadius))
     }

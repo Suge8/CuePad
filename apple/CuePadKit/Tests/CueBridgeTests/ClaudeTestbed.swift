@@ -6,13 +6,9 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 真 Claude Code（钉住的版本，`PinnedAgent.claude`）的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，
-/// 绝不碰 ~/.claude 与真实资料库；模型是本测试台的假模型（`FakeModel`，Anthropic Messages，经 `ANTHROPIC_BASE_URL` 指过去），
-/// 登录是假密钥、不带订阅令牌，辅助流量关掉（见 `environment`），零网络。
 let pinnedClaude = PinnedAgent.claude
 let claudeTestModel = ClaudeSandbox.model, claudeOtherModel = "sonnet"
 
-/// 256×256 纯红 PNG（32×32 的常被模型认成别的颜色）
 let redPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAAB+0lEQVR42u3TQQkAAAjAwPUvrX8reHAJBmsK3pIAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgAJMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAyAASTAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADADHAllMDvLkz2XNAAAAAElFTkSuQmCC")!
 
 @MainActor
@@ -43,13 +39,6 @@ final class ClaudeTestbed {
 
     func startConnected() throws { try runtime.start() }
 
-    /// - Parameter settings: 用户自己的 settings.json（nil 是没有这个文件）。
-    /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程）。
-    ///   脚本经 `TestScript` 放，内容里不写本次运行的路径：
-    ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
-    /// - Parameter signedIn: false 时不给密钥，Claude Code 照常起来、上桥，要用模型的都被它拒收。
-    /// - Parameter timing: runtime 的钟（默认不前进：期限都不到点）；要量宽限的用例给 `ManualTiming`。
-    /// - Parameter bridgeTiming: 桥的钟（闲置到点按它）
     init(
         settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
         timing: Timing = noDeadline, bridgeTiming: Timing = .system
@@ -89,7 +78,6 @@ final class ClaudeTestbed {
             locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, timing: timing)
     }
 
-    /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
         settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
         timing: Timing = noDeadline, _ body: (ClaudeTestbed) async throws -> Void
@@ -105,7 +93,6 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
     func connect(_ indexed: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: indexed.id) { return live.id }
         return try await runtime.resume(indexed)
@@ -132,7 +119,6 @@ final class ClaudeTestbed {
     }
 }
 
-/// 外壳底下的真 Claude Code（钉住的那份）
 func claudeChildren(of pid: pid_t) -> [pid_t] {
     var children = [pid_t](repeating: 0, count: 16)
     let count = proc_listchildpids(pid, &children, Int32(children.count * MemoryLayout<pid_t>.size))

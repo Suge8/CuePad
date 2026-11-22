@@ -1,8 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 手机、iPad 设置里"把最近日志发到 Mac"：存一份最近的日志、经你自己的 iCloud 送到你的 Mac（`Diagnostics.sendRecentLogs`）。
-/// 只在连着 iCloud 时有（`Diagnostics.canSend`）。Mac 上没有这一行：同一台 Mac 上的 agent 直接用 log show 读，比快照全。
 struct SendLogsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -11,7 +9,6 @@ struct SendLogsRow: View {
     private enum Phase: Equatable {
         case idle, sending
         case sent(Date)
-        /// 日志已存下，iCloud 一时没收：连上后自己送出
         case pending
         case failed(String)
     }

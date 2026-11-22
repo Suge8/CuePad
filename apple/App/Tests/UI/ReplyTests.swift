@@ -21,7 +21,7 @@ struct ReplyTests {
         #expect(settings.replyDraft(for: session).text == "改完再跑一遍")
         #expect(settings.replyDraft(for: session).attachments.first?.content == "接口约定")
 
-        settings.flush()  // 退出前
+        settings.flush()
         let relaunched = self.settings(preferences)
         #expect(relaunched.replyDraft(for: session).text == "改完再跑一遍")
         #expect(relaunched.replyDraft(for: session).attachments.isEmpty)

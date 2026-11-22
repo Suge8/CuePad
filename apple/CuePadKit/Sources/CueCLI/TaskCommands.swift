@@ -1,6 +1,5 @@
 import CueStore
 
-/// 任务是要做的卡片：正文、移动、回收站用 card 命令。
 extension Command {
   static let task: [Command] = [
     Command(

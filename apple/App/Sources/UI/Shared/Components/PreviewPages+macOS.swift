@@ -103,7 +103,6 @@ extension PreviewPDF {
     }
 }
 
-/// 翻到时它接键盘（`Player`），空格暂停、继续是它自己的（←→ 归翻页，`PageInput`）。
 private struct PreviewPlayer: NSViewRepresentable {
     let file: URL
     let active: Bool

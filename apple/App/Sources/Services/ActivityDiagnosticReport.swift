@@ -1,8 +1,5 @@
 import Foundation
 
-/// 手机实时活动生命周期的取证，存进诊断存档（`DiagnosticArchive.activity`），随诊断经 iCloud 送到 Mac。
-/// 取证不是业务状态：只保存系统标识、时刻与固定原因，不保存正文、令牌、提问或额度。
-/// contentObserved 是 App 看见系统内容的时刻，不是 APNs 投递时刻，也不是屏幕展示确认。
 nonisolated struct ActivityDiagnosticReport: Codable, Sendable {
     static let eventLimit = 96
     static let retention: TimeInterval = 7 * 24 * 60 * 60
@@ -50,11 +47,10 @@ nonisolated struct ActivityDiagnosticReport: Codable, Sendable {
     }
 
     mutating func append(_ event: Event) {
-        events.removeAll { $0.at < event.at.addingTimeInterval(-Self.retention) }  // 先删再算插入处：删后下标会变
+        events.removeAll { $0.at < event.at.addingTimeInterval(-Self.retention) }
         let next = events.firstIndex { $0.run == event.run && $0.sequence > event.sequence }
         let afterRun = events.lastIndex { $0.run == event.run }.map { $0 + 1 }
         events.insert(event, at: next ?? afterRun ?? events.endIndex)
-        // 先排顺再合并；不同内容版本、原因或错误不能被后来排到的同类事件抹掉。
         events = events.reduce(into: []) { kept, item in
             if let last = kept.last, [.contentObserved, .blocked].contains(item.action),
                 last.run == item.run, last.action == item.action, last.activity == item.activity,

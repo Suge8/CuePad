@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 只读库里现成的开始与完成时刻，不另存。
 nonisolated enum TaskPace: Equatable {
     case left(TimeInterval)
     case ran(since: Date)

@@ -32,7 +32,6 @@ struct LibraryFailureTests {
 
         #expect(older.version == 13 && older.olderLibrary && !older.newerLibrary)
         #expect(newer.version == 999 && newer.newerLibrary && !newer.olderLibrary)
-        // 更新版本的库要说更新 App，而不是"不再升级"
         #expect(newer.summary != older.summary)
         #expect(older.diagnostics.contains(older.reason) && older.diagnostics.contains("13"))
         #expect(!older.summary.contains(older.reason))

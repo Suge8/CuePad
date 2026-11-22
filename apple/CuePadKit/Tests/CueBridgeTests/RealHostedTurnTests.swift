@@ -5,11 +5,9 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 托管会话的一轮，每家一样：换轮（`HostedTurns`）、从 CuePad 答权限与一问一问的提问。
 @MainActor
 @Suite(RealAgents.tiered, .enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
 struct RealHostedTurnTests {
-    /// 在跑时再说一句：停下在跑的、以这句开新的一轮，两轮之间不报歇下（不多响一次"做完了"），这句答完才歇下。
     @Test(arguments: Hosting.allCases)
     func aMessageDuringATurnStartsTheNextWithoutSettlingBetween(_ hosting: Hosting) async throws {
         try await EndRig.run(hosting, timing: .system) { rig in
@@ -62,7 +60,6 @@ struct RealHostedTurnTests {
         }
     }
 
-    /// 一问一问地从 CuePad 答（Grok、dsh 的 `ask_user_question`）：选项带说明，不在选项里的选项被拒，自己填一个也行；答案回到模型的工具结果里。
     @Test(arguments: [Hosting.grok, .dsh])
     func aQuestionIsAnsweredFromCuePadOneByOne(_ hosting: Hosting) async throws {
         try await EndRig.run(hosting, timing: .system) { rig in

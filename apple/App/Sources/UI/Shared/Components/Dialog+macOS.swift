@@ -8,7 +8,6 @@ extension View {
         panel(isPresented: isPresented) { DialogCard(title: title, message: message, field: field, buttons: buttons) }
     }
 
-    /// `cancel`：没答应就关了（取消、Esc、点外面）。
     func ask(
         _ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, button: DialogButton,
         cancel: @escaping @MainActor () -> Void
@@ -36,7 +35,6 @@ private struct Ask: ViewModifier {
         content.dialog(title, isPresented: Binding { shown.wrappedValue } set: { open in
             shown.wrappedValue = open
             guard !open else { return }
-            // 关与办在同一个调用里（`DialogCard.run` 先关后办）：等这个调用走完，再看这一回是不是答应了
             Task { @MainActor in
                 if !answered.yes { cancel() }
                 answered.yes = false
@@ -50,7 +48,6 @@ private struct Ask: ViewModifier {
     @MainActor private final class Answered { var yes = false }
 }
 
-/// 破坏性的不当默认、要点按，免得顺手一回车删掉东西。
 private struct DialogCard: View {
     let title: LocalizedStringResource
     let message: LocalizedStringResource?
@@ -81,7 +78,6 @@ private struct DialogCard: View {
                     if button.id == primary?.id {
                         Button { run(button) } label: { Text(button.title) }.keyboardShortcut(.defaultAction)
                     } else {
-                        // 破坏性的字用胭脂（同系统提示框），一眼看出这颗会删东西
                         Button(role: button.role) { run(button) } label: {
                             Text(button.title).foregroundStyle(button.role == .destructive ? palette.failure : palette.ink)
                         }

@@ -2,7 +2,6 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 一次聚合，不读正文、附件或会话。
   public func projectSummaries() throws -> [ProjectSummary] {
     let summaries = Dictionary(uniqueKeysWithValues: try db.query(
       """
@@ -17,7 +16,6 @@ extension CueStore {
     }
   }
 
-  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文命中；项目名只用于 `projects` 里单列的项目（`Project.nameMatch`）。按项目缩小卡片范围用 `projects` 筛选。
   public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
     let terms = query.text.split(whereSeparator: \.isWhitespace).map(String.init)
     let (condition, arguments) = cardCondition(query, terms: terms)

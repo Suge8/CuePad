@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    /// 各处只经这里问。别的状态没有：状态由状态标与状态词表达。`shown`：调用处已推好的样子；不给时这里推。
     func handoff(of session: SessionState, shown: SessionShown? = nil) -> CueHandoff? {
         let id = session.sessionID
         guard let handoff = services.liveSessions.handoffs[id],
@@ -11,7 +10,6 @@ extension Workspace {
     }
 }
 
-/// 写不下点名的就换成不点名的那句，默认字号下最窄的看板卡也放得下。
 struct HandoffLine: View {
     let handoff: CueHandoff
 

@@ -15,7 +15,6 @@ struct CaptureDraft {
 
     var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty }
 
-    /// 项目已失效时 `Workspace` 回落到默认项目，提示照实写。
     func save(in project: UUID, asTask: Bool = false, workspace: Workspace) async throws {
         let store = workspace.services.store
         let body = StoredBody.make(text: text, files: files)

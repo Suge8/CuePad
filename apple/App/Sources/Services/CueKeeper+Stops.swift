@@ -4,8 +4,6 @@ import CueStore
 import Foundation
 
 extension CueKeeper {
-    /// 会话停下叫醒的一轮正常做完时的兜底，保证每个会话都有去处：没人对它说话的，去处是留给他回（`CueStore.leaveUnattended`）。
-    /// 记成一次 leave 调用进这一轮的经过，Cue 页照它显示"留给你"。他发起的那一轮停下时已当场留了的不再写；出错的一轮不兜底，重试时 Cue 再看。
     func leaveUnattended() async {
         guard let turn, turn.round.failure == nil, !turn.stops.isEmpty else { return }
         let given = Set(turn.round.calls.filter { !$0.failed && CueActivity.settlesStop(tool: $0.name, arguments: $0.arguments) }

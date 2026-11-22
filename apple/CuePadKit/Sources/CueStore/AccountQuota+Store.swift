@@ -1,7 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// `host` 给了只要那台 Mac 观测到的（额度是各台各登各的）。
   public func accountQuotas(on host: String? = nil) throws -> [AccountQuota] {
     let all = try host.map { try select(AccountQuota.self, where: "hostID = ?", [$0], orderBy: "modifiedAt DESC, id") }
       ?? select(AccountQuota.self, orderBy: "modifiedAt DESC, id")
@@ -19,8 +18,6 @@ extension CueStore {
     }
   }
 
-  /// 账号或网关来源的记录只按在线会话的证明（`Session.proofs`）移除；没有证明的模型（还没解析过、或会话不在线）是未知，什么都不移除，旧证明不能否定比它新的记录。
-  /// 尚待桥重新连接的有效记录也保留，避免启动时先连上的会话清掉其他账号。
   public func retainQuotaSources(on host: String, live: [QuotaWitness]) throws {
     var candidates: [QuotaCandidate] = []
     for witness in live {
@@ -67,16 +64,11 @@ extension CueStore {
     }
   }
 
-  /// 先后只看 `requestedAt`（见 `QuotaReport.requestedAt`）：比已收下的早就丢掉，几个会话进程的结果怎么交错到达都一样。
-  /// 只在值有意义地变化，或上次写已超过 `touchAfter` 时才写；否则只在本机推进排序时刻、不同步，免得每次回复都写库与同步。
-  /// 提供方未解析的授权（`scope` 为 nil）在已有证明了身份的账号或来源时不写；写入与保留（`retainQuotaSources`）用同一个判断，到达先后不影响结果。
-  /// 网关来源一级的报告带来的提供方与时刻只并进那一条（取较晚的，不删），较早的报告被丢掉时也并：那次解析是真的证明。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String, proofs: [PiProof] = []) throws -> Bool {
     try write { try applyQuota(report, host: host, proofs: proofs) }
   }
 
-  /// 来源一级只有规范的那一条（`AccountQuota.recordID`）：写它时删掉同来源的旧记录（如按 Pi 提供方名定 id 时写下的），删除随同步到手机。
   private func applyQuota(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
     guard let source = report.account.source, report.account.route == nil else { return try applyReport(report, host: host, proofs: proofs) }
     let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
@@ -143,7 +135,6 @@ extension CueStore {
     return true
   }
 
-  /// 不经额度记录上记着的提供方名：几个提供方共用一个网关来源时那里只有一个。
   private static func proves(_ proofs: [PiProof], _ provider: String, _ kind: PiAccount.Kind, since: Date) -> Bool {
     proofs.contains { $0.provider == provider && $0.account.kind == kind && $0.at >= since }
   }
@@ -153,14 +144,12 @@ extension CueStore {
     return try select(AccountQuota.self, where: "hostID = ?", [host]).contains { peer in
       guard peer.account?.route == nil, peer.account?.scope != nil, peer.account?.kind == report.account.kind else { return false }
       if let at = owners[peer.id]?[report.provider], start.map({ at >= $0 }) ?? true { return true }
-      // 网关来源那一条的 provider 只是建它的提供方、requestedAt 是各提供方共用的，证明不了这个提供方何时成功：带时刻的只看 owners
       guard peer.provider == report.provider, peer.account?.source == nil || start == nil else { return false }
       guard let start else { return true }
       return peer.requestedAt.map { $0 >= start } ?? false
     }
   }
 
-  /// 本机列 `owners`，不同步。
   private func sourceOwners(on host: String) throws -> [UUID: [String: Date]] {
     let rows = try db.query("SELECT id, owners FROM accountQuotas WHERE hostID = ? AND owners IS NOT NULL", [host]) { ($0.uuid(0), $0.text(1)) }
     return Dictionary(rows.map { ($0.0, Self.decodeOwners($0.1)) }, uniquingKeysWith: { $1 })
@@ -197,7 +186,6 @@ extension CueStore {
     }
   }
 
-  /// 已有一条在路上时返回它，不再写第二条。
   public func requestQuotaRefresh(on host: String) throws -> DeliveryRequest {
     let mode = DeliveryMode.quota
     if let open = try select(DeliveryRequest.self, where: "mode = ? AND status IN (\(DeliveryStatus.openSQL))", [mode.rawValue]).first(where: { $0.hostID == host && Speech.trip($0, at: .always(at: timing.now())).inTransit }) {

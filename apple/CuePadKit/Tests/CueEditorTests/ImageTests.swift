@@ -137,7 +137,7 @@ struct ImageTests {
         #expect(copied.string(forType: .string) == original)
 
         let other = EditorHarness()
-        _ = other.store  // 独立的库：图片 id 在库里不存在，也要原样往返
+        _ = other.store
         #expect(other.textView.readSelection(from: copied, type: .string))
         #expect(other.stored == original)
     }

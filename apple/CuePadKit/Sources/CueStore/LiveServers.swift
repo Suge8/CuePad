@@ -26,33 +26,25 @@ public struct LiveServers: Sendable {
   struct Listener: Hashable {
     let pid: pid_t
     let started: Int64
-    /// 问得到这个进程的那个地址（`reach`）。
     let url: URL
     var asked: Asked { Asked(pid: pid, started: started, port: url.port ?? 0) }
   }
 
-  /// 一个进程的一个口。问到的记在它上，不记在地址上：地址会变（别的进程在另一族回环上占了同号的口，localhost 就换成 127.0.0.1），
-  /// 跟着地址记的话这个口会掉出放行的名单，等下一遍问过才回来，它上面连着的先被断掉（`ports`）。
   struct Asked: Hashable {
     let pid: pid_t
     let started: Int64
     let port: Int
   }
 
-  /// 问过的监听口答不答网页：答了的同一个进程的同一个口不再问；没答的过一会儿再问（服务先开口、页面后就绪）。
-  /// `web`：答过 HTTP（不论答的是什么）。答过一次就一直算：后来哪一次没在时限里答上不改它，不然隧道会把这个口上连着的断掉（`ports`）。
   private var pages: [Asked: (page: Bool, web: Bool, at: ContinuousClock.Instant)] = [:]
   private static let retry = Duration.seconds(5)
 
   public init() {}
 
-  /// 键是会话 id；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
   public mutating func find(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [URL]] {
-    // 还在不在对着全部会话的口看，问只问要的这几个：只留这一遍要的，别的会话问过的就忘了，它们的口不再算答过 HTTP（`ports`）
     let everyone = await Self.listening(for: owners)
     let listeners = only.map { only in everyone.filter { !$0.owners.isDisjoint(with: only) }.map { (listener: $0.listener, owners: $0.owners.intersection(only)) } } ?? everyone
     let now = ContinuousClock.now
-    // 一起问：接了连接却迟迟不答的口要等满超时，挨个问会把别的会话这一轮都拖住
     var once = Set<Asked>()
     let asking = listeners.map(\.listener).filter { listener in
       (pages[listener.asked].map { !$0.page && now - $0.at >= Self.retry } ?? true) && once.insert(listener.asked).inserted
@@ -83,15 +75,12 @@ public struct LiveServers: Sendable {
     return ports
   }
 
-  /// 最近起来的在前。
   @concurrent static func listening(for owners: [String: Owner], only: Set<String>? = nil) async -> [(listener: Listener, owners: Set<String>)] {
     guard !owners.isEmpty, only?.isEmpty != true else { return [] }
     let me = getpid()
     let info = Dictionary(processes().compactMap { pid in bsd(pid).map { (pid, $0) } }, uniquingKeysWith: { first, _ in first })
-    // 同一端口号上别人的监听口也要看：谁接哪个地址由它们一起定（`reach`）
     let listening: [Socket] = info.keys.flatMap { sockets($0) }
     let candidates = Set(listening.map(\.pid)).subtracting([me])
-    // 空的是带着别的会话的 id：后两条不再认它
     var mine: [pid_t: Set<String>] = [:]
     for (pid, session) in sessions(of: candidates) { mine[pid] = owners[session] == nil ? [] : [session] }
     var children: [pid_t: [pid_t]] = [:]
@@ -115,7 +104,6 @@ public struct LiveServers: Sendable {
         mine[pid] = keys
         continue
       }
-      // 顺着工作目录往上查表，不拿每个进程去比每个会话
       guard !directories.isEmpty, var path = workingDirectory(pid) else { continue }
       var keys = Set<String>()
       while true {
@@ -165,8 +153,6 @@ public struct LiveServers: Sendable {
     return sessions
   }
 
-  /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的（true）。只等到响应头。答了 HTTP、不是 HTML 的是 false，没有 HTTP 回应是 nil。
-  /// 把人转去别处、那一处又连不上的（http 转 https、转去登录的域名）也是答了 HTTP：false。
   @concurrent static func answersPage(_ url: URL) async -> Bool? {
     var request = URLRequest(url: url)
     request.setValue("text/html", forHTTPHeaderField: "Accept")
@@ -194,7 +180,6 @@ public struct LiveServers: Sendable {
     return URLSession(configuration: configuration)
   }()
 
-  /// 根目录、主目录与它的上级（/Users）：底下什么进程都有。
   static func tooWide(_ directory: String) -> Bool {
     let home = realPath(UserHome.directory.path) ?? UserHome.directory.path
     return directory == "/" || home == directory || home.hasPrefix(directory + "/")
@@ -219,7 +204,6 @@ public struct LiveServers: Sendable {
     return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size ? info : nil
   }
 
-  /// 同 `SessionProcess.startedAt`：微秒。
   private static func started(_ info: proc_bsdinfo) -> Int64 { Int64(info.pbi_start_tvsec) * 1_000_000 + Int64(info.pbi_start_tvusec) }
 
   private static func workingDirectory(_ pid: pid_t) -> String? {
@@ -229,7 +213,6 @@ public struct LiveServers: Sendable {
     return withUnsafeBytes(of: info.pvi_cdir.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
   }
 
-  /// `pid` 是不是 `ancestor` 的后代（顺着父进程往上找；中途有进程退了、被 launchd 收养的不算）。
   static func descends(_ pid: pid_t, from ancestor: SessionProcess) -> Bool {
     guard ancestor.isRunning else { return false }
     var current = pid
@@ -241,7 +224,6 @@ public struct LiveServers: Sendable {
     return false
   }
 
-  /// 这个进程起来的时刻（`CueStore.liveAddresses` 之后的命令以 App 进程起来为界，不以订阅开始为界）。
   public static func launched(_ pid: pid_t = getpid()) -> Date? {
     bsd(pid).map { Date(timeIntervalSince1970: Double(started($0)) / 1_000_000) }
   }
@@ -278,7 +260,6 @@ public struct LiveServers: Sendable {
     return fds.prefix(Int(max(0, got)) / MemoryLayout<proc_fdinfo>.size)
   }
 
-  /// 有没有 CuePad.app（可执行文件 `….app/Contents/MacOS/CuePad`；命令行在 Helpers 里、小组件在 PlugIns 里，都不算）开着这份库文件。
   static func appHolding(_ file: String) -> Bool {
     guard let file = realPath(file) else { return false }
     return processes().contains { pid in

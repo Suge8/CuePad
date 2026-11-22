@@ -33,7 +33,6 @@ import Testing
     var sent: [VoiceSignalPayload] = []
     var recipients: [VoiceEndpoint] = []
     var failConnected = false
-    /// 给了就让解析挂在它上面（中转连着却不回解析）
     var resolveGate: VoiceGate?
     func resolveVoicePeer(_ device: VoiceDeviceID) async throws -> VoiceEndpoint {
         await resolveGate?.wait()
@@ -50,7 +49,6 @@ import Testing
 }
 
 #if os(iOS)
-/// 手机拨出并接通到"在听"；之后的入站信令由测试用 `voice.receive` 注入。
 @MainActor func connectedPhone(makeMedia: @escaping () -> FakeVoiceMedia = { FakeVoiceMedia() }) async throws -> (TestApp, VoiceService, FakeVoiceSignaling, FakeVoiceMedia) {
     let app = TestApp(), signal = FakeVoiceSignaling()
     var media: FakeVoiceMedia?

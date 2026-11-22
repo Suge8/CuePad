@@ -5,7 +5,6 @@ import Testing
 import CueStore
 @testable import CueBridge
 
-/// 摘要请求停在假模型的闸门上（`holdCompaction`）：压缩停住多久由测试决定，不按时长——机器负载高时测试自己的步骤会慢过任何固定窗口。
 @MainActor
 @Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealCompactTests {
@@ -26,7 +25,6 @@ struct RealCompactTests {
         try History.index(file: #require(session.sessionFile), from: nil).messages.filter { $0.role == .known(.system) }.count
     }
 
-    /// Pi 请求压缩摘要时停住，放行后给摘要（`failing` 时以错误结束：压缩失败）
     private func holdCompaction(_ pi: PiProcess, failing: Bool = false) -> FakeGate {
         let gate = pi.model.gate()
         pi.model.on({ $0.prompt.hasPrefix("<conversation>\n") || $0.prompt.hasPrefix("# Conversation\n") }) { _ in
@@ -61,7 +59,7 @@ struct RealCompactTests {
             let settled = try #require(bridge.sessions.first)
             let log = ChangeLog(bridge)
 
-            let compact = Task { try await bridge.command("/compact", in: s.id) }  // 压完才确认
+            let compact = Task { try await bridge.command("/compact", in: s.id) }
             try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
             let compacting = try #require(bridge.sessions.first)
             #expect(compacting.busySince != nil && compacting.stateSince > settled.stateSince)
@@ -91,7 +89,7 @@ struct RealCompactTests {
             let settled = try #require(bridge.sessions.first)
             let log = ChangeLog(bridge)
 
-            let stopping = Task { try await bridge.command("/compact", in: s.id) }  // 压完才确认
+            let stopping = Task { try await bridge.command("/compact", in: s.id) }
             try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
             try await bridge.abort(s.id)
             await #expect(throws: BridgeError.rejected("failed: Compaction cancelled")) { try await stopping.value }

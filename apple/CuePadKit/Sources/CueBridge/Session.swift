@@ -2,56 +2,36 @@
 import CueStore
 import Foundation
 
-/// 状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct Session: Identifiable, Sendable, Equatable {
-    /// `<sessionId>.<pid>`（`bridgeID`）：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
     public let id: String
     public let sessionID: String
     public let agent: AgentKind
     /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。
     public let sessionFile: URL?
-    /// 承载这个会话的进程：OpenCode 是它的后台服务（同一进程承载多个会话），其余是 CuePad 为这个会话起的进程
     public let pid: Int32
     public let cwd: URL
     public internal(set) var state: WorkState
-    /// CuePad 读不懂这一版扩展（`PiWire.reads`）。这段时间读不到它在做什么（`state` 只是填的歇着）、也发不进命令；
-    /// 同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
     public internal(set) var upgrading = false
-    /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
     public internal(set) var detail: String? = nil
-    /// 出错时 Pi 上报的原文；`detail` 里是摘要
     public internal(set) var errorMessage: String? = nil
-    /// 出错的种类（同步记录的 `SessionState.failure`）：只按原文归一次类（`ErrorSummary.failure`）
     public var failure: FailureKind? { state == .error ? ErrorSummary(errorMessage ?? "").failure : nil }
     public internal(set) var stateSince: Date
     public internal(set) var busySince: Date? = nil
-    /// Pi 由扩展报（每次模型回合开始），其余由接入记（`SessionFacts.startTurn(at:)`）
     public internal(set) var turnStartedAt: Date? = nil
-    /// Cue 与语音拿来接管、停下这一轮的凭据（同步记录里的毫秒）还是不是这一轮：核对只在这里。接入记的开始有亚毫秒，按存的毫秒比，不按任意容差放宽。
-    /// 开这一轮的那句（`SessionState.turnOpener`）：Pi 由扩展在那句落成消息时报，其余由接入在交出那一刻记（`HostedTurns.send`）。
-    /// 进程或 CuePad 重启后从头记起，交出下一句前为 nil，记录上留着之前的。
     public internal(set) var turnOpener: TurnOpener? = nil
-    /// `/name` 设的会话名
     public internal(set) var name: String? = nil
-    /// 只留开头 `SessionName.firstMessageLimit` 个字：各家接入给原文即可，截在这里。
     public internal(set) var firstMessage: String? = nil {
         didSet { if let firstMessage, firstMessage.count > SessionName.firstMessageLimit { self.firstMessage = SessionName.clipped(firstMessage) } }
     }
     public internal(set) var question: Question? = nil
-    /// 经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展（`LaunchRequest.token`）；其余会话为 nil
     public internal(set) var launchToken: String? = nil
-    /// FireCode 的子代理是进程内子会话，不作为独立会话出现
     public internal(set) var subagents: [SubagentState] = []
-    /// 见 `AgentKind.confirmsFromHistory`
     public var confirmsFromHistory: Bool { agent.confirmsFromHistory }
-    /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: ModelOption? = nil
     public internal(set) var thinking: Open<ThinkingLevel>? = nil
     public internal(set) var fast: Bool? = nil
     public internal(set) var availableModels: [ModelOption] = []
-    /// 只用来决定保留哪些额度记录，不存不同步
     public internal(set) var proofs: [PiProof] = []
-    /// 上下文余量：没有模型时为 nil
     public internal(set) var context: ContextUsage? = nil
     public internal(set) var commands: [SlashCommand] = []
 
@@ -66,7 +46,6 @@ public struct Session: Identifiable, Sendable, Equatable {
         agent.facts.sessionFiles == nil || sessionFile.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
     }
 
-    /// 标题与项目要查库，由 `SessionMirror` 定好交进来。
     public func snapshot(title: String, projectID: UUID?) -> SessionSnapshot {
         var snapshot = SessionSnapshot(sessionID: sessionID, state: state, times: SessionTimes(stateSince: stateSince, busySince: busySince))
         snapshot.detail = detail
@@ -97,10 +76,7 @@ extension Session {
     static func bridgeID(sessionID: String, pid: Int32) -> ID { "\(sessionID).\(pid)" }
 }
 
-/// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致。
 public enum SessionName {
-    /// 首条用户消息只用来当单行显示名：只取开头这么多字符。Pi 扩展另截一次（`info.ts` 的 `FIRST_MESSAGE_LIMIT`，同一个数）：
-    /// 截在那边是为了不把几 MB 的首条消息每次连接都传过来。
     public static let firstMessageLimit = 200
 
     static func clipped(_ text: String) -> String { String(text.prefix(firstMessageLimit)) }
@@ -110,7 +86,6 @@ public enum SessionName {
             .compactMap { $0.map { singleLine(AttachmentFiles.namingAgentLines(in: $0)) } }.first { !$0.isEmpty } ?? folder
     }
 
-    /// 没有文字为 nil（接着看下一条）。与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
     public static func firstMessage(_ text: String) -> String? {
         let trimmed = SkillCall.shown(text).trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : clipped(trimmed)
@@ -138,12 +113,9 @@ public enum SessionName {
 }
 
 public enum SessionEndReason: Sendable, Equatable {
-    /// 连接断开且没有告别：进程被强杀/崩溃
     case disconnected
-    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`
     case closed(reason: String)
 
-    /// 重新载入扩展（/reload、扩展自己换上新版本）：同一进程随即在同一路径以新扩展连回来，会话没有结束
     public static let reload = SessionEndReason.closed(reason: "reload")
 }
 
@@ -152,7 +124,6 @@ public enum SessionChange: Sendable, Equatable {
     case stateChanged(Session, from: WorkState)
     case infoChanged(Session)
     case ended(Session, reason: SessionEndReason)
-    /// 属于账号，记到 `AccountQuota` 上
     case quota(QuotaReport)
 }
 
@@ -165,7 +136,6 @@ public struct MessageImage: Sendable, Equatable {
     }
 }
 
-/// Cue 的话只能插进它自己开的那一轮（`Session.turnOpener`）：桥交出前、Pi 扩展交给 Pi 前各按此刻的开轮者核对一次。
 public enum SendPolicy: Sendable, Equatable {
     case user
     case cue
@@ -174,7 +144,6 @@ public enum SendPolicy: Sendable, Equatable {
 public struct SessionMessage: Sendable, Equatable {
     public var text: String
     public var images: [MessageImage]
-    /// CuePad 投送请求的 id：扩展把它写进会话文件里这条消息（`cuepadDelivery`），对话据此认出是哪条请求送进来的
     public var deliveryID: String?
     public var policy: SendPolicy
     public init(text: String, images: [MessageImage] = [], deliveryID: String? = nil, policy: SendPolicy = .user) {
@@ -184,7 +153,6 @@ public struct SessionMessage: Sendable, Equatable {
         self.policy = policy
     }
 
-    /// 这句开轮时记下的开轮者；不带投送 id 的（测试、演示直接发的）不改记录上的。
     var opener: TurnOpener? { deliveryID.flatMap(UUID.init(uuidString:)).map { TurnOpener(delivery: $0, cue: policy == .cue) } }
 }
 
@@ -192,27 +160,17 @@ public enum BridgeError: Error, Equatable {
     case insecureSocketDirectory(String)
     case socketDirectoryTooLong
     case unknownSession(String)
-    /// 已交出后等 ack 时连接断了：结果未知，不是未接受的证明。
     case sessionEnded
-    /// 未及时观察到确认，可能已经执行；不能据此自动重投。
     case ackTimeout
-    /// `unconfirmed_turn` / `user_turn` 是提交前的 Cue 保护拒绝；`failed: …` 仍可能已执行，不承诺未接受。
     case rejected(String)
-    /// Pi 扩展回 `unknown_model`，其余几家的接入自己判断
     case unknownModel(AgentKind)
-    /// Agent 明确没做这件事（托管的 Claude Code 没登录、模型不可用、额度用完时取消了这条命令或这句话）：原因是它自己的原话；确定没送达，可以重发
     case refused(String)
-    /// 当前扩展尚未就绪；不能据此推断调用方的复合操作此前没有副作用。
     case upgradingExtension
-    /// 已进入接入的复合操作，不能再把其中的升级错误用作准备证明。
     case operationStarted(ShownText)
     case unsupported
-    /// 请求结束后未能确认真正退出；不据断线或重载推断结束成功。
     case notEnded
 }
 
-/// 接入在交出之前就拒掉的原因（`BridgeError.rejected` 的原文；Pi 扩展回的 `ack.error` 同一套，在 `connection.ts`）：都确定没执行，可以重发。
-/// 不在其中的（`failed: …` 是执行时出错，旧扩展不认新命令回的 `bad_request`……）按可能已执行处理。
 enum RejectReason: String {
     case empty
     case unknownCommand = "unknown_command", missingArgument = "missing_argument"
@@ -220,7 +178,6 @@ enum RejectReason: String {
     case noAuth = "no_auth"
     case nothingToRetry = "nothing_to_retry"
     case unconfirmedTurn = "unconfirmed_turn", userTurn = "user_turn"
-    /// 换轮停不下在跑的那一轮（停止被拒、等不到它收尾）：这句还没交出（`HostedTurns.send`）
     case previousTurnRunning = "previous_turn_running"
 
     var shown: String.LocalizationValue? {
@@ -240,7 +197,6 @@ enum RejectReason: String {
 }
 
 extension BridgeError {
-    /// 确定没交给 Agent（可以重发）；其余的可能已经执行。
     public var definitelyNotHanded: Bool {
         switch self {
         case .unknownSession, .unsupported, .unknownModel, .refused: true
@@ -268,7 +224,6 @@ extension BridgeError: ShownError {
         case .refused(let reason): ShownText.verbatim(reason).value
         case .rejected(let reason):
             if let shown = RejectReason(rawValue: reason)?.shown { shown }
-            // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
             else if reason.hasPrefix(Self.failedPrefix) { ShownText.verbatim(String(reason.dropFirst(Self.failedPrefix.count))).value }
             else { "Agent 没有接受：\(reason)" }
         }

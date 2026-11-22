@@ -13,13 +13,10 @@ public typealias CueFont = UIFont
 // NSFont/NSColor 未标 Sendable，但主题只保存不可变的样式值。
 public struct CueEditorTheme: Equatable, @unchecked Sendable {
     public var font: CueFont
-    /// `# ` `## ` 等标题行的字体（各级同一个）。
     public var headingFont: CueFont
     public var codeFont: CueFont
-    /// 图片占位中间的说明字（图片缺失、传了几成）。
     public var captionFont: CueFont
     public var fileGlyphSize: CGFloat
-    /// 标题、列表、围栏等标记字符的颜色：保持可见，降低存在感。
     public var markerColor: CueColor
     public var codeBackground: CueColor
     public var textColor: CueColor
@@ -28,16 +25,13 @@ public struct CueEditorTheme: Equatable, @unchecked Sendable {
     public var variableBackground: CueColor
     public var imagePlaceholderColor: CueColor
     public var horizontalInset: CGFloat
-    /// 一行字最宽多少（AppKit）：编辑区更宽时左右留白加大，让这一列字居中；nil 时只有 `horizontalInset`。
     public var maxTextWidth: CGFloat?
     public var verticalInset: CGFloat
     public var lineSpacing: CGFloat
     public var headingSpacing: CGFloat
     public var imageCornerRadius: CGFloat
-    /// 首段当标题排（任务气泡：标题与下面的话在同一个编辑器里，从第一帧就可编辑，点哪光标落在哪）；nil 时首段同正文。
     public var title: Title?
 
-    /// 首段的样子：字体（按 `title3` 的档位随系统字号缩放）、颜色，与下一段隔多远。只改展示，存储格式里它就是第一行。
     public struct Title: Equatable, @unchecked Sendable {
         public var font: CueFont
         public var color: CueColor
@@ -79,7 +73,6 @@ public struct CueEditorTheme: Equatable, @unchecked Sendable {
 
 #if canImport(UIKit)
 extension CueEditorTheme {
-    /// 编辑器与只读预览按同一份系统文字样式缩放，主题本身始终保留默认档位的值。
     public func scaled(for traits: UITraitCollection) -> Self {
         func font(_ value: UIFont, fallback: UIFont.TextStyle) -> UIFont {
             // 固定系统字体的 textStyle 也可能是 CTFontRegularUsage；它不是 UIFontMetrics 接受的文字样式。

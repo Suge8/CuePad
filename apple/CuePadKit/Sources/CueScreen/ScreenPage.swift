@@ -1,15 +1,7 @@
 #if os(macOS)
-/// `ScreenServer` 的那张页：画面收 `/screen` 的 H.264 帧用 `VideoDecoder` 解出来画上去，指针、滚轮、键盘送回去（`ScreenInput`）。
-/// 看不见时（预览收起了、切到后台）断开，服务那头就不再取画面；断了每秒重连，连上先来一个关键帧。
-/// 底是黑的：画面按比例摆进去后四周多出来的那一圈读作屏的黑边。
-/// 脚本分三段、同一个作用域：这里是画面与连接，`hands` 是手指、鼠标与键盘，`mirror` 是画面上那一层看不见的元素。
 public enum ScreenPage {
   public enum Kind: Sendable {
-    /// 一块触摸屏（模拟器）：指针就是手指，键位原样送进去（打出什么字由它里面的键盘定）。
-    /// `tall`：竖长的屏请活预览用手机宽那一档摆（`cuepad-viewport`，App 的 `LivePreview` 读它），画面正好填满，不在宽屏上两边留白。
     case touchscreen(tall: Bool)
-    /// 桌面应用的窗口：指针是鼠标。字由看的这一头的输入法组好整段送，功能键与带 ⌘ ⌃ 的照键位送。
-    /// 手机上轻点是点一下、拖是滚、按住不动再拖是按着拖，双指捏是放大画面、双指拖是挪；点在输入框上键盘跟着出来、画面凑到那个框上。
     case desktop
   }
 
@@ -25,7 +17,6 @@ public enum ScreenPage {
       .replacingOccurrences(of: "{hands}", with: hands).replacingOccurrences(of: "{mirror}", with: desktop ? mirror : "")
   }
 
-  /// 桌面那一种才有：收字的输入框（平时看不见，输入法组字时露出来）、手机上的两颗钮（放回整幅、叫出键盘）与头一回的那句提示。
   private static let typing = #"""
     <textarea aria-hidden="true" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
     <nav>

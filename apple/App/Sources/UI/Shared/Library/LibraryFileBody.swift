@@ -12,7 +12,6 @@ struct LibraryFileTop: View {
         let skill: String? = if case .skill(let path) = file { path } else { nil }
         let duplicate = library.duplicate(for: file)
         let merge = library.merge(for: file)
-        // 另写了一份的先合并进来，不拿底稿盖过它
         let starter = file == .instruction(.global) && draft.blank && merge == nil
         if draft.conflicted || duplicate != nil || merge != nil || starter || skill != nil {
             VStack(alignment: .leading, spacing: Self.gap) {
@@ -43,7 +42,6 @@ struct LibraryFileTop: View {
     #endif
 }
 
-/// 文件页下半：正文编辑器；合并前标出时换成合并稿、编辑器交出键盘（`FileDraft.previewing`）。各份正文没到齐时标不出来，照常显示正文。
 struct LibraryFileBody: View {
     let file: LibraryFile
     let library: AgentLibrary

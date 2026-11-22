@@ -8,7 +8,6 @@ import Foundation
 extension CodexRuntime {
     static let namingModel = "gpt-5.6-luna"
 
-    /// 临时线程里关掉的功能：照终端界面起名开的临时线程（`temporary_structured_request.rs`）。
     private static let namingOff = [
         "apps", "code_mode", "code_mode_only", "context_management", "current_time_reminder", "deferred_executor", "goals", "hooks",
         "image_generation", "memories", "multi_agent", "multi_agent_v2", "plugins", "request_permissions_tool", "shell_snapshot",

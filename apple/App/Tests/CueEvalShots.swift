@@ -6,7 +6,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// Cue 用读文件工具打开看得出是哪个方案、哪一种样子。
 @MainActor
 func mockShot(_ name: String) throws -> Data {
     let dark = name.contains("dark"), mac = name.contains("mac")

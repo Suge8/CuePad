@@ -69,7 +69,6 @@ extension CueTextView {
         }
     }
 
-    /// 点中的要交给宿主的附件（`EditorCore.openableAttachment`）；本机的图片照常定光标。
     func attachment(at point: CGPoint) -> (key: String, name: String, rect: CGRect)? {
         guard let position = closestPosition(to: point) else { return nil }
         let offset = self.offset(from: beginningOfDocument, to: position)
@@ -90,7 +89,6 @@ extension CueTextView {
         onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: hit.rect, named: hit.name))
     }
 
-    /// 复制/剪切一律输出存储格式字符串：附件不会被归档成 RTFD 而丢失键。
     public override func copy(_ sender: Any?) {
         let range = selectedRange
         guard range.length > 0 else { return }

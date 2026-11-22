@@ -6,7 +6,6 @@ import UniformTypeIdentifiers
 /// 正文里的引用、本机文件名、附件记录（`hash` + `format`）都按它；扩展名决定系统（快速查看、Agent 的读文件工具）把它认成什么。
 public enum AttachmentKey {
     public static let hashLength = 64
-    /// 扩展名最长几个字符：再长的不是扩展名，按没有扩展名算。
     static let formatLimit = 16
 
     /// 系统把 .ts、.mts 认作 MPEG-2 传输流（视频），可 Agent 与用户发来的几乎都是 TypeScript：这几个的键按文本（txt）存，
@@ -15,10 +14,8 @@ public enum AttachmentKey {
 
     public static func make(hash: String, format: String) -> String { format.isEmpty ? hash : hash + "." + format }
 
-    /// 扩展名取文件名的；没有或不合规为空。
     public static func make(hash: String, name: String) -> String { make(hash: hash, format: format(ofName: name)) }
 
-    /// 文件名对应的系统类型（快速查看、图标、预览的种类都按它）；没有扩展名为 nil。
     public static func type(ofName name: String) -> UTType? { type(ofFormat: format(ofName: name)) }
 
     static func type(ofFormat format: String) -> UTType? { format.isEmpty ? nil : UTType(filenameExtension: format) }
@@ -29,7 +26,6 @@ public enum AttachmentKey {
         return reassigned[raw] ?? raw
     }
 
-    /// 键拆成哈希与扩展名（无扩展名为空）；不是合法的键为 nil。
     public static func parts(_ key: String) -> (hash: String, format: String)? {
         let utf8 = key.utf8
         guard utf8.count >= hashLength, utf8.prefix(hashLength).allSatisfy(isHex) else { return nil }

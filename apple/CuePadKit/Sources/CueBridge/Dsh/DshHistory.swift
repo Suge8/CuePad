@@ -80,7 +80,6 @@ enum DshHistory {
         }
     }
 
-    /// 图片块的原图：内嵌的 base64，或附件库里的引用（会话文件在 `<DSH_HOME>/<DshRuntime.sessions>/<项目>/<id>/` 下）。
     private static func image(_ block: Line.Block, near file: URL?) -> Data? {
         if let data = block.data { return Data(base64Encoded: data) }
         guard let file, let hash = block.attachment?.attachmentId?.split(separator: ":").last, hash.count > 2 else { return nil }

@@ -10,8 +10,6 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests {
-    /// 会话开在另一台 Mac 上：说话请求由那台执行，本机的执行器不碰它；时限过后由替身当那台 Mac 写回失败。
-    /// 要的是等过时限，与时长无关：时限缩短（等结果在 `cuepad mcp` 子进程里，只能真等）。
     @Test func 说话过了时限才没送达_Cue马上醒来看到原因() async throws {
         let rig = try await Rig(timing: { $0.sayWait = 0.5 })
         let project = try #require(try await rig.store.projects().first)
@@ -93,7 +91,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 每次都等说话工具过了时限才回报：时限缩短，同上一条。
     @Test func 请求失败晚到_完成时刻更早_Cue仍然醒来() async throws {
         let rig = try await Rig(timing: { $0.sayWait = 0.5 })
         let project = try #require(try await rig.store.projects().first)
@@ -107,8 +104,6 @@ extension CueHostTests {
 
         func sayFails(_ reason: String, at clock: Timing) async throws {
             try await rig.say("请对登录页说继续")
-            // 说话工具等结果至多 `CueTiming.sayWait`：等它交回"送达尚未确认"再替那台 Mac 回报。只看歇着不够——这一轮刚开始时库里还是歇着，
-            // 那时回报，说话工具当场拿到没送到，Cue 不会再被叫醒
             let told = rig.model.answers("送达尚未确认")
             try await eventually("这一轮做完") {
                 guard rig.model.answers("送达尚未确认") > told, try await rig.store.cueState()?.state == .known(.settled) else { return false }

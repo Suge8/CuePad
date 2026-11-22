@@ -22,7 +22,6 @@ struct CardEditorPage: View {
     @State private var settled = false
     @State private var gone = false
 
-    /// 一行字最宽：苹方 15.5pt 约 44 个字，再宽读到行尾回头找下一行就费劲。
     fileprivate static let textWidth = InspirationPaper.textWidth
     fileprivate static let inset = Spacing.page
 
@@ -49,7 +48,6 @@ struct CardEditorPage: View {
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)
         .debugSettling(isOpen ? !settled : !gone)
-        // 卡没了（并进了草稿、接进了会话的回复框）由工作区收起，不当成出错
         .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
             if case CueStoreError.notFound = error { return }
             workspace.fail(error)
@@ -82,7 +80,6 @@ struct CardEditorPage: View {
 
     private func prepare() {
         Task {
-            // 每一步之前都看一眼：准备途中已经关了就停下（关闭由 collapse 收尾）
             await NextFrame.wait()
             guard isOpen else { return }
             mounted = true
@@ -117,7 +114,6 @@ struct CardEditorPage: View {
 }
 
 private extension View {
-    /// 编辑器自己按同样的数居中（`CueEditorTheme.maxTextWidth`）。
     func column() -> some View {
         frame(maxWidth: CardEditorPage.textWidth, alignment: .leading)
             .padding(.horizontal, CardEditorPage.inset)

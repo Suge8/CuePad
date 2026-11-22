@@ -11,7 +11,6 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
 
     let id: UUID
     let role: Role
-    /// 你的话是存储格式正文（`CueFormat`，可带图片），其余是纯文字或 Markdown
     let text: String
     let took: String?
     var tools: ChatMessage.Tools?
@@ -54,10 +53,6 @@ private nonisolated enum Timed {
 }
 
 nonisolated enum Chat {
-    /// 对话来自 Pi 的会话文件，与终端里看到的一致；不在文件里的两种按时刻插进对话：预览卡（文件在 Agent 的命令行里发出，不留对话条）按创建时间，
-    /// 你的作答（`ChatRole.answer`，由作答的 Mac 写进对话）按答的那一刻。
-    /// 你发出、还没进对话的话（`outgoing`）与 Cue 页你的话同一条规则：还在路上的接在最末——Agent 读到时它就进对话的末尾，换下时不挪位；没能送达的不会再进对话，留在你说它的那一刻。
-    /// `cueSent`：Cue 说的那几条的请求 id（`SessionDigest.cueSent`，按发送记录认）。
     static func entries(
         _ messages: [ChatMessage], previews: [PreviewItem] = [], deliveries: [DeliveryRequest] = [], cueSent: Set<UUID> = [],
         at moment: Speech.Moment = .always()
@@ -103,10 +98,7 @@ nonisolated enum Chat {
         return SessionClock.duration(message.at.timeIntervalSince(started))
     }
 
-    /// 一轮的经过报的数：按做了什么分类（改、跑、读、搜），不报总步数。读、改同一个文件只算一次，与清单的行同一口径。
-    /// 不写出错几处：中途出的错它多半自己解决了，没解决的回答里会说；哪步出错展开清单在原位标着。
     struct Process: Equatable {
-        /// 标题行里一类一格：图标（与清单那一类的同一个）配个数；`spoken` 是读屏与悬停时的整句。
         struct Count: Equatable {
             let kind: ChatMessage.Tools.Kind
             let count: Int
@@ -114,9 +106,7 @@ nonisolated enum Chat {
         }
 
         var counts: [Count] = []
-        /// 按类数不全时写总步数：清单没列全（`Tools.itemLimit`）时只有改动数得全
         var steps: String?
-        /// 这一轮缓存没接上，重读了多少：自成一行，不进标题行
         var recached: String?
 
         var spoken: Dotted { Dotted(counts.map(\.spoken) + [steps]) }
@@ -152,7 +142,6 @@ nonisolated enum Chat {
 
     static let foldedLooks = 3
 
-    /// 在跑的一轮逐条列：清单还在往后加，并起来的那一行会跟着换范围，开着的一行与它里面正在看的一步就被换掉了。
     static func rows(_ items: [ChatMessage.Tools.Item], settled: Bool) -> [ProcessRow] {
         guard settled else { return items.indices.map(ProcessRow.step) }
         var rows: [ProcessRow] = [], start = 0
@@ -186,11 +175,8 @@ nonisolated enum Chat {
         messages.last { $0.role == .known(.user) }.map { SkillCall.shown($0.text) }?.nonEmpty
     }
 
-    /// 会话页顶栏状态后与会话行（你看过以后）的小标记两处同一个数，来自 `SessionListItem.undelivered`。
     static func undeliveredNote(_ count: Int) -> String? { count > 0 ? String(localized: "\(count) 句没送到") : nil }
 
-    /// 对话只同步最近这么久内活跃过的会话（Mac 的历史索引按它决定读不读对话），对话也在会话安静这么久之后清理；
-    /// 更早的会话打开时没有对话，请它所在的 Mac 补写。
     static let transcriptWindow: TimeInterval = 7 * 86_400
 
     static func needsTranscript(_ session: SessionState, messages: [ChatMessage]) -> Bool {

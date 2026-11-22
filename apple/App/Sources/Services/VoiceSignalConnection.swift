@@ -1,9 +1,6 @@
 import CryptoKit
 import Foundation
 
-/// 一条既有 Relay 连接的加密与防重放记录，不拥有 socket、心跳或重连任务。
-/// 本机 lease 只由这里创建，registered 不提供身份来源；对端退役及最高序号保留到本机连接终止。
-/// 同账号成员共享密钥，互相可信；不信任 Relay 的 challenge、路由、登记回执和租约退出通知。
 final class VoiceSignalConnection {
     let claim: VoiceRegistrationClaim
     private let key: SymmetricKey
@@ -16,7 +13,6 @@ final class VoiceSignalConnection {
     }
     private var peers: [VoiceDeviceID: Peer] = [:]
     private var retired: Set<VoiceEndpoint> = []
-    /// 恶意中转不能靠无尽 departed 耗尽内存；达到上限结束本机租约，不能清空记录后沿用它。
     private static let maximumPeers = 1024
     private static let gcmOverhead = 28
 

@@ -10,11 +10,9 @@ enum Host {
   static let ownerKey = "CUEPAD_SCREEN_OWNER"
   @MainActor private static var running: (WindowScreen, ScreenServer)?
 
-  /// dyld 载入这个库时跑，在应用的 `main` 之前。
   static func load() {
     guard let port = ProcessInfo.processInfo.environment[portKey].flatMap(UInt16.init) else { return }
     let owner = ProcessInfo.processInfo.environment[ownerKey] ?? ""
-    // 这个应用再起的子进程不跟着载：它们会去抢同一个口
     unsetenv(portKey)
     unsetenv(ownerKey)
     var image = Dl_info()
@@ -41,7 +39,6 @@ enum Host {
     }
   }
 
-  /// 起它的 `cuepad live app` 等不到服务时报"没起来"；原因留在这个应用的 stderr 里。
   static func say(_ message: String) { FileHandle.standardError.write(Data("CuePad 的屏：\(message)\n".utf8)) }
 }
 

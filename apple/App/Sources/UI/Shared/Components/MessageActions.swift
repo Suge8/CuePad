@@ -2,8 +2,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 有哪几项、什么顺序只在 `MessageMenu`，这里只画。只属于某一行的动作（选择文本、批注、重发、移除）由那一行给。
-/// `text`：你的话是存储格式正文（复制与存为灵感连图片一起；分享只给文字），Pi 与 Cue 的回答是 Markdown。
 struct MessageActions: View {
     let text: String
     let kind: MessageMenu.Kind
@@ -43,7 +41,6 @@ struct MessageActions: View {
         }
     }
 
-    /// 草稿只有一份（`AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
     private func editAgain(_ session: SessionState) {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)

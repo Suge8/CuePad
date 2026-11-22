@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 失效时报错而不是悄悄挪进默认项目：回落策略属于界面。
 @Suite struct ProjectReferenceTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }

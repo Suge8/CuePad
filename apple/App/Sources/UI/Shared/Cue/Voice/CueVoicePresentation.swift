@@ -18,7 +18,6 @@ enum CueVoiceActivity {
     }
 }
 
-/// 通话界面发出的一个动作，Mac 与手机同一份（`Workspace.performVoice`）。命令带原记录的身份，结果原样返回，不自动重发。
 enum VoiceAction: Equatable {
     case start, hangUp, microphoneSettings
     case setMuted(Bool)
@@ -37,8 +36,6 @@ enum VoiceAction: Equatable {
     }
 }
 
-/// 通话的只读渲染输入：由投影推一次（`VoiceViewState.presentation`），不推进状态、不计时、不推断送达。
-/// 高频音量只在声音叶子读取，空样本不伪造声音。
 struct CueVoicePresentation {
     typealias Activity = CueVoiceActivity
 
@@ -52,30 +49,24 @@ struct CueVoicePresentation {
 
     let activity: Activity
     let muted: Bool
-    /// 只在声音叶子读取；构造业务投影不观察高频音轨样本。
     let samples: () -> [CGFloat]
     let canMute: Bool
     let issues: [Issue]
     var readings: [Reading] = []
-    /// 手机只收到最近的条目时，其余在哪（`VoiceCallProjection.bounded`）
     var earlier: LocalizedStringResource?
-    /// nil 表示允许发起；宿主提供权限、账号或运行设备的实际阻塞原因，视图不推断可用性。
     var startUnavailableReason: LocalizedStringResource?
 
-    /// 只给辨认结果的短摘录；完整正文仍在原聊天，朗读记录不参与错误灯。
     struct Reading: Identifiable {
         let id: UUID
         let excerpt: String
         let status: String
         let recovery: VoiceAction?
 
-        /// 正文第一行的纯文字：朗读记录里不露 Markdown 标记。
         static func excerpt(of text: String) -> String { String((MarkdownBlock.firstPlainLine(text) ?? text).prefix(80)) }
     }
 
     var active: Bool { activity != .idle && activity != .ended && activity != .failed }
     var needsAttention: Bool { !issues.isEmpty }
-    /// 通话详情里有东西可看：通话中，或留着问题与记录。
     var hasDetails: Bool { active || !issues.isEmpty || !readings.isEmpty }
 
     var title: LocalizedStringResource {

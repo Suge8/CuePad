@@ -1,6 +1,5 @@
 import Foundation
 
-/// 既有 Relay 的单条 socket 所拥有的语音收发；实例不跨重连复用，旧回调只会碰旧作用域。
 final class RelayVoiceConnection {
     let crypto: VoiceSignalConnection
     private let socket: URLSessionWebSocketTask

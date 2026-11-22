@@ -26,7 +26,6 @@ final class PiConnection: SessionLink {
 
     func command(_ line: String, opener _: TurnOpener?, in _: Session.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
-    /// 退出方式由扩展按真实 mode 选择，不按 hosted 猜模式，也不对外部 PID 发信号。
     func end(_: Session.ID) async throws { _ = try await request { try PiWire.bare("end", id: $0) } }
 
     func abort(_: Session.ID) async throws { _ = try await request { try PiWire.bare("abort", id: $0) } }
@@ -37,7 +36,6 @@ final class PiConnection: SessionLink {
         _ = try await request { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
     }
 
-    /// 强度按目标模型夹取：Pi 自己的夹法不同，界面按这一条显示。
     func configure(_ config: SessionConfig, in _: Session.ID) async throws {
         let key = config.model ?? session?.model?.key
         let levels = session?.availableModels.first { $0.key == key }?.thinkingLevels ?? []
@@ -45,7 +43,6 @@ final class PiConnection: SessionLink {
         _ = try await request { try PiWire.configCommand(id: $0, model: config.model, thinking: thinking, fast: config.fast, name: config.name) }
     }
 
-    /// hello 报的扩展版本不是随包版本：请它核对随包目录（`PiWire.upgrade`）。那里还是旧的它就不动，所以可以多说。
     func offerUpgrade(from version: Int) {
         guard version != PiExtensionBundle.version else { return }
         connection.write(PiWire.upgrade)
@@ -69,7 +66,6 @@ final class PiConnection: SessionLink {
         let data = try encode(commandID)
         let ack = try await replies.request(commandID) { connection.write(data) }
         guard !ack.ok else { return ack }
-        // 旧扩展不认比它新的命令（`PiWire.oldestExtension`）：换上新扩展后才做得到
         throw ack.error == "unknown_model" ? BridgeError.unknownModel(.pi) : BridgeError.rejected(ack.error ?? "unknown")
     }
 }

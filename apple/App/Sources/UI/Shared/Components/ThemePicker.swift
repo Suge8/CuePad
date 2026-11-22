@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 辅助字号用原生内联选项，让选中值与选项保持可读。
 struct ThemePicker: View {
     @Environment(AppServices.self) private var services
     @Environment(\.dynamicTypeSize) private var typeSize

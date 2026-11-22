@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 
 nonisolated extension [SubagentState] {
-    /// 名册里每一个配上列表用的标识：名字可能重复（别家 Agent 的子代理按角色起名，同一个角色派了几个），同名的按出现先后编号。
-    /// 名册只往后添，已有的编号不变。
     var identified: [(id: String, agent: SubagentState)] {
         var seen: [String: Int] = [:]
         return map { agent in
@@ -88,7 +86,6 @@ nonisolated enum SubagentClock: Equatable {
 
 }
 
-/// 它接在状态词"子代理工作中"后面，不再说一遍"在干活"。
 nonisolated enum SubagentLine {
     static func of(_ agents: [SubagentState]) -> String? {
         guard !agents.isEmpty else { return nil }

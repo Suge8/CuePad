@@ -6,9 +6,7 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
     let title: String
     let detail: String
     let deletedAt: Date?
-    /// 有它就是项目行，恢复与永久删除按它分项目与卡片。
     let project: Project?
-    /// 卡片行：行首画它是任务还是灵感，按它原来的项目分段。
     let card: Card?
 
     init(_ project: Project, cards: Int) {
@@ -38,7 +36,6 @@ nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
         if project != nil { try await store.purgeProject(id) } else { try await store.purgeCard(id) }
     }
 
-    /// 恢复后落在哪个项目：卡片所在的项目还在回收站时回到默认项目，所以要在恢复之后读。
     func landing(_ store: CueStore) async throws -> Project? {
         if let project { return project }
         guard let id = try await store.card(id)?.projectID else { return nil }
@@ -50,10 +47,8 @@ nonisolated struct TrashSummary: Sendable, Equatable {
     var projects: [TrashItem]
     var cards: [TrashItem]
 
-    /// 单独删掉的灵感与任务按原来的项目分段，最近删过东西的项目在前。
     var runs: [ProjectRun<TrashItem>] { cards.runs { $0.card?.projectID ?? Project.defaultID } }
 
-    /// 一段的项目：还在的从目录里认，连项目也删了的在这份回收站里。
     func project(of run: ProjectRun<TrashItem>, in catalog: ProjectCatalog?) -> Project? {
         catalog?.project(run.id) ?? projects.first { $0.id == run.id }?.project
     }

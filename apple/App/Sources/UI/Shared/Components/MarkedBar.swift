@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 铺色的末端落在缝里、或越过缝却不足两个条宽时收在缝前（圆头）：否则缝的另一边留下一小截两头圆的碎块，读成一个点或渲染毛刺（一个条宽的门槛挡不住 62% 对 59% 那种）。
 struct MarkedBar: View, Animatable {
     private var values: AnimatablePair<Double, Double>
     private let level: UsageLevel

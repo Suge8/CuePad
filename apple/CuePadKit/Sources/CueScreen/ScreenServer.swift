@@ -3,9 +3,6 @@ import CryptoKit
 import Foundation
 import Network
 
-/// 把一块屏变成本机网页：`GET /` 是那张页（`ScreenPage`），页面连 `/screen` 这条 WebSocket，画面往下发、手指往上送；`GET /outline` 是画面里有什么（`ScreenSource.outline`）。
-/// 只听本机回环：活预览（`cuepad live`）照普通的开发服务打开它，手机经隧道看到的也是这一页。
-/// 有人连着才让来源取画面（`ScreenSource.watch`、`rest`）。画面只在有改动时编，停下来后补几帧（`settle`）。
 public final class ScreenServer: @unchecked Sendable {
   private let queue = DispatchQueue(label: "cuepad.screen", qos: .userInteractive)
   private let source: any ScreenSource
@@ -18,30 +15,22 @@ public final class ScreenServer: @unchecked Sendable {
   private var dirty = false
   private var encoding = false
   private var settling = 0
-  /// 编到第几帧了。
   private var turn = 0
 
-  /// 只在 `queue` 上碰。
   private final class Viewer: @unchecked Sendable {
     let connection: NWConnection
-    /// 交给连接、还没写出去的帧数。
     var queued = 0
-    /// 收到过关键帧、之后的帧都接得上；跟丢了（`backlog`）就停发，等写空了从新的关键帧接。
     var synced = false
     var input = Data()
-    /// 这条连接按着没抬起的手指与键：它断了替它抬起（`drop`），不然模拟器里一直按着。
     var finger: (x: Double, y: Double)?
     var keys: Set<UInt32> = []
     init(_ connection: NWConnection) { self.connection = connection }
   }
 
-  /// 那一头慢（手机在弱网上）：攒到这么多帧没写出去就不再往里塞，画面宁可跳一下也不越拖越后。
   private static let backlog = 30
-  /// 画面停下后再编几帧：码控把运动时省下的码率花在这几帧上，字从糊变清。
   private static let settle = 3
   private static let settleGap = DispatchTimeInterval.milliseconds(80)
 
-  /// `identity` 写在每个回应的 `X-CuePad-Screen` 头里：再起一次时认得出这个口上是不是同一块屏的服务（`ScreenServer.identity(port:)`）。
   public init(source: any ScreenSource, port: UInt16, identity: String, page: String) throws {
     self.source = source
     self.port = port
@@ -55,7 +44,6 @@ public final class ScreenServer: @unchecked Sendable {
     listener = try NWListener(using: parameters)
   }
 
-  /// 听上了才返回；口被占着就抛。
   public func start() async throws {
     listener.newConnectionHandler = { [weak self] in self?.accept($0) }
     try await withCheckedThrowingContinuation { (ready: CheckedContinuation<Void, any Error>) in
@@ -71,7 +59,6 @@ public final class ScreenServer: @unchecked Sendable {
     }
   }
 
-  /// 这个口上的服务是哪块屏的（它的 `identity`）；没在听、不是屏的服务是 nil。
   public static func identity(port: UInt16) async -> String? {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.connectionProxyDictionary = [:]
@@ -109,9 +96,7 @@ public final class ScreenServer: @unchecked Sendable {
   private func encoded(_ frame: ScreenEncoder.Frame?) {
     encoding = false
     if let frame { viewers.values.forEach { deliver(frame, to: $0) } }
-    // 没编出来的那一次也隔一拍再来：编码器一直起不来时不空转
     if dirty, frame != nil { return pump() }
-    // 这一拍里画面又动过（编过新的一帧）就不补：不然动着的时候每帧后面都跟一帧重复的
     queue.asyncAfter(deadline: .now() + Self.settleGap) { [weak self, turn] in
       if self?.turn == turn { self?.pump() }
     }
@@ -225,7 +210,6 @@ public final class ScreenServer: @unchecked Sendable {
         default: break
         }
       }
-      // 网页的帧最多几 KB（一段字，`ScreenPage` 的 `type` 切过）：攒到这么多还凑不成一帧的不是它
       viewer.input.count < 4096 ? self.listen(viewer) : self.drop(viewer)
     }
   }
@@ -267,7 +251,6 @@ public final class ScreenServer: @unchecked Sendable {
     return (Opcode(rawValue: bytes[0] & 0x0F) ?? .pong, payload)
   }
 
-  /// 一下滚轮最多滚这么多屏。
   private static let maxWheel = 16.0
 
   private static func input(_ payload: Data) -> ScreenInput? {
@@ -276,7 +259,6 @@ public final class ScreenServer: @unchecked Sendable {
     if kind == "focus", let id = message["i"] as? Int { return .focus(id) }
     if kind == "fill", let id = message["i"] as? Int, let text = message["s"] as? String { return .fill(id, text) }
     if kind == "key", let usage = message["u"] as? Int, (4...231).contains(usage), let down = message["d"] as? Bool { return .key(usage: UInt32(usage), down: down) }
-    // 来源照这些数造事件、算整数：出了界的不往下送
     guard let x = message["x"] as? Double, let y = message["y"] as? Double, (0...1).contains(x), (0...1).contains(y) else { return nil }
     if kind == "menu" { return .secondary(x: x, y: y) }
     if kind == "wheel", let dx = message["dx"] as? Double, let dy = message["dy"] as? Double, abs(dx) <= maxWheel, abs(dy) <= maxWheel {

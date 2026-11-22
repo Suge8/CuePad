@@ -1,9 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 草稿与 Cue 页同一份（`CueWatch.draft`）：没说完收起了，在 Cue 页里接着写。
 struct CueBarView: View {
-    /// 调试画面里放在桌面图上拍时没有宿主。
     let bar: CueBar?
 
     var body: some View {
@@ -19,7 +17,6 @@ struct CueBarView: View {
     private static let width: CGFloat = 560
 }
 
-/// 槽里一块浮起的选中块在几格之间滑；选了灵感、任务时右边露出记到哪个项目。
 struct CueBarTargets: View {
     let targets: [CueBarTarget]
     let aim: CueBarTarget
@@ -59,7 +56,6 @@ struct CueBarTargets: View {
             .frame(height: ControlSize.inline.height)
             .background {
                 if on {
-                    // 深色下纸色与槽底几乎同色，换成选中底
                     Capsule().fill(palette.dark ? palette.selection : palette.paperLit).overlay(Capsule().strokeBorder(palette.hair))
                         .matchedGeometryEffect(id: "on", in: slot)
                 }
@@ -91,7 +87,6 @@ struct CueBarTargets: View {
 
 import SwiftUI
 
-/// `status` 为假时不写此刻那一行（iPad 上 Cue 页开着时页头已写了这一句）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
     var status = true
@@ -100,7 +95,6 @@ struct CueStatusRow<Trailing: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 新消息数只在整行连它都排得下时写（名字已加粗说有新消息）；排不下就整行不带它，宽度先给名字与数字账
         ViewThatFits(in: .horizontal) {
             row(unread: workspace.cue.unread)
             row(unread: 0)
@@ -119,7 +113,6 @@ struct CueStatusRow<Trailing: View>: View {
                 if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
             .layoutPriority(1)
-            // 两边已有行距，空白不再另占宽
             Spacer(minLength: 0)
             if unread > 0 { UnreadCount(count: unread).font(Typography.meta) }
             trailing
@@ -157,7 +150,6 @@ struct UnreadCount: View {
     }
 }
 
-/// Cue 运行在别的设备上、本机正在和 iCloud 对时（`SyncDriver.showsCatchingUp(on:)`）写"正在同步"：那时写下的状态与数可能已经过时。
 struct CueStatusLine: View {
     var tally = false
     var font = Typography.meta

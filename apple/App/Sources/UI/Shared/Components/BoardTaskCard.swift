@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 上级收成一张：状态、"下一步"与点卡都只看卡上写的会话（`TaskBoard.Item.agent`，此刻干活那一步的）。
 struct BoardTaskCard: View {
     let item: TaskBoard.Item
     let column: TaskBoard.Column
@@ -32,7 +31,6 @@ struct BoardTaskCard: View {
                 if let steps = item.steps { Text(verbatim: "\(steps.done)/\(steps.total)").monospacedDigit().foregroundStyle(palette.ink3) }
                 if let finished { Text(verbatim: finished).monospacedDigit().foregroundStyle(palette.ink3) }
                 #if os(iOS)
-                // Mac 上不放"开始"：把卡拖到推进中就是开始（用上次选的那家与模型），要换的点开任务。触屏拖起来没那么顺手，写着
                 if column == .todo, let start = next.flatMap({ $0.starts ? $0 : nil }) { TaskNextMark(next: start) }
                 #endif
             } trailing: {
@@ -44,11 +42,9 @@ struct BoardTaskCard: View {
         }
         .help(tip)
         .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) { menu }
-        // 卡不画圈，完成前那一问由整张卡认领
         .completionAsks(claiming: task.id)
     }
 
-    /// 卡没有圈，Cue 交过来的那道光落在标题上。
     private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
         return BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
@@ -56,12 +52,10 @@ struct BoardTaskCard: View {
             .relaySpot(task: task.id)
     }
 
-    /// 第二行那一句：会话此刻在做什么（做完的是它最后说的头一句），没有会话的是任务正文的头一行。
     private var note: String? {
         item.agent.flatMap { SessionProgress.said(of: $0.state) } ?? SessionProgress.firstLine(task.rest)
     }
 
-    /// 手机行里的薄条不写：一行里地方给标题，这一行又都是今天做完的。
     private var finished: String? { column == .done && !row ? task.completedAt.map { DateLabel.short($0) } : nil }
 
     private var tip: String {
@@ -74,7 +68,6 @@ struct BoardTaskCard: View {
             case nil: nil
             }
         case .done: task.completedAt?.formatted(date: .omitted, time: .shortened)
-        // 记下多久了只在这里说：写在卡脚上把项目名挤成一个图标，它又不是据以行动的事
         case .todo: DateLabel.short(task.todoAt ?? task.createdAt)
         case .waiting: nil
         }
@@ -101,7 +94,6 @@ struct BoardTaskCard: View {
         if let next { workspace.follow(next) }
     }
 
-    /// 长按菜单与读屏动作同一份。
     @ViewBuilder private var menu: some View {
         let session = item.agent?.state
         if let shot = item.shot {

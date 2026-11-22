@@ -12,7 +12,6 @@ import Testing
     Dictionary(uniqueKeysWithValues: try await store.sessionPage(SessionQuery(limit: .max)).items.map { ($0.state.sessionID, $0.state) })
   }
 
-  /// 对账时进程一律判为不在。
   @Test func 启动对账_托管的歇着_其余记为已结束_没有会话文件的清掉_在线的不动() async throws {
     let recorder = recorder
     for (index, id) in ["terminal", "hosted", "hosted-silent", "old-ended", "live-new"].enumerated() {

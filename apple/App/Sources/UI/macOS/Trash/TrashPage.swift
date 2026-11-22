@@ -36,7 +36,6 @@ struct TrashPage: View {
                 }
             }
         }
-        // 单独删掉的灵感与任务按原来的项目分段，同归档（`ArchiveList`）
         ForEach(data.runs) { run in
             group { ProjectRunHeader(project: data.project(of: run, in: workspace.catalog), count: run.items.count) } rows: {
                 ForEach(run.items) { item in

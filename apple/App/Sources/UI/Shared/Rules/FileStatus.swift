@@ -4,13 +4,11 @@ import CueSync
 import CueText
 import Foundation
 
-/// 记录先到、文件后到：手机上大文件、按流量计费时不自动取，点一下才取。
 nonisolated enum FileStatus {
     private static func kind(of name: String) -> String {
         PreviewKind(fileName: name)?.label ?? AttachmentKey.format(ofName: name).uppercased().nonEmpty ?? String(localized: "文件")
     }
 
-    /// 只有附件停着，别的照常同步。
     static var overQuota: String { String(localized: "iCloud 空间已满：附件先留在这台，腾出空间后接着传") }
 
     private static func size(of file: URL) -> String? {

@@ -40,7 +40,6 @@ struct AgentCapsule: View {
 }
 
 
-/// 没有额度的只有标志、占同样大，换模型时不跳。认不出的模型（`BrandMark`）只有环；两样都没有时胶囊上不放它。
 struct ModelBadge: View {
     let mark: BrandMark?
     let binding: QuotaMeter.Window?

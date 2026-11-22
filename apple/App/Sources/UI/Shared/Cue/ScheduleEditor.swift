@@ -65,13 +65,10 @@ struct ScheduleDraft: Equatable {
 
 struct ScheduleEditor: View {
     let text: String
-    /// 手上的那一份归调用方：点"好"与调用方自己的提交（"记一条"按回车）存的是同一份
     @Binding var draft: ScheduleDraft
-    /// 调用方那边存得成（新记一条时正文记得成）：不成时"好"停用
     var savable = true
     let save: () -> Void
     let cancel: () -> Void
-    /// 已有的定时才有：点"不再定时"，由调用方先确认（`stopScheduleDialog`）
     var end: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -209,7 +206,6 @@ struct ScheduleStrip: View {
 }
 
 extension View {
-    /// 不再定时先确认（库里忘掉是软删，界面上没有拨回去的路）：`line` 设上就问，点了才忘掉这一条。
     func stopScheduleDialog(_ line: Binding<CueMemoryLine?>) -> some View { modifier(StopScheduleDialog(line: line)) }
 }
 

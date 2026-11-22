@@ -23,7 +23,6 @@ nonisolated struct CueWait: Identifiable, Sendable, Equatable {
         }
     }
 
-    /// Cue 的一般提问是它问时的范围（`CueMessage.asked`），没给范围的不属于哪个项目。
     var project: UUID? {
         if let task { return task.projectID }
         switch wait {

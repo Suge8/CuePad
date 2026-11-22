@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 用户触摸、拖动及惯性期间放弃滚入，不排队到松手后抢位置；已经完整可见的目标也不挪。
 final class SessionRailReveal {
     var active = false {
         didSet { if !active { busy = [] } }

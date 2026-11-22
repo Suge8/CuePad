@@ -2,7 +2,6 @@
 import SwiftUI
 import UIKit
 
-/// 不抢列表滚动，不贴屏幕两边起手（贴边是返回）；页上的横拖（内容区右滑返回）等它先判，它不要的才归它。
 struct HorizontalPan: UIGestureRecognizerRepresentable {
     let allows: (CGFloat) -> Bool
     let changed: (CGFloat) -> Void

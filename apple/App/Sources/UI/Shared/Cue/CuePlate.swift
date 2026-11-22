@@ -9,9 +9,7 @@ struct PlateStyle {
     let lineGap: CGFloat
     let name: Font
     let line: Font
-    /// 字号跟着动态字体放大到这一档为止，再大第二行就出了定高的名牌。
     let largestType: DynamicTypeSize
-    /// 收着时头像仍贴左，名字与数字账各自排在名牌正中（Mac：名牌比字宽出一大截，字跟着头像靠左排右半边是空的）；长开时字只往下落、不横挪。
     var centered = false
 
     #if os(iOS)
@@ -28,13 +26,10 @@ struct PlateStyle {
     #endif
 }
 
-/// 名字与数字账只一份，开合时跟着摆法（`PlateLayout`）连续挪位，不交叉淡化：两份半透明叠在一起时字多就发花。
 struct CuePlate: View {
     let card: Bool
     let style: PlateStyle
-    /// 名牌右端另放了东西（Mac 右栏的收起钮）：字让出这么宽。
     var reserve: CGFloat = 0
-    /// 名字后面一颗小箭头说它点得开（Mac；手机的名牌自己长成名片，不用）：面板开着时朝上。
     var opens: Bool?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -45,7 +40,6 @@ struct CuePlate: View {
         let full = CueAvatar.Size.card.side
         let side = card ? full : style.face
         PlateLayout(progress: card ? 1 : 0, style: style, reserve: reserve) {
-            // 头像只按名片那一档画一次，收着时整体缩小：开合时连续地长大，点与表情不换档
             CueAvatar(cue.beat, size: .card, plate: false)
                 .scaleEffect(side / full)
                 .frame(width: side, height: side)
@@ -63,7 +57,6 @@ struct CuePlate: View {
     }
 }
 
-/// 数字账两态都按收着时那一栏的宽排（`column`）：名片里放得下全列也不换排法，开合前后是同一排字。
 private struct PlateLayout: Layout {
     var progress: CGFloat
     let style: PlateStyle
@@ -111,7 +104,6 @@ private struct PlateLayout: Layout {
         let down = Self.ease(p / Self.turn), across = Self.ease((p - Self.turn) / (1 - Self.turn))
         let beside = center.x + radius + style.nameGap
         let top = Self.lerp(center.y - words / 2, center.y + radius + Self.cardGap, down)
-        // 收着时字在哪：居中的那种排在名牌正中，让开左边的头像与右端留的那一截
         let clear = style.inset + style.face + style.nameGap
         func rest(_ width: CGFloat) -> CGFloat {
             style.centered ? max(clear, min((start - width) / 2, start - reserve - Self.trailing - width)) : beside
@@ -128,7 +120,6 @@ private struct PlateLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        // 与量尺寸时同一个给的宽：这一刻的宽是按进度从收着的宽长向它的（`bounds` 已是长到一半的宽，不能再拿它当铺满的宽）
         let f = frame(width: proposal.width, subviews)
         let origin = CGPoint(x: bounds.midX - f.size.width / 2, y: bounds.minY)
         subviews[0].place(at: CGPoint(x: origin.x + f.avatar.x, y: origin.y + f.avatar.y), anchor: .center, proposal: .unspecified)

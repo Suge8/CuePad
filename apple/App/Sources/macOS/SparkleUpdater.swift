@@ -1,7 +1,6 @@
 #if os(macOS)
 import Sparkle
 
-/// 更新源与公钥在 Info.plist（SUFeedURL、SUPublicEDKey）。
 final class SparkleUpdater: NSObject, AppUpdater, SPUUpdaterDelegate {
     private var controller: SPUStandardUpdaterController!
     var postponeRelaunch: ((_ install: @escaping () -> Void) -> Bool)?

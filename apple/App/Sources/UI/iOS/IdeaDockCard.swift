@@ -3,9 +3,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 边聊边看停在回复框上方的那一块（`IdeaDock`）：收着是一条写灵感标题的玻璃条，点它或往上拉长成卡，里面是这条灵感的编辑器；点条或往下拉收回。
-/// 长开收回是同一块玻璃变高：编辑器一直在，收着时高为 0、不接输入（`editable`），字与光标都留着。
-/// 回复框拿到键盘时收回：卡占着半屏，再加键盘，对话就没处看了。
 struct IdeaDockCard: View {
     let dock: IdeaDock
     @Environment(Workspace.self) private var workspace
@@ -48,8 +45,6 @@ struct IdeaDockCard: View {
         .onDisappear { editing?.leave() }
     }
 
-    /// 连条一起至多占对话可见高的一半（`RiseLayout` 给停靠的卡的上限），约是页头与回复框之间的六成。是上限不是定高：
-    /// 键盘弹着、下面还有问题卡时，回复框那一叠先拿走它们的高，卡只占剩下的，不从页头底下伸出去。
     private var editorHeight: CGFloat {
         guard chatHeight.isFinite else { return 0 }
         return max(0, chatHeight / 2 - Self.head - Spacing.item)
@@ -99,7 +94,6 @@ struct IdeaDockCard: View {
     }
 }
 
-/// 上限逐帧排：回复框这一块的高就是对话的底边距（`FloatingReply`），只在终点量一次的话对话先一下跳到位、卡再慢慢长。
 private struct OpenHeight: ViewModifier, Animatable {
     var height: CGFloat
 

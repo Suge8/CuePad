@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// 假模型收到的一个请求，三种协议读成同一个样子（`messages` 按对话先后）。
 public struct FakeRequest: Sendable {
   public enum API: Sendable { case chat, responses, messages, other }
   public enum Role: Sendable { case system, user, assistant, tool }
@@ -9,9 +8,7 @@ public struct FakeRequest: Sendable {
   public struct Message: Sendable {
     public let role: Role
     public let text: String
-    /// `<mime>:<base64 长度>`
     public let images: [String]
-    /// 助手这一条里调的工具名
     public let calls: [String]
   }
 
@@ -23,26 +20,21 @@ public struct FakeRequest: Sendable {
   public let messages: [Message]
   /// 请求带的工具清单（名字）
   public let tools: [String]
-  /// 思考强度（Chat 的 `reasoning_effort`、Responses 的 `reasoning.effort`）
   public let effort: String?
   public let body: Data
   /// 工具搜索（Responses）找到的工具所在的命名空间，工具名 → 命名空间；调它们时要带上
   public let found: [String: String]
 
-  /// 最近一条你的话（工具结果不算）
   public var prompt: String { lastUser.map { messages[$0].text } ?? "" }
   /// 会话那一家按第一句话起名的旁路请求：带着 CuePad 的起名说明（`SessionNameSuggestion.instructions`），Pi 放在系统提示里，Codex 拼在你的话前面
   public var isTitle: Bool { system.contains("single-line task title") || prompt.contains("single-line task title") }
   public var images: [String] { lastUser.map { messages[$0].images } ?? [] }
-  /// 最近一条你的话之后，助手已调过几次工具
   public var step: Int { after.filter { !$0.calls.isEmpty }.count }
   /// 有工具搜索可用、`name` 还没搜出来（Codex 的 MCP 工具）
   public func needsSearch(_ name: String) -> Bool {
     tools.contains("tool_search") && !found.contains { $0.key == name || $0.key.hasSuffix("_" + name) }
   }
-  /// 最近一条你的话之后的工具结果
   public var results: [String] { after.filter { $0.role == .tool }.map(\.text) }
-  /// 你说过的每一句
   public var said: [String] { messages.filter { $0.role == .user }.map(\.text) }
   var estimatedTokens: Int { messages.reduce(0) { $0 + $1.text.count } / 4 + 1 }
   public var json: [String: Any] { (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:] }

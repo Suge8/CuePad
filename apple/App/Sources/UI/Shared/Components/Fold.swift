@@ -28,7 +28,6 @@ struct Fold<Label: View, Content: View>: View {
     @ViewBuilder private var toggle: some View {
         let button = Button {
             stay?(key, !open)
-            // 开合带着下面的内容一起挪：只给这一块挂动画（`.animation(value:)`）的话下面的回答当帧跳到位，收走的几行还在原地淡出、叠在它的字上
             withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { open.toggle() }
         } label: { label }
         switch press {
@@ -37,7 +36,6 @@ struct Fold<Label: View, Content: View>: View {
         }
     }
 
-    /// 只裁上下：行的悬停底比行左右各宽出一圈（`Press.inline`），贴着框裁的话右端被切成直边。
     private var held: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .padding(.horizontal, Self.hoverRoom).clipped().padding(.horizontal, -Self.hoverRoom)
@@ -47,7 +45,6 @@ struct Fold<Label: View, Content: View>: View {
 }
 
 extension View {
-    /// 收着的那一头由实到虚：字是被截在这里的，不是到这里就完了。
     func fadesEdge(_ edge: VerticalEdge, when folded: Bool) -> some View {
         mask {
             ZStack(alignment: edge == .top ? .top : .bottom) {

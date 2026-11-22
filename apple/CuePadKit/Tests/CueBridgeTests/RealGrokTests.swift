@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 端到端：钉住版本的真 Grok（ACP）+ 假模型（Responses，`FakeModel`）+ `GrokRuntime` 与 `Bridge`。零网络、不用任何登录。
 @MainActor
 @Suite(RealAgents.needs(.grok), RealAgents.tiered)
 struct RealGrokTests {
@@ -47,7 +46,6 @@ struct RealGrokTests {
 
     @Test func aRunningTurnIsAborted() async throws {
         try await withGrokRig { rig in
-            // 说到一半停住（假模型的闸门）：停止一定落在回答还在说的时候
             let gate = rig.model.gate()
             rig.model.on({ $0.prompt.contains("numbers from 1 to 400") }) { _ in .stream(["1\n", "2\n", "3\n"], until: gate) }
             let id = try await rig.open("token-3")
@@ -62,7 +60,6 @@ struct RealGrokTests {
         }
     }
 
-    /// 终端里还开着这个会话（真的终端界面）时不接，它退出后照常接着。
     @Test func aSessionStillOpenInATerminalIsNotResumedUntilItExits() async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-5")

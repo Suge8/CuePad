@@ -3,7 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 先撤回（若有 withdraw）、放回（若有 restore），再说（若有 text）；都没有是参数错。
   func tell(_ args: Args) async throws -> Result {
     let related = try await args.string("task").asyncMap(references.task)
     let shots = try CueShot.checked(try await shots(args.raw["show"]))
@@ -14,8 +13,6 @@ extension CueTools {
     if ask == nil, !shots.isEmpty { throw Failure("show 只跟着 ask：要他看的图放在提问上") }
     var done: [String] = []
     if let ref = args.string("withdraw") {
-      // 他开口收起的卡已经不在等你里，算他直接说了：撤回是多余的一步，不当错（模型照他那句话撤回它很自然）；
-      // 随撤回带的 text 是撤回的理由，卡没撤也就不发，免得多一条打扰他
       if ask == nil, args.string("restore") == nil, let aside = try Self.question(ref, in: await store.cueQuestionsSetAside()) {
         return .ok("「\(CueEnvelope.clip(CueFormat.plainText(aside.text), 40))」他开口时已收起，不在等你里，不用撤回" + (args.string("text") == nil ? "。" : "，text 也没发。"))
       } else {
@@ -37,7 +34,6 @@ extension CueTools {
     return .ok(done.joined() + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）\n\(CueToolReceipt(.reply, message.id).mark)")
   }
 
-  /// show 点名的图（tell 的提问、done 的结果）：每张的 file 是发到手机的那一份的 id 或前缀（task peek 里列的）。
   func shots(_ raw: Any?) async throws -> [CueShot] {
     guard let raw else { return [] }
     guard let items = raw as? [[String: Any]] else { throw Failure("show 是数组：[{file, look}]") }
@@ -58,7 +54,6 @@ extension CueTools {
     return question
   }
 
-  /// 同上，对不上为 nil；对上好几条照样报错（要多写几位，不是没有）。
   private static func question(_ ref: String, in candidates: [CueMessage]) throws -> CueMessage? {
     let key = ref.trimmingCharacters(in: .whitespaces).lowercased()
     guard !key.isEmpty else { return nil }

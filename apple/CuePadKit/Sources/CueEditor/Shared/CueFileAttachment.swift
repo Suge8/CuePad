@@ -8,9 +8,7 @@ import AppKit
 import UIKit
 #endif
 
-/// 宿主告诉编辑器一个附件此刻的样子：编辑器只画，不懂同步。
 public struct CueFileStatus: Equatable, Sendable {
-    /// 还没到的图片写在占位上。
     public var detail: String
     public var progress: Double?
 
@@ -20,7 +18,6 @@ public struct CueFileStatus: Equatable, Sendable {
     }
 }
 
-/// 点它交给宿主（`onOpenAttachment`）；牌子在绘制时现画，缩略图后台出好再重画。
 final class CueFileAttachment: NSTextAttachment {
     private static let maxWidth: CGFloat = 360
 
@@ -55,7 +52,6 @@ final class CueFileAttachment: NSTextAttachment {
     }
 }
 
-/// 文件牌怎么画（两端同一份，画布由 `CueImageRendering.canvas` 给；颜色由调用方先按当前外观解析好）。
 nonisolated enum FileChip {
     static let padding: CGFloat = 8
     static let thumbSide: CGFloat = 40
@@ -89,7 +85,6 @@ nonisolated enum FileChip {
 
         let box = CGRect(x: padding, y: (size.height - thumbSide) / 2, width: thumbSide, height: thumbSide)
         if let thumbnail {
-            // 缩略图离牌边 `padding`，与牌的圆角同心
             let inner = max(style.imageCornerRadius - padding, 0)
             let fitted = fit(CGSize(width: thumbnail.width, height: thumbnail.height), in: box)
             context.saveGState()

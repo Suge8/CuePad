@@ -58,7 +58,6 @@ extension SyncBench {
             }
         }
 
-        /// `was`：nil 是第一次读（启动时），`.some(nil)` 是这一条第一次出现。
         private static func step(_ prefix: String, _ item: Seen, was: Seen??) {
             let id: [String: any Sendable] = ["id": item.id.uuidString.lowercased()]
             let first = id.merging(["author": item.author ?? ""] as [String: any Sendable]) { $1 }
@@ -75,8 +74,6 @@ extension SyncBench {
 
         private static var shown: Set<UUID> = []
 
-        /// 页面的订阅拿到新值（`Observing` 写进页面状态那一刻，`DebugHooks.observed`）：Cue 页里第一次出现的话，
-        /// 等这一圈主线程的界面更新与 Core Animation 提交做完（提交之后的 beforeWaiting 观察者）记 `msg-shown`。
         static func observed(_ value: Any) {
             guard let thread = value as? CueThread else { return }
             let fresh = thread.messages.map(\.id).filter { !shown.contains($0) }

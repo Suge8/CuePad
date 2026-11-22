@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 替身记下拉起了哪些链接（只用替身，不真去拉起 UU 远程）。
 @MainActor
 @Suite(.releasesLibraries)
 struct MacRemoteTests {

@@ -2,13 +2,11 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 不读整块看板、有活会话就不看各件事：值班的 Cue 管理器每次会话状态变化都读它（读整块看板曾占会话忙时常驻开销的一成多）。
   public func cueBoardActive() throws -> Bool {
     try db.first("SELECT 1 FROM piSessionStates WHERE \(Self.isLoose("piSessionStates")) LIMIT 1") { _ in true } != nil
       || boardItems(try topTasks(where: Self.onBoard)).contains(where: \.isActive)
   }
 
-  /// 信封、变化与 peek 按它；用户看到的推进中另按 `CueBoard.inProgress`。
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
@@ -20,13 +18,6 @@ extension CueStore {
       .compactMap { task in try latestSession(of: task.id).map { (task, $0) } }
   }
 
-  /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它——
-  /// 但那件事完成之后它还没动过的不算：完成时它随那件事收起（不是为它开的会话 CuePad 不结束，`taskSessionCanEnd`），再有动静才回来。
-  /// 活着就在看板上，一件事只出现一处：收起的会话在看板上是它绑着的那张已完成的任务卡；完成之后它有了新状态，才作为无主会话回到推进中。
-  /// 那张卡离开了看板（`taskDoneOnBoard` 不成立：归档、删除、项目进了回收站）就没有东西代表它，照常作为无主会话在推进中。
-  /// 先后比记录自带的时刻（会话的 `stateSince` 与任务的 `completedAt`），不比本机写入的先后：同步乱序到达时，收到的先后与发生的先后相反，
-  /// 时刻在各设备上读到的都一样。只有会话的时刻严格晚于完成才算完成之后的新动静；时刻只记到毫秒，同一毫秒分不出先后，按没动过算——
-  /// 完成那一下与会话的这次变化同一毫秒，多半就是同一件事。
   static func isLoose(_ alias: String) -> String {
     """
     \(WorkState.outsideSQL([.ended], column: "\(alias).state"))
@@ -120,8 +111,6 @@ extension CueStore {
   }
 
 
-  /// 一件顶层任务的交付物（唯一的规则）：它与它的子任务用过的会话（正在用的与换下来的）在任务开工（`Card.startedAt`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
-  /// 不另记“哪些是交付物”：会话发到手机本来就是给人看的。
   public func deliverables(of task: UUID) throws -> [PreviewItem] {
     try db.query(
       """

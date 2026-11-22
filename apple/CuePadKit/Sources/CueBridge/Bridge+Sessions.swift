@@ -4,12 +4,8 @@ import Darwin
 import Foundation
 
 extension Bridge {
-    /// 启动对账时从同步记录里取（`CueStore.launchMac`）。
     public func carryOver(_ before: [String: (state: WorkState, times: SessionTimes)]) { carried = before }
 
-    /// 同一 id 已在线时只换通道与快照，不重报出现。
-    /// 重新上桥（同一 id 换了快照、CuePad 重开后接回）时粗状态（`WorkState.phase`）没变就沿用原来的起点，
-    /// 各家接入上桥时给的"现在"不算——界面的"多久前""有新回复"与同步记录都读它。
     public func attach(_ session: Session, via link: any SessionLink) {
         controls[session.id] = link
         var session = session
@@ -51,13 +47,10 @@ extension Bridge {
         emit(session.state != previous.state || session.detail != previous.detail ? .stateChanged(session, from: previous.state) : .infoChanged(session))
     }
 
-    /// 改一个在线会话正在说的话（`LiveDraft`）：各家接入每个增量调一次即可，刷新节奏由 `LiveDraftFeed` 统一定；只改这一格的 `draft`，
-    /// 不经 `changes()`（不进记录器、不进同步）。不在线时什么也不做；会话下线时随它的格子一起没了。
     public func setDraft(_ id: Session.ID, _ draft: LiveDraft?) {
         slots.first { $0.id == id }?.offer(draft)
     }
 
-    /// 托管会话的各家接入都经这里，别的事件与桥无关。
     public func show(_ event: TurnEvent, in id: Session.ID) {
         switch event {
         case .speaking(let draft): setDraft(id, draft)
@@ -66,8 +59,6 @@ extension Bridge {
         }
     }
 
-    /// 各家报的用量不带阈值，只在这一处补上：模型、窗口、已用有一样变了就照这家此刻的配置再算一遍（换了模型、会话里改了压缩设置，
-    /// 下一次报用量就跟上），都没变沿用上一次的——会话别的字段变得勤，不为它们读配置。预留比窗口还大的（线不在窗口里）当说不准。
     private func compacting(_ session: Session, after previous: Session?) -> Session {
         guard let paths, let compactsAt = session.agent.facts.compactsAt, var context = session.context else { return session }
         var session = session
@@ -88,7 +79,6 @@ extension Bridge {
         emit(.ended(session, reason: reason))
     }
 
-    /// 歇着满 `hostedIdle` 时请它退出（不算结束，发话时再接着；`AgentFacts.releasesIdleHosted`）。
     func reviewHosted() {
         for slot in slots where !releasing.contains(slot.id) {
             let session = slot.session
@@ -107,7 +97,6 @@ extension Bridge {
         }
     }
 
-    /// 请它退出；失败（含 Pi 扩展的确认超时 `ackTimeout`）就摘掉标记，下次审查（任何状态变化）再请一次。
     private func release(_ id: Session.ID) {
         guard let link = controls[id], releasing.insert(id).inserted else { return }
         idleTimers.removeValue(forKey: id)?.cancel()

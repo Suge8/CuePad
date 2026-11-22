@@ -2,7 +2,6 @@
 import CueStore
 import Foundation
 
-/// `cuepad live` 的动词：看、点、填这个会话活预览里的页面。命令行把请求经 `LiveChannel` 交给开着这份库的 App，App 在那个会话的预览里做完、答回来。
 extension Command {
   static let liveActions: [Command] = [
     action(
@@ -111,7 +110,6 @@ extension Command {
     },
   ]
 
-  /// `saves`：应答带回文件（截图）的动词，文件存到哪。
   private static func action(
     _ name: String, _ summary: String, arguments: String = "", options: [Opt] = [], notes: String = "",
     saves: (@Sendable (Call) -> URL)? = nil, _ build: @escaping @Sendable (Call) throws -> LiveChannel.Args
@@ -119,7 +117,6 @@ extension Command {
     Command(path: ["live", name], summary: summary, arguments: arguments, options: options, notes: notes) { call in
       let session = try agentSession(call, "live \(name) 只能在 Agent 执行的命令里运行，操作的是那个会话的活预览")
       let args = try build(call)
-      // App 那边自己有各步的时限（等用户停手、等页面安定、等脚本答话）；这里只兜住 App 卡死
       let timeout = Duration.seconds((args.timeout ?? 0) + 60)
       let reply: LiveChannel.Reply
       do throws(LiveChannel.Failure) {

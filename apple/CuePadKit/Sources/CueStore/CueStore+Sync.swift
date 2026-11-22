@@ -1,8 +1,5 @@
 import Foundation
 
-// CueSync 使用的窄接口（`package` 可见，不进入应用的公开 API）。同步表的行以"字段字典"交换，
-// CueSync 负责它与 CKRecord 的映射；冲突判定、事务与本机元数据留在 Store 里，保证一次远端应用是一个写事务。
-
 package struct SyncKey: Hashable, Sendable {
   package var table: Table
   package var id: String
@@ -39,7 +36,6 @@ package enum RemoteChange: Sendable {
   case delete(SyncKey)
 }
 
-/// 一次提交告诉同步层的：碰过哪些表，要不要叫实时通道马上传（`Table.live`；别的进程写的，碰了实时通道的表就要）。
 package struct SyncChange: Sendable {
   package var tables: Set<Table>
   package var urgent: Bool
@@ -68,7 +64,6 @@ extension CueStore {
     return nil
   }
 
-  /// 这次增量里有没有一写下就要传的（`Table.live`）：满足条件的保存，或实时通道里的表的删除。
   func urgent(among delta: PendingSync) throws -> Bool {
     let saves = Dictionary(grouping: delta.saves, by: \.table).mapValues { $0.map(\.id) }
     for (table, urgency) in Table.live {
@@ -86,7 +81,6 @@ extension CueStore {
       [JSONColumn.encode(delta.deletes), JSONColumn.encode(Table.live.keys.map(\.rawValue))]) { _ in true } != nil
   }
 
-  /// 待推送的附件记录：文件那一路单独传（CueSync 的 `FileSender`），记录的两条通道不带它们。附件表小，每次全表查。
   package func pendingAttachments() throws -> [String] {
     try pendingSaves(.attachments, where: "1").map(\.id)
   }
@@ -102,10 +96,6 @@ extension CueStore {
     return pending
   }
 
-  /// 这几张表（一条上传通道）的待推送与推导时的同步变更代数。`since` 是上次确定这几张表没有剩下待推送时的代数：其后的提交增量都还记着、
-  /// 范围都明确时，只复查它们碰过的记录；否则全量推导（真实库一次约 1 亿条指令，会话在跑时几乎每次上传前都要一遍）。
-  /// `urgentOnly`：只要一写下就该传的版本（`Table.live`，`.when` 的表只要满足条件的；不在里面的表一条不要）。
-  /// `newestFirst`：保存按修改时间从新到旧排（实时通道：积压再多，新写的也在下一批里）；否则按写下的先后。删除排在保存后面。
   package func pendingSync(
     since generation: Int?, in tables: [Table], urgentOnly: Bool = false, newestFirst: Bool
   ) throws -> (pending: PendingSync, generation: Int) {
@@ -134,7 +124,6 @@ extension CueStore {
     return (PendingSync(saves: saves.map(\.key), deletes: deletes), syncGeneration)
   }
 
-  /// 这几条里仍待推送的（这几张表里的保存与删除）。
   package func pendingSync(among names: Set<String>, in tables: [Table] = Table.synced) throws -> PendingSync {
     let sorted = names.sorted(), ids = JSONColumn.encode(sorted)
     var pending = PendingSync(saves: [], deletes: [])
@@ -179,7 +168,6 @@ extension CueStore {
     return pending
   }
 
-  /// `scanning`：翻整张表（全量推导）时走只有 id 与修改时间的覆盖索引（`Schema.pendingIndexes`），不读表本身；按行查的照常走主键。
   private func pendingSaves(
     _ table: Table, where condition: String, _ arguments: [any SQLBindable] = [], scanning: Bool = false
   ) throws -> [SyncKey] {
@@ -228,8 +216,6 @@ extension CueStore {
     return synced
   }
 
-  /// 临交出前核对：这一版已被服务器收下的作废（挑批之后、交出之前拉到了它的回声：先前交出这一版的结果丢了，服务器其实收下了），不再交一次；
-  /// 投送请求另在同一事务里核对版本并保留发送权，与撤回互斥。其余记录沿用挑批时的记账。
   package func reserveForUpload(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws -> Set<String> {
     let pushed = Dictionary(
       uniqueKeysWithValues: try db.query(
@@ -251,10 +237,6 @@ extension CueStore {
     }
   }
 
-  /// 本机把这几条记录的这一版交给服务器（构造上传批次时）。结果没回到本机就崩溃、或回包在路上丢了，服务器其实收下了它；
-  /// 之后它经拉取或重传被拒附的服务器版本回来，按修改时间认出是自己的（`applyVersion`），不当成并发编辑留冲突副本。
-  /// 同一时刻只有一批在路上，所以每条记录记一个时间就够：已有一版交出去而服务器还没收下时保留那一版（它最可能先回来），
-  /// 收下之后再交出去的才覆盖。
   package func noteSent(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws {
     try write { try noteSentVersions(versions) }
   }
@@ -270,10 +252,6 @@ extension CueStore {
     }
   }
 
-  /// 你发出的话的那条消息（带请求标识，`ChatMessage.deliveryID`）上了服务器，同一事务按保留规则收走投送请求（`removeExpiredDeliveries`）；窗口内原卡未到时保留。
-  /// 不在写对话时收：请求的删除随回执马上传，消息走后台通道、要等攒批窗口与前面的批次，别的设备会先收到删除、气泡就空着。
-  /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
-  /// `serverAt` 是服务器收下它的时刻（上传回执里那条记录的 creationDate）：投送请求记进本机列 `DeliveryRequest.serverAt`，同拉到时（`RemoteChange.save`）。
   package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data, serverAt: Date?)]) throws {
     guard !pushed.isEmpty else { return }
     let messages = JSONColumn.encode(pushed.filter { $0.row.table == .piMessages }.map(\.row.id))
@@ -283,7 +261,6 @@ extension CueStore {
         if row.table == .deliveryRequests, let serverAt {
           try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, row.id])
         }
-        // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `StateRecorder`）；不动修改时间，不会让记录重新待推送
         if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
           try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
         }
@@ -318,18 +295,17 @@ extension CueStore {
   package func resetSyncMetadata() throws {
     try write {
       try db.run("DELETE FROM syncRecords")
-      try db.run("DELETE FROM syncState WHERE key NOT LIKE 'capture:%'")  // 分享入库的标记不属于同步状态：条目还在时要留着
+      try db.run("DELETE FROM syncState WHERE key NOT LIKE 'capture:%'")
     }
   }
 
-  /// 文件在同一个写事务里删（同 `reclaimFiles`）：别的连接不能在清库之后、删文件之前提交引用，不然它刚留的保底跟着被删，记录却在。
   package func eraseSyncedData() throws {
     try write {
       for table in Table.synced { try db.run("DELETE FROM \(table.rawValue)") }
       try db.run("DELETE FROM projectDirectories")
       try db.run("DELETE FROM syncRecords")
       try db.run("DELETE FROM syncState")
-      try db.exec(Schema.defaultProject)  // 新库建好就有的那一条：清掉之后同样要有，不然新账号里一条灵感都建不了
+      try db.exec(Schema.defaultProject)
       try files.removeAll()
     }
   }

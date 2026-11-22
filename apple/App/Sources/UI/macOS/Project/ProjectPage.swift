@@ -14,7 +14,6 @@ struct ProjectPage: View {
     @Environment(\.topBand) private var band
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
-    /// 首次挂上时内容分几帧出（`Stage`）：一个回合里全建要几十毫秒；留着的页回来时已经在最后一段。
     @State private var stage = Stage.header
 
     private enum Stage: Int, CaseIterable, Comparable {
@@ -23,10 +22,8 @@ struct ProjectPage: View {
     }
 
     private static let collapseOffset: CGFloat = 140
-    /// 卡片墙：列不窄于 260；2560 宽的全屏收起侧栏是 9 列，留出余量。
     private static let metrics = ProjectWallSections<CardTile>.Metrics(
         minColumnWidth: 208, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, olderGap: Spacing.group)
-    /// 页底留的一截：多选时浮在页底的那一条（`SelectionBar`）连同它离窗口底，最后一行能滚到它上面。
     private static let bottomClearance: CGFloat = 88
 
     var body: some View {
@@ -36,13 +33,11 @@ struct ProjectPage: View {
                     content.id("top")
                 }
                 .scrollPosition($position)
-                // 栏头那排字没有底：滚上来的卡在它下面淡出，不从字后面穿过去
                 .fadesUnderHead()
                 .taskFoldScroll(anchor)
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.fade) { collapsed = isCollapsed }
                 }
-                // 下滚后的回到顶部是页里的一块、不放进栏头：栏头内容只随用户操作变，不随滚动位置这种布局读数变（跟着滚动位置变会形成布局循环）。
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
                         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
@@ -68,7 +63,6 @@ struct ProjectPage: View {
                 await NextFrame.wait()
                 stage = next
             }
-            // 首屏有了（`interact` 等它）：按页面排完记，不按墙上的卡片出现——没有"最近"卡片的项目（演示库的圆桌）永远等不到
             DebugHooks.mark("content")
         }
     }
@@ -94,7 +88,6 @@ struct ProjectPage: View {
         }
     }
 
-    /// 读到的数据与由它推出的分区、墙与"更早"在同一次写入里落下：页面只多算一遍，不先露一帧只有页头的样子。
     private var dataBinding: Binding<ProjectPageData?> {
         Binding(get: { data }, set: { data = $0; rearrange() })
     }

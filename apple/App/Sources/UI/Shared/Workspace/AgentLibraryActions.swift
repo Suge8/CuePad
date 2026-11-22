@@ -1,9 +1,7 @@
 import CueStore
 import Foundation
 
-/// 文件只由那台 Mac 写：别的设备发投送请求（`DeliveryMode.tidy`、`.libraryEdit`）、等它写回结果。
 extension Workspace {
-    /// 按 `host` 那台 Mac 分开：Cue 换到另一台后看的是那台的文件，在这台没发的字不拿去对着那台。
     func fileDraft(_ file: LibraryFile, text: String?, on host: String) -> FileDraft {
         let key = FileDraftKey(host: host, file: file)
         if let draft = fileDrafts[key] {
@@ -23,7 +21,6 @@ extension Workspace {
         library.flatMap { fileDrafts[FileDraftKey(host: $0.hostID, file: file)] }
     }
 
-    /// 手机发往那台 Mac 的不带撤销：那台照做不留撤销（移走的在那台的废纸篓里）。
     func tidy(_ orders: [TidyOrder], in library: AgentLibrary) async {
         guard !orders.isEmpty else { return }
         do {
@@ -49,7 +46,6 @@ extension Workspace {
         return "整理好了 \(count) 件"
     }
 
-    /// 文件已不是 `edit.base` 时抛 `AgentLibraryError.changedOnMac`（手机发出的，原因随结果写回）。不提示：页顶那一行由调用方写。
     func saveFile(_ edit: LibraryEdit, in library: AgentLibrary) async throws {
         if library.hostID == localHost {
             #if os(macOS)

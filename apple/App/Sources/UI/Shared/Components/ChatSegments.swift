@@ -16,10 +16,8 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
     let items: [Item]
     let window: ChatWindow
     let size: Int
-    /// 屏上那几段上下各再留几段真的：快甩时滑进来的先是排好的，不露空白；来回翻时离开不远的段不拆了又建。
     var spare = 1
     @ViewBuilder let segment: (ArraySlice<Item>) -> Segment
-    /// 要跳去的那一条（`ChatColumn` 往列里给）。在这里读，不由放列的页传：页在列外，读不到。
     @Environment(\.chatTarget) private var target
     @Environment(\.chatAnchor) private var anchor
     @Environment(\.chatOnScreen) private var onScreen

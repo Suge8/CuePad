@@ -25,7 +25,6 @@ nonisolated struct DraggedTaskSession: Transferable {
 }
 
 extension UTType {
-    /// 两端 Info.plist 导出的同一个标识（`$(CUEPAD_APP_ID).card`）。
     nonisolated static let cuepadCard = UTType(exportedAs: "\(AppIdentity.id).card")
 }
 
@@ -50,7 +49,6 @@ extension View {
         modifier(CardDraggable(card: card, session: session, chip: chip, shape: shape))
     }
 
-    /// `hover` 拖走与放下后报 nil；`perform` 先于放下后的那个 nil：落点的状态（拖进来时的起点）放下时还在。
     func cardDrop(isEnabled: Bool = true, hover: @escaping (CGPoint?) -> Void = { _ in }, perform: @escaping (DraggedCard, CGPoint) -> Void) -> some View {
         modifier(CardDrop(isEnabled: isEnabled, hover: hover, perform: perform))
     }
@@ -105,7 +103,6 @@ private struct CardDraggable<S: Shape>: ViewModifier {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    /// 拖进宽屏主区算哪一块（同 `WideDrop.pane`）：带会话的是会话，灵感是灵感，任务不接。
     private var wide: WideNavigation.Beside?? {
         if let session = session ?? card.session { return .session(SessionRoute(id: SessionState.recordID(sessionID: session), sessionID: session)) }
         return .some(card.idea.map { .card($0) })

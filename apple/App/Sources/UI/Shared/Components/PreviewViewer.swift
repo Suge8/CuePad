@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// `reply` 为 nil 时照挂全屏页的那一页（`previewPresenter` 的 `reply`），只有拍板卡另给（那几个选项）。
 struct PreviewOpening: Identifiable, Equatable {
     let preview: PreviewItem
     let batch: [PreviewItem]
@@ -11,7 +10,6 @@ struct PreviewOpening: Identifiable, Equatable {
 
     var id: UUID { preview.id }
 
-    /// 这一批在对话里的那一条（`group` 就是它的 id：会话里是 `ChatEntry.id`，Cue 页是那条消息）；会话底栏的"回复"用它（`PreviewReplyBar`）。
     var entry: UUID? { UUID(uuidString: group) }
 
     func index(of current: UUID) -> Int { batch.firstIndex { $0.id == current } ?? 0 }
@@ -32,8 +30,6 @@ enum PreviewReply: Equatable {
     case answer(CueMessage)
 }
 
-/// 按挂它的那一页认（`owner`）：给它的全屏页每次更新都新建一个闭包，闭包没法比，每次都算不等的话读它的每一格缩略图都跟着重算。环境值比出相等时读它的视图留着旧的那一个，所以闭包只能写给它的那一页的状态或绑定（旧的写的也是同一份），不能捕获会变的值。
-/// 不能恒等：页里再挂一层（窗口根上一个、会话里一个）时，里层写的与外层的比出相等，里面的缩略图读到的还是外层那个，图在外层的全屏页打开——飞不出来，也没有回复栏。
 struct PreviewOpener: Equatable {
     let owner: ObjectIdentifier
     let open: @MainActor (PreviewOpening) -> Void
@@ -49,18 +45,14 @@ extension EnvironmentValues {
 enum PreviewScale {
     static let tap: CGFloat = 2.5
 
-    /// 放大后换上的那张清楚的要解多大（最长边像素）：适合屏幕时铺的像素（`fit`）× 最多放大的倍数（`most`）——放到最大时一个图像素
-    /// 对一个屏幕像素，再多也看不出——夹在原图（`original`）以内、不过 `detailCap`。两端都只在第一次放大停下来才解它，只看不放大的图不解。
     nonisolated static func detailPixels(fit: CGFloat, most: CGFloat, original: CGSize) -> Int {
         Int(min(fit * most, max(original.width, original.height), CGFloat(detailCap)).rounded(.up))
     }
 
-    /// 清楚的那张最长边至多这么多：一张至多 8192² × 4 字节（256MB）
     nonisolated static let detailCap = 8192
 }
 
 struct PreviewContent: View {
-    /// 一行不宽过它，居中；Mac 飞出的落点按它算（`PreviewFlight`）。
     static let measure: CGFloat = 680
     /// Mac 全屏页最大这么大，就是网页缩略图排首屏的大小（`PageSnapshots`：不挂视图的 `WebPage` 固定按 1024×768 排，没有接口改，实测）：
     /// 窗口放得下整页时，飞来的那张与真网页是同一种排法，落地不跳。
@@ -85,7 +77,6 @@ struct PreviewContent: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // 自己排的字（Markdown、改动）铺在缩略图那页纸的颜色上：缩略图是这页纸的开头，点开是同一张纸长大
         .background(DeliverableLooks.drawn(preview.kind) ? palette.paper : palette.desk)
     }
 }
@@ -102,7 +93,6 @@ private struct PreviewMarkdown: View {
     }
 }
 
-/// 文件不在本机、读不出来（坏了、不是 UTF-8 的字、WebKit 载不出）时各类页都写这一句，不留一张白页。
 struct PreviewUnreadable: View {
     var body: some View {
         EmptyState(mascot: .error, title: "读不了这个文件").padding(Spacing.page).frame(maxHeight: .infinity)
@@ -115,7 +105,6 @@ nonisolated enum PreviewFile {
     @concurrent static func read<Value: Sendable>(_ file: URL, _ parse: @Sendable (String) -> Value) async throws -> Value { parse(try text(of: file)) }
 }
 
-/// 自己排字的那几类页（Markdown、改动、纯文本）：在后台读整份、交给 `parse`，读不了写 `PreviewUnreadable`。
 struct PreviewTextFile<Value: Sendable, Content: View>: View {
     let file: URL
     let parse: @Sendable (String) -> Value

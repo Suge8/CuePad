@@ -44,13 +44,12 @@ extension DebugScene {
         let project = await prepareLibrary(workspace)
         if args.demo {
             await seedRemote(workspace.services)
-            // Cue 在演示 Mac 上值班才有"等 Cue 回答"与待回复：每个画面都写（已写过就不再写）；Cue 页那几档在摆画面时按各自的先后写
             if !["cue", "cuememory", "cueschedules"].contains(scene ?? "") { await seedCue(workspace.services) }
         }
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         Task { await phoneVoiceCallIfAsked(workspace) }
         if args.noAsks { await settleAsks(workspace.services.store) }
-        await IslandBench.run(workspace.services)  // 跑完才报就绪：xc.sh run 一直持有这台模拟器，别的任务换不掉它
+        await IslandBench.run(workspace.services)
         holdForLiveActivity()
         if args.driveOpts.bench == "interact" {
             Task { await IOSInteractionBench.run(workspace) }
@@ -76,7 +75,6 @@ extension DebugScene {
         try await store.sessionPage(SessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
-    /// 演示模式没有同步，真实状态出不来。
     static var alertStatus: AlertStatus? {
         switch args.alertStatus {
         case "on": AlertStatus(authorization: .authorized, registration: .registered, subscription: .active)

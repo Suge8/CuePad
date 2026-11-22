@@ -14,7 +14,6 @@ final class CodexBrain: HostedSession {
     /// 停用的功能：会写 Codex 自己的记忆与时间线（memories、chronicle），会跑用户配置的钩子（hooks，也就不会报给 CuePad 成一个会话），
     /// 或会给模型加上读文件以外的能力（apps、plugins、computer_use、browser_use、image_generation）。
     static let disabledFeatures = ["memories", "chronicle", "hooks", "apps", "plugins", "computer_use", "browser_use", "image_generation"]
-    /// 盖过用户配置的项（`-c`，值是 TOML），键名见 Codex 的 config.schema.json。
     static let overrides = [
         "notify=[]", #"web_search="disabled""#, "skills.include_instructions=false", "project_doc_max_bytes=0", "agents.enabled=false",
         "include_collaboration_mode_instructions=false", "include_permissions_instructions=false",
@@ -23,9 +22,7 @@ final class CodexBrain: HostedSession {
     private let outlet = BrainSession(agent: .codex)
     private let driver = CodexDriver()
     private var threadParams: JSONValue = [:]
-    /// `model/list` 里的模型（连隐藏的）：就地换模型时认模型、取它支持的强度
     private var models: [CodexModel] = []
-    /// 在用的模型（没给时是 `thread/start` 定下的默认）与要的强度：每轮随 `turn/start` 给
     private var model: CodexModel?
     private var level: ThinkingLevel?
     private var fast = false

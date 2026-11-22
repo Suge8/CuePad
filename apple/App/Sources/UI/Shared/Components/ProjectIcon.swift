@@ -20,9 +20,7 @@ struct ProjectGlyph: View {
     static func icon(_ project: Project?) -> Icon { .project(ProjectIcon(stored: project?.icon)) }
 }
 
-/// 库里存的值不迁移：表外的名字认不出，是文件夹（含没存图标的）。
 nonisolated enum ProjectIcon: String, CaseIterable, Sendable {
-    // rawValue 就是库里已存的名字（早先表单存的系统符号名，更早版本存的 lucide 名 rocket）：已有项目直接认得，不用映射
     case folder, sparkles, chat = "bubble.left.and.bubble.right", terminal, globe, hammer, book, target
     case briefcase, cart, megaphone, paintbrush, lightbulb, flag, cube, leaf
     case layers, camera, house, heart, star, music = "music.note", rocket, bolt

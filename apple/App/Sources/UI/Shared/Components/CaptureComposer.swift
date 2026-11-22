@@ -7,11 +7,9 @@ struct CaptureState {
     var project: UUID?
 }
 
-/// 菜单栏面板最右的"交给 Cue"管的是这份草稿，所以挨着草稿，不占 Cue 那一行的宽。
 struct CaptureComposer: View {
     @Binding var state: CaptureState
     let defaultProject: UUID?
-    /// 草稿在这之前已清空。
     var saved: () -> Void = {}
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -72,7 +70,6 @@ struct CaptureComposer: View {
         let project = project, taken = state.draft, claim = workspace.claimImports(taken)
         guard !taken.isEmpty(accepting: .files), !saving else { return }
         saving = true
-        // 同发送：输入框当场清空，等待导入与保存期间新打的字留在输入框里；写不成放回去，新打的接在后面
         state.draft = ComposerDraft()
         workspace.attempt {
             defer { saving = false }
@@ -92,7 +89,6 @@ struct CaptureComposer: View {
 
 #endif
 
-/// 去处胶囊连着选项目的菜单：随手记（"→ 项目"）、记任务（"记到 项目"）。
 struct DestinationMenu: View {
     let project: UUID
     var lead = Text(verbatim: "→")

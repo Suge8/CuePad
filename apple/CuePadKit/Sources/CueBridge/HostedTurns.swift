@@ -13,39 +13,29 @@ final class HostedTurns {
     enum Phase {
         case idle
         case running
-        /// 被换轮停下的那一轮已收尾、这句开的一轮还没开始：桥上照旧在跑
         case handedOver
     }
 
     var facts = SessionFacts()
     private(set) var phase: Phase = .idle
-    /// 这一轮被要求停下：它的收尾不算出错
     private(set) var stopping = false
-    /// 这一轮发出、没被拒的停止请求有几个：都被拒了才不算被要求停下
     private var stopRequests = 0
     private enum Handover { case halting, delivering, awaitingStart }
-    /// 换轮中的话：期间收尾的一轮不歇下。开始说不出是哪句开的，只认领已交出、等开始的（几句可能并进同一轮，一次全认领）；
-    /// 交出中的到交出那一刻才看：在跑就是并进了或已开了
     private var handovers: [(token: UUID, step: Handover)] = []
     private var failure: String?
     private var tools: Set<String> = []
-    /// 一轮收尾或连接关了
     private let ends: Occurrences
     private let stopPhase = StopPhase()
-    /// 不经 `apply` 改了事实时通知主人发布：换轮没开成改为歇下、交出的话成了开轮者（开始可能早于交出返回就报过了）
     var onChange: () -> Void = {}
 
     init(timing: Timing = .system) {
         ends = Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: BridgeError.ackTimeout)
     }
 
-    /// Agent 此刻在跑一轮（桥上的 `facts.running` 在换轮的间隙也为真）
     var running: Bool { phase == .running }
 
     var handingOver: Bool { !handovers.isEmpty }
 
-    /// 返回这件事算不算数（大脑与桥要不要听到它）：已在跑时的开始、没在跑时的工具、出错与结束都不算。
-    /// `time` 只对开始有用：要早于这一轮在会话记录里可能的收尾（`SessionFacts.startTurn`）。
     @discardableResult
     func apply(_ event: TurnEvent, at time: Date = .now) -> Bool {
         switch event {
@@ -144,8 +134,6 @@ final class HostedTurns {
         onChange()
     }
 
-    /// 不是一句话开的一轮（没人等着回话，如 Codex 补开一轮取子代理的结果），歇着时才开：交不出就带着原因歇下，返回 false，主人随后发布；
-    /// 交的工夫里已有一轮开始过（在跑或已收尾）、连接关了的，这次交不出不算数，照开成了返回。
     func open(_ deliver: () async throws -> Void) async -> Bool {
         let seen = ends.count
         do {
@@ -166,10 +154,8 @@ final class HostedTurns {
         try await stopPhase.run(cancellable: false) { [self] in try await halt(stop, of: turn) }
     }
 
-    /// 此刻在跑的那一轮，按已收尾的轮数认（`ends.count`，这一轮收尾才变）；没在跑是 nil
     private var runningTurn: Int? { phase == .running ? ends.count : nil }
 
-    /// 没被开始认领、没被停下清掉的才改
     private func step(_ token: UUID, to step: Handover) {
         if let index = handovers.firstIndex(where: { $0.token == token }) { handovers[index].step = step }
     }
@@ -191,7 +177,6 @@ final class HostedTurns {
         do {
             try await stop()
         } catch {
-            // 停止请求没被收下：这一轮照旧，之后它自己出错要报（同一轮另有请求在途的除外）。收下了却等不到收尾（下面的等待超时）的照旧算被停下
             if ends.count == seen {
                 stopRequests -= 1
                 if stopRequests == 0 { stopping = false }
@@ -207,16 +192,12 @@ final class HostedTurns {
         onChange()
     }
 
-    /// 连接断开、进程退出：等收尾的都放行，之后不再有一轮
     func closed() {
         phase = .idle
         handovers.removeAll { $0.step == .awaitingStart }
         ends.happened()
     }
 
-    /// 按快照对齐（断线重连后）：`start` 是在跑的那一轮的开始，取会话记录里的（不晚于事件报来的同一轮的开始），nil 是歇着；
-    /// `failure` 是歇着时快照里上一轮出错的原文，没出错为 nil。错过的事件不补；
-    /// 在跑的那一轮快照里已歇下、或换成了更晚开始的一轮，就是错过了它的收尾，照收尾处理（等它收尾的换轮放行、接着交出，被要求停下的不算出错）。
     func reconcile(runningSince start: Date?, failure: String?) {
         tools = []
         if phase == .running {

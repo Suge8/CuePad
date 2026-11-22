@@ -30,7 +30,7 @@ import Testing
 
     let seen = try #require(try await phone.store.allSessionStates().first)
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
-    #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
+    #expect(seen.folder == "cuepad")
     #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == question)
     #expect(seen.pendingPrompt == recap.pendingPrompt)
     #expect(try await phone.store.chatMessages(of: "s1").map { [$0.text, $0.deliveryID?.uuidString] } == [[said.text, said.deliveryID?.uuidString]])
@@ -43,10 +43,9 @@ import Testing
     try await recorder.end(sessionID: "s1")
     try await cloud.exchange()
     let ended = try #require(try await phone.store.allSessionStates().first)
-    #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
+    #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)
   }
 
-  /// 新装设备的那一版修改时间是 0，盖不回"默认"。
   @Test func defaultProjectsCreatedOfflineOnTwoDevicesMergeIntoOne() async throws {
     try await mac.store.updateProject(Project.defaultID) { $0.name = "收件" }
     let fromMac = try await mac.store.createCard(body: "Mac 上记的")
@@ -68,7 +67,7 @@ import Testing
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.previews(of: "s1").first)
-    #expect(seen == preview)  // 标题、文件名、大小、哈希都到了
+    #expect(seen == preview)
     #expect(try Data(contentsOf: #require(phone.store.files.fileURL(for: seen.key))) == Data("<h1>登录页</h1>".utf8))
 
     try await mac.store.pruneMessages(olderThan: 7 * 86_400, now: .now.addingTimeInterval(8 * 86_400))
@@ -109,28 +108,27 @@ import Testing
     try await executor.start()
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
-    try await cloud.exchange()  // 手机 → Mac
+    try await cloud.exchange()
     _ = try await eventually(mac.store, { try $0.deliveryRequests().first?.status }) { $0 == .known(.succeeded) }
-    try await cloud.exchange()  // Mac → 手机：结果回来
+    try await cloud.exchange()
     let back = try #require(try await phone.store.deliveryRequest(request.id))
     #expect(back.status == .known(.succeeded))
-    let roundTrip = try #require(back.roundTrip)  // 发起的手机用本机时钟算：创建 → 看到结果
+    let roundTrip = try #require(back.roundTrip)
     #expect(roundTrip >= .zero && roundTrip < .seconds(60))
-    #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
+    #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)
 
     let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
     try await mac.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: Recap()))
-    try await cloud.deliver(from: mac, to: phone, lanes: [.live])  // 回执走实时通道，消息走后台通道还没到
+    try await cloud.deliver(from: mac, to: phone, lanes: [.live])
     #expect(try await phone.store.deliveryRequest(request.id) != nil)
-    try await cloud.exchange()  // 消息上了服务器、到了手机
+    try await cloud.exchange()
     #expect(try await phone.store.chatMessages(of: "s1").map(\.deliveryID) == [request.id])
     #expect(try await mac.store.deliveryRequest(request.id) == nil)
-    try await cloud.exchange()  // 收走同步过去
+    try await cloud.exchange()
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
     await executor.stop()
   }
 
-  /// 排在哪、Cue 替你答的不写，见 App 的 `AnswerLineTests`。
   @Test
   func anAnswerLineOutlivesItsRequestOnThePhone() async throws {
     let executor = DeliveryExecutor(
@@ -171,10 +169,10 @@ import Testing
     #expect(await phone.coordinator.status == .offline)
     #expect(try await mac.store.deliveryRequest(request.id) == nil)
 
-    try await cloud.exchange()  // 恢复：手机的待推送传出去
+    try await cloud.exchange()
     _ = try await eventually(mac.store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.succeeded) }
-    try await mac.store.markCueMessagesDelivered([message.id])  // Mac 上值班的管理器交给 Cue
-    try await cloud.exchange()  // 回执回到手机
+    try await mac.store.markCueMessagesDelivered([message.id])
+    try await cloud.exchange()
 
     let back = try #require(try await phone.store.deliveryRequest(request.id))
     let heard = try #require(try await phone.store.cueMessages().first { $0.id == message.id })
@@ -206,7 +204,7 @@ import Testing
 
     try await recorder.update(sessionID: "s1", state: .settled, detail: "做完了")
     let pending = try await mac.reconcileDelta().saves
-    #expect(!pending.contains(mac.id(shared)))  // 清单没改，不再上传
+    #expect(!pending.contains(mac.id(shared)))
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allSessionStates().first { $0.sessionID == "s1" })

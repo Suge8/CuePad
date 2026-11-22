@@ -7,7 +7,6 @@ import Testing
 struct SyncPollerTests {
   let time = ManualTiming()
 
-  /// 条件流：每次被消费方要下一个值时发信号，测试据此确认上一个值已经处理完。
   final class Condition: AsyncSequence, Sendable {
     typealias Element = SyncPoller.Cadence?
     let (values, input) = AsyncStream<SyncPoller.Cadence?>.makeStream()
@@ -51,7 +50,7 @@ struct SyncPollerTests {
     var fetched = fetches.makeAsyncIterator()
 
     await asks.next()
-    condition.input.yield(every5)  // 开始在等：开始时的那一拉由 App 的立即同步拉，这里等第一个间隔
+    condition.input.yield(every5)
     for _ in 0..<3 {
       try await time.waitForSleeper()
       time.advance(.seconds(5))
@@ -60,7 +59,7 @@ struct SyncPollerTests {
 
     condition.input.yield(nil)
     await asks.next()
-    await asks.next()  // 不再等已处理
+    await asks.next()
     time.advance(.seconds(5))
     time.advance(.seconds(5))
     condition.input.finish()
@@ -77,10 +76,10 @@ struct SyncPollerTests {
 
     await asks.next()
     condition.input.yield(slow)
-    try await time.waitForSleeper()  // 睡在 10 秒的间隔里
+    try await time.waitForSleeper()
 
     await asks.next()
-    condition.input.yield(SyncPoller.Cadence(every: .seconds(2)))  // 来了要等的东西：不等睡醒，马上拉
+    condition.input.yield(SyncPoller.Cadence(every: .seconds(2)))
     await fetched.next()
 
     condition.input.finish()

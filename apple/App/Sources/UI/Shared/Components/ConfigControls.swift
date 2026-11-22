@@ -49,7 +49,6 @@ extension ModelMenu {
 }
 
 
-/// 只管显示与选择：可选什么、当前值、送达中（填色轻轻呼吸）、选了之后做什么都由调用方给；没换成的原因由 `MacInputNotice` 叠在输入框上方。
 struct ConfigControls<Trailing: View>: View {
     var agent: AgentPick?
     let models: ModelMenu
@@ -58,7 +57,6 @@ struct ConfigControls<Trailing: View>: View {
     let levels: [ThinkingLevel]
     let chooseThinking: (ThinkingLevel) -> Void
     let chooseFast: (Bool) -> Void
-    /// 弹出后清掉。
     let opening: Binding<ConfigPick?>
     let trailing: Trailing
     var alignment = Alignment.leading
@@ -104,10 +102,8 @@ struct ConfigControls<Trailing: View>: View {
             }
             trailing
         }
-        // 字号到这一档为止（输入的正文与上下文气泡照常放大，气泡按窗口的字号画，`PanelHost.typeSize`）：再大最窄的手机上收完六步也放不下
         .dynamicTypeSize(...Self.largestType)
         .frame(maxWidth: .infinity, alignment: alignment)
-        // 模型与思考强度的快捷键都打开同一个气泡
         .onChange(of: opening.wrappedValue) { _, pick in
             guard pick != nil else { return }
             opening.wrappedValue = nil
@@ -120,7 +116,6 @@ struct ConfigControls<Trailing: View>: View {
 /// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
 /// 所有压缩档用尽仍放不下时才折行；新增的尾部动作不能伸到发送钮下面，也不裁掉操作。
 private struct ConfigRow: Layout {
-    /// 名字比读数要紧：先收字与间距，再收 Agent 名，模型名最后收——看不出选的是哪个模型就没法确认这一次用的是谁。
     enum Give: CaseIterable { case wording, spacing, agent, model }
 
     private static let spacing = Spacing.glyph
@@ -196,7 +191,6 @@ nonisolated private struct ConfigGive: LayoutValueKey {
 }
 
 
-/// 已结束的会话也能换（Mac 在后台唤醒它再换），放不放由调用方决定。
 struct SessionConfigControls: View {
     let session: SessionState
     let models: [ModelOption]

@@ -1,7 +1,6 @@
 import CoreGraphics
 import simd
 
-/// 与着色器（`FigureShaders`）的 `Uniforms` 逐字段对齐。
 nonisolated struct FigureUniforms {
     var body = matrix_identity_float3x3, ring = matrix_identity_float3x3
     var a = SIMD4<Float>(), b = SIMD4<Float>(), c = SIMD4<Float>(), d = SIMD4<Float>()
@@ -11,31 +10,23 @@ nonisolated struct FigureUniforms {
     var r1 = SIMD4<Float>(), r2 = SIMD4<Float>(), r3 = SIMD4<Float>(), hl = SIMD4<Float>(), pool = SIMD4<Float>(), acc = SIMD4<Float>()
 }
 
-/// 与着色器的 `Sprite` 对齐：中心 x、y、边长、透明；rgb、发光。
 nonisolated struct FigureSprite {
     var rect: SIMD4<Float>
     var col: SIMD4<Float>
 }
 
-/// `size` 是角色本身那一方块（排版只占这么大），画布四周多出来的给波纹、火星和碎开时飞走的格子。
 nonisolated enum FigureLayout {
     static let size: CGFloat = 144
-    /// 角色在那一方块里偏下站，头顶空着的这一截不占排版：占着的话它离上面的字比离回复框远一截。
     static let headroom: CGFloat = 16
     static let tiles = 36
-    /// 世界坐标里画布那一方块有多宽：角色连环、迷你方块都在里面。
     static let span: Float = 2.7
     static let tile = size / CGFloat(tiles)
-    /// 碎开时格子往右上飞出一个多身位，画布往右、往上留出这一截。
     static let origin = CGPoint(x: 20, y: 32)
     static let canvas = CGSize(width: size + 180, height: size + 52)
 }
 
-/// 深色下格子是暗底上的光点（带底光）；浅色下光衬不出来，按像素画在浅底上的做法：
-/// 最外一圈实心描边（`line`）、缝收小、暗面与中间调压深压饱和、身后一层投影代替发光。不用黄、绿、红：那是"等你""新回复""出错"。
 nonisolated struct FigureColors {
     var sh, mid, lit, tint, rim, dark, eye, cheek, line: SIMD3<Float>
-    /// 环的三段（靛、紫、青）与高光；点缀色从这四个里挑（`FigureMotion.accent`）。
     var r1, r2, r3, hl, pool: SIMD3<Float>
 
     func fill(_ u: inout FigureUniforms, accent: SIMD3<Float>) {
@@ -60,7 +51,6 @@ nonisolated struct FigureColors {
 }
 
 extension FigureMotion {
-    /// 姿势的各项，按下标放进一个 SIMD16 一起过弹簧。
     nonisolated enum Key {
         static let yaw = 0, pitch = 1, lookX = 2, lookY = 3, ringTilt = 4, spin = 5, hand = 6, bob = 7
         static let squint = 8, squeeze = 9, minis = 10
@@ -75,8 +65,6 @@ extension FigureMotion {
         return v
     }
 
-    /// 在听：身子往输入框那边倾、眼睛往下看。在想：侧身、眼睛往上、手托腮。用工具：环转快、眯眼。压缩：被压扁再弹起。
-    /// 等子代理：两个迷你方块绕着转。想完：轻轻一跳。
     static func target(_ pose: FigurePose) -> SIMD16<Float> {
         switch pose {
         case .listening: listening
@@ -95,7 +83,6 @@ extension FigureMotion {
     private static let delegating = pose([Key.ringTilt: 1.16, Key.spin: 0.5, Key.minis: 1])
     private static let done = pose([Key.pitch: -0.06, Key.lookY: 0.3, Key.ringTilt: 1.14, Key.spin: 1.4, Key.bob: 0.02])
 
-    /// 每种姿势一种点缀色：脚下的光、波纹、环都慢慢过渡过去，光看颜色也知道换了。
     static func accent(_ pose: FigurePose) -> KeyPath<FigureColors, SIMD3<Float>> {
         switch pose {
         case .listening: \.r3

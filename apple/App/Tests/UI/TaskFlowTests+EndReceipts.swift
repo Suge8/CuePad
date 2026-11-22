@@ -57,7 +57,6 @@ extension TaskFlowTests {
         try await eventually("结束已交出") { link.waiting != nil }
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.executing))
         await services.executor.beginStop()()
-        // 模拟进程在结束交出后中断：旧处理任务不能正常返回并继续确认结果。
         link.waiting?.resume(throwing: CancellationError())
         link.waiting = nil
         try await StateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "audit-interrupted", confirming: recovery == "source" ? [automatic.id] : [])
@@ -72,7 +71,6 @@ extension TaskFlowTests {
                 #expect(issue?.unconfirmedReason != nil)
                 let action = try #require(SessionActions.sleep(ended, ending: false, recovering: issue != nil, in: workspace))
                 #expect(action.enabled)
-                // 歇着的会话再来一次不问，当场发
                 action.run()
                 #expect(workspace.sessionAsk == nil)
                 try await eventually("休眠已发出") { try await store.deliveryRequests().contains { $0.end == .explicit } }

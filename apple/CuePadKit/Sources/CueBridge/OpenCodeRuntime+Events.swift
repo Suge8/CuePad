@@ -11,7 +11,6 @@ extension OpenCodeRuntime {
             _ = try? await catalog(directory, connection.client, reload: true)
             for (id, tracked) in sessions where tracked.directory == directory { publish(id) }
             return
-        // 子代理要你确认的也挂在顶层会话上（它在等，整个会话就在等）；作答时按标识里记的会话答
         case "permission.asked":
             guard let sessionID = data.sessionID, let id = data.id else { return }
             let question = Self.question(OpenCodePermission(id: id, sessionID: sessionID, action: data.action ?? "", resources: data.resources ?? []))
@@ -89,9 +88,8 @@ extension OpenCodeRuntime {
             case .turnFinished:
                 let questions = tracked.facts.questions
                 changed = tracked.turns.apply(turn) || changed
-                tracked.facts.questions = questions  // 权限与表单随它们自己的事件收起
+                tracked.facts.questions = questions
             default:
-                // 开始取服务记下的时刻：与对话里回答的时刻（`OpenCodeMessage.at`）同一个钟
                 changed = tracked.turns.apply(turn, at: event.at) || changed
             }
         }
@@ -99,7 +97,6 @@ extension OpenCodeRuntime {
         if changed { publish(sessionID) }
     }
 
-    /// 改一个托管的顶层会话并发布，别的会话不理。`activeAt`：这是服务在这一刻记下的一次活动，会话不在线就上线（在 CuePad 里结束之后的才算，`revives`）。
     private func change(
         _ sessionID: String, _ connection: Connection, activeAt: Date? = nil, publishing: Bool = true, _ body: (inout Tracked) -> Void
     ) async {
@@ -117,7 +114,7 @@ extension OpenCodeRuntime {
     func child(_ sessionID: String, of parent: String, _ event: OpenCodeEvent) {
         guard sessions[parent] != nil else { return }
         parents[sessionID] = parent
-        guard !event.type.hasPrefix("session.text.") else { return }  // 子代理说的话不要，逐字增量也不白拼
+        guard !event.type.hasPrefix("session.text.") else { return }
         let data = event.data
         let now = Date()
         let turn = childTurns[sessionID, default: OpenCodeTurn()].apply(event, models: []).filter(\.changesFacts)
@@ -180,7 +177,6 @@ extension OpenCodeRuntime {
             options: [allowOnce, allowAlways, reject])
     }
 
-    /// 只有一个字段的表单能从 CuePad 答（`question` 工具问一个问题时就是这样）：有选项的是选择，文字是填空，是否是确认；其余只能在 OpenCode 里答。
     static func question(_ form: OpenCodeForm) -> Question {
         guard form.fields.count == 1, let field = form.fields.first else {
             return Question(promptID: nil, kind: .unknown("form"), text: String((form.title ?? "").prefix(500)))

@@ -52,7 +52,6 @@ struct SessionNoticeTests {
         #expect(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).isEmpty)
     }
 
-    /// 不在前台时的转换那一下系统推送已经提示过了，所以不补报。
     @Test func 回到前台之前就发生的转换不补报_之后的照常提示() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
@@ -77,15 +76,15 @@ struct SessionNoticeTests {
     @Test func 开着那个会话时不弹提示_别处照弹() {
         let session = UUID()
         let workspace = Workspace(services: app.services)
-        #expect(workspace.showsAlert(about: session))  // Cue 页
+        #expect(workspace.showsAlert(about: session))
         workspace.push(.search)
         #expect(workspace.showsAlert(about: session))
-        workspace.push(.session(UUID()))  // 搜索的会话列表上推了别的会话
+        workspace.push(.session(UUID()))
         #expect(workspace.showsAlert(about: session))
         workspace.path = [.session(session)]
         #expect(!workspace.showsAlert(about: session))
         workspace.select(.cue)
-        workspace.push(.session(session))  // Cue 页里点进了这个会话
+        workspace.push(.session(session))
         #expect(!workspace.showsAlert(about: session))
     }
 

@@ -66,7 +66,7 @@ extension CueHostTests {
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
-        rig.jump(by: .seconds(120), asleep: true)  // 合盖的这段：墙钟走过两个看门狗的时长
+        rig.jump(by: .seconds(120), asleep: true)
         try await rig.reconciled()
         #expect(rig.brainPIDs == [first])
         #expect(try await rig.count("收到：请慢慢想") == 0)
@@ -75,7 +75,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 跳过看门狗的时长、等它对过账：挂住之后才到的事件会让看门狗重新算起，没停掉就再跳一次。
     private func stalled(_ rig: Rig, _ brain: pid_t, silence: Duration) async throws {
         try await eventually("看门狗停掉挂住的大脑") {
             guard rig.brainPIDs.contains(brain) else { return true }
@@ -119,7 +118,7 @@ extension CueHostTests {
         #expect(try await rig.store.cueLine(reminder.id)?.deletedAt == nil, "没做完的定时还欠着")
         try await remote.update(sessionID: "remote-retry", state: .settled)
         try await rig.answered("remote-retry")
-        try await rig.reconciled()  // 新变化对过账：不该叫它重来
+        try await rig.reconciled()
         #expect(rig.model.errors == 1 && keeper.snapshot.turn == nil)
         #expect(try await rig.count("定时到点") == 0)
         try await rig.say("你好")
@@ -171,7 +170,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 卡着的定时与你那句话在库里还欠着（定时过点、那句退回没送达）：App 重启或换到另一台 Mac（那台没有这台的进度文件），新的值班一起好就接着做，各答一次。
     @Test(arguments: [false, true])
     func 额度卡住时重启或换手_卡着的定时与你那句话接着做_各答一次(_ elsewhere: Bool) async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
@@ -213,11 +211,11 @@ extension CueHostTests {
         let lastYou = try #require(try await rig.store.cueLastYou()?.said)
         rig.jump(to: lastYou + warm.seconds - 1)
         try await rig.reconciled()
-        #expect(try await rig.count("巡视了一圈") == 0)  // 热巡视的时长差一刻还不巡视
-        rig.jump(to: lastYou + warm.seconds)  // 离冷巡视（一小时）、缓存过期都还远
+        #expect(try await rig.count("巡视了一圈") == 0)
+        rig.jump(to: lastYou + warm.seconds)
         try await rig.message(.cue, containing: "巡视了一圈")
         try await eventually("巡视的这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
-        rig.jump(by: warm)  // 再过一个热巡视的时长：同一段空闲不再巡视
+        rig.jump(by: warm)
         try await rig.reconciled()
         #expect(try await rig.count("巡视了一圈") == 1)
         await rig.stop()

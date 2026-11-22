@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// `session` 为 nil 时不弹。`sleeps`：完成会不会让它休眠（`CompletionAsk`）。
     func agentBusyDialog(
         _ session: SessionState?, sleeps: Bool, isPresented: Binding<Bool>, confirm: @escaping @MainActor () -> Void,
         cancel: @escaping @MainActor () -> Void

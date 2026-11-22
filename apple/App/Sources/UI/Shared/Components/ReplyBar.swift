@@ -14,7 +14,6 @@ struct ReplyBar: View {
     var sending = false
     var recall: String?
     var previews: [PreviewItem] = []
-    /// 最新那条回答带的提示缓存：上下文那颗旁边写它还热几分钟、冷了这一句要重读多少（`CacheNote`）。
     var cache: ChatMessage.Tools.Cache?
     var revealNote: (ReplyNote) -> Void = { _ in }
     let sent: () -> Void
@@ -27,8 +26,6 @@ struct ReplyBar: View {
     @Environment(\.panelCovered) private var covered
     @State private var opening: ConfigPick?
 
-    /// 回复框的草稿（每个会话一份，`AppSettings.replyDraft`）只在回复框里读写：会话页不经手它，
-    /// 打字时只有回复框（与列表里那一行）重算，会话页、对话都不动。
     private var draft: ComposerDraft {
         get { services.settings.replyDraft(for: session.id) }
         nonmutating set { services.settings.setReplyDraft(newValue, for: session.id) }
@@ -93,7 +90,6 @@ struct ReplyBar: View {
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
-            // 读到了（在路上，或 Agent 已经接过去开始跑）就交还给页面；页面走了也不留
             .onChange(of: sending) { workspace.launching.settle(session) }
             .onChange(of: canStop) { workspace.launching.settle(session) }
             .onDisappear { workspace.launching.settle(session) }
@@ -134,7 +130,6 @@ struct ReplyBar: View {
         return map
     }
 
-    /// 发出后焦点去哪，两端只在这里分：手机收起键盘看对话；Mac 焦点留在回复框接着写。
     private func didSend(talked: Bool = true) {
         if talked { workspace.launching.begin(session) } else { workspace.launching.settle(session) }
         #if os(iOS)
@@ -145,7 +140,6 @@ struct ReplyBar: View {
         sent()
     }
 
-    /// 等你确认、不能发自由文本时收成的一行，与空着的回复框同高（Mac 是两层的高）：问题卡来去时回复框不跟着变高变矮，浮在上面的对话只跟着卡挪（`RiseBehind`）。
     private func notice(_ text: LocalizedStringResource, icon: Icon) -> some View {
         Label(text, icon: icon)
             .font(Typography.secondary).foregroundStyle(palette.ink2)
@@ -195,17 +189,13 @@ struct ReplyBar: View {
 
     private var prompt: LocalizedStringResource { compact ? replyPrompt : placeholder }
 
-    /// 回给这个会话的那句占位：已结束的会话也能接着说——发出后它所在的 Mac 先在后台把它唤醒再送达，占位写明这一步，
-    /// 不让人以为发给了一个没人接的会话。
     private var replyPrompt: LocalizedStringResource {
         ended ? "唤醒会话" : "回复 \(session.title)"
     }
 
     private var ended: Bool { session.state == .known(.ended) }
-    /// 占位写的是"唤醒会话"（带电源图标）：已结束、且没被"补一句"这类更具体的占位换掉。
     private var wakes: Bool { ended && answering == nil && (compact || draft.attachments.isEmpty && draft.files.isEmpty) }
 
-    /// 说出去的这句就是答案（`CueStore.speak`），答完文字清空，其余（别处带进草稿的卡片、附件）留着。
     private func answer() {
         guard canSend, answering != nil else { return }
         workspace.answer(session, from: box)
@@ -220,7 +210,6 @@ struct ReplyBar: View {
 
     private func removeNote(_ note: ReplyNote) { services.settings.removeReplyNote(note.id, in: session.id) }
 
-    /// 是命令还是说的话只在发出这一刻按草稿与会话报的清单认（`Workspace.reply`），不看按钮上次排版时带来的方式。
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
         let talked = commandLine == nil

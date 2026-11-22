@@ -3,7 +3,6 @@ import Foundation
 import os
 
 extension VoiceService {
-    /// 一次明确点击一个 UUID；传输失败只报告未确认，绝不在换租约后自动重发。
     func command(_ action: VoiceCommand.Action, id: UUID = UUID()) async throws -> VoiceCommandResult.Outcome {
         let command = VoiceCommand(id: .init(id), action: action)
         if let result = commandResults[command.id] { return result }
@@ -33,7 +32,6 @@ extension VoiceService {
 
     #if os(macOS)
     func receiveCommand(_ command: VoiceCommand, header: VoiceSignalHeader) {
-        // 来源按到达这一刻核对：执行前链路才断的，仍是这一通发来的
         let fromCall = remote?.leg.session == header.session && remote?.leg.link == .bound(local: header.recipient, peer: header.sender)
         Task {
             let outcome: VoiceCommandResult.Outcome

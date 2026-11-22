@@ -21,10 +21,8 @@ import Synchronization
 final class Relay {
     private enum Phase {
         case off
-        /// 连接任务在跑：取密钥、握手，或断了在退避
         case connecting(Task<Void, Never>)
         case live(Task<Void, Never>, URLSessionWebSocketTask)
-        /// 断开后等这个任务收尾
         case closing(Task<Void, Never>)
     }
 
@@ -45,32 +43,21 @@ final class Relay {
     @ObservationIgnored private let credentials: @MainActor () async throws -> RelayCredentials
     @ObservationIgnored private let session: URLSession
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
-    /// 这个账号的房间与签名（密钥派生的）：取到一次就记着，换账号（`reconnect`）时清掉。
     @ObservationIgnored private var known: RelayCredentials?
-    /// 活预览隧道的密钥（`VoiceSignaling.liveTunnelKey`），与入房同出这个账号的密钥。
     var liveTunnelKey: SymmetricKey? { known?.tunnelKey }
-    /// 最后一个按出去的门铃（之前的都已发完或失败）：`settle` 与短连等它。
     @ObservationIgnored private var sending: Task<Void, Never>?
-    /// 有改动被收下时门铃没通（或没按出去），入房后先补按一次。
     @ObservationIgnored private var owesRing = false
-    /// 此刻想不想连着（`resume` 为真、`pause` 为假）：`settle` 只在仍不想连时断开。
     @ObservationIgnored private var wanted = false
-    /// 断着的这一段从何时起（日志按段记：断了一条、连回来一条，其间每次重连不记）。
     @ObservationIgnored private var downSince: ContinuousClock.Instant?
 
     nonisolated static let pingInterval = Duration.seconds(10)
     nonisolated static let pongLimit = Duration.seconds(5)
-    /// 心跳察觉静默断线的上限，也是门铃通着时按节奏拉取降到的兜底间隔（`AppServices.doorbellFallback`）：兜底只补门铃自己察觉不到的丢失
-    /// （对方按出去的那一下在路上没了、中转重启），察觉得到的断（断线、重连）当场换回快档、入房先拉一次，察觉不到的也不比它更晚。
     nonisolated static let silenceLimit = pingInterval + pongLimit
     nonisolated static let handshakeLimit = Duration.seconds(15)
-    /// 重连的退避：1 秒起，至多 `Backoff.waitingCap`（中转恢复后至多再等这么久就连回来，门铃不通时一直按 2 秒拉）。
     static let retry = Backoff(first: .seconds(1), cap: Backoff.waitingCap)
-    /// 连上后通了这么久才算稳定，退避从头算；更短就断的（中转刚起就挂、被网络掐掉）接着加长。
     static let steady = Duration.seconds(30)
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
 
-    /// 连 `<endpoint>/<房间号>`（正式是 `wss://<中转主机>/v1`）。
     init(endpoint: URL, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
         voiceDevice = VoiceDeviceID(device)
         self.endpoint = endpoint
@@ -78,8 +65,6 @@ final class Relay {
         session = URLSession(configuration: .ephemeral)
     }
 
-    /// 本机的一批改动已被 iCloud 收下：通着就按一下门铃（排在前一个后面发）；不通（正在重连、手机在后台）或没按出去的记下欠一次，
-    /// 下次入房先补按：对方的拉取降为兜底后，丢一下就要等到兜底那一拉。不想连着的这时短连一次去补按。
     func ring() {
         guard case .live(_, let socket) = phase else {
             owesRing = true
@@ -99,14 +84,13 @@ final class Relay {
         }
     }
 
-    /// 保持连接直到任务取消（`connected` 为假时先不连，等 `resume`）。门铃响了（以及每次入房时）调 `rang`。
     func run(connected: Bool, rang: @escaping @MainActor () async -> Void) async {
         self.rang = rang
         if connected { resume() }
         let (cancelled, keep) = AsyncStream<Never>.makeStream()
-        for await _ in cancelled {}  // 任务取消时结束
+        for await _ in cancelled {}
         withExtendedLifetime(keep) {}
-        self.rang = nil  // 不再连：收尾期间别处等完的重连（`thenConnect`）也不起
+        self.rang = nil
         await disconnect(thenConnect: false)
     }
 
@@ -115,19 +99,16 @@ final class Relay {
         connect()
     }
 
-    /// 不想再连着（如手机进后台），连接留到 `settle`：本机还在传的改动收下后还要按门铃。
     func pause() {
         wanted = false
     }
 
-    /// `pause` 之后：等已经按出去的门铃发完，仍不想连着就断开，返回时连接已关。
     func settle() async {
         await sending?.value
         guard !wanted else { return }
         await disconnect(thenConnect: true)
     }
 
-    /// 换了 iCloud 账号：连着的那条在旧账号的房间里，断开后按新账号的密钥重连。
     func reconnect() async {
         voiceConnection?.close(.accountChanged)
         known = nil
@@ -148,7 +129,6 @@ final class Relay {
         })
     }
 
-    /// 断开并等旧任务收尾。`thenConnect`：收尾期间 `resume`、`ring` 来过的（这时才不被挡）按此刻想不想连决定要不要连。
     private func disconnect(thenConnect: Bool) async {
         switch phase {
         case .connecting(let task), .live(let task, _):
@@ -182,11 +162,11 @@ final class Relay {
             guard !Task.isCancelled, wanted || owesRing else { break }
             await Self.wait(upTo: retry.next())
         }
-        if case .connecting = phase { phase = .off }  // 收尾中（.closing）的由 disconnect 清
+        if case .connecting = phase { phase = .off }
     }
 
     private nonisolated static func wait(upTo delay: Duration) async {
-        let returns = NetworkReturns.stream()  // 在子任务跑起来之前订上：其间回来的网络不让门铃白等一个退避
+        let returns = NetworkReturns.stream()
         await withTaskGroup(of: Void.self) { group in
             group.addTask { try? await Task.sleep(for: delay) }
             group.addTask {
@@ -223,7 +203,7 @@ final class Relay {
             let voice = try await Self.handshake(socket, credentials, device: voiceDevice, emit: { [voiceFeed] in voiceFeed.continuation.yield($0) })
             voiceConnection = voice
             voiceAvailability(voice.map { .ready(endpoint: $0.crypto.claim.endpoint) } ?? .unsupported)
-            guard case .connecting(let task) = phase else { return }  // 收尾中：不再算通
+            guard case .connecting(let task) = phase else { return }
             phase = .live(task, socket)
             if let downSince {
                 Self.log.notice("门铃通了，断了 \((ContinuousClock.now - downSince).seconds, format: .fixed(precision: 1), privacy: .public) 秒")
@@ -239,7 +219,7 @@ final class Relay {
                 await sending?.value
                 return
             }
-            Task { await rang() }  // 补上没连着时听不到的；心跳与收门铃不等它
+            Task { await rang() }
             if let remembered { Task { await recheck(remembered) } }
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask { try await Self.heartbeat(socket) }
@@ -257,7 +237,7 @@ final class Relay {
                         }
                     }
                 }
-                defer { socket.cancel(with: .goingAway, reason: nil) }  // 一个先结束，另一个等在这条连接上的也随之结束
+                defer { socket.cancel(with: .goingAway, reason: nil) }
                 try await group.next()
             }
         } onCancel: {
@@ -289,7 +269,7 @@ final class Relay {
                 try await voice.register(credentials)
                 while true {
                     let response = try await frame(from: socket)
-                    if response.t == "ring" { continue } // 入房后会统一拉取，握手期间不丢业务事实。
+                    if response.t == "ring" { continue }
                     guard response.t == "voice", case .registered(let endpoint) = response.body else { throw RelayError.unexpectedFrame }
                     try voice.crypto.acceptRegistration(endpoint)
                     break
@@ -302,7 +282,7 @@ final class Relay {
             return voice
         } catch {
             watchdog.cancel()
-            if case .success = await watchdog.result { throw RelayError.handshakeTimeout }  // 是时限到了断的，不是别的错
+            if case .success = await watchdog.result { throw RelayError.handshakeTimeout }
             throw error
         }
     }
@@ -332,7 +312,6 @@ final class Relay {
     }
 }
 
-/// 最近一次 ping 的回应时刻（URLSession 的回调线程写，心跳读）。
 private nonisolated final class Pong: Sendable {
     private let state = Mutex<ContinuousClock.Instant?>(nil)
     var last: ContinuousClock.Instant? { state.withLock { $0 } }

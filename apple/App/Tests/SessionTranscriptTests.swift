@@ -108,14 +108,13 @@ struct SessionTranscriptTests {
 
         let first = try await services.requestTranscript(of: session)
         let late = first.createdAt.addingTimeInterval(Speech.receiptLimit + 1)
-        #expect(Speech.trip(first, at: .always(at: late)).inTransit)  // 没人领取不算未确认：领取只在期限前，到期才是失败
+        #expect(Speech.trip(first, at: .always(at: late)).inTransit)
         let again = try await services.requestTranscript(of: session)
 
         #expect(again.id == first.id)
         #expect(try await store.deliveryRequests(toSession: "old").filter { $0.mode == .known(.transcript) }.count == 1)
     }
 
-    /// 不能只有近七天的会话更新、同一界面留着两种口径。
     @Test func 检查点作废后从头重读_七天外存着对话的会话也更新已存消息的工具计数() async throws {
         let at = Date.now.addingTimeInterval(-10 * 86_400)
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
@@ -168,7 +167,7 @@ struct SessionTranscriptTests {
             continuation.yield(.ended(idle, reason: .closed(reason: "quit")))
             continuation.finish()
         })
-        try await StateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "s1")  // 托管的进程退出只是歇着，结束要你来
+        try await StateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "s1")
         #expect(try await record("s1").pendingPrompt == nil)
 
         await services.consumeHistory(AsyncStream { continuation in
@@ -179,7 +178,6 @@ struct SessionTranscriptTests {
         #expect(ended.pendingPrompt == nil && ended.state == .known(.ended))
     }
 
-    /// 文件一追加就写：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
     @Test func 文件追加一条用户消息后_摘要与消息随即可读() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
@@ -208,8 +206,8 @@ struct SessionTranscriptTests {
         await backfill()
         #expect(try await record("s1").pendingPrompt == "第三问")
 
-        try services.reconcileLaunch()  // 重启时的启动对账
-        _ = try await live("s1", file: file)  // 桥重新发现它；文件没有新内容，不会再读
+        try services.reconcileLaunch()
+        _ = try await live("s1", file: file)
 
         #expect(try await record("s1").pendingPrompt == "第三问")
     }
@@ -222,7 +220,7 @@ struct SessionTranscriptTests {
 
         let days = Mutex(0)
         let timing = Timing(now: { Date.now.addingTimeInterval(Double(days.withLock { $0 }) * 86_400) }) { _ in
-            days.withLock { $0 += 8 }  // 睡一觉醒来已过了 8 天
+            days.withLock { $0 += 8 }
             if days.withLock({ $0 }) > 8 { try await Task.sleep(for: .seconds(3_600)) }
         }
         let pruning = Task { await services.historyStore.keepPruned(timing: timing) }

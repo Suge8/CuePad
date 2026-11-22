@@ -22,7 +22,6 @@ extension CueEvalTests {
     @Test func f额度用完() async throws {
         try await CueEval.run("f2-额度用完", expect: "会话报额度用完：告诉用户") { eval in
             let work = try await eval.rig.working(Self.title, Self.body)
-            // 重置时刻跟着此刻走：写死的日期一过，"重置已过、可以重试"就成了对的做法
             let resets = Date.now.addingTimeInterval(86400).formatted(.iso8601.year().month().day())
             let quota = #"400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on \#(resets) at 00:00 UTC."}}"#
             try await eval.trigger { work.session.setState(["kind": "error", "error": quota]) }
@@ -44,7 +43,6 @@ extension CueEvalTests {
             try await rig.store.recordSend(first, to: SendTarget(kind: .piSession, name: Self.title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
             let dispatched = "后端与登录页都改好了，单元测试 23 个全过。派了 e2e 去跑端到端测试（真浏览器走一遍忘记密码），等它交回再汇报。"
             try await eval.trigger {
-                // 在另一台 Mac 上：e2e 最后一次进展再过 3 秒满 20 分钟
                 let due = Date.now.addingTimeInterval(3)
                 let e2e = SubagentState(
                     name: "e2e", role: "工程师", phase: .known(.running), action: "bash · npx playwright test reset-password", startedAt: due - 1800,
@@ -182,7 +180,6 @@ extension CueEvalTests {
         }
     }
 
-    /// show 点名的图（file 写编号前缀）是会话发来的哪几张；认不出的略过
     static func shown(_ show: Any?, in previews: [PreviewItem]) -> [PreviewItem] {
         (show as? [[String: Any]] ?? []).compactMap { item in
             guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }

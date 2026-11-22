@@ -34,7 +34,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 短问句不和长交代拼在一起才查：拼起来超了短问句的长度就查不到。
     @Test func 一次交几句_里面的短问句照样带上查到的会话回复() async throws {
         let rig = try await Rig()
         try await Self.handedBack(rig, "出依赖升级清单", in: "remote-deps", ["Node 20 已经结束维护，建议把 CI 与部署的 Node 升到 22。"])
@@ -52,7 +51,6 @@ extension CueHostTests {
         ])
         try await Self.handedBack(rig, "查清邮件服务", in: "remote-mail", ["上个月退信 31 封，其中邮箱不存在的 13 封，其余是信箱已满。"])
         let sent = try await Self.handedTogether(rig, ["依赖清单里 Node 建议升到几？", "邮件服务那件里退信有几封是邮箱不存在的？"])
-        // 只看查到的那一节（他的原话里也有 Node）：依赖那件、邮件那件各有一条
         let found = sent.components(separatedBy: "他问的话在会话回复里查到的").dropFirst().first?.components(separatedBy: "醒来：").first ?? ""
         #expect(found.contains("Node") && found.contains("邮箱不存在的 13 封"), "\(sent)")
         await rig.stop()

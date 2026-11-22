@@ -20,7 +20,6 @@ enum FirstClick {
     }
 }
 
-/// 不用 Button 的按钮（列表行里成百上千的小点按目标）：省掉每颗 Button 的焦点、按键与读屏机器，其余照按钮。首击（`FirstClick`）不算点、交给 `firstClick`。
 struct ListPress: ViewModifier {
     let slop: CGFloat
     let action: () -> Void

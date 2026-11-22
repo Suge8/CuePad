@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 只有老用户的库走升级：建新库的 SQL 与升级步骤漏了一列、一个索引，新装的库测不出来。从冻结的已发布结构升上来，表、列、索引、触发器都与新库一样。
 @Suite struct SchemaUpgradeTests {
   @Test func aLibraryUpgradedFromTheReleasedVersionIsLaidOutLikeANewOne() throws {
     let fresh = TestLibraries.makeDirectory(), upgraded = TestLibraries.makeDirectory()
@@ -36,7 +35,6 @@ import Testing
     return lines
   }
 
-  /// 建表语句括号里的顶层各项（列定义与表约束），空白规整后排序；STRICT 等括号后的选项另算一项。
   private func definitionItems(_ sql: String) -> [String] {
     let text = sql.replacing(/\s+/, with: " ")
     guard let open = text.firstIndex(of: "(") else { return [text] }

@@ -48,7 +48,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         return shown.lazy.compactMap { present[$0] }.first
     }
 
-    /// 可见区的尺寸在同一次排版里拿到（GeometryReader 先拿到自己的尺寸再排里面）：打开的第一帧就按它排开，不先排一帧再补。
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size, window = self.window(size), first = ids.count - window
@@ -63,12 +62,10 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                     ChatIndex(marks: marks, ids: ids, reading: reading, scrolling: follow.scrolling, crowded: margin < ChatIndex.room) { follow.seek($0) }
                 }
             }
-            // 改记成接上的那条，之后不用每次再找
             .onChange(of: ids, initial: true) {
                 let index = start ?? ids.count - self.window(size)
                 if shown?.first != (ids.indices.contains(index) ? ids[index] : nil) { show(from: index) }
             }
-            // 每一批都等这一帧画上屏之后再排：打开时读数就报着离最早那头不到一屏，同一次更新里排开的话第一帧要多排；一批接一批也不挤进同一帧
             .onChange(of: follow.wantsEarlier, initial: true) { _, wants in
                 guard wants else { return }
                 Task {
@@ -84,8 +81,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         .environment(\.chatStay, ChatStay(column: column) { follow.stay($0, $1) })
     }
 
-    /// 先描圈、排开到那一条（离屏远的地方排的是空白，跳去的那条所在的段由内容按 `chatTarget` 钉成真的），同一次更新里记下跳去哪；
-    /// 滚动区等这一帧排好了再滚过去（`ChatScroll`）。
     private func seek(_ target: ChatFollow.Target, size: CGSize) {
         if target.landing == .flash { highlight.flash(target.id) }
         if let index = ids.firstIndex(of: target.id) { show(from: max(0, min(index - paging.step(size, index), ids.count - window(size)))) }
@@ -105,7 +100,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     }
 }
 
-/// 都给出可见区的尺寸与排到的那一条之前有几条（打开时是全部条数，往上翻时是最早排着的那条的下标），返回从那里往上数的条数。
 nonisolated struct ChatPaging {
     let first: (_ size: CGSize, _ above: Int) -> Int
     let step: (_ size: CGSize, _ above: Int) -> Int

@@ -6,7 +6,6 @@ nonisolated extension SessionState {
         DeliveryShown.phase(of: delivery, for: self, at: moment) == .inTransit(.waking)
     }
 
-    /// 已结束、也没有话正在唤醒它：界面上按"已结束"画的那些（淡一档、斜线圈）。
     func staysEnded(by delivery: DeliveryRequest?, at moment: Speech.Moment) -> Bool {
         state == .known(.ended) && !isWaking(by: delivery, at: moment)
     }
@@ -32,9 +31,6 @@ nonisolated extension SessionListItem {
 }
 
 nonisolated extension SessionState {
-    /// 待回复那一档是等得最久的在前，同会话条（`CueStore.sessionsAwaitingReply`）。
-    /// `deliveries`：话在路上的与工作中同档，发出那一刻就挪到位。
-    /// 不看有没有新回复：看一眼就让行换位置，列表会在手下跳。
     static func inListOrder<Item>(
         _ items: [Item], state: KeyPath<Item, SessionState>, deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil,
         at moment: Speech.Moment
@@ -52,7 +48,6 @@ nonisolated extension SessionState {
 
 }
 
-/// 会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、再同步过来才变；话是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
 nonisolated enum DeliveryShown: Hashable, Sendable {
     case preparing(String)
     case inTransit(Transit)
@@ -93,8 +88,6 @@ nonisolated enum DeliveryShown: Hashable, Sendable {
         }
     }
 
-    /// 会话状态的时间（`stateSince`）与送达时间（`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
-    /// 送到了的请求不会一直挂着（发出的话进了对话、消息上了服务器就收走，别的请求过一会儿由执行它的 Mac 清理）；没能送达的留着（等你重发或移除），在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
     static func phase(of request: DeliveryRequest?, for session: SessionState, seen: Date? = nil, at moment: Speech.Moment) -> DeliveryShown? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
         let trip = Speech.trip(request, at: moment)
@@ -102,7 +95,6 @@ nonisolated enum DeliveryShown: Hashable, Sendable {
         case .preparing(let reason): return .preparing(reason)
         case .unconfirmed: return mode == .retry ? nil : .inTransit(.unconfirmed)
         case .sending, .sent:
-            // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还没打断它）
             if session.runtimeState.isWorking && session.stateSince > request.createdAt { return nil }
             return .inTransit(.of(request, session: session, trip: trip))
         case .delivered:
@@ -115,7 +107,6 @@ nonisolated enum DeliveryShown: Hashable, Sendable {
     }
 }
 
-/// 界面上一个会话（或一个项目）显示的状态，全 App 只在这里判定；说法、颜色、状态标、动效、排序也都只按 `status` 分。赭黄只留给在等你的（与"等你 N"同一条规则，`SessionState.asksYou`、`CueStore.cueTally`）。
 nonisolated struct SessionShown: Hashable, Sendable {
     var agentBusy: Bool {
         switch status {
@@ -138,7 +129,6 @@ nonisolated struct SessionShown: Hashable, Sendable {
         case fresh
         case ended
         case interrupted
-        /// 没确认是因为它所在的 Mac 没开时带上那台的名字（`SessionState.macOff`）：说的是那台没开，同 Cue 那一句（`CuePresence.asleep`）。
         case unknown(macOff: String? = nil)
     }
 
@@ -147,7 +137,6 @@ nonisolated struct SessionShown: Hashable, Sendable {
     var clock: SessionClock?
     var cue: String?
     var asksForWords = false
-    /// 输出中只是这层显示、不是同步的状态：会话的由 `Workspace.shown`、`shownInHeader` 一处置位（列表、顶栏、菜单栏同一个说法），正在说的话上方那一行与 Mac 上 Cue 的状态那一句各自读自己的草稿；手机没有草稿，照常是思考中。
     var speaking = false
 
     func speaking(_ drafting: Bool) -> SessionShown {
@@ -211,12 +200,10 @@ extension Workspace {
             .speaking(speaking(session))
     }
 
-    /// 正在看的会话没有"有新回复"，没送到的话另写"N 句没送到"（`Chat.undeliveredNote`），这里不再说一遍。
     func shownInHeader(_ session: SessionState, delivery: DeliveryRequest?) -> SessionShown {
         SessionShown(session, delivery: delivery, marks: SessionMarks(seen: .distantFuture), cue: cueDuty, at: services.speech).speaking(speaking(session))
     }
 
-    /// 只随出字开始、结束通知，不随每个增量（`Bridge.Slot.speaking`）。
     private func speaking(_ session: SessionState) -> Bool {
         #if os(macOS)
         services.bridge.slot(sessionID: session.sessionID)?.speaking ?? false

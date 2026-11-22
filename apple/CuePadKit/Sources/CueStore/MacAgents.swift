@@ -1,14 +1,8 @@
 import Foundation
 
-/// 一台 Mac 上的 Agent 能不能用、各家的模型（同步表 `macAgents`，每台 Mac 一条，只由它自己写；各端只读）：
-/// 开新会话能选哪几家、默认哪家、Cue 的大脑能选哪几家哪些模型、不指定模型时实际用哪个、一家都不能用时为什么，两端都只从这里推出。
-/// 能用 = 开得出会话（装着；Pi 还要接入 CuePad）并且问得出它的模型（登录了），规则在 `AgentProbe`；探测与写的时机在 App 的 Mac 端。
-/// 内容没变不写（不触发同步）。没有记录（还没探测完，或更旧版本的 Mac）是一家都不能用。
 public struct MacAgents: Equatable, Sendable {
   public var hostID: String
-  /// 这台 Mac 的名字（系统设置里的电脑名）；更旧版本写的没有。别处要写出某台 Mac 的名字都读这里。
   public var name: String?
-  /// 能用的，按 `AgentKind` 的顺序；更新的版本写的、不认识的那家读出时丢掉（下同）。
   public var agents: [MacAgent]
   public var problems: [MacAgentProblem]
   public var modifiedAt: Date
@@ -24,7 +18,6 @@ public struct MacAgents: Equatable, Sendable {
   public var shownName: String { Self.shownName(name) }
   public static let unnamed = String(localized: "未命名的 Mac")
   static func shownName(_ name: String?) -> String { name ?? unnamed }
-  /// 读别的记录时顺带取它 `host` 列那台 Mac 报的名字（没有为 NULL，读出后经 `shownName(_:)`）：目录绑定、会话跑过的文件夹都这样带上名字，不另存。
   static func nameSQL(host column: String) -> String { "(SELECT name FROM macAgents WHERE macAgents.hostID = \(column))" }
 
   public func agent(_ kind: AgentKind) -> MacAgent? { agents.first { $0.kind == kind } }
@@ -33,13 +26,11 @@ public struct MacAgents: Equatable, Sendable {
 
   public var kinds: [AgentKind] { agents.map(\.kind) }
 
-  /// 开新会话默认用哪家：上次用的（`last`，界面记在本机偏好里；Cue 没有）这台还能用就是它，否则第一家；一家都不能用为 nil。
   public func preferred(_ last: AgentKind?) -> AgentKind? {
     if let last, kinds.contains(last) { return last }
     return kinds.first
   }
 
-  /// 一家都不能用时为什么（"Pi 没登录 · Codex 没装"）；还没有这台 Mac 写的记录时说还没查过。
   public var whyNone: String {
     problems.isEmpty ? String(localized: "还没查过有哪些 Agent 能用") : problems.map { "\($0.kind.name) \($0.reason)" }.joined(separator: " · ")
   }
@@ -47,9 +38,6 @@ public struct MacAgents: Equatable, Sendable {
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-agents/\(host)") }
 }
 
-/// 一家 Agent 在一台 Mac 上：不指定模型时它用哪个（`model`，Agent 自己按它的配置定的那个），能选哪些（`models`，与它在会话里报的
-/// 模型菜单同一规则：Pi 配了范围就是范围内的）。默认的总在清单里：没报在清单里的补在最前，菜单才选得回"跟着默认"。
-/// 没有模型清单的（OpenCode）两者都空。
 public struct MacAgent: Codable, Equatable, Sendable, Identifiable {
   public let kind: AgentKind
   public let model: ModelKey?
@@ -76,8 +64,6 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
     self.reason = reason
   }
 
-  /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"）与别的（版本太旧、问不出模型……，只写出来）。
-  /// 同步记录里存的是种类（别的带句式与参数，`ShownText`），各端按自己的语言写出（`description`，接在 Agent 名后面读）。
   public enum Reason: Equatable, Sendable, Codable, CustomStringConvertible {
     case notInstalled
     case notLoggedIn
@@ -110,7 +96,6 @@ extension MacAgents: Record, SyncedColumns {
 }
 
 extension CueStore {
-  /// 这台 Mac 写下自己的 Agent 能不能用；和库里的一样就不写。
   public func recordMacAgents(host: String, name: String?, _ agents: [MacAgent], problems: [MacAgentProblem] = []) throws {
     try write {
       if let stored = try find(MacAgents.self, MacAgents.recordID(host: host)), stored.name == name, stored.agents == agents, stored.problems == problems {
@@ -125,7 +110,6 @@ extension CueStore {
     try select(MacAgents.self, orderBy: "name, hostID")
   }
 
-  /// 那台 Mac 上的 Agent；没有记录是一家都没有（`whyNone` 说还没查过）。
   public func macAgents(on host: String) throws -> MacAgents {
     try find(MacAgents.self, MacAgents.recordID(host: host)) ?? MacAgents(hostID: host, agents: [], modifiedAt: .distantPast)
   }

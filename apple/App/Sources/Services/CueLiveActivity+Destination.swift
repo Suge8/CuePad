@@ -32,7 +32,6 @@ extension CueLiveActivity {
         observers[activity.id] = [tokens, states]
     }
 
-    /// 开岛令牌的初值与轮换、系统（远程推送）开出来的活动。自己请求的那只在 `present` 里已登记，`adopt` 按 `observers` 认出、不重复。
     func watchRemoteStarts() -> [Task<Void, Never>] {
         [
             Task { [weak self] in
@@ -51,7 +50,6 @@ extension CueLiveActivity {
         ]
     }
 
-    /// 资料所属刚确认（同步对过）：此前到的开岛令牌与远程开出来的活动那时不能登记，现在补上。被推送冷启动的进程走的就是这条。
     func syncReady() async {
         await registerStarter()
         await adopt()
@@ -84,8 +82,6 @@ extension CueLiveActivity {
         }
     }
 
-    /// 远程开出来、还没登记地址的那只：登记了 Mac 才推得动。同时还开着别的（旧的没收到结束）就只留最新一只。
-    /// 和 `show` 等同一个撤销屏障；资料所属没确认时不接，等 `syncReady`。
     private func adopt() async {
         let revision = revision
         await restoration?.value

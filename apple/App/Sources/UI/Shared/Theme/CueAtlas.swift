@@ -17,8 +17,6 @@ import Synchronization
         static func == (lhs: Sheet, rhs: Sheet) -> Bool { lhs.image === rhs.image }
     }
 
-    /// 解好之前为 nil。后台解好就写进 `built`，读的那一刻直接拿到，不等主线程的回合交过来（首屏那一帧常常就在这几十毫秒里）；
-    /// 解好时另通知读过它的视图（先画了静止图的那几只换成拼图）。
     var sheet: Sheet? {
         access(keyPath: \.sheet)
         return Self.built.withLock { $0 }
@@ -48,7 +46,6 @@ import Synchronization
     }
 
     nonisolated private static let gap = 2
-    /// 解码在哪条线程、花多久（验证主线程不解：`log show --predicate 'category == "cue-atlas"'`）。
     nonisolated private static let log = Logger(subsystem: AppIdentity.id, category: "cue-atlas")
 
     nonisolated private static func build(_ names: [String], into target: CGColorSpace?) -> Sheet? {

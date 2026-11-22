@@ -36,7 +36,6 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 真进程起来、假模型收到了这句话与这张图，是同一条证据：回答是假模型照请求回的 ECHO。
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.startConnected()

@@ -58,7 +58,6 @@ final class CardEditing {
     }
 
     #if os(iOS)
-    // 登记的落盘闭包攥着自动存与工作区：没走 `leave` 就被放掉（窗口场景直接销毁）时，在这里注销，不然服务一直攥着它们
     isolated deinit {
         if let flushToken { workspace.services.removeBackgroundFlush(flushToken) }
     }
@@ -92,8 +91,6 @@ enum SaveState: Equatable {
 
     private static let savedDisplay: Duration = .seconds(1.5)
 
-    /// 等够返回 true；等的时候状态又变了（任务取消）返回 false。
-    /// `awaitsMac`：手机"发往 Mac"是等那台回话，结果晚到，多亮一倍的时间让人看见；Mac 自动存立刻有结果。
     static func linger(awaitsMac: Bool = false) async -> Bool {
         try? await Task.sleep(for: savedDisplay * (awaitsMac ? 2 : 1))
         return !Task.isCancelled

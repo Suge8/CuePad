@@ -29,7 +29,7 @@ struct ComposerTests {
 
         var draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: project.id)])
         draft.attach(try #require(try await store.card(reference.id)))
-        draft.attach(try #require(try await store.card(reference.id)))  // 同一张不重复带
+        draft.attach(try #require(try await store.card(reference.id)))
         let request = try await Workspace(services: app.services).said(draft, to: target, mode: .send)
 
         #expect(request.content == "修乱序\n先复现\n\n接口约定\n队列按首次加入时间排")
@@ -52,7 +52,7 @@ struct ComposerTests {
         var handed = try await store.handedSessions()
         #expect(handed[task.id] == .session("atlas") && handed[reference.id] == nil)
 
-        try await store.recordSend(request.content, to: request.target, card: request.cardID)  // Mac 执行
+        try await store.recordSend(request.content, to: request.target, card: request.cardID)
         handed = try await store.handedSessions()
         #expect(handed[task.id] == .session("atlas") && handed[reference.id] == nil)
         #expect(try await store.card(reference.id)?.piSessionID == nil)

@@ -2,12 +2,7 @@
 import CueStore
 import Foundation
 
-/// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
 enum PiWire {
-    /// CuePad 读得懂的最旧扩展版本：从它到随包版本，扩展说的格式 CuePad 都照常读、命令照常发。扩展要等会话连同子代理都歇下才换上新版本
-    /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
-    /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
-    /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`Session.upgrading`）
     static let oldestExtension = 70
 
     static func reads(extensionVersion version: Int) -> Bool { (oldestExtension...PiExtensionBundle.version).contains(version) }
@@ -21,7 +16,6 @@ enum PiWire {
         var since: Double
         var busySince: Double?
         var turnSince: Double?
-        /// 开这一轮的那句：CuePad 交的话落成消息时记下；扩展重载、换进程前没交过话为空
         var opener: Opener?
 
         struct Opener: Decodable {
@@ -37,7 +31,7 @@ enum PiWire {
             case "delegating": (.delegating, nil)
             case "compacting": (.compacting, nil)
             case "waiting_user": (.waitingForUser, title)
-            case "error": (.error, ErrorSummary(error ?? "").line)  // 手机上没有悬停看原文
+            case "error": (.error, ErrorSummary(error ?? "").line)
             default: nil
             }
         }
@@ -50,7 +44,6 @@ enum PiWire {
         var turnOpener: TurnOpener? { opener.flatMap { o in UUID(uuidString: o.delivery).map { TurnOpener(delivery: $0, cue: o.cue) } } }
     }
 
-    /// 扩展之外还有两处造 hello 的替身：测试的 `FakeExtension`、脚本的 `apple/scripts/_pi_extension.py`；这里加必读的字段，两处一起加。
     struct Hello: Decodable {
         var extensionVersion: Int
         var sessionId: String
@@ -78,8 +71,6 @@ enum PiWire {
         }
     }
 
-    /// 每个 hello 先按它读：读得懂这一版扩展（`reads`）才往下读完整的 `Hello`，读不懂的只留认得出会话的几项（其余字段读不出就当没有），
-    /// 这几项的键与含义永远不变。`sessionFile` 也读：进程退出时说没说过话（`Session.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct IdentityHello: Decodable {
         var extensionVersion: Int
         var sessionId: String
@@ -105,8 +96,6 @@ enum PiWire {
         }
     }
 
-    /// `info` 消息只带变了的几项：键出现就是新值（null 是“没有”），没出现就是不变（模型表和命令清单很大，上下文用量每轮都变，不整份重发）。hello 带全部。
-    /// 问答近况不走这里：对话与摘要只来自会话文件（`History`）。
     struct Info: Decodable {
         private var updates: [@Sendable (inout Session) -> Void] = []
 
@@ -142,7 +131,6 @@ enum PiWire {
             for update in updates { update(&session) }
         }
 
-        /// 名册不带进展时刻，Mac 收到时记（`SubagentState.progressAt`）。FireCode 的名字在一个指挥官下唯一，所以按名字对上上一份。
         private static func stamped(_ roster: [SubagentState], since previous: [SubagentState], at now: Date) -> [SubagentState] {
             roster.map { agent in
                 var agent = agent
@@ -199,11 +187,8 @@ enum PiWire {
 
     struct Bye: Decodable { var reason: String }
 
-    /// 请扩展核对磁盘上的扩展版本、不同就歇下时重新载入（`SelfReload.check`）。格式跨扩展版本不变、没有 id、扩展不回 ack：
-    /// 要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（见 CueBridge README「协议」）。
     static let upgrade = Data(#"{"t":"upgrade"}"#.utf8) + Data([0x0A])
 
-    /// 读不懂的扩展的连接里只认告别（`IdentityHello` 同理）：格式可能已变，读不出就当不是。
     static func identityBye(_ line: Data) -> Bye? {
         struct Tagged: Decodable { var t: String; var reason: String }
         guard let tagged = try? JSONDecoder().decode(Tagged.self, from: line), tagged.t == "bye" else { return nil }
@@ -211,7 +196,6 @@ enum PiWire {
     }
     struct StateMessage: Decodable { var state: State }
 
-    /// `text` 为 null 是清掉。
     struct Draft: Decodable {
         var text: String?
         var since: Double?
@@ -249,7 +233,7 @@ enum PiWire {
         case "draft": return .draft(try decoder.decode(Draft.self, from: line).draft)
         case "quota":
             let seconds = JSONDecoder()
-            seconds.dateDecodingStrategy = .secondsSince1970  // 重置时刻是 Unix 秒
+            seconds.dateDecodingStrategy = .secondsSince1970
             return .quota(try seconds.decode(QuotaReport.self, from: line))
         case let other: throw DecodeError.unknownType(other)
         }
@@ -262,7 +246,6 @@ enum PiWire {
         var text: String
         var images: [Image]?
         var deliveryId: String?
-        /// Cue 的话：扩展只在此刻这一轮是 Cue 开的（或歇着）时交出
         var cue: Bool?
     }
 
@@ -305,7 +288,6 @@ enum PiWire {
         var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
     }
 
-    /// 扩展挑模型、问一次，只回不写。
     static func titleCommand(id: String, text: String) throws -> Data { try encodeLine(TitleCommand(id: id, text: text)) }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {

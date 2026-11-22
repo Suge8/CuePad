@@ -21,7 +21,6 @@ final class ClaudeHostedSession: SessionLink {
     var tasks = ClaudeHostedTasks()
     var permission: (request: String, permission: ClaudePermission)?
     let deliveries = ClaudeDelivery()
-    /// 大脑在做的 `/clear`，先发的在前：每个 `result` 结束最早的那个等待
     var clearing: [UUID] = []
     let clearWaits: PendingReplies<UUID, Void>
     private var apiError: String?
@@ -54,7 +53,6 @@ final class ClaudeHostedSession: SessionLink {
         PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: BridgeError.ackTimeout)
     }
 
-    /// 起好的连接；没起或起不来时抛 `sessionEnded`（进程退出后写入同样抛它）
     var live: ClaudeStream {
         get throws {
             guard let stream else { throw BridgeError.sessionEnded }
@@ -73,7 +71,6 @@ final class ClaudeHostedSession: SessionLink {
         return stream.process
     }
 
-    /// 接着已结束的会话时 `known` 是索引里记下的名字与首条消息，`model` 是起进程时指定的模型（几个别名解析到同一个 id 时，之后报的 id 认回它）。
     func connect(
         sessionID: String, cwd: URL, sessionFile: URL, model: ModelKey?, launchToken: String?, known: (name: String?, firstMessage: String?)?
     ) async throws -> Session {
@@ -103,7 +100,6 @@ final class ClaudeHostedSession: SessionLink {
         return session
     }
 
-    /// `HostedTurns` 不认的（已在跑时的开始、没在跑时的工具与收尾）不往外报。
     func emit(_ event: TurnEvent, at time: Date = .now) {
         guard turns.apply(event, at: time) else { return }
         brain?.emit(event)
@@ -208,7 +204,6 @@ final class ClaudeHostedSession: SessionLink {
             ?? result["subtype"]?.string ?? String(localized: "未知错误")
     }
 
-    /// 几个别名可能解析到同一个 id，所以先认当前选的那项；都对不上才显示原始 id。
     private func option(_ model: String, current: ModelOption?, in catalog: [ModelOption]) -> ModelOption {
         let matches = { (option: ModelOption) in option.key.id == model || self.resolved[option.key.id] == model }
         if let current, matches(current) { return current }

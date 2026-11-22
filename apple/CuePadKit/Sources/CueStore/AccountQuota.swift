@@ -24,7 +24,6 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
     case isBinding = "binding"
   }
 
-  /// 线上与存储里 `binding` 只在为真时出现。
   public init(from decoder: any Decoder) throws {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     try self.init(
@@ -41,14 +40,12 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
     if isBinding { try c.encode(true, forKey: .isBinding) }
   }
 
-  /// 名字是给人看的，不同长度可能写成同一个“N 小时”，所以按长度与模型认同一个窗口。
   public struct Slot: Hashable, Sendable {
     public let seconds: Int
     public let model: String?
   }
   public var id: Slot { Slot(seconds: seconds, model: model) }
 
-  /// 重置不代表已观测到恢复。
   public func used(at now: Date) -> Double { min(max(used, 0), 1) }
 
   public func pace(at now: Date) -> Double {
@@ -71,27 +68,22 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
 /// “更新于”读 `observedAt`；`modifiedAt` 表示能力、结果或当前授权发生变化。
 public struct AccountQuota: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// 原生提供方 id，或网关完整上游 provider（可含远端前缀）
   public var provider: String
   public var hostID: String
   public var macName: String
   public var account: PiAccount?
   public var status: QuotaStatus
   public var observedAt: Date?
-  /// 已收下的最晚排序时刻（`QuotaReport.requestedAt`），只用于拒绝晚到的结果，不代替原观测时间。
   public var requestedAt: Date?
   public var windows: [QuotaWindow]
   public var details: QuotaDetails?
   public var createdAt: Date
   public var modifiedAt: Date
 
-  /// 它不决定账号清单是否需要读取。
   public static let staleAfter: TimeInterval = 10 * 60
-  /// 用量没有有意义的变化时，观测时间最多拖这么久才写一次（只为"更新于"不过时）；有变化随时写。
   static let touchAfter: TimeInterval = staleAfter / 2
   /// 重置时间相差不超过这么多算同一个（同一窗口里提供方报的重置时刻会差几百毫秒）。
   static let resetTolerance: TimeInterval = 60
-  /// 同一毫秒切换授权也要有确定的先后；数据库与同步的时刻精度是毫秒。
   static let updateStep: TimeInterval = 0.001
 
   public init(id: UUID, provider: String, hostID: String, windows: [QuotaWindow], createdAt: Date, modifiedAt: Date,
@@ -144,7 +136,6 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
     }.max { $0.used(at: now) < $1.used(at: now) }
   }
 
-  /// 网关来源一级的那条按来源一条：几个提供方指向同一网关与授权时，它们的清单在同一条记录上排先后。
   static func recordID(provider: String, host: String, account: PiAccount?) -> UUID {
     let owner = account?.source != nil && account?.route == nil ? "source" : provider
     return DeterministicID.uuid("account-quota/\(host)/\(owner)/\(account?.kind.rawValue ?? "unknown")/\(account?.scope ?? "unknown")")
@@ -153,7 +144,6 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   var evidencedAt: Date { requestedAt ?? createdAt }
 }
 
-/// 扩展报来的一次观测（桥协议的 `quota` 消息，线上格式即此）。
 public struct QuotaReport: Sendable, Equatable, Decodable {
   public var provider: String
   public var account: PiAccount
@@ -161,15 +151,10 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   public var windows: [QuotaWindow]
   /// 是这个账号的全部窗口（查用量接口得到的）时替换已存的；回复里带回的只有一部分（Claude 的响应头没有按模型的周额度），按窗口并进已存的
   public var complete: Bool
-  /// 网关的原始 readAt（Unix 秒）；不以取缓存的时刻替换。
   public var observedAt: Date?
-  /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。与 `accounts` 同一事务写，损坏的清单整份不写。
   public var activeScopes: [String]?
-  /// 几个提供方指向同一网关时查询只做一次。
   public var owners: [String: Date]?
   public var accounts: [QuotaReport]?
-  /// 排序时刻：这份结果所属操作期间的一个时刻——主动查询（成功、失败、不支持、网关清单）取请求开始，回复带回的观测取收到回复。
-  /// 取在操作期间以内，先结束的操作的时刻一定早于后开始的；能力声明不带。
   public var requestedAt: Date?
   public var details: QuotaDetails?
 

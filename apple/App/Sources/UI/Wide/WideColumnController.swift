@@ -8,7 +8,6 @@ nonisolated private final class LayoutMark: CALayer {
 
     override func layoutSublayers() {
         super.layoutSublayers()
-        // 块的层只在主线程的提交里排
         let laidOut = laidOut
         MainActor.assumeIsolated { laidOut?() }
     }

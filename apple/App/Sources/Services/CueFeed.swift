@@ -2,9 +2,6 @@ import CueStore
 import Foundation
 import Observation
 
-/// Cue 那一行、小组件快照与实时活动都从这里取，整个界面一份、共用订阅读一次，不各自订阅、库一变各读一遍摘要。
-/// 原始共享读取归 `CueReading`；发布者直接订阅它，不以这里的界面观察为前置。
-/// 读失败时订阅结束、记下错误，读它的各自报出。
 @Observable
 final class CueFeed {
     typealias Read = CueReading.Read
@@ -18,7 +15,6 @@ final class CueFeed {
     private(set) var read: Read?
     fileprivate(set) var failure: (any Error)?
     @ObservationIgnored fileprivate var following = false
-    /// 订阅还没读到时当场读的那份：订阅从它接着读，不重读
     @ObservationIgnored private var start: Snapshot<Read>?
     @ObservationIgnored private let store: CueStore
     private let widget: Bool
@@ -28,7 +24,6 @@ final class CueFeed {
         self.widget = widget
     }
 
-    /// 新建的窗口第一帧就是它；读不出来为 nil（失败页盖住页面）。
     func latest() -> Read? {
         if let read { return read }
         start = try? store.snapshot { [widget] in try Read.read(from: $0, widget: widget) }
@@ -38,7 +33,6 @@ final class CueFeed {
     fileprivate func follow() async {
         defer { following = false }
         let read: @Sendable (isolated CueStore) throws -> Read = { [widget] in try Read.read(from: $0, widget: widget) }
-        // 从当场读的那份接着订阅时，库不变就不再给一份：先把它记成手里的，本机事实（同步对没对过）变了照样配上它再给（`updates`）
         if let start { self.read = start.value }
         do {
             for try await next in start.map({ store.observe(from: $0, read) }) ?? store.observe(read) { self.read = next }
@@ -47,11 +41,9 @@ final class CueFeed {
         }
     }
 
-    /// 订阅读失败时以那个错误结束。
     fileprivate func updates(_ services: AppServices) -> AsyncThrowingStream<Seen, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
-                // 调试钉住的此刻（`DebugHooks.cueNow`，正式版恒为 nil）换了也推一份：轮播只改它
                 for await (read, moment, local, failure, _) in Observations({ (self.read, services.speech, services.cueLocal, self.failure, DebugHooks.cueNow) }) {
                     if let failure { return continuation.finish(throwing: failure) }
                     if let read { continuation.yield(Seen(read: read, moment: moment, local: local)) }
@@ -64,7 +56,6 @@ final class CueFeed {
 }
 
 extension AppServices {
-    /// 第一个来读的起订阅（随 App 的常驻任务一起取消），之后的共用。
     func cueUpdates() -> AsyncThrowingStream<CueFeed.Seen, any Error> {
         if !cueFeed.following {
             cueFeed.following = true

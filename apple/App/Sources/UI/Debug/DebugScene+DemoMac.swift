@@ -5,7 +5,6 @@ import Foundation
 import Observation
 
 extension DebugScene {
-    /// 各台演示 Mac 对额度刷新请求按"没有在线的 Pi 会话"写回（同 Mac 上会话还没连好时），画面等到明细里没查到那一行出来才算就绪。
     private static var quotaFails: Bool {
         #if os(iOS)
         args.quotaOpts.fails
@@ -17,7 +16,6 @@ extension DebugScene {
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"
         if quotaFails {
-            // 别的演示 Mac 上也有在线会话：同样按没查到写回，不然手机一直等它。问哪几台由手机读到的在线会话定（`quotaRefreshKey`），读到一台接一台
             Task {
                 var answering: Set<String> = [host]
                 for await hosts in Observations({ services.quotaRefreshKey }) {
@@ -38,7 +36,6 @@ extension DebugScene {
         }
         Task {
             await running("演示 Mac 交给 Cue") {
-                // 每次变化都重读此刻还没交出去的：攒下的旧变化不再各等一遍
                 for try await waiting in store.observe({ try toDemoCue($0) }) where !waiting.isEmpty {
                     guard try await !toDemoCue(store).isEmpty else { continue }
                     await reachable()
@@ -63,20 +60,16 @@ extension DebugScene {
                     try store.deliveryRequests().contains { pending.contains($0.id) && $0.isOpen }
                 }) where !open { break }
                 await executor.stop()
-                // 各自演一轮，不挡住下一批话的接手
                 for id in pending { Task { await running("演示 Mac 回一轮") { try await playRound(for: id, store: store, host: host) } } }
             }
         }
     }
 
-    /// 演示 Mac 照真的 Mac（`MacExecutor.perform`）逐种办：库里办得了的照办，要真会话的当作办成。
-    /// 不写 default：新加的投送方式在这里编不过，要明说演示怎么办，不默认报成功。
     private static func demoMacOutcome(_ request: DeliveryRequest, host: String, store: CueStore) async -> DeliveryOutcome {
         guard let mode = request.mode.known else { return .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue))) }
         do {
             switch mode {
             case .send:
-                // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
                 _ = try await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
             case .step:
                 #if os(macOS)
@@ -106,7 +99,6 @@ extension DebugScene {
         try await store.setDemoCueState(.settled, context: context)
     }
 
-    /// 你对运行在演示 Mac 上的 Cue 说了、还没交给它的话；演示 Mac 不在线（`-CuePadCuePresence asleep`，没写在线记录）时它收不到。
     private static func toDemoCue(_ store: isolated CueStore) throws -> [UUID] {
         guard try store.cueProfile()?.hostID == "demo-mac", try store.macOnline("demo-mac") else { return [] }
         return try store.cueMessagesToDeliver().filter { $0.author == .known(.you) }.map(\.id)
@@ -127,7 +119,6 @@ extension DebugScene {
             guard let session = try await store.sessionPage(query).items.first?.state else { return }
             try await replay(session, as: state, detail: detail, question: question, recorder: recorder)
         }
-        // 说过话的会话做完一轮才是"有新回复"（刚开的还是新会话）
         try await store.writeTranscript(SessionTranscript(
             sessionID: "scratch", messages: [], recap: Recap(lastPrompt: String(localized: "先跑一遍测试", table: "Demo"), lastReply: String(localized: "全部通过。", table: "Demo"))))
         while !Task.isCancelled {
@@ -137,7 +128,6 @@ extension DebugScene {
             for try await state in store.observe({ try $0.sessionPage(query).items.first?.state.state }) {
                 if state?.isWorking == true { worked = true } else if worked, state == .known(.settled) { break }
             }
-            // 每个状态停留的时长是演示节奏，不是在等别的事
             await Task.wait(for: .seconds(2.5))
             try await set(.waitingForUser, String(localized: "要提交吗？", table: "Demo"), question: Question(promptID: "cycle", kind: .confirm, text: String(localized: "要提交吗？", table: "Demo")))
             await Task.wait(for: .seconds(3))
@@ -147,7 +137,6 @@ extension DebugScene {
     }
 
     private static func playRound(for request: UUID, store: CueStore, host: String) async throws {
-        // 歇下的不演：一写状态它又醒了。每一下都重读，等的这几秒里被叫去歇下的也不再写
         guard let asked = try await store.deliveryRequest(request), asked.mode != .known(.end), let ref = asked.target.ref else { return }
         let recorder = demoRecorder(store, host: host)
         for (wait, state) in [(0.8, WorkState.thinking), (2.5, .settled)] {
@@ -159,7 +148,6 @@ extension DebugScene {
         }
     }
 
-    /// 演示会话换一个状态：名字、所在、模型、命令与上下文照旧（记录器每次整份写入，不带上就被清掉）。
     private static func replay(
         _ session: SessionState, as state: WorkState, detail: String? = nil, question: Question? = nil, recorder: StateRecorder
     ) async throws {

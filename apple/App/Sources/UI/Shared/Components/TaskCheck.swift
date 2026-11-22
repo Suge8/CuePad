@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 点了立即显示完成，停留 `linger` 再写入、由列表移走：看得清，也来得及反悔，这段时间里再点一下就撤销。要先问的（`CompletionAsk`）答应了才开始停留。
-/// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }
 
@@ -14,7 +12,6 @@ struct TaskCheck: Equatable {
 }
 
 extension Workspace {
-    /// `busy`：在做或在等你的会话（`TaskNext.busySession`），完成前先问它。
     func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: SessionState?) {
         if task.status == .done {
             let id = task.id
@@ -65,8 +62,6 @@ struct TaskCheckButton: View {
 }
 
 extension View {
-    /// 挂在持有 `check` 的那一行或卡上（`taskSpoken` 已挂），不挂在圈上：看板列里的卡不画圈，读屏照样勾得了。
-    /// 停留后写入的是设为完成，不是翻转：等待时别处已做完也不会被翻回去。
     func taskCheck(_ task: Card, check: Binding<TaskCheck>) -> some View {
         modifier(TaskCheckFlow(task: task, check: check))
     }
@@ -85,7 +80,6 @@ private struct TaskCheckFlow: ViewModifier {
             guard !Task.isCancelled else { return }
             commit()
         }
-        // 停留时就离开了页面（列表收起、换页）：照样写入，不丢这次勾选
         .onDisappear { if check.phase == .pending { commit() } }
         .onChange(of: task.completedAt) { check.phase = .idle }
     }
@@ -104,7 +98,6 @@ private struct TaskCheckFlow: ViewModifier {
     }
 }
 
-/// 任务气泡标题旁的完成圈：自己记着这一下（标题不随它划线）。
 struct GoalCheck: View {
     let task: Card
     var subtasks: TaskProgress?

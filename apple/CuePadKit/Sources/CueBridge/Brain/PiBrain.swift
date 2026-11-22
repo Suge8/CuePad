@@ -35,7 +35,6 @@ final class PiBrain: HostedSession {
     static let subscription = Bundle.module.url(forResource: "claude-subscription", withExtension: "ts")!
     static let tools = Bundle.module.url(forResource: "cue-tools", withExtension: "ts")!
 
-    /// 本机的 Claude Code（`claude-subscription.ts` 取它的版本号）：先找大脑的 PATH，再找常见安装目录；没有就交 `claude`，扩展用保底版本号。
     private static func claude(_ config: CueBrainConfig) -> String {
         let path = (config.environment["PATH"] ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
         let locator = ExecutableLocator(searchDirectories: path + ExecutableLocator.standard.searchDirectories)
@@ -126,7 +125,6 @@ final class PiBrain: HostedSession {
         return { await process?.stop() }
     }
 
-    /// 回应 `success: false` 抛 `rejected`。
     private func command(_ command: [String: JSONValue]) async throws -> JSONValue {
         guard let process else { throw HostedSessionError.notRunning }
         nextID += 1

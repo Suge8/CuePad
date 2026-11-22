@@ -1,8 +1,6 @@
 import CryptoKit
 import Foundation
 
-/// 一份记忆快照中对齐的 [lo, hi) 区间。位置只用于布局，指纹绑定有序输入；范围引用跨进程原样传递，
-/// 不能用写入时的输入重新盖章。指纹同时用于缓存有效性、zoom 与摘要事务比较，避免三处定义漂移。
 public struct CueMemoryRange: Equatable, Sendable {
   public let lo: Int
   public let hi: Int
@@ -32,7 +30,6 @@ public struct CueMemoryRange: Equatable, Sendable {
     return size >= 2 && size & (size - 1) == 0 && lo % size == 0
   }
 
-  /// 长度前缀保留字段和行的边界；内容参与比较，不依赖可能同毫秒的 modifiedAt。
   static func fingerprint(_ lines: ArraySlice<CueMemoryLine>) -> String {
     let fields = lines.flatMap { line in
       [line.id.uuidString, line.text, line.source.rawValue, String(line.createdAt.timeIntervalSince1970),

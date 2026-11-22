@@ -6,7 +6,6 @@ import Synchronization
 /// 下行默认也由这个节拍从 WebRTC 取走、不碰音频硬件：模拟器的音频服务在负载高时初始化输出单元会 RPC 超时、整个 App 被中止（实测），CI 的 runner 也没有声卡。
 final class VoiceFixture {
     nonisolated enum Downlink: Sendable {
-        /// 录下（`write`），不出声
         case record
         case discard
         /// 照常走 `VoiceAudio` 的扬声器（静音）：只有真的在出声，iOS 才按后台音频让 App 在后台接着跑（模拟器实测：不出声的进后台即被挂起）。后台验收用
@@ -48,7 +47,6 @@ final class VoiceFixture {
         }
     }
 
-    /// 录下的下行（`.record`），24 kHz 单声道 16 位。
     func write(to url: URL) throws {
         let pcm = feed.recorded()
         func le<T: FixedWidthInteger>(_ value: T) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
@@ -79,7 +77,6 @@ final class VoiceFixture {
         return Array(UnsafeBufferPointer(start: output.int16ChannelData![0], count: Int(output.frameLength)))
     }
 
-    /// 节拍那一侧：`tick` 只在节拍的串行队列上跑，两块缓冲只有它碰；锁只在主线程换文件、取录音时才有人争。
     private nonisolated final class Feed: Sendable {
         static let frames = Int(VoiceAudioDevice.rate / 100)
         private struct State {
@@ -88,7 +85,6 @@ final class VoiceFixture {
             var recorded: [Int16] = []
         }
         private let state = Mutex(State())
-        /// 节拍只在这条串行队列上走
         let queue = DispatchQueue(label: "voice-fixture", qos: .userInteractive)
         nonisolated(unsafe) private let output = UnsafeMutableBufferPointer<Int16>.allocate(capacity: frames)
         nonisolated(unsafe) private let input = UnsafeMutableBufferPointer<Int16>.allocate(capacity: frames)
@@ -109,7 +105,6 @@ final class VoiceFixture {
         func clock(link: VoiceAudioDevice.Link, levels: VoiceLevels, downlink: Downlink) -> any DispatchSourceTimer {
             let clock = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
             clock.setEventHandler { [weak clock] in
-                // 被耽搁时一次补上错过的几拍，上下行都不慢于实时
                 for _ in 0..<max(1, Int(clock?.data ?? 1)) { self.tick(link: link, levels: levels, downlink: downlink) }
             }
             clock.schedule(deadline: .now(), repeating: .milliseconds(10), leeway: .milliseconds(1))
@@ -130,7 +125,6 @@ final class VoiceFixture {
             }
             state.withLock { state in
                 if downlink == .record {
-                    // 两点并一点降到 24 kHz
                     for index in stride(from: 0, to: output.count, by: 2) {
                         state.recorded.append(Int16((Int32(output[index]) + Int32(output[index + 1])) / 2))
                     }

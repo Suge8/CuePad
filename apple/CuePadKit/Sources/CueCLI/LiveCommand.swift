@@ -55,7 +55,6 @@ extension Command {
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: found)))
   }
 
-  /// `cuepad live snapshot [ref] [-i] [--find <文字>]`：参数与选项都写出来，只读 `cuepad live --help` 也够用。
   private static func synopsis(_ command: Command) -> String {
     let options = command.options.map { option in
       option.short.map { "[-\($0)]" } ?? "[--\(option.name)" + (option.value.map { " <\($0)>" } ?? "") + "]"
@@ -63,7 +62,6 @@ extension Command {
     return (["cuepad", command.name, command.arguments] + options).filter { !$0.isEmpty }.joined(separator: " ")
   }
 
-  /// `cuepad live` 与它的动词共用的"CuePad 没开"。
   static func notOpen(_ call: Call, _ then: String) -> CLIError {
     .invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：\(then)")
   }

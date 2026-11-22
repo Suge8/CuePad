@@ -15,7 +15,6 @@ struct BubbleFooter: View {
         case start(Card, editing: CardEditing?)
     }
 
-    /// 总览要开的那一步，"开始"长在那一步的行尾（`TaskBubblePage`），这里只在下一步是 Agent 时放它在做什么。
     private var stage: Stage? {
         if focus.id == data.goal.id, !data.steps.isEmpty {
             guard case .agent(_, let session)? = workspace.lead(of: data.steps, in: agents) else { return nil }
@@ -26,9 +25,6 @@ struct BubbleFooter: View {
         return focus.status != .done ? .start(focus, editing: editing) : nil
     }
 
-    /// 开始 → 正在开 → Agent 在做是同一条的三个样子，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换。
-    /// 同新会话输入框的工具排：不垫底、不画线，Mac 上铺满气泡的宽（那一排的字才写得全），靠上面留的空隔开。
-    /// 没有这一排时留一个零高的框：气泡底下照样留出外面给它的那圈白，最后一行不贴着气泡底。
     var body: some View {
         ZStack(alignment: .leading) {
             switch stage {
@@ -117,16 +113,12 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
                 .accessibilityLabel(markLabel ?? "")
             content
             Spacer(minLength: 4)
-            // 带字的钮比圆钮往里让一格
             trailing.padding(.trailing, Spacing.item)
         }
         .contentShape(.rect)
     }
 }
 
-/// Mac 上这一下要开新会话时，左边是交给谁（新会话，或绑定本项目开着的会话，`HandOffChoice`）与用哪家、哪个模型的那一排（同新会话的输入框，改了就记住）；
-/// 接着用已有会话的都不放（写"交给 新会话"就说错了）。
-/// 这台 Mac 上上一次没开成或说不出结果（`SessionLaunching.outcome`）时左边换成原因、按钮写"重试"，可能已开过时先确认。
 private struct StartBar: View {
     let leaf: Card
     let editing: CardEditing?
@@ -165,7 +157,6 @@ private struct StartBar: View {
         }
         #if os(macOS)
         .confirmsLaunchAgain(launching)
-        // 读不出去向时不放那一排，原因在点"开始"时报
         .observingLaunchAgents(id: leaf.id, into: $launch, onError: { _ in }) { [id = leaf.id, here = services.hostID] store in
             guard case .launch(_, let host) = try store.handOffPlan(id, host: here).destination else { return nil }
             return host
@@ -186,7 +177,6 @@ private struct StartBar: View {
 }
 
 #if os(macOS)
-/// 交给谁：默认开新会话；选本项目开着的会话是把这一步绑给它（只关联，不发正文、不开不停会话），绑上后底下这一排换成那个会话。
 private struct HandOffChoice: View {
     let leaf: Card
     @Environment(Workspace.self) private var workspace

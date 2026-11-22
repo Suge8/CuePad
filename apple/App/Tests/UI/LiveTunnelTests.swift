@@ -4,7 +4,6 @@ import Network
 import Testing
 @testable import CuePad
 
-/// 隧道本身（两端各一份 `LiveTunnel`）：同一把 PSK 握得上、协商的是带前向保密的那一套，错的密钥与票据进不来。iOS 模拟器与 Mac 上都跑。
 @Suite struct LiveTunnelTests {
     let key = SymmetricKey(size: .bits256)
     let ticket = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
@@ -35,13 +34,11 @@ import Testing
         #expect(other == .ticket)
     }
 
-    /// 验过票、还在连开发服务与写放行的这一会儿，手机走了、票据作废：这一条不放行，也不留在隧道口的账上。
     @Test func 验票之后_登记之前票据作废_这条不放行() async throws {
         let holder = Holder(), ticket = ticket
         let server = try LiveTunnel.Server(key: key) { request in
             guard request.ticket == ticket else { return .ticket }
             holder.server?.keep([])
-            // 连回隧道口自己：只要有个在听的口
             return .open(host: "127.0.0.1", port: holder.port)
         }
         holder.server = server

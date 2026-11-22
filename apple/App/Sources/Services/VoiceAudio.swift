@@ -21,7 +21,6 @@ final class VoiceAudio {
     private let levels = VoiceLevels()
     private var engine: AVAudioEngine?
     private var microphone: AVAudioSinkNode?
-    /// 开语音处理那一下加上一次换路由，正常不过两三次；窗口里超过就当失控，不再重开。
     private static let restartLimit = (count: 5, within: Duration.seconds(2))
     private var events: (VoicePeer.Event) -> Void = { _ in }
     private var watching: [Task<Void, Never>] = []
@@ -142,7 +141,6 @@ final class VoiceAudio {
         #endif
     }
 
-    /// 声源是文件时只建扬声器这一半，且不外放（无人值守）。返回上行采样率。
     @discardableResult
     private func build(_ link: VoiceAudioDevice.Link) throws -> Double {
         engine?.stop()
@@ -209,7 +207,6 @@ final class VoiceAudio {
     }
 
     #if os(macOS)
-    /// 默认设备的标称采样率与这一侧的声道总数；读不到的项是 0。
     private static func device(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> String {
         func address(_ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
             AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
@@ -247,7 +244,6 @@ final class VoiceAudio {
         }
     }
 
-    /// 上行：麦克风（语音处理后）的第一声道转成 16 位交给 WebRTC。
     nonisolated private static func microphone(format: AVAudioFormat, link: VoiceAudioDevice.Link, levels: VoiceLevels) -> AVAudioSinkNode {
         let scratch = Scratch()
         let stride = format.isInterleaved ? Int(format.channelCount) : 1
@@ -265,7 +261,6 @@ final class VoiceAudio {
         }
     }
 
-    /// 只在实时线程上写的缓冲，随节点一起释放。
     private nonisolated final class Scratch: @unchecked Sendable {
         let samples = UnsafeMutableBufferPointer<Int16>.allocate(capacity: VoiceAudio.maximumFrames)
         deinit { samples.deallocate() }

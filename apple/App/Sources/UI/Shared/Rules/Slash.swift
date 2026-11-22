@@ -33,9 +33,7 @@ nonisolated enum Slash {
 
     static func insertion(for command: SlashCommand) -> String { "/\(command.name) " }
 
-    /// 带图片的不算命令：命令不能携带图片。
     @MainActor static func line(of draft: ComposerDraft, in commands: [SlashCommand], for session: SessionState) -> String? {
-        // 回复框每次重算都问一遍：先只看开头，是命令再整串修剪（长草稿每次都整串复制一遍，打一个字就要几毫秒）
         let start = draft.text.drop { $0.isWhitespace }
         guard start.hasPrefix("/"), !draft.hasFiles else { return nil }
         let name = start.dropFirst().prefix { !$0.isWhitespace }
@@ -74,14 +72,10 @@ nonisolated enum Slash {
 /// 刚压缩过、Pi 在下次回答前不知道已用多少时没有读数（`init?` 给 nil）：界面不画这颗胶囊，一道短横或"未知"读着像减号、像控件。
 /// 紧不紧按离自动压缩线走了几成算（没有线时按窗口的边）：过了线 Agent 自己就压缩了，线才是这一段的尽头。
 nonisolated struct ContextMeter: Equatable {
-    /// 走到压缩线的这几成起建议现在就压缩
     static let compactFraction = 0.8
-    /// 用量越过线这么多（占窗口几成）Agent 还没压缩，算出的线就是错的——各家的缺省照它们的源码与文档写（`AgentFacts.compactsAt`），
-    /// 它们升级后可能变。那时当没有线：不画、不说要压缩，紧不紧按窗口的边算。
     static let overshoot = 0.05
 
     let fraction: Double
-    /// 自动压缩线占窗口几成（`ContextUsage.compactAt`）；Agent 关了自动压缩或说不准时为 nil
     let compactsAt: Double?
 
     init?(_ usage: ContextUsage) {
@@ -91,7 +85,6 @@ nonisolated struct ContextMeter: Equatable {
             .flatMap { fraction <= $0 + Self.overshoot ? $0 : nil }
     }
 
-    /// 线落在窗口边上（用满才压）的不另画：环上的缺口与条上的刻度都只标在边以内
     var mark: Double? { compactsAt.flatMap { $0 < 0.995 ? $0 : nil } }
 
     var level: UsageLevel { UsageLevel(used: fraction / (compactsAt ?? 1)) }
@@ -101,7 +94,6 @@ nonisolated struct ContextMeter: Equatable {
     var compactLine: String? {
         guard let compactsAt else { return nil }
         guard mark != nil else { return String(localized: "用满时自动压缩") }
-        // 还没到线就不说到了：差不到一个百分点写 1
         let left = max(1, Int(((compactsAt - fraction) * 100).rounded()))
         return fraction < compactsAt ? String(localized: "再用约 \(left)% 自动压缩") : String(localized: "到了压缩线，接着会自动压缩")
     }
@@ -112,6 +104,5 @@ nonisolated struct ContextMeter: Equatable {
 
     var help: Dotted { Dotted(String(localized: "上下文")) + summary + Dotted(compactLine) }
 
-    /// "已用 21% · 剩 79%"（只写比例，用户看不到 token 数）。
     var summary: Dotted { Dotted(String(localized: "已用 \(used)%"), String(localized: "剩 \(100 - used)%")) }
 }

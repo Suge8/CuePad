@@ -21,8 +21,6 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
-/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与托管的 Pi 一样经 socket），
-/// 收到结束命令就像 Pi 那样告别退出。
 final class RecordingHost: AgentRuntime {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
@@ -30,20 +28,16 @@ final class RecordingHost: AgentRuntime {
     }
 
     private(set) var calls: [Call] = []
-    /// 开出的、已连上桥的假扩展，按 Pi 自己的会话 id：等它非空就是会话在桥上了（起来就记下的话，测试会在连上桥之前往下走）。
     private(set) var extensions: [String: FakeExtension] = [:]
-    /// 连上桥的会话报的会话文件，按 Pi 会话 id：收到的话（`writesMessages`）与剧本写的会话说的都追加在这里，Mac 读它（第一条写下前还不存在）
     private(set) var sessionFiles: [String: SessionFile] = [:]
     var openFailure: String?
     var openingRejection: String?
     var openingGate: AsyncStream<Void>?
     var writesMessages = true
-    /// 按 Pi 会话 id 装到它每个假扩展上的行为：开出的与结束后被话唤醒重新连上的（`resume`，新进程）都装，会话换了进程照样那样回话
     var behaviors: [String: (FakeExtension) -> Void] = [:]
     var resumeFailures: [any Error] = []
     private let bridge: Bridge
     private let socketDirectory: URL
-    /// Pi 的会话目录：开的新会话像 Pi 那样一上桥就报出它将来的会话文件 `--demo--/<会话 id>.jsonl`（第一条回答落盘前还不存在）
     private let sessions: URL
 
     init(bridge: Bridge, socketDirectory: URL, sessions: URL) {
@@ -82,8 +76,6 @@ final class RecordingHost: AgentRuntime {
         return ext.id
     }
 
-    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`since` 是它报的粗状态起点（缺省此刻）；
-    /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
         _ sessionID: String, cwd: String, busy: Bool = false, since: Date? = nil,
@@ -92,14 +84,12 @@ final class RecordingHost: AgentRuntime {
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd)
         options.launchToken = launchToken
-        // 桥只把清单里有的命令交给扩展（`Bridge.command`）：用例里用到的几条
         options.commands = ["compact", "greet", "shout"].map { FakeExtension.WireCommand(name: $0, description: nil) }
         if !seesImages { options.model?.images = false }
         options.model?.supportsFast = supportsFast
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
         options.sessionFile = file.url.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
-        // 起点按库存的毫秒（`Date.stored`，四舍五入）报：真扩展报的毫秒就是库里那一刻，截断的话亚毫秒的时刻会差出 1 毫秒，被当成起点变了
         if busy || since != nil {
             ext.setState(["kind": busy ? "thinking" : "idle"].merging(since.map { ["since": Int($0.stored)] } ?? [:]) { $1 })
         }
@@ -124,8 +114,6 @@ final class RecordingHost: AgentRuntime {
     }
 }
 
-/// 撑不过 App 重启的那几家（Claude Code、Codex 这类靠管道连着 App 的）托管会话的替身：经桥的 `attach` 上桥（各家接入就是这样上桥的），
-/// 状态由测试改，命令都受理不做事；`refusal` 有值时像没登录的 Claude Code 那样拒收说的话与命令，原话是它。
 final class PipedHostedAgent: AgentRuntime, SessionLink {
     private(set) var messages: [SessionMessage] = []
     private(set) var commands: [String] = []
@@ -186,8 +174,6 @@ extension FakeExtension {
     }
 }
 
-/// 更新器替身：检查一次就"找到更新、你点了安装"，像 Sparkle 一样在退出重启前问一次要不要推迟（`AppUpdater.postponeRelaunch`），
-/// 不推迟或推迟后被放行时记下装了几次。
 final class FakeUpdater: AppUpdater {
     var automaticallyChecksForUpdates = true
     var canCheckForUpdates = true

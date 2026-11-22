@@ -1,7 +1,6 @@
 #if DEBUG && os(iOS)
 import UIKit
 
-/// 系统分享完成回调的本地替身：读取所有交付文件后写入指定隔离目录，再报告成功；不向其他应用发消息。
 nonisolated final class InspirationAuditActivity: UIActivity {
     let destination: URL
     private var files: [URL] = []

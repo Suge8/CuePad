@@ -28,12 +28,10 @@ struct MainColumn: View {
         .ignoresSafeArea(.container, edges: .top)
     }
 
-    /// 进展页那一排是看板的列头：栏头只占两端那几颗钮（左端项目范围、右端要关注时的同步提醒），不盖住列头（空处拖窗口由看板自己接）。
     @ViewBuilder private var head: some View {
         if workspace.mainRoute == .progress, workspace.overlay == nil {
             WideColumnHead().padding(inset).frame(height: Chrome.band)
         } else {
-            // 编辑页的标题叠在让出两边之后的整栏正中：下面的正文栏也是按整栏居中的，放进那一排里会被两头的钮挤偏
             WideColumnHead().padding(inset).frame(height: Chrome.band)
                 .overlay { if workspace.overlay != nil { OverlayTitle() } }
                 .windowDragArea()

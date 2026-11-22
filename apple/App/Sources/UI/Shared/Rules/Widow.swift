@@ -1,6 +1,5 @@
 import Foundation
 
-/// 段落末尾不留单独一个英文单词（排版里的"孤字"）：中文行里夹的英文原因常在最后一个词上折行，下一行只剩"long"。
 nonisolated enum Widow {
     static func joined(_ text: String) -> String {
         guard let space = text.lastIndex(of: " ") else { return text }

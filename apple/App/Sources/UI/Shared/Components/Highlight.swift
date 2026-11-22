@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 灵感搜索、⌘K、Agent 页的会话搜索同一条。
 enum Highlight {
     static func matches(_ text: String, _ query: String, base: AttributedString? = nil) -> AttributedString {
         var result = base ?? AttributedString(text)

@@ -25,7 +25,7 @@ struct HistoryTests {
             SessionFile.user("u2", "a1", "later prompt", at: 3),
             SessionFile.assistant("t2", "u2", text: "checking", stop: "toolUse", at: 4),
             SessionFile.toolResult("r2", "t2", at: 5),
-            SessionFile.user("u0", nil, "rewritten first", at: 6))  // 回到开头另起分支：Pi 的列表仍取文件里的第一条
+            SessionFile.user("u0", nil, "rewritten first", at: 6))
         #expect(try index(f).history.displayName == "first prompt")
 
         try f.append(SessionFile.info("n1", "u0", name: "Refactor auth", at: 7))
@@ -34,7 +34,6 @@ struct HistoryTests {
 
     // MARK: 命令在会话文件里留下的
 
-    /// 对话只来自会话文件，与终端一致：终端里没有的条目这里也没有。
     @Test func compactionIsASystemLineAndSettingEntriesAreNotConversation() throws {
         var f = SessionFile(directory: dir)
         try f.append(
@@ -55,7 +54,7 @@ struct HistoryTests {
         #expect(update.messages[2...4].map(\.text) == ["已压缩上下文", "已压缩上下文", "已压缩上下文"])
         #expect(update.messages[2].id == ChatMessage.recordID(sessionID: update.sessionID, entryID: "c1") && update.messages[2].seq == 7 && update.messages[2].at == SessionFile.date(6))
         #expect(update.messages[5].text == "Say hello to world." && update.messages[5].deliveryID == nil)
-        #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")  // 系统行不动问答摘要
+        #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")
     }
 
     // MARK: 增量

@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 不再定时先确认：库里是软删、界面上没有拨回去的路。
 struct CueSchedulePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -87,7 +86,6 @@ struct CueSchedulePage: View {
                 trailing: RowAction("不再定时", icon: .remove, tone: .destructive) { ending = line }
             ) {
                 HStack(alignment: .firstTextBaseline, spacing: ScheduleMetrics.gap) {
-                    // 几点那一列按这台的写法里最宽的两个时刻占宽（"上午 10:58""下午 10:58""10:58 PM"），各行对齐
                     ZStack(alignment: .leading) {
                         ForEach([10, 22], id: \.self) { Text(verbatim: ScheduleText.clock(hour: $0, minute: 58)).hidden() }
                         Text(verbatim: ScheduleText.time(line)).foregroundStyle(palette.ink)

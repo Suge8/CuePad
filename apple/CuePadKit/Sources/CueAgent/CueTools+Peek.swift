@@ -3,8 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 在做的归 Cue 管，其余是用户手上的清单。末尾最近完成的各带会话与它此刻的状态：他接着交代其中一件的下一步时在原任务上加一步（同系统提示"接着用"），
-  /// 在旧会话上做别的事才 add 带 session（只写后一种时，做完的调研他接着说"先升第一档"，长程评测里另建了一件）。
   func board() async throws -> Result {
     let board = try await store.cueBoard()
     let left = try await store.cueState()?.left ?? []
@@ -26,7 +24,7 @@ extension CueTools {
       lines += board.sessions.map { ("- " + CueEnvelope.sessionLine($0, now: now, left: left), true) }
     }
     let total = items.count + board.sessions.count
-    let room = Self.overviewLimit - 1 - (recent.isEmpty ? 0 : recent.count + 1)  // 第一行是"没做完的 N 件"，最近完成的总在末尾
+    let room = Self.overviewLimit - 1 - (recent.isEmpty ? 0 : recent.count + 1)
     if lines.count > room {
       lines = Array(lines.prefix(room - 1))
       if lines.last?.isItem == false { lines.removeLast() }
@@ -41,9 +39,6 @@ extension CueTools {
         + (lines.isEmpty ? "" : "\n" + lines.map(\.text).joined(separator: "\n")))
   }
 
-  /// 信封里变化说到的那几件事的近况（`CueEnvelope.Input.recaps`），就是 peek 给的那一份：Cue 醒来就能核对证据，不用再 peek 一次
-  /// （每次工具调用都要把整段前缀再读一遍）。一件一份，按变化的先后放，放不下 `recapBudget` 的那件不带，变化那一行照旧写截短的回复。
-  /// 完成的不带：做完是定了的事，不用再核对证据；叫醒那一刻会话的记录常还没写完，近况只有开工那句。带的 4 遍里 Cue 每遍照样再 peek，省不下调用（整件任务完成已不叫醒 Cue，这条多半只碰上子任务完成）。
   public func recaps(for changes: [CueChange]) async throws -> [CueEnvelope.Subject: String] {
     var recaps: [CueEnvelope.Subject: String] = [:], seen = Set<CueEnvelope.Subject>(), room = Self.recapBudget
     for change in changes where change.kind != .done {
@@ -59,33 +54,25 @@ extension CueTools {
     return try await change.session.asyncMap { try await peek($0).text }
   }
 
-  /// 一个信封里近况合起来最多这么多字。一份近况通常一两千字（真实库里会话回答的中位 366 字、P99 约 2500 字，peek 再带两三轮截短的问答与正文），
-  /// 最长约 6000 字（最新回答截到 `latestReplyLimit`）；真实库里会话叫醒 Cue 时至多 4 件事有变化（96% 只有一件）。12000 字装得下两份最长的或五六份常见的，
-  /// 合起来约 1 万 token，是换新线（`CueContext.renewAt`）的一成：一次很多变化也不会把一轮的上下文撑到要换新。
   static let recapBudget = 12_000
 
   static let recentlyDone = 5
 
-  /// peek 里每个叶子最新的那条回答最多给这么多字：超了留开头 `latestReplyHead` 字与结尾，截掉中间。结论多在开头，证据、没做完的多在结尾
-  /// （真实库里超长的回答不到 0.3%，多数的证据在第 4000 字之后），截尾会把它们截掉；中间多是过程。
   static let latestReplyLimit = 4000
   static let latestReplyHead = 1000
 
   static let overviewLimit = 60
 
-  /// 会话是哪家 Agent 的（本版本不认识的写 Agent）。
   static func agentName(_ session: SessionState) -> String { session.agent.known?.name ?? "Agent" }
 
   func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
     let now = store.timing.now(), left = try await store.cueState()?.left ?? []
-    // 在哪个项目里：他放行的范围写的是项目（"以后「演示」里推送代码不用问"），不写出来就对不上
     let project = try await store.projects().first { $0.id == detail.task.projectID }?.name
     var lines = [
       "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (project.map { " · 项目「\($0)」" } ?? "")
         + (detail.progress.map { " · 子任务 \($0.done)/\($0.total)" } ?? "") + " · " + status(detail.task)
     ]
-    // 几步接着用同一个会话（start 的缺省）时，会话与它的问答只列在最后用它的那一步下面：每步各列一遍是同一段字重复几次
     let lastUse = Dictionary(detail.leaves.enumerated().compactMap { index, leaf in leaf.session.map { ($0.session.sessionID, index) } }) { _, later in later }
     for (index, leaf) in detail.leaves.enumerated() {
       var head = leaf.leaf.id == detail.task.id ? "-" : "- 「\(leaf.leaf.heading)」（\(leaf.leaf.id.shortID)）\(status(leaf.leaf))"
@@ -103,7 +90,6 @@ extension CueTools {
       }
       lines.append(head)
       if let session = leaf.session { lines += Self.subagentLines(session.session, now: now) }
-      // 会话里有开工那一句（与标题加正文一字不差）就不另列正文：那一句是 Cue 说的，在问答或更早说过的里照原文列全
       let opened = leaf.session.map { Self.opening(in: $0, body: leaf.leaf.body) } ?? false
       if !opened, let rest = leaf.leaf.rest { lines.append("  正文：\(CueEnvelope.clip(CueFormat.plainText(rest), 200))") }
       if let session = leaf.session { lines += Self.conversation(session, opening: opened ? leaf.leaf.body : nil) }
@@ -148,8 +134,6 @@ extension CueTools {
     return head
   }
 
-  /// 会话带的子代理此刻怎样，每个一行、缩进两格：名册是 Agent 报给 Mac 的（FireCode 的名册、Claude Code 的后台任务……），
-  /// 主会话嘴上说在等的，照这里看是不是真在等。
   private static func subagentLines(_ session: SessionState, now: Date) -> [String] {
     guard !session.subagents.isEmpty else { return [] }
     let running = session.subagents.count(where: \.isRunning)
@@ -174,13 +158,6 @@ extension CueTools {
     }
   }
 
-  /// 会话最近几轮问答（最新的回答给全文，常是测试输出与证据，太长截掉中间；他说的与更早的回答截短），每行缩进两格。
-  /// `opening`：叶子的标题与正文（`opening(in:body:)` 认出了开工那一句）：那一句标明是开工的第一句。
-  /// 前面先列更早你对它说过的（`earlier`，重发的同一句、最近几轮里你说过的只列一次；他或 Agent 说的同一句截短了，不算列过）：托付的事常在几轮之前，交回时不提它就会被漏掉
-  /// （长程评测里"做完顺手升版本号"漏核对就 done，实测）。你说的每一句在这里只出现一次、原文照列不截：截掉的后半句里可能正是要核对的那件；
-  /// 这是 Cue 自己写的短话（长程评测 234 句 say 中位 92 字、最长 347 字）。
-  /// 这一轮还没答完时末尾再列它到目前最后说的一段（`Recap.pendingTools`）：会话停下来问之前说的（测试过没过、倾向哪个）常是拿主意的依据，
-  /// 答完前它只在这一轮的经过里、不进对话（短场景"放行过的不再问"没它就看不到测试已过，答成不推送）。
   private static func conversation(_ detail: CueSessionDetail, opening: String? = nil) -> [String] {
     var lines: [String] = [], listed = Set(detail.recent.filter { $0.saidByCue(detail.cueSent) }.map { flat(CueFormat.plainText($0.text)) })
     let earlier = detail.earlier.map { CueFormat.plainText($0.text) }.filter { listed.insert(flat($0)).inserted }
@@ -214,7 +191,6 @@ extension CueTools {
     text.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }.joined(separator: "\n")
   }
 
-  /// 会话里你说过的一句（最近几轮或更早）与叶子的标题加正文一字不差（不计空白），就是开工那一句。
   private static func opening(in detail: CueSessionDetail, body: String) -> Bool {
     (detail.earlier + detail.recent).contains { $0.role != .known(.pi) && $0.saidByCue(detail.cueSent) && same(CueFormat.plainText($0.text), body) }
   }

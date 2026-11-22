@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// 纸跟着整排收窄。否决的是各占等宽一半、各自按比例放进去：一横一竖并排时一高一矮、竖的那半右边空一截，一份时纸比图宽出一大块。
-/// 每张的比例由格子自己报（`PreviewAspect`），读到画面前按类型猜，读到时整排按真比例重排一次（同主图）。
 struct PreviewRow: Layout {
     let maxHeight: CGFloat
     let gap: CGFloat

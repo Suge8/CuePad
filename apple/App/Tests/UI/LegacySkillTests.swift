@@ -4,8 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 旧版 CuePad 往用户目录写过自己的 cuepad 技能、给 Claude Code 建过链接；这一版启动时把它记着的接入搬进设置，再删掉它。
-/// 接入看得见的效果是终端里开的 Claude Code 会话进了历史；CuePad 托管过的那个不论接入都进，进了它就说明这一遍回填已经看过整个目录。
 @Suite(.releasesLibraries)
 struct LegacySkillTests {
     private struct Places {
@@ -41,7 +39,6 @@ struct LegacySkillTests {
             try await recorder.end(sessionID: Self.hosted)
         }
 
-        /// 起 App，等这一遍回填做完（托管过的那个读得到对话），返回进了历史的 Claude Code 会话。
         func launch() async throws -> Set<String> {
             app.services.start()
             let store = app.services.store

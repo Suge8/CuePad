@@ -77,7 +77,6 @@ extension DebugScene {
         SlashCommand(name: "skill:frontend-design", summary: String(localized: "做界面时先定视觉方向与密度", table: "Demo"), source: .known(.skill)),
     ]
 
-    /// 几家各报各的：手机发给 Agent 时换选会话才看得出命令跟着换。
     static func demoCommands(for agent: AgentKind?) -> [SlashCommand] {
         let names: Set<String>? = switch agent {
         case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]

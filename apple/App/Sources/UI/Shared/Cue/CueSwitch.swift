@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 按下开的那一刻到写成之间头像是在听的那一拍（带在动的点），不另放转圈。关着时这一行不写别的：停用是平常的一态，不是出错。
 struct CueSwitchRow: View {
     let model: CueSettingsModel
     let here: String?
@@ -34,7 +33,6 @@ struct CueSwitchRow: View {
         return model.isOn ? .resting : .away
     }
 
-    /// 这一行的高：头像与名字、原因两行字都放得下，原因出没不挤动这一组。
     private static var height: CGFloat { 36 }
 }
 

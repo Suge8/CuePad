@@ -2,11 +2,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 要你拍板的不在这里：在输入框上方的拍板卡里（`CueWaitDock`），这里只留一句发生过什么。
-/// 连着的几轮（中间没人说话）排成一块，一处一行（`CueNoteFold`）：同一个会话停下十几次是一行带次数，不是十几行。
-/// 字定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`、`CueMessage.tools`），那一处之后改名、再动起来都不变；这一轮此刻在做什么只写在对话末尾那一行（`CueEnding`）。
-/// Cue 这一轮不写话（系统提示「说话」），去处只从动作推出，三处说同一套话。
-/// 后面又有了话的那几块是旧事（`settled`）：几行收成一行（哪几处、最近那次几点），点开才逐行列；对话最末那一块与还没读的照旧逐行，那是此刻的事。
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
     let settled: Bool
@@ -42,7 +37,6 @@ struct CueNoteLog: View {
         .transition(.entry)
     }
 
-    /// 名字取最近有动静的那一处。
     private func summary(_ folds: [CueNoteFold]) -> Text {
         var names: [String] = []
         for place in folds.reversed().flatMap({ $0.last.header?.places ?? [] }) where !names.contains(place.title) { names.append(place.title) }
@@ -77,7 +71,6 @@ private struct CueNoteLine: View {
         link(places, row: CueNoteRow(time: round.date, tint: tint(places)) { glyph(places) } text: { words(places) })
     }
 
-    /// 放不下时先收短名字：去处与次数在句尾，整句截断会先丢掉它们。
     private func words(_ places: [CueWakeHeader.Place]) -> some View {
         ViewThatFits(in: .horizontal) {
             counted(line(places)).fixedSize()
@@ -136,7 +129,6 @@ private struct CueNoteLine: View {
             head == nil ? round.header.map { Text($0.wake.reason) } : nil
         }
         return switch (head, tail) {
-        // 接在前半句后面的去处自成一键：英文用冒号接，不与别处并列两段的"%@，%@"共用
         case (let head?, let tail?): Text("\(head)\(Text("，\(tail)", comment: "Cue 页醒来那一行：发生了什么之后接 Cue 定的去处"))")
         case (let head?, nil): head
         case (nil, let tail?): tail
@@ -171,7 +163,6 @@ private struct CueNoteLine: View {
     }
 }
 
-/// 醒来那几行、一轮的经过（`CueTrace`）共用。
 struct CueNoteRow<Glyph: View, Words: View>: View {
     var time: Date?
     var tint: Color?
@@ -179,7 +170,6 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
     @ViewBuilder let text: Words
     @Environment(\.palette) private var palette
     #if os(macOS)
-    /// Mac 上几点只在指针停在这一行时露出：一列时间常驻着，一块记录就成了两栏字。手机没有悬停，照常写着。
     @State private var hovered = false
     #endif
 
@@ -214,7 +204,6 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
 }
 
 enum CueNoteRows {
-    /// 几点那一列至少多宽："中午 12:44" 放得下，一列对齐。
     static let timeWidth: CGFloat = 62
     static let height: CGFloat = Note.lineHeight + 4
 }

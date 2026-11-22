@@ -8,15 +8,12 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var done: [Card]
     var taskCounts: TaskCounts
     var subtasks: [UUID: TaskProgress]
-    /// 由 `cards` 推出，读取时算一次。
     var stamps: [CardStamp]
-    /// 每张卡的摘要，读取时在 Store 的执行体上算好，不占主线程。
     var entries: [UUID: CardEntry]
 
     static let doneLimit = 30
 
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
-        // 层级限制按本项目全部任务（含已完成）算
         let all = try store.tasks(in: project, .inProgress, .todo, .done)
         let cards = try store.cards(in: project)
         return ProjectPageData(
@@ -34,10 +31,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
 nonisolated struct WallBoard: Equatable, Sendable {
     private(set) var arrangement: WallArrangement?
     private(set) var floated: Set<UUID> = []
-    /// "更早"的分组随分区一起算：页面在任务行里 Agent 的状态一变就重算，每次都从上千张卡里重新分组太贵。
     private(set) var older: [OlderGroup] = []
 
-    /// 用最新数据更新分区；返回是否是第一次排墙（调用方据此决定要不要动画）。
     @discardableResult
     mutating func refresh(with data: ProjectPageData, project: UUID, now: Date = .now, calendar: Calendar = .current) -> Bool {
         defer {

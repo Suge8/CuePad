@@ -1,8 +1,6 @@
 import CueStore
 import Foundation
 
-/// 当前状态与未来各 host 到期后的数字账共用同一份归属汇总；不为每个未来时刻重扫全量。
-/// 这里只管随时间衰减：此刻的推进中、被等你占着哪件（`CueTally.holds`）与 Agent 数（`CueAgents`）都照 Kit 的规则取。
 nonisolated struct RuntimeTimeline {
     struct Work {
         var id: String
@@ -10,7 +8,6 @@ nonisolated struct RuntimeTimeline {
         var since: Date
         var runningSince: Date?
         var delegatingSince: Date?
-        /// 在跑的会话里最晚开工的那个的起点（`runningSince` 是最早的，行上写做了多久用它）。
         var began: Date?
         var running = 0
         var delegating = 0
@@ -45,7 +42,6 @@ nonisolated struct RuntimeTimeline {
     struct Session {
         var agents: Int
         var total: Int
-        /// held 只撤销那一件的引用，不能把共享会话的贡献固定给第一件。
         var advancing = 0
         var contribution: Int { advancing > 0 ? agents : 0 }
     }
@@ -199,7 +195,6 @@ nonisolated struct RuntimeTimeline {
         freezeTimes()
     }
 
-    /// 逆序汇总每台到期之后仍有效的最早起点；每份会话贡献只合并一次，不按会话数量排序或逐期限重扫。
     private mutating func freezeTimes() {
         var running: [Int: Date] = [:], delegating: [Int: Date] = [:]
         for date in dates.reversed() {

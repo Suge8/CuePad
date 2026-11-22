@@ -1,8 +1,6 @@
 import CueStore
 import Foundation
 
-/// 不写发送记录、不算发给会话的话。已结束的会话 Mac 先在后台恢复再改。
-/// 会话名只来自 Pi（会话记录的 `title`，规则 `SessionName`），界面不另存；改名在路上、没改成都由这条请求推出。
 nonisolated enum SessionRename {
     static func clean(_ name: String) -> String? {
         let name = name.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
@@ -23,7 +21,6 @@ nonisolated enum SessionRename {
         return Speech.trip(request, at: moment).inTransit
     }
 
-    /// 没改成（行上写"没能改名"），留到本机看过这个会话（`seen`）为止（同没能送达的话，`DeliveryShown.phase`）。
     static func failed(_ request: DeliveryRequest?, seen: Date?, at moment: Speech.Moment) -> Bool {
         guard let request, request.isRename, let failedAt = Speech.failedAt(request, at: moment) else { return false }
         return (seen ?? .distantPast) <= failedAt
@@ -33,6 +30,5 @@ nonisolated enum SessionRename {
 extension SessionListItem {
     func shownTitle(at moment: Speech.Moment) -> String { SessionRename.title(of: state, request: rename, at: moment) }
 
-    /// 会话行、会话条与看板写的名字：绑着任务的是那个叶子的标题（任务标题是名字的唯一事实源），标题为空或没绑任务的是会话自己的名字。
     func name(at moment: Speech.Moment) -> String { task?.title.nonEmpty ?? shownTitle(at: moment) }
 }

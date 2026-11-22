@@ -50,7 +50,7 @@ struct SetupTests {
         let next = await reopen()
         #expect(!next.showsSetup)
         next.cue.draft = ComposerDraft(text: "整理发布说明")
-        await next.sayToCue(from: Bindable(next.cue).draft)?.value  // 输入框的发送：没启用时这句会记成灵感
+        await next.sayToCue(from: Bindable(next.cue).draft)?.value
         #expect(try await services.store.cueMessages().map(\.text) == ["整理发布说明"])
     }
 
@@ -60,7 +60,7 @@ struct SetupTests {
         #expect(workspace.showsSetup)
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
-        #expect(now.rows.first == SetupRow(kind: .claudeCode, step: .install(nil)))  // 推荐的排第一
+        #expect(now.rows.first == SetupRow(kind: .claudeCode, step: .install(nil)))
 
         await workspace.installAgent(.claudeCode)
         now = try await panel(workspace)
@@ -77,7 +77,7 @@ struct SetupTests {
 
     @Test func 装了没登录_一打开就是登录_不用先点启用再失败() async throws {
         try app.installClaude()
-        try app.install(.pi, signedIn: false)  // 也还没接入
+        try app.install(.pi, signedIn: false)
         let workspace = try await launch()
         var now = try await panel(workspace)
         #expect(now.cue == .needsAgent)
@@ -86,7 +86,7 @@ struct SetupTests {
         await workspace.logIn(.claudeCode)
         now = try await panel(workspace)
         #expect(now.cue == .enable)
-        #expect(step(.claudeCode, in: now.rows) == .connect && step(.pi, in: now.rows) == .logIn(nil))  // Pi 仍要登录才勾得上
+        #expect(step(.claudeCode, in: now.rows) == .connect && step(.pi, in: now.rows) == .logIn(nil))
     }
 
     @Test func Pi缺够新的NodeJS_先给官网_装上了才给安装() async throws {
@@ -100,13 +100,13 @@ struct SetupTests {
         #expect(try await pi() == .needs(node))
 
         try app.installNode("v22.19.0")
-        await workspace.recheckAgents()  // 面板在回到 App 时这样重查
+        await workspace.recheckAgents()
         #expect(try await pi() == .install(nil))
     }
 
     @Test func 装不上或没登录上_就地写原因_可再点() async throws {
         let workspace = try await launch()
-        await workspace.installAgent(.claudeCode)  // 安装脚本出错
+        await workspace.installAgent(.claudeCode)
         guard case .install(let why?) = try await panel(workspace).rows.first?.step else {
             Issue.record("没装上时应仍是安装，带原因")
             return
@@ -127,13 +127,13 @@ struct SetupTests {
 
         let following = Task { await workspace.followCue() }
         defer { await following.stop() }
-        _ = try await services.store.updateCueProfile { profile in  // 第一遍拉回来的：Cue 在原来那台上
+        _ = try await services.store.updateCueProfile { profile in
             profile.hostID = "mac-old"
             profile.enabledAt = .now
         }
         try await app.syncs()
         try await eventually("Cue 那一行没了") { try await panel(workspace).cue == .none }
-        #expect(try await panel(workspace).rows == [SetupRow(kind: .pi, step: .connect)])  // 接入照常
+        #expect(try await panel(workspace).rows == [SetupRow(kind: .pi, step: .connect)])
     }
 
     @Test func 老用户已接入Agent只差Cue_弹一次只剩Cue那一行_只这一次() async throws {
@@ -152,7 +152,7 @@ struct SetupTests {
     @Test func 停用过Cue的_不弹() async throws {
         try await app.connect(.pi)
         let here = TestApp.hostID
-        _ = try await services.store.updateCueProfile { $0.hostID = here }  // 启用过、又停用了：在哪台运行留着
+        _ = try await services.store.updateCueProfile { $0.hostID = here }
 
         #expect(try await launch().showsSetup == false)
     }

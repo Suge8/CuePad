@@ -18,8 +18,6 @@ public enum CloudOutage {
     if !isDown, pathReturns { NetworkReturns.simulateReturn() }
   }
 
-  /// 请求都经断网开关的同步（其余与 `CloudSync(store:)` 相同）。`shared`：模拟云的目录（`SharedCloud`；nil 连真的 iCloud）；
-  /// `budget`：连真的 iCloud 时这个进程至多发这么多个请求。
   public static func cloudSync(store: CueStore, shared: URL?, budget: Int?) -> CloudSync {
     CloudSync(store: store) {
       if let shared { return Cut(base: SharedCloud(directory: shared), budget: nil) }
@@ -30,7 +28,6 @@ public enum CloudOutage {
   public static var requests: Int { spent.load(ordering: .relaxed) }
   public static var requestTimings: [String: [Double]] { timings.withLock { $0 } }
 
-  /// 认账号也失败（替身认得出账号，真断网认不出）。请求数用满（`budget`）也走这里：当断网。
   private struct Cut: SyncCloud {
     let base: any SyncCloud
     let budget: Int?
@@ -75,7 +72,6 @@ public enum CloudOutage {
     func save(_ subscription: CKSubscription) async throws { try await timed("other") { try await now.save(subscription) } }
     func delete(_ id: CKSubscription.ID) async throws { try await timed("other") { try await now.delete(id) } }
 
-    /// 含 CloudKit 进程间的开销与排队：模拟云的延迟模型按它标定。
     private func timed<T>(_ kind: String, _ body: () async throws -> T) async throws -> T {
       let began = ContinuousClock.now
       defer {

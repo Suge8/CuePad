@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 看一条任务只有它，各处都经 `Workspace.openTask`；任务行与看板卡点开工了的叶子直接进会话，其余开它（`Workspace.enter`）。
 struct TaskBubble: View {
     struct Request: Identifiable, Equatable {
         let id = UUID()
@@ -12,7 +11,6 @@ struct TaskBubble: View {
 
     let request: Request
     var sheet = false
-    /// 翻到的那一步：跟着工作区里开着的这一次（翻页只改它）；这一次关了就停在最后一页，收起的那一下不跳回打开时的页。
     @State private var step: UUID?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -20,7 +18,6 @@ struct TaskBubble: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var footerHeight: CGFloat = 0
     @State private var data: BubbleData?
-    /// 这一页的编辑：页一出现就开着（编辑器从第一帧就在，点哪写哪），翻页、关气泡先写下没保存的字再换。"开始"先等它落盘再交出去。
     @State private var editing: CardEditing?
 
     var body: some View {
@@ -28,7 +25,6 @@ struct TaskBubble: View {
         TurnStack {
             if let data, let editing, editing.cardID == data.focus(step).id {
                 let focus = data.focus(step)
-                // 底下那一条（用哪家、哪个模型、"开始"，或 Agent 在做什么）钉在气泡底：正文写长了、子任务多了，气泡里往下滚时它一直在手边，不用滚到底才开得了工
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionFooters) {
                     Section {
                         VStack(alignment: .leading, spacing: BubbleMetrics.footerGap) {
@@ -42,7 +38,6 @@ struct TaskBubble: View {
                         .padding(.top, Spacing.item).padding(.leading, BubbleMetrics.leading)
                         .mask(alignment: .top) { UnderFooterFade(footer: footerHeight) }
                     } footer: {
-                        // 同输入框底下那一排：胶囊从左边排起，圆钮在右下同一个位置
                         BubbleFooter(data: data, focus: focus, editing: editing)
                             .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.glyphInset)
                             .padding(.top, BubbleMetrics.footerGap)
@@ -56,13 +51,11 @@ struct TaskBubble: View {
         }
         .debugCyclesTurn { if let data { workspace.openTask(step == nil ? data.steps.first ?? data.goal : data.goal) } }
         #if os(macOS)
-        // Mac 的浮层挂在页面之外：子任务的状态点、"下一步"读的"交给了哪个会话"在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
         #endif
         .observing(services.store, id: request.task, into: $data, onError: workspace.fail) { [task = request.task] in try BubbleData.read(task, from: $0) }
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
         .onChange(of: data?.focus(step).id, initial: true) { edit(data?.focus(step)) }
-        // 翻页时编辑跟着在同一次更新里换好：等焦点变了再换的话，旧页先撤、新页晚一次更新才插进来，气泡先塌下去再长出来
         .onChange(of: live, initial: true) {
             guard let live, live.step != step || editing == nil else { return }
             withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion)) {
@@ -82,8 +75,6 @@ struct TaskBubble: View {
     }
 }
 
-/// 正文滚到钉在底下那一排后面时，在那一排的上沿渐隐、排后面不留字：气泡底是玻璃，那一排铺实色是一条带子、再套玻璃是玻璃叠玻璃。
-/// 渐隐随藏到排后面的长短长出来：没滚、正文刚好放下时最后一行不淡。只挪遮罩（`visualEffect`），滚动时不重算视图。
 private struct UnderFooterFade: View {
     let footer: CGFloat
 
@@ -146,13 +137,10 @@ nonisolated struct BubbleData: Sendable, Equatable {
 
 enum BubbleMetrics {
     static let stepLead: CGFloat = (TaskMetrics.chipTarget - TaskMetrics.ringColumn) / 2
-    /// 完成圈在它那一格里离格边多远：顶上那颗胶囊让进这么多，同圈一条左缘。
     static let ringInset: CGFloat = (TaskMetrics.chipTarget - TaskMetrics.titleRing) / 2
-    /// 胶囊与完成圈离左边 `Spacing.group`、胶囊离上边 `Spacing.item`，同输入框的去处胶囊。
     static let leading = Spacing.group - ringInset
     static let textLeading: CGFloat = stepLead + TaskMetrics.ringColumn + TaskMetrics.columnGap
     static let titleGap: CGFloat = textLeading - TaskMetrics.chipTarget
-    /// 字离右边，同输入框里的字（`Composer` 的 `rows`）。
     static let textTrailing = Spacing.block
     static let sheetBottom = Spacing.group
     #if os(macOS)
@@ -166,7 +154,6 @@ enum BubbleMetrics {
     static let markSlot: CGFloat = 26
     static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
-    /// 新会话、记任务的输入框在 Mac 上也是这么宽（`NewSessionInput`、`NewTaskInput`）：底下那一排（交给谁、哪家、模型、思考强度、"开始"）的字都写得全。
     static let width: CGFloat = 480
     static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #else

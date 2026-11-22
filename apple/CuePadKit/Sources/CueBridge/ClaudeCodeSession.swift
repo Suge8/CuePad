@@ -8,8 +8,6 @@ enum ClaudeCode {
     /// 模型的提供方写成 Agent 自己：Claude Code 的模型名（`opus`、`sonnet`）在它自己的命名空间里
     static let provider = AgentKind.claudeCode.modelProvider!
 
-    /// 一轮出错的原文（交给 `ErrorSummary` 归类）：状态码与详情在前，错误类型与 Claude Code 写进对话的那句原话按提供方错误体写，
-    /// 归类认类型、说明带上原话（对话里那条回答就是它，不再另显示一处）。
     static func failure(code: String, status: Int? = nil, details: String? = nil, message: String?) -> String {
         let body: JSONValue = ["error": ["type": .string(code), "message": message.map(JSONValue.string) ?? .null]]
         return [status.map(String.init), details, String(decoding: body.data, as: UTF8.self)].compactMap { $0 }.joined(separator: " ")
@@ -65,12 +63,10 @@ struct ClaudePermission {
         return (question, first["options"]?.array?.compactMap { $0["label"]?.string } ?? [])
     }
 
-    /// 能从 CuePad 答（权限确认都能；提问只有一个单选问题的能）
     var answerable: Bool {
         !isQuestion || (input["questions"]?.array?.count == 1 && input["questions"]?.array?.first?["multiSelect"]?.bool != true)
     }
 
-    /// 显示的问题；`answerable` 为 false 时没有作答标识（只显示）。
     func question() -> Question {
         let id = answerable ? promptID : nil
         if let asked {
@@ -83,7 +79,6 @@ struct ClaudePermission {
         return Question(promptID: id, kind: .confirm, text: text)
     }
 
-    /// 作答写成 Claude Code 的决定（`{behavior, updatedInput}` 或 `{behavior: deny, message}`）；答案对不上抛 `rejected("bad_answer")`。
     func decision(_ answer: AnswerValue, to id: String) throws -> JSONValue {
         if isQuestion { return ["behavior": "allow", "updatedInput": try answered(answer, to: id)] }
         guard id == promptID else { throw BridgeError.rejected("stale_prompt") }

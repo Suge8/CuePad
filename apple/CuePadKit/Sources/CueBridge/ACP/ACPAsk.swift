@@ -2,10 +2,8 @@
 import CueStore
 import Foundation
 
-/// 驱动只认这一种：没答就作废（这一轮停下、结束，或又来一问）时回 `withdrawn`。一个请求里有几问的（分批提问，`inOrder`）逐问来：`answer` 回下一问，最后一问答完才回给 Agent。
 struct ACPAsk {
     var question: Question
-    /// 答案不合这一问为 nil（`bad_answer`）。
     var answer: (AnswerValue) -> ACPReply?
     var withdrawn: JSONValue
 }
@@ -16,7 +14,6 @@ enum ACPReply {
 }
 
 extension ACPAsk {
-    /// 一个请求里的几问逐问来：`ask` 给一问的样子与怎么收它的答案（不合这一问为 nil），答完全部问题后 `finish` 出回给 Agent 的结果。
     static func inOrder<Answer>(
         _ questions: [JSONValue], ask: @escaping (JSONValue) -> (question: Question, accept: (AnswerValue) -> Answer?),
         finish: @escaping ([Answer]) -> JSONValue, withdrawn: JSONValue
@@ -54,7 +51,6 @@ extension ACPAsk {
         }, withdrawn: ["outcome": ["outcome": "cancelled"]])
     }
 
-    /// 大脑没人可问：权限一律允许（它只有读文件与 CuePad 的工具）
     static func allowed(_ params: JSONValue) -> JSONValue {
         selected(params["options"]?.array ?? [], ["allow_once", "allow_always"]) ?? ["outcome": ["outcome": "cancelled"]]
     }

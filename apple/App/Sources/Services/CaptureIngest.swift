@@ -2,7 +2,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 分享扩展留在共享容器里的内容入库：主 App 是资料库唯一写者。
 final class CaptureIngest {
     private let store: CueStore
     private let directory: URL
@@ -16,8 +15,6 @@ final class CaptureIngest {
         self.report = report
     }
 
-    /// 失败的条目保留（下次再试）并报告。
-    /// 同一时刻只有一趟在跑：跑的时候再来的记成再扫一遍，并等这趟扫完。
     func drainCaptures() async {
         if let running = drain {
             drainAgain = true

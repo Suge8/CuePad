@@ -15,13 +15,11 @@ struct ProgressScreen: View {
         page.observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    /// 宽屏同 Mac 的 `TaskBoardPage`：不要页头，四个列头就是最顶那一排，范围钮在它们开头（栏头的 `ProjectScopeSlot`）；额度在会话条最下一排（`WideRail`）。
     @ViewBuilder private var page: some View {
         if workspace.layout == .wide {
             boardView
                 .padding(.leading, WideMetrics.boardLead(inset))
                 .padding(.trailing, under > 0 ? 0 : inset.trailing - BoardCardMetrics.inset)
-                // 列头离列的上沿有一圈：整块上提这一圈，列头与会话条顶上那一排钮同一条中线
                 .padding(.top, -BoardCardMetrics.inset)
                 // 最顶那一排就是玻璃列头，系统在状态栏下垫的那层雾会把它们盖淡
                 .scrollEdgeEffectHidden(true, for: .top)
@@ -43,7 +41,6 @@ struct ProgressScreen: View {
                 PhoneBoard(board: shown)
             }
         }
-        // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }
 }

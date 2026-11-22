@@ -23,7 +23,6 @@ extension DeliveryConfirmationTests {
     func ACK后真断线先核对最后历史_有证据则送达_没证据才静态未知(hasMessage: Bool) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
-        // 这里只推进业务时钟；socket 的真实关闭必须能直接结束确认，不等超时。
         let (target, ext, file) = try await session(app)
         defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("最后检查这句话", to: target, in: app)
@@ -66,7 +65,6 @@ extension DeliveryConfirmationTests {
         services.start()
         clock.advance(.seconds(20))
         try await services.executor.start()
-        // 新发给别处的话先完成，作为重开的执行通道已恢复的屏障。
         let other = try await app.host.connect("other", cwd: app.directory.path)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "other", state: .settled)

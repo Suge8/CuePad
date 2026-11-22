@@ -81,7 +81,6 @@ enum InlineMarkdown {
 
     private enum Side { case before, after }
 
-    /// 该在 `*` 串的哪一侧塞占位字：两边都不是空白（行首行尾算空白）、至少一边是 CJK 字、恰好一边是 cmark 认的标点时，塞在标点那侧。
     private static func fillSide(before: Unicode.Scalar?, after: Unicode.Scalar?) -> Side? {
         guard let before, let after, !before.properties.isWhitespace, !after.properties.isWhitespace,
               isCJK(before) || isCJK(after) else { return nil }
@@ -109,7 +108,6 @@ enum InlineMarkdown {
         return cjkRanges.contains { $0.contains(value) }
     }
 
-    /// markdown-cjk-friendly 的「CJK 字」（Unicode 18，东亚宽度 W/F/H 且非默认 emoji，或谚文），取自它的 ranges.md。
     private static let cjkRanges: [ClosedRange<UInt32>] = [
         0x1100...0x11FF, 0x20A9...0x20A9, 0x2329...0x232A, 0x2630...0x2637, 0x268A...0x268F, 0x2E80...0x2E99, 0x2E9B...0x2EF3,
         0x2F00...0x2FD5, 0x2FF0...0x303E, 0x3041...0x3096, 0x3099...0x30FF, 0x3105...0x312F, 0x3131...0x318E, 0x3190...0x31E5,

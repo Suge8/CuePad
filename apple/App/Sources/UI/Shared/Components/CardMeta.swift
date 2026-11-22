@@ -34,7 +34,6 @@ struct CardMeta: View {
     }
 }
 
-/// 图片在预览里看得见的地方只数文件（`CardText.files`），没有预览的行数全部附件。
 struct AttachmentMark: View {
     let count: Int
 

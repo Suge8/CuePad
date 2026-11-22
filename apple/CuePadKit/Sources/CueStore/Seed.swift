@@ -1,8 +1,6 @@
 #if DEBUG
 import Foundation
 
-/// 演示库与性能测量库（Debug 构建的视觉验收与测量，见 `DemoLibrary`、`PerfLibrary`）：项目与灵感、任务按给定的修改时间原样写入，
-/// 墙和"更早"分组才有真实的时间分布；走正常入口建不出这种时间。
 public struct SeedProject: Sendable {
   public var name: String, icon: String, color: String, pinned: Bool
 
@@ -25,7 +23,6 @@ public struct SeedCard: Sendable {
   }
 }
 
-/// 演示记忆的一条：记下的时刻原样写入，记忆页才有"刚刚""昨天""几月几日"的分布。
 public struct SeedCueLine: Sendable {
   public var text: String, source: CueLineSource, pinned: Bool, createdAt: Date
   public var remindAt: Date?, repeats: CueRepeat?, task: UUID?
@@ -75,9 +72,7 @@ extension CueStore {
     }
   }
 
-  /// 演示里说出去一会儿了的话（看没回执超时的样子）：把已有的对话整体往前挪 `seconds` 秒（先后不变）。
   public func seedAgeCueMessages(by seconds: TimeInterval) throws {
-    // 答的时刻（你的回答按它排在对话里）与读到哪（`Mark.cueRead`）都是对话里的时刻，跟着挪
     let ms = Int64(seconds * 1000)
     try write {
       try db.exec(
@@ -90,8 +85,6 @@ extension CueStore {
 }
 
 extension StateRecorder {
-  /// 演示与测试只写关心的几项：在上一次写下的样子上改给了的（nil 沿用），`question`、`detail` 与 `failure` 每次整体替换；
-  /// 第一次写、没给计时的从此刻算。落盘同 `update(_:)`。
   @discardableResult
   public func update(
     sessionID: String, state: WorkState, detail: String? = nil, failure: FailureKind? = nil, title: String? = nil, directory: String? = nil,

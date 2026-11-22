@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 状态的规则只在这一处，各家把自己的事件翻译成对它的修改。歇着时压缩上下文不算新的一轮，压完计时回到压缩前。
 struct SessionFacts {
     var running = false
     var activity: WorkState = .thinking
@@ -14,19 +13,12 @@ struct SessionFacts {
     var standingQuestion: Question?
     var compacting = false
     var failure: String?
-    /// 在飞的后台工作（按 Agent 给的 id）：还没把结果交回主会话的子代理（Claude Code 还有后台命令）。等子代理只看它，名册只给人看。
-    /// 各家只按自己的权威来源写（Claude Code 的后台任务清单、Codex 子线程的推送、OpenCode 子会话的执行状态）。
-    /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
     var inFlight: Set<String> = []
     private(set) var turnStartedAt: Date?
     var turnOpener: TurnOpener?
     private(set) var subagents: [(id: String, state: SubagentState)] = []
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
-    /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`SessionState.answered`）：
-    /// 取 Agent 给的开始时刻；没有就取一定在它之前的——CuePad 发出话或空输入、收到开始通知的那一刻；
-    /// 接上时已在跑的取拿到列表或快照之后会话记录里最后一轮的开始（`HistoryCheckpoint.lastTurnStart`）：接上的此刻、请求前的时刻、
-    /// 库里旧的都分不清期间换没换轮（会晚于这一轮的收尾或早于上一轮的回答），记录里一轮都读不到才取请求前的时刻。
     mutating func startTurn(at start: Date) {
         turnStartedAt = start
         running = true
@@ -50,8 +42,6 @@ struct SessionFacts {
         subagents.append((id, SubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now, progressAt: now)))
     }
 
-    /// 子代理开始一次运行：第一次是新的一项；同一 id 再跑（Claude Code 被自己名下的后台命令叫醒、Codex 的 followup）名册里还是那一项，
-    /// 回到在跑，从此刻重新算（同 FireCode 名册的"本次运行"）。
     mutating func runSubagent(_ id: String, name: String, role: String, at now: Date) {
         guard subagents.contains(where: { $0.id == id }) else { return startSubagent(id, name: name, role: role, at: now) }
         updateSubagent(id, at: now) { agent in
@@ -109,7 +99,6 @@ struct SessionFacts {
 }
 
 extension Session {
-    /// 与 Pi 扩展的计时同一规则。
     mutating func enter(_ next: WorkState, detail: String? = nil, at now: Date = .now) {
         if next.phase != state.phase { stateSince = now }
         busySince = next.isWorking || next == .waitingForUser ? busySince ?? now : nil
@@ -119,7 +108,6 @@ extension Session {
     }
 }
 
-/// 同 Pi 扩展，各家共用。
 enum ToolDetail {
     static let limit = 120
 
@@ -159,7 +147,6 @@ enum ToolDetail {
 
 }
 
-/// 作答时回给模型的原因说明是用户在 CuePad 里答的（不说成 CuePad 自己拦的）。各家同一句式。
 enum PermissionWording {
     static let allowed = "用户在 CuePad 里允许了", denied = "用户在 CuePad 里拒绝了"
 

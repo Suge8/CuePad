@@ -5,7 +5,6 @@ import Testing
 import CueStore
 @testable import CueBridge
 
-/// 提示词模板与 skill 用 Pi 的显式路径参数加载，扩展命令来自测试夹具。
 @MainActor
 @Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealSlashTests {
@@ -31,13 +30,12 @@ struct RealSlashTests {
     @Test func contextUsageIsReportedPerTurnAndUnknownRightAfterCompaction() async throws {
         try await withRig { pi, bridge, s in
             #expect(s.context?.window == 100_000)
-            await #expect(throws: BridgeError.self) { try await bridge.command("/compact", in: s.id) }  // 太短没有可压缩的：失败报给发起方，不静默
+            await #expect(throws: BridgeError.self) { try await bridge.command("/compact", in: s.id) }
 
             // 压缩要有足够多的历史：留下最近约 2 万 token，更早的才压成摘要
             var used = 0
             for round in 1...2 {
                 try pi.prompt("第 \(round) 轮 " + String(repeating: "上下文填充 ", count: 12_000))
-                // 以已用量涨上去为准：上一轮的"歇下"状态在新一轮开始前还留着，单看状态会提前放行
                 try await eventually("第 \(round) 轮之后已用量涨了") {
                     (bridge.sessions.first?.context?.tokens ?? 0) > used + 10_000 && bridge.sessions.first?.state == .settled
                 }
@@ -51,7 +49,7 @@ struct RealSlashTests {
             }
             let transcript = try History.index(file: #require(s.sessionFile), from: nil).messages
             #expect(transcript.contains { $0.role == .known(.system) && $0.text.hasPrefix("已压缩上下文") })
-            #expect(transcript.filter { $0.role == .known(.user) }.count == 2)  // 命令没有变成你说的话
+            #expect(transcript.filter { $0.role == .known(.user) }.count == 2)
         }
     }
 
@@ -80,7 +78,6 @@ struct RealSlashTests {
             let greet = UUID(), careful = UUID()
             try await bridge.send(SessionMessage(text: "/greet world", deliveryID: greet.uuidString), to: s.id)
             try await eventually("模板展开后进了模型上下文") { fileTexts("user", in: s.sessionFile) == ["Say hello to world."] }
-            // 回复框带着卡片发时卡片接在你打的话后面（`Slash.said`）：仍按 skill 展开，卡片是参数
             try await bridge.send(SessionMessage(text: "/skill:careful 小心点\n\n卡片：登录页改版", deliveryID: careful.uuidString), to: s.id)
             try await eventually("skill 展开后进了模型上下文") {
                 fileTexts("user", in: s.sessionFile).last.map { $0.contains("CAREFUL-BODY-MARKER") && $0.hasSuffix("小心点\n\n卡片：登录页改版") } == true
@@ -93,7 +90,7 @@ struct RealSlashTests {
     @Test func unknownAndMalformedCommandsAreRefused() async throws {
         try await withRig { _, bridge, s in
             await #expect(throws: BridgeError.rejected("unknown_command")) { try await bridge.command("/nope", in: s.id) }
-            await #expect(throws: BridgeError.rejected("unknown_command")) { try await bridge.command("/settings", in: s.id) }  // 纯终端交互的内置命令
+            await #expect(throws: BridgeError.rejected("unknown_command")) { try await bridge.command("/settings", in: s.id) }
             await #expect(throws: BridgeError.rejected("bad_request")) { try await bridge.command("hello", in: s.id) }
             await #expect(throws: BridgeError.rejected("missing_argument")) { try await bridge.command("/name", in: s.id) }
             await #expect(throws: BridgeError.unknownModel(.pi)) { try await bridge.command("/model fake/nope", in: s.id) }
@@ -110,7 +107,7 @@ struct RealSlashTests {
             try await eventually("换模型") { bridge.sessions.first?.model?.key.id == "echo-think" }
             try await bridge.command("/thinking high", in: s.id)
             try await eventually("换强度") { bridge.sessions.first?.thinking == .known(.high) }
-            try await bridge.command("/model echo-b", in: s.id)  // 不带提供方：模型 id 唯一时也认
+            try await bridge.command("/model echo-b", in: s.id)
             try await eventually("按 id 换模型") { bridge.sessions.first?.model?.key.id == "echo-b" }
         }
     }

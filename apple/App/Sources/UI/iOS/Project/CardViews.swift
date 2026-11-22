@@ -2,7 +2,6 @@
 import SwiftUI
 
 struct CardTileView: View {
-    /// 会话点（看得见的那颗，不是它 44 的点按格）往卡的右内边里收一截：点离卡右边与标题离左边看着一样。
     private static let dotTuck: CGFloat = 6
     let entry: CardEntry
     let floated: Bool
@@ -26,7 +25,6 @@ struct CardTileView: View {
                     Spacer(minLength: 0)
                     AgentDot(card: card.id).padding(.vertical, -AgentDot.overhang).padding(.trailing, -Self.dotTuck)
                 }
-                // 摘要拿剩下的高，放不下的行截掉；日期那一行贴底
                 if image == nil, !text.preview.isEmpty {
                     Text(VariableText.styled(text.preview, palette))
                         .font(Typography.meta).foregroundStyle(palette.ink2)

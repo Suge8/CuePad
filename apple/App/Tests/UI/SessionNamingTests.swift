@@ -14,7 +14,6 @@ struct SessionNamingTests {
     nonisolated static let first = "帮我看看登录页为什么白屏"
     nonisolated static let suggested = "修复登录页白屏"
 
-    /// 替身：记下被要求起名时拿到的第一句话；`held` 时停在起名中，等测试 `release`；改名照 Pi 那样把会话名报回桥上。
     final class NamingLink: SessionLink {
         weak var bridge: Bridge?
         var able = true

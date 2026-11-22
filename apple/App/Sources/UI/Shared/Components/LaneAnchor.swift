@@ -10,13 +10,11 @@ struct LaneAnchor: ViewModifier {
     @State private var span = Span()
     @Environment(\.boardMoves) private var moves
 
-    /// 滚到哪了、能滚到哪：滚动时每帧记，不触发重绘。
     private final class Span {
         var at = CGPoint.zero
         var end: CGFloat = 0
     }
 
-    /// 拖着卡停在列的上下边时每帧滚这么多（一秒六百来点：看得清滚过了什么）。
     private static let step: CGFloat = 10
 
     init(_ column: TaskBoard.Column) {

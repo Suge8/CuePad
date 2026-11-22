@@ -35,7 +35,6 @@ struct ProjectForm: View {
             if draft.project == nil { folderRow }
             HStack(spacing: Spacing.item) {
                 Spacer()
-                // Esc 由弹层接（关掉即取消）
                 Button("取消", role: .cancel) { close() }
                     .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
                 Button(draft.confirm, action: save)

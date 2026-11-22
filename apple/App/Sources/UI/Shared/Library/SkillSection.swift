@@ -47,7 +47,6 @@ struct SkillSection: View {
     }
 }
 
-/// 几十上百个技能不逐个套卡：名字与一句说明排成清单（行底向两边让出，字与分组标题对齐，`RowStyle`）。
 private struct SkillRow: View {
     let skill: LibrarySkill
     let library: AgentLibrary

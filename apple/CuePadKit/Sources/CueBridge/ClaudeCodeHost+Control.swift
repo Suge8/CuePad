@@ -23,7 +23,6 @@ extension ClaudeHostedSession {
         }
     }
 
-    /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
     func command(_ line: String, opener: TurnOpener?, in _: Session.ID) async throws {
         try await deliver(hosted(.string(line), uuid: opener?.delivery.uuidString), opener: opener)
     }

@@ -60,7 +60,6 @@ struct CueWaitEyebrow: View {
             if linked { Chevron(.forward) }
         }
         .foregroundStyle(palette.ink2)
-        // 小字本身矮：点得到的范围往上下扩，不撑高这一行
         .contentShape(.rect.inset(by: -Self.reach))
     }
 

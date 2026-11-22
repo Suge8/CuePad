@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 读页面的只有这里，主窗口的视图体不读它，切页时不重算整个窗口。会话页不留，只在当前页时挂上。
 struct PageStack: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.underCue) private var under
@@ -42,7 +41,7 @@ struct PageStack: View {
         case .cue: CuePage()
         case .progress: TaskBoardPage()
         case .session(let route): if route.sessionID != nil { SessionPage(route) }
-        default: EmptyView()  // 其余是 iOS 的页
+        default: EmptyView()
         }
     }
 }

@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 会话在等子代理时这一行就是对话末尾的进展，不再另写一行状态。落定的整句写全（FireCode 名册里的结果首句或失败原因；交回的全文在对话里那张 FireCode 卡片）。
 struct SubagentList: View {
     let agents: [SubagentState]
     @Environment(\.palette) private var palette
@@ -51,7 +50,6 @@ struct SubagentList: View {
 
     private func row(_ agent: SubagentState) -> some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
-            // 名字、角色与模型是一段字：放不下就折行，不截成"…"（模型名截了就认不出）；用时不折，辅助字号下挪到下一行
             HStack(spacing: Note.spacing) {
                 StateDot(shown: agent.shown, size: 6).noteGlyph()
                 MetaLine(alignment: .center, spacing: Note.spacing, gap: Spacing.item) {

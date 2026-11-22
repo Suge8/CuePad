@@ -17,7 +17,6 @@ private struct PreviewOutput {
 
 extension Command {
 
-  /// 执行这条命令的 Agent 会话（`show`、`live` 共用）：环境变量里第一个有值的。
   static func agentSession(_ call: Call, _ why: String) throws -> String {
     guard let session = callingSession(call) else {
       throw CLIError.invalid("不在 Agent 会话里：\(AgentKind.sessionVariables.joined(separator: "、")) 都没有值。\(why)")

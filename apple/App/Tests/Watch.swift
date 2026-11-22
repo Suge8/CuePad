@@ -1,8 +1,7 @@
 import CueTestSupport
 import Foundation
 
-/// 等一条流接连的几项，每项都带上限（`bounded`）。先创建它（订阅）再触发被测操作；`keep` 之外的项被跳过，流结束给 nil。
-nonisolated final class Watch<Element: Sendable>: @unchecked Sendable {  // 同一时刻只有一次 next 在拉，迭代器不并发
+nonisolated final class Watch<Element: Sendable>: @unchecked Sendable {
     nonisolated(unsafe) private var iterator: AsyncStream<Element>.Iterator
     private let keep: @Sendable (Element) -> Bool
 
@@ -21,7 +20,6 @@ nonisolated final class Watch<Element: Sendable>: @unchecked Sendable {  // 同�
     }
 }
 
-/// 只等一项的：任何异步序列里第一个满足 `match` 的，带上限；序列先结束也抛。先建好序列（订阅）、再触发。
 @discardableResult
 func awaitNext<S: AsyncSequence & Sendable>(
     _ what: String, from stream: S, where match: @escaping @Sendable (S.Element) -> Bool = { _ in true }

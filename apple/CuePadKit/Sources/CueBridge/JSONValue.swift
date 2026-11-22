@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// 字段多、形状随版本变，只取用得到的几项，其余原样带着（如 `AskUserQuestion` 的 `tool_input` 作答时要整份交回）。
 enum JSONValue: Codable, Sendable, Equatable {
     case null
     case bool(Bool)
@@ -69,7 +68,6 @@ enum JSONValue: Codable, Sendable, Equatable {
 
     var string: String? { if case .string(let value) = self { value } else { nil } }
     var number: Double? { if case .number(let value) = self { value } else { nil } }
-    /// 整数（JSON 里的数都读成 Double，id 与 token 数在 2^53 以内不丢精度）
     var int: Int? { number.flatMap { $0.rounded() == $0 ? Int(exactly: $0) : nil } }
     var bool: Bool? { if case .bool(let value) = self { value } else { nil } }
     var array: [JSONValue]? { if case .array(let value) = self { value } else { nil } }

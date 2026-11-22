@@ -3,7 +3,6 @@ import Foundation
 import UIKit
 #endif
 
-/// 语言由系统选择；这里仅展示当前进程实际使用的语言，并提供系统入口，不写语言偏好。
 enum AppLanguage {
     static var name: String {
         let code = Bundle.main.preferredLocalizations.first ?? Bundle.main.developmentLocalization ?? "en"

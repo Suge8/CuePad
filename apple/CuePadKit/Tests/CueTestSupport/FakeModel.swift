@@ -14,7 +14,6 @@ import Synchronization
 /// 让演回合的规则认了它，它会抢走限次的名额、停在闸门上（负载高时实测抢走 `times: 1` 的那次出错，那一轮反倒答成功）。
 public final class FakeModel: Sendable {
   public let port: UInt16
-  /// 每次回答报的输入用量（token），nil 时按请求里对话的字数估（每 4 个字一个，同 Pi 自己的估法）；输出总报 5
   public let usage: Int?
   private let listener: NWListener
   private let queue = DispatchQueue(label: "fake-model")
@@ -60,13 +59,11 @@ public final class FakeModel: Sendable {
 
   deinit { stop() }
 
-  /// 停止监听并断开所有连接（停在闸门上、说到一半的随之结束）。
   public func stop() {
     listener.cancel()
     for connection in state.withLock({ state in defer { state.open = [:] }; return Array(state.open.values) }) { connection.cancel() }
   }
 
-  /// 最近一条你的话里有 `prompt` 时按 `steps` 答：第 n 步（`FakeRequest.step`）用第 n 个，超出的用最后一个。
   public func on(_ prompt: String, _ steps: FakeReply...) {
     on({ $0.prompt.contains(prompt) }) { steps[min($0.step, steps.count - 1)] }
   }
@@ -75,7 +72,6 @@ public final class FakeModel: Sendable {
     on({ $0.prompt.contains(prompt) }, reply: reply)
   }
 
-  /// 同上，只答前 `times` 个认出的请求，之后的交给别的规则（如第一次出错、重试照常）
   public func on(_ prompt: String, times: Int, _ steps: FakeReply...) {
     let left = Budget(times)
     on({ $0.prompt.contains(prompt) && left.take() }) { steps[min($0.step, steps.count - 1)] }
@@ -85,7 +81,6 @@ public final class FakeModel: Sendable {
     state.withLock { $0.rules.insert(Rule(title: false, match: match, reply: reply), at: 0) }
   }
 
-  /// 起名的旁路请求这样答（别的规则都不认它）
   public func onTitle(_ reply: @escaping @Sendable (FakeRequest) -> FakeReply) {
     state.withLock { $0.rules.insert(Rule(title: true, match: { _ in true }, reply: reply), at: 0) }
   }
@@ -155,21 +150,14 @@ public indirect enum FakeReply: Sendable {
   case custom(String, String)
   /// Responses 的客户端工具搜索（Codex 把 MCP 工具藏在 `tool_search` 后面，要先搜才能调）
   case search(String)
-  /// 回 HTTP 错误（默认 400），`message` 是错误原文
   case fail(String, status: Int = 400)
-  /// 先说这几段，请求不结束：没给闸门就一直不说完，直到 Agent 断开（停下这一轮）；给了就停在闸门上，放行后照说完的一句收尾
-  /// （回答就是这几段连起来）。Agent 先断开就不收尾，也不占用放行
   case stream([String], until: FakeGate? = nil)
-  /// 停在闸门上：放行一次后照 `then` 答；Agent 先断开（停下这一轮）就不答，也不占用放行
   case held(FakeGate, then: FakeReply)
-  /// Responses：同一次回应里先说一条过程中的说明（`phase` 为 commentary 的消息），再照 `then` 答（`then` 是消息时标成 final_answer）
   case commentary(String, then: FakeReply)
 
-  /// 一直不答，直到 Agent 断开
   public static var hang: FakeReply { .held(FakeGate(), then: .say("")) }
 }
 
-/// 闸门：请求停在这里，等测试放行（`open`）或 Agent 断开；先放行后停住也算。
 public final class FakeGate: Sendable {
   private struct State {
     var held = 0
@@ -177,25 +165,20 @@ public final class FakeGate: Sendable {
     var permits = 0
     var always = false
     var waiting: [UUID: CheckedContinuation<Bool, Never>] = [:]
-    /// 还没排进 `waiting` 就断开了的
     var gone: Set<UUID> = []
   }
   private let state = Mutex(State())
 
   public init() {}
 
-  /// 一共停住过几次
   public var held: Int { state.withLock { $0.held } }
-  /// 正停着的
   public var waiting: Int { state.withLock { $0.waiting.count } }
 
-  /// 等到又有一个请求停住（从上次等到的往后数）
   public func reached() async throws {
     let wanted = state.withLock { $0.seen += 1; return $0.seen }
     try await eventually("假模型停在闸门上（第 \(wanted) 次）") { self.held >= wanted }
   }
 
-  /// 放行一次
   public func open() {
     let waiter = state.withLock { state -> CheckedContinuation<Bool, Never>? in
       guard let first = state.waiting.first else { state.permits += 1; return nil }
@@ -205,7 +188,6 @@ public final class FakeGate: Sendable {
     waiter?.resume(returning: true)
   }
 
-  /// 之后的停住都当场放行（连同正停着的）
   public func openForever() {
     let waiters = state.withLock { state in
       state.always = true
@@ -215,7 +197,6 @@ public final class FakeGate: Sendable {
     for waiter in waiters { waiter.resume(returning: true) }
   }
 
-  /// 放行时为 true；`disconnected` 先结束（Agent 断开）时为 false
   func pass(unless disconnected: @escaping @Sendable () async -> Void) async -> Bool {
     let id = UUID()
     let watcher = Task {

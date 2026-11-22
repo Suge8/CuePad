@@ -5,7 +5,6 @@ import UIKit
 import UniformTypeIdentifiers
 @testable import CueEditor
 
-/// 拖出选区时 UIKit 交给委托的请求；只有 dragRange 会被读取。
 private final class FakeDragRequest: NSObject, UITextDragRequest {
     let dragRange: UITextRange
     var suggestedItems: [UIDragItem] { [] }

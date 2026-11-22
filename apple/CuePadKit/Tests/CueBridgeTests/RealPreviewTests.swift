@@ -33,7 +33,6 @@ struct RealPreviewTests {
 
         let result = try bashResult(pi)
         #expect(!result.isError, "\(result.text)")
-        // 存了什么、同一批是 CLI 自己的事（CueCLITests）：这里只看 Pi 交给命令的会话 id 认对了
         let reply = try #require(try JSONSerialization.jsonObject(with: Data(result.text.utf8)) as? [[String: Any]])
         #expect(reply.count == 2 && reply.allSatisfy { $0["session"] as? String == session.sessionID })
     }

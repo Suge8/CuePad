@@ -84,7 +84,6 @@ enum LaunchBench {
         }
     }
 
-    /// 内容出来后等到连着 `quiet` 没有长任务：睡到最后一圈长任务结束后 `quiet`，其间又有长任务就从它再算。报出这一行、正常退出（收掉起过的子进程）。
     private static func settle() async {
         if stamps["content"] == nil { await withCheckedContinuation { contentShown = $0 } }
         guard let content = stamps["content"] else { return }

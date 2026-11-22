@@ -1,9 +1,7 @@
 import CueStore
 import Foundation
 
-/// 定时写给 Cue 看的样子（信封与 memory 工具的结果，中文、不随界面语言）：界面上的说法在 App（`ScheduleText`）。
 enum CueScheduleWords {
-  /// "每天 8:00""每周一、四 9:00""每月 1 号 9:00"
   static func repeats(_ rule: CueRepeat) -> String {
     let clock = String(format: "%d:%02d", rule.hour, rule.minute)
     switch rule.cycle {

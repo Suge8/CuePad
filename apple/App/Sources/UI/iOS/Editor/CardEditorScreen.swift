@@ -24,7 +24,6 @@ struct CardEditorScreen: View {
         page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
             .floatingHeader(.verbatim(data?.project?.shownName ?? ""), idea: workspace.layout == .wide ? cardID : nil, detail: { detail }, trailing: { actions })
-            // 卡没了（并进了草稿、接进了会话的回复框）由工作区收起，不当成出错
             .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
                 if case CueStoreError.notFound = error { return }
                 workspace.fail(error)
@@ -41,7 +40,6 @@ struct CardEditorScreen: View {
 
     private var wide: Bool { sizeClass == .regular }
 
-    /// 手机上正文铺到屏幕上下边，滚动时从页头的玻璃与横条底下穿过；静止时首行的位置由文字视图把安全区算进滚动边距（`contentInsetAdjustmentBehavior`）给出，同没铺开时一样。
     @ViewBuilder private var page: some View {
         if wide {
             editor
@@ -66,7 +64,6 @@ struct CardEditorScreen: View {
         }
     }
 
-    /// 卡片还没读到时这一行先占着位置，读到后标题不上移。
     @ViewBuilder private var detail: some View {
         Group {
             if let card = data?.card {
@@ -78,7 +75,6 @@ struct CardEditorScreen: View {
         .font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
     }
 
-    /// 从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
     @ViewBuilder private var actions: some View {
         ChatAlongsideButton(cardID: cardID, editing: editing)
         Menu("更多", icon: .more) {

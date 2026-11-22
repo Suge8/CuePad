@@ -4,8 +4,6 @@ import CueText
 import Foundation
 import Observation
 
-/// 语音交出的请求与 Cue 的结果：通话只往里加、按它朗读，挂断不改它；库记录是业务的依据，转写和音轨不是。
-/// 写库不归通话所有：挂断不能撤销可能已落库的业务，也不能丢掉晚回来的请求 ID。
 @Observable final class VoiceRecord {
     struct Request: Identifiable {
         enum Submission { case recording, recorded(UUID), returned(UUID), failed(String) }
@@ -31,7 +29,6 @@ import Observation
         var isRecording: Bool { if case .recording = submission { true } else { false } }
     }
 
-    /// 结果先进入界面，再尝试交给语音。没有任何状态声称这条结果已朗读，音轨事件不修改它。
     struct Reply: Identifiable {
         enum Delivery: Equatable {
             case awaitingOrigin, queued, sending, submitted
@@ -53,9 +50,7 @@ import Observation
     private(set) var replies: [Reply] = []
     private(set) var storeFailure: String?
     @ObservationIgnored let store: CueStore
-    /// 写一条请求进库；第二个参数是这次写入的身份，同一身份再写不重复（`CueStore.recordVoiceRequest`）。
     @ObservationIgnored var tell: (String, UUID) async throws -> UUID
-    /// 正通着的那一通：写完、读到新结果时让它接着朗读，库读不了时让它结束。
     @ObservationIgnored weak var call: VoiceCall?
     @ObservationIgnored private var writing: [String: Task<Error?, Never>] = [:]
     @ObservationIgnored private var observing: Task<Void, Never>?
@@ -75,13 +70,11 @@ import Observation
 
     var isWriting: Bool { !writing.isEmpty }
 
-    /// 通话开始时定下从哪条消息之后读结果，并订阅库的写入。
     func begin() throws {
         cursor = try store.snapshot { try $0.lastWrite() }.value
         watch()
     }
 
-    /// delegation 可早于 turn.done；直接交正文，身份在结果返回后也保留，重复事件不会再写请求。
     @discardableResult
     func submit(_ delegation: VoiceWire.Delegation, origin: VoiceSessionID) -> Bool {
         guard !requests.contains(where: { $0.id == delegation.id }),
@@ -91,8 +84,6 @@ import Observation
         return true
     }
 
-    /// 重新交出一条没能写进库的请求（按原行身份认，不收客户端给的正文）；command 让同一次点击重复送达时只写一次。
-    /// 没有这一行、已写进库或正在写时返回 nil；写不进抛出原错误。
     func retry(_ rowID: UUID, origin: VoiceSessionID, command: UUID) async throws -> UUID? {
         guard let row = requests.first(where: { $0.rowID == rowID && $0.origin == origin }),
               row.message == nil, row.failure != nil, writing[row.id] == nil else { return nil }
@@ -100,7 +91,6 @@ import Observation
         return requests.first { $0.rowID == rowID }?.message
     }
 
-    /// 原请求在库里被重新唤醒（`CueStore.recoverCueMessage`）后，这一行回到等结果。
     func recovered(_ message: UUID) {
         guard let index = requests.firstIndex(where: { $0.message == message }) else { return }
         requests[index].submission = .recorded(message)
@@ -130,7 +120,6 @@ import Observation
         return task
     }
 
-    /// 写入序号只负责读完整份结果，不为了界面更新而触发重复播报。
     private func watch() {
         observing?.cancel()
         let store = store
@@ -209,7 +198,6 @@ import Observation
             && (answered.isEmpty || requests.contains { $0.message.map(answered.contains) == true })
     }
 
-    /// 明确重说与自动朗读遵循同一来源规则；订阅只负责展示，操作授权必须同步读取权威记录。查询与排队之间没有 await。
     func requeue(_ id: UUID) throws -> VoiceCommandResult.Outcome {
         guard let index = replies.firstIndex(where: { $0.id == id }),
               let original = try store.snapshot({ try $0.cueMessages([id]).first }).value,
@@ -223,7 +211,6 @@ import Observation
         return .readbackQueued(message: id)
     }
 
-    /// 下一条排着的结果交给语音：标成正在提交，带上它回答的、这一通派出的那条委派（没有就当会话里的一句）。
     func takeQueued(delegations: Set<String>) -> (message: UUID, delegation: String?, text: String)? {
         guard !isWriting, let index = replies.firstIndex(where: { $0.delivery == .queued }) else { return nil }
         let message = replies[index].message
@@ -237,7 +224,6 @@ import Observation
         if let index = replies.firstIndex(where: { $0.id == message }) { replies[index].delivery = .submitted }
     }
 
-    /// 已提交本就不保证播放成功，正常挂断不制造异常；半途取消的发送才需明确请求再说。
     func interrupted() {
         for index in replies.indices where replies[index].delivery == .sending {
             replies[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))

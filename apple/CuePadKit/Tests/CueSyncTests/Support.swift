@@ -50,7 +50,6 @@ actor FakeUploader: RecordUploader {
     gate = nil
   }
 
-  /// 等到上传过的批次满足条件；到不了就在时限前抛 `TimedOut` 并说出在等什么。
   func waitUntil(_ what: String, _ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async throws {
     try await eventually(what) { check(batches) }
   }
@@ -124,7 +123,6 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
   ]
 }
 
-/// 附件同真的一样分两路：记录不带文件先到，文件经接收端的 `FileFetcher` 从云里取。
 struct Loopback {
   let a: Rig
   let b: Rig

@@ -27,7 +27,6 @@ struct NewSessionFlowTests {
     #else
     let host = "mac-a"
 
-    /// 工作区建起来时读一次有哪些 Mac（界面在时才接着跟）：那台 Mac 先写下自己。
     init() async throws {
         try await store.recordMacAgents(host: host, name: "Mac", [MacAgent(kind: .pi, model: nil, models: [])])
     }

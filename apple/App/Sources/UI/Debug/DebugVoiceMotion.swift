@@ -30,7 +30,6 @@ enum DebugVoiceMotion {
             let request = String(localized: "检查发布事项 \(1)", table: "Demo")
             call.inputs.continuation.yield(.wire(.success(.turn(id: "motion-user", assistant: false, done: true, text: request))))
             call.inputs.continuation.yield(.wire(.success(.delegation(.init(id: "motion-request", turn: "motion-user", text: request)))))
-            // 隔离服务晚些才创建助手回合；写库不承担“等待回应”的显示语义。
             try await Task.sleep(for: responseDelay)
             mark("speak")
             call.inputs.continuation.yield(.wire(.success(.turn(id: "motion-assistant", assistant: true, done: false, text: ""))))
@@ -51,7 +50,6 @@ enum DebugVoiceMotion {
                     mark("reverse-\(index)")
                     call.inputs.continuation.yield(.wire(.success(.turn(
                         id: "motion-reverse-\(index / 2)", assistant: true, done: !index.isMultiple(of: 2), text: ""))))
-                    // level 只选择波形读取哪条音轨，不能驱动听说阶段。
                     call.inputs.continuation.yield(.peer(.level(.output, loud: index.isMultiple(of: 2), peak: 0.8)))
                     call.setMuted(index.isMultiple(of: 2))
                     try await Task.sleep(for: .milliseconds(90))

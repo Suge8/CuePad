@@ -79,7 +79,6 @@ enum CodexHistory {
         switch item.type {
         case "UserMessage":
             var said = transcript.said()
-            // 用技能说的（技能条目在前、话在后，`CodexRuntime.input`）写回你发的样子：`/skill:名字 话`，同 Pi 的 `SkillCall.line`
             var skill = item.content?.first { $0.type == "skill" }?.name.map { "/skill:\($0)" }
             for input in item.content ?? [] {
                 switch input.type {
@@ -99,7 +98,6 @@ enum CodexHistory {
         case "ContextCompaction":
             cp.compacted(entry, into: &transcript)
         default:
-            // 工具活动只算进还没做完的那一轮（后台命令可能在这一轮结束之后才落定）
             guard cp.round != nil else { return }
             for call in toolCalls(item) {
                 cp.toolStarted(id: call.id, name: call.name, arguments: call.arguments)
@@ -112,7 +110,6 @@ enum CodexHistory {
         }
     }
 
-    /// 改文件的一项里每个文件算一步，调用 id 是那一项的 id 接着路径；各家的 id 里都没有空格。
     private static let changeSeparator = " "
 
     static func changeCall(_ call: String) -> (item: String, path: String?) {
@@ -157,13 +154,11 @@ enum CodexHistory {
         }
     }
 
-    /// 会话文件里最近一轮在不在 Plan 模式、是不是被停下的。
     struct LastTurn {
         var plan: Bool
         var interrupted: Bool
     }
 
-    /// 一行可能很长（带图的工具结果），所以从文件尾往前一块一块读；读不了或没有为 nil。
     @concurrent static func lastTurn(in file: URL) async -> LastTurn? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
@@ -287,7 +282,6 @@ enum CodexHistory {
         }
     }
 
-    /// 形状不认得时当没有，不连累整条。
     private struct ToolResult: Decodable {
         var images: [Data?] = []
 
@@ -314,7 +308,6 @@ enum CodexHistory {
             case unifiedDiff = "unified_diff"
         }
 
-        /// 摘要只要路径与行数：删掉的与加上的行分别当作新旧两段交给 `ToolArguments`，按行比较得出同样的数。
         func arguments(path: String) -> ToolArguments {
             var object: [String: String] = ["path": path]
             switch type {

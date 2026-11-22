@@ -3,19 +3,14 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 正文里刚点的那个附件在哪：全屏页从这里放大、关上缩回，走缩略图同一套（`previewSource`）。
-/// 编辑器是平台文本视图，附件牌子不是 SwiftUI 视图：点的那一下由宿主记下框（编辑器外层视图坐标，左上为原点），
-/// `AttachmentSpotLayer` 在那里放一块看不见的视图当来源。
 @Observable final class AttachmentSpot {
     static let group = "note"
 
     private(set) var key: String?
     private(set) var frame = CGRect.zero
-    /// 第几次点：同一个附件再点一次也换一块新的来源
     private(set) var tap = 0
     @ObservationIgnored private var pending: (() -> Void)?
 
-    /// 等那块来源上了屏（`AttachmentSpotLayer`）再打开，放大时才找得到它。
     func open(_ file: DraftFile, at frame: CGRect, in workspace: Workspace, with opener: PreviewOpener?) {
         key = file.key
         self.frame = frame
@@ -56,13 +51,11 @@ struct AttachmentSpotLayer: View {
 }
 
 extension AttachmentLooks {
-    /// 出不了画面为 nil（不飞，只淡入）。
     @concurrent static func picture(_ key: String, in files: AttachmentFiles) async -> CGImage? {
         guard let file = files.fileURL(for: key) else { return nil }
         if AttachmentKey.isImage(key) { return Thumbnails.image(at: file, maxPixel: flightPixels) }
         return await Thumbnails.system(at: file, fitting: CGSize(width: flightPixels, height: flightPixels), scale: 2, icons: false)
     }
 
-    /// 盖得住全屏页落地那一块，不解原图。
     nonisolated private static let flightPixels = 1200
 }

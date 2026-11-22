@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 规则在 `MacRemote`、`Workspace+Remote`。
 struct RemoteMacButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

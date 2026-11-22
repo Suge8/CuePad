@@ -8,7 +8,6 @@ struct FilterBar: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 筛选在左、可横向滚动（窄面板里不被挤成省略号），结果数常驻右侧
         HStack(spacing: Spacing.group) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.item) {

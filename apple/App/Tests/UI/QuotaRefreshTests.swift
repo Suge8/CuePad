@@ -34,7 +34,6 @@ struct QuotaRefreshTests {
         defer { services.cancelBackgroundWork(); await services.sync?.stop() }
         try await macWithQuota(.pi)
         #expect(services.quotaRefreshKey == ["mac-x"])
-        // 演那台 Mac：第一次按会话还没连好写回失败，之后查到
         let answered = Mutex(0)
         let mac = DeliveryExecutor(store: store, hostID: "mac-x", onIssue: { _ in }) { _, _ in
             answered.withLock { count in
@@ -200,7 +199,6 @@ struct QuotaRefreshTests {
 
         let query = Task { await services.refreshQuota(.automatic) }
         let request = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.quota) } }) { $0 != nil })
-        // 服务器真实收下，上传回执带回派发锚点；Mac 不领取，走过派发期限与回执窗口。
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.serverAt }) { $0 != nil }
         clock.advance(.seconds(DeliveryRequest.phaseLimit + Speech.receiptLimit + 1))
 

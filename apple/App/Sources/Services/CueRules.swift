@@ -2,8 +2,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 它运行的那台 Mac 不在线是在睡觉（`MacPresence`，与值班同一条，`CueStore.macOnline`）；本机同步不通时那条记录可能只是没同步来，说不准它在不在，
-/// 不说它在睡觉、也不沿用旧运行断言（值班仍按不在线算：那时它答不了会话，宁可多叫你一次）。
 nonisolated enum CuePresence: Equatable, Sendable {
     case disabled
     case asleep
@@ -13,7 +11,6 @@ nonisolated enum CuePresence: Equatable, Sendable {
     case working(WorkState, detail: String?, step: CueActivity.Touch?)
     case unreachable(String)
 
-    /// `moment`：此刻与到 Cue 那台 Mac 的同步从什么时候起通着（`AppServices.speech`）。
     static func derive(_ digest: CueDigest, at moment: Speech.Moment) -> CuePresence {
         guard digest.enabled else { return .disabled }
         let trip = digest.lastYou.map {
@@ -55,7 +52,6 @@ nonisolated enum CuePresence: Equatable, Sendable {
         return step.map(CueActivity.line) ?? detail.flatMap(SessionProgress.action).map(SessionProgress.gist) ?? shown?.label
     }
 
-    /// 这一句总写在名字下面（Cue 那一行、页头、小组件），不再带名字。
     func line(host: String, ranBefore: Bool) -> String? {
         switch self {
         case .disabled: ranBefore ? String(localized: "已停用") : String(localized: "还没启用")
@@ -76,7 +72,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var tally: CueTally
     var advancing: Int { tally.advancing.count }
     var unread: Int
-    /// 它运行的那台 Mac 在线到几时（`CueStore.macOnlineUntil`）；没启用、不在线为 nil。
     var hostUntil: Date?
     var hostOnline: Bool { hostUntil != nil }
     var lastYou: LastYou?
@@ -145,8 +140,6 @@ nonisolated extension CueMessage {
     var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
 }
 
-/// 时刻在同一条时间线上比新旧：叫醒与说话是 Cue 那台 Mac 的时钟，开新会话是开出它的那台（多数就是 Cue 那台）。
-/// 不飞的：停下与结束是把活收回来，结束还常在做完一件事时一次结束好几个（`endUnusedSessions`），一片光讲不清；换模型与思考强度（config）总跟在一句话前面，那句话飞就够了。
 nonisolated struct CueFlight: Equatable, Sendable {
     enum Direction: Sendable {
         case wake
@@ -172,7 +165,6 @@ nonisolated struct CueFlight: Equatable, Sendable {
         }
     }
 
-    /// 叫醒那一下不在这里：它的时间线归 Cue 的现状（`CueWatch.wake`），与"在想"同一份摘要。
     struct Facts: Equatable, Sendable {
         var handed: [Handed]
 

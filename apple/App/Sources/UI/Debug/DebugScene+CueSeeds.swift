@@ -38,7 +38,6 @@ extension DebugScene {
         }
     }
 
-    /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
         let asks = [String(localized: "今天先看哪件？", table: "Demo"), String(localized: "把计费那个会话的进展说一下", table: "Demo"), String(localized: "圆桌的预发什么时候能好？", table: "Demo"), String(localized: "帮我记一下：周五不发版", table: "Demo"), String(localized: "README 截图换完了吗？", table: "Demo"), String(localized: "重连用例加了几个？", table: "Demo")]
         let replies = [String(localized: "先看圆桌：乱序会影响所有 5 人以上的房间。", table: "Demo"), String(localized: "计费会话卡在额度接口的签名上，我让它先把请求原文打出来。", table: "Demo"), String(localized: "测试在跑，大概二十分钟后能部署到预发。", table: "Demo"),
@@ -51,7 +50,6 @@ extension DebugScene {
         }
     }
 
-    /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
         await running("Cue 行的演示数据") { try await seedCueRows(services.store) }
     }

@@ -17,7 +17,6 @@ public struct AgentCatalog: Identifiable, Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
-  /// 带上主机：回收只动本机写的。
   public static func recordID(host: String, models: [ModelOption], commands: [SlashCommand]) -> UUID {
     DeterministicID.uuid("agent-catalog/\(host)/\(JSONColumn.encode(models))/\(JSONColumn.encode(commands))")
   }
@@ -41,8 +40,6 @@ extension AgentCatalog: Record, SyncedColumns {
 extension CueStore {
   public func agentCatalog(_ id: UUID) throws -> AgentCatalog? { try find(AgentCatalog.self, id) }
 
-  /// 一个会话能选的模型与能用的命令，读的只此一处：它报过就是它那份；没报过的（只从会话文件索引来、没连过桥的）是它那台 Mac 上这一家
-  /// 此刻的模型（`MacAgents`），没有命令。回复框据此对每个会话都列得出模型，不看它的进程在不在、是谁开的。
   public func catalog(of session: SessionState) throws -> AgentCatalog? {
     if let own = try session.catalogID.flatMap(agentCatalog) { return own }
     let host = try macAgents(on: session.hostID)
@@ -50,7 +47,6 @@ extension CueStore {
     return AgentCatalog(host: session.hostID, models: models, commands: [], at: host.modifiedAt)
   }
 
-  /// 会话没记下模型（桥没报过、会话文件里也没有）时接着说会用的：它那台 Mac 上这一家的默认。
   public func defaultModel(of session: SessionState) throws -> ModelOption? {
     try session.agent.known.flatMap { try macAgents(on: session.hostID).agent($0) }?.defaultModel
   }
@@ -59,7 +55,6 @@ extension CueStore {
     _ = try insert(catalog, ignoringExisting: true)
   }
 
-  /// 只动本机的：别的 Mac 的会话记录可能还在路上。
   func dropUnusedCatalogs(host: String) throws {
     try db.run(
       "DELETE FROM agentCatalogs WHERE hostID = ? AND NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.catalogID = agentCatalogs.id)",

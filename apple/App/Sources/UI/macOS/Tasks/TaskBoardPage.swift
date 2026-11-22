@@ -9,9 +9,6 @@ struct TaskBoardPage: View {
     @Environment(\.underCue) private var under
     @State private var board: TaskBoard?
 
-    /// 滚动区的边就是两端列的边，看板里不另留页边（`margin: 0`）：放不下横滑时，滚过去的列画到滚动区的边为止，
-    /// 页边留在滚动区里面的话，列会滑进栏头左右那几颗钮底下（#86）。
-    /// Cue 浮着时右边不留这条边：滚动区铺到浮板下面（`tail`），列滑到浮板后面，不在桌面上凭空切断。
     private var trailing: CGFloat {
         let alert = SyncAlertSlot.needed(services) ? Spacing.item + ControlMetrics.height : 0
         return (under > 0 ? 0 : inset.trailing - BoardCardMetrics.inset) + alert

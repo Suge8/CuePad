@@ -36,7 +36,6 @@ struct GrowPanel<Head: View, Panel: View>: View {
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(open ? .isModal : [])
             .accessibilityAction(.escape) { $open.grow(to: false, reduceMotion: reduceMotion) }
-            // 开着时把这一块的框报给窗口那一层：那里接住外面的每一下，这一块留给它自己
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
                 frame.rect = $0
                 host?.reshape(token, hole: $0)
@@ -62,13 +61,10 @@ struct GrowPanel<Head: View, Panel: View>: View {
     }
 }
 
-/// 记在不触发重算的盒子里：开合的每一帧都在变。
 private final class Frame {
     var rect: CGRect?
 }
 
-/// 长开的面板多宽：两侧圆钮之间放得下 `widest` 就停在 `widest`、居中，让出圆钮（iPad 的页宽到一千多点，面板里的字拉满整页就散了）；
-/// 放不下（手机、iPad 排着侧栏的竖屏）就铺满这一排、整颗盖住两侧圆钮，不露半颗。收着时照原样排。按给的宽一次排定，不读几何。
 private struct GrownWidth: Layout {
     let open: Bool
     static let widest: CGFloat = 440

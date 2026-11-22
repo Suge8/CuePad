@@ -19,12 +19,9 @@ extension View {
         }
     }
 
-    /// sheet 与全屏是盖在上面的一页新的，不吃挂它那一页的页内环境（呈现的内容照样继承呈现处的环境）。
     fileprivate func modalPage(_ close: ClosePanel) -> some View {
-        // sheet 是另一层呈现，窗口那一层的气泡画不到它上面：里面长出的气泡画在它自己的这一层
         panelHost()
             .environment(\.closePanel, close)
-            // 页顶那一排画在它自己的导航栏里，不吃根页给的让开、长开面板与前台状态
             .environment(\.headerHost, .navigationBar)
             .environment(\.headerGivesWay, false)
             .environment(\.headerGrown, false)
@@ -32,7 +29,6 @@ extension View {
             .environment(\.pagePrefetch, false)
     }
 
-    /// 不拦这一下（任务气泡从这里长出来，`Workspace.pressed`）。
     func watchesTouches(_ pressed: @escaping (CGPoint) -> Void) -> some View {
         background { TouchWatch { point, _ in pressed(point) } }
     }
@@ -51,7 +47,6 @@ final class PanelHost {
     }
 
     private(set) var shown: Shown?
-    /// 这一层（窗口、sheet）的字号：气泡内容按它画，不按呈现处——呈现处可能在一排封了字号的控件里（工具排），气泡里是能放大的说明。
     @ObservationIgnored fileprivate var typeSize = DynamicTypeSize.large
 
     static let largestType = DynamicTypeSize.accessibility1
@@ -92,12 +87,9 @@ private struct PanelHostModifier: ViewModifier {
     func body(content: Content) -> some View {
         let covered = modals.modal != nil
         content
-            // 模态浮出开着时 Esc 归它（`ModalScrim`），抽屉不挂自己的（`DrawerCatcher`）
             .environment(\.escapeTaken, covered)
             .onChange(of: typeSize, initial: true) { host.typeSize = typeSize }
-            // 任何模态浮出开着时，窗口的气泡都不读；浮出外面的页与栏由放它的地方藏（浮窗：`ModalLayers` 整块，名牌：所在的页与 iPad 的 `SplitRoot`）
             .overlay { BubbleLayer(shown: host.shown).readerHidden(covered) }
-            // 模态浮出盖在这一层的最上面：开着的气泡上、iPad 抽屉里长开的名牌外面的一下也由它接住，浮窗开着时气泡一起不进读屏
             .modifier(ModalLayers(host: modals))
             .environment(host)
     }
@@ -137,11 +129,12 @@ private struct ControlBubble<Panel: View>: ViewModifier {
     let width: BubblePlacement.Width
     @ViewBuilder let panel: () -> Panel
     @State private var measured = Measured()
+    @Environment(\.bubbleInset) private var inset
 
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { measured.frame = $0 }
-            .panel(isPresented: $isPresented, style: .bubble(isPresented ? measured.frame.map(BubbleSource.control) ?? .unanchored : .unanchored, width: width), content: panel)
+            .panel(isPresented: $isPresented, style: .bubble(isPresented ? measured.frame.map { .control($0, inset: inset) } ?? .unanchored : .unanchored, width: width), content: panel)
     }
 
     private final class Measured {
@@ -149,8 +142,6 @@ private struct ControlBubble<Panel: View>: ViewModifier {
     }
 }
 
-/// 点另一条任务就是换成它的气泡）。键盘升起时（在气泡里写字）气泡收起尾巴、整块往上挪到键盘上沿之上，只挪不重排；
-/// 放不下才矮下去、在里面滚。这一层不让键盘（`ignoresSafeArea(.keyboard)`）：摆法始终对着整个容器算，键盘只给一条下沿（`BubbleStage.floor`）。
 private struct BubbleLayer: View {
     let shown: PanelHost.Shown?
     @State private var keyboardTop: CGFloat?
@@ -161,8 +152,8 @@ private struct BubbleLayer: View {
         let source = shown?.source ?? .unanchored
         GeometryReader { proxy in
             let frame = proxy.frame(in: .global)
-            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets(source), width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
-            BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.edge }, ceiling: Self.edge) {
+            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets, width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
+            BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.insets.bottom }, ceiling: Self.insets.top) {
                 if let shown {
                     BubbleFrame(placement: placement) {
                         shown.content
@@ -178,7 +169,6 @@ private struct BubbleLayer: View {
                 }
             }
         }
-        // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
         .allowsHitTesting(shown != nil)
         .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: shown?.identity)
@@ -204,15 +194,7 @@ private struct BubbleLayer: View {
 
     private static var dismissDrag: CGFloat { 140 }
 
-    private static let edge = Spacing.item
-
-    /// 从钮长出的气泡两侧再让进一截，落在回复框里 ＋ 与主钮那两颗圆的外沿上：回复框贴着页边，气泡盖着它的上沿，
-    /// 两边再同它对齐，两个圆角就叠成一道缺口。
-    private static func insets(_ source: BubbleSource) -> EdgeInsets {
-        var side = BubblePlacement.margin
-        if case .control = source { side += (ComposerMetrics.slot - ComposerMetrics.glyph) / 2 }
-        return EdgeInsets(top: edge, leading: side, bottom: edge, trailing: side)
-    }
+    private static var insets: EdgeInsets { EdgeInsets(top: Spacing.item, leading: BubblePlacement.margin, bottom: Spacing.item, trailing: BubblePlacement.margin) }
 }
 
 struct SheetGrabber: View {
@@ -255,7 +237,6 @@ private struct TouchWatch: UIViewRepresentable {
         }
     }
 
-    /// 只看不认：落下的那一刻报一下就作废，不延迟、不取消别的手势与触摸。
     final class Watch: UIGestureRecognizer, UIGestureRecognizerDelegate {
         private weak var probe: Probe?
 

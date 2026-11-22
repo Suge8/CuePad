@@ -12,7 +12,6 @@ extension CueStore {
     return SessionListPage(items: try listItems(states), total: total)
   }
 
-  /// 会话归在哪个项目（同 `SessionListItem.home`）：没有项目或项目已删（列表项也不带它，`listItems`）的归默认项目。
   private static let home = """
     CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL) THEN projectID ELSE '\(Project.defaultID.uuidString.lowercased())' END
     """
@@ -34,7 +33,6 @@ extension CueStore {
     if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
       let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
         .replacingOccurrences(of: "_", with: "\\_") + "%"
-      // 所在也算：行上写的是项目给人看的名字（`SessionPlace`），按名字认项目同一条规则（英文界面搜 Default）
       let named = Project.nameMatch(text, stored: "name LIKE ? ESCAPE '\\'")
       conditions.append(
         """
@@ -44,7 +42,6 @@ extension CueStore {
       arguments += [pattern, pattern, pattern, pattern] + named.arguments
     }
     if let project = query.project {
-      // 别的项目走 projectID 的索引；默认项目还收没有项目的
       conditions.append(project == Project.defaultID ? "\(home) = ?" : "projectID = ?")
       arguments.append(project)
     }
@@ -66,8 +63,6 @@ extension CueStore {
     return (conditions.isEmpty ? "1" : conditions.joined(separator: " AND "), arguments)
   }
 
-  /// 一批会话（Pi 的会话 id）的列表项，按会话 id 索引；没有记录的 id 不在结果里。行与卡上要显示几十个会话的状态时一次读出，
-  /// 不必一个会话查一次。
   public func sessionItems(sessionIDs: [String]) throws -> [String: SessionListItem] {
     guard !sessionIDs.isEmpty else { return [:] }
     let ids = String(decoding: try JSONEncoder().encode(sessionIDs), as: UTF8.self)
@@ -79,7 +74,6 @@ extension CueStore {
     try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
   }
 
-  /// 会话记录配上列表项要的其余几样（项目、最近一条投送请求、改名、没送达的话、绑着的任务）：分页与按 id 取的唯一组装处。
   private func listItems(_ states: [SessionState]) throws -> [SessionListItem] {
     let ids = states.map(\.sessionID)
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
@@ -95,13 +89,10 @@ extension CueStore {
     }
   }
 
-  /// 置顶分组里的会话：它所归的那件事（`sessionOwnerTops`）置顶了。会话没有自己的置顶，行上的置顶菜单（`SessionListItem.task`）读的是同一件事。
   private static let pinnedSessions = """
     SELECT o.sessionID FROM (\(sessionOwnerTops(where: "1"))) o JOIN cards t ON t.id = o.top WHERE t.isPinned = 1
     """
 
-  /// 在问你的会话："等你"里会话那一半（规则在 `SessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：
-  /// 别的会话变状态时"等你"不重读。
   func sessionsAskingYou() throws -> [SessionState] {
     let cue = try cueDuty()
     let waiting = WorkState.waitingForUser.rawValue
@@ -111,8 +102,6 @@ extension CueStore {
     return try notEnding(asking)
   }
 
-  /// 你已经叫它歇了（结束在路上：点了休眠，或完成带出来的）的会话不再算等你，不等那台 Mac 做完——不然点了完成它还挂在等你里，
-  /// 像没点上。没结束成（失败）的回到等你。等你的通知也问它（`push`）：列表里没有的不该还来叫你。
   func notEnding(_ sessions: [SessionState]) throws -> [SessionState] {
     guard !sessions.isEmpty else { return sessions }
     let ending = Set(try db.query(
@@ -121,10 +110,6 @@ extension CueStore {
     return sessions.filter { !ending.contains($0.sessionID) }
   }
 
-  /// 待回复的会话（规则在 `SessionState.awaitsReply`），等得最久的在前：会话条与等你里的待回复（`CueTally.replies`）只读它。
-  /// 只读留给你回、此刻歇着或出错的那几条，订阅同 `sessionsAskingYou`。
-  /// 留给你之后已经对它说了话（最近一条说给它的话晚于这次停下、没失败）的不算：话一发出就有人接手了，不等 Mac 送到、会话动起来
-  /// （`CueLeft` 在那时自然作废）——看板上它当场回到推进中、写话到哪了（`SessionShown` 的 `DeliveryShown`），"等你 N"当场少一件。
   public func sessionsAwaitingReply() throws -> [SessionState] {
     guard let cue = try cueDuty(), !cue.left.isEmpty else { return [] }
     let resting: [WorkState] = [.settled, .error]
@@ -145,7 +130,6 @@ extension CueStore {
     rows.isEmpty ? [] : try select(SessionState.self, where: "rowid IN (SELECT value FROM json_each(?))", [JSONColumn.encode(rows.sorted())])
   }
 
-  /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。
   func latestRenames(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
     guard !sessionIDs.isEmpty else { return [:] }
     let configs = try select(
@@ -155,9 +139,6 @@ extension CueStore {
     return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
   }
 
-  /// 发给这些会话、可能没能送达的话，按 Pi 的会话 id：说的话（`DeliveryMode.send`）里还没被领取的与失败的——
-  /// 哪几句此刻算没能送达由说的话那条规则定（`SessionListItem.undelivered`）。失败的话不会进对话，一直留到你重发
-  /// （新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
   func unsettledTalk(to sessionIDs: [String]) throws -> [String: [DeliveryRequest]] {
     guard !sessionIDs.isEmpty else { return [:] }
     let requests = try select(
@@ -169,8 +150,6 @@ extension CueStore {
     return Dictionary(grouping: requests) { $0.target.ref ?? "" }
   }
 
-  /// 发给这些会话的最近一条投送请求（只算 `modes` 里的方式，默认 `DeliveryMode.toSession`），按 Pi 的会话 id。
-  /// 一次查询按会话聚合；投送请求完成后不久就被执行它的 Mac 清理，表一直很小。
   func latestDeliveries(to sessionIDs: [String], modes: Set<DeliveryMode> = DeliveryMode.toSession) throws -> [String: DeliveryRequest] {
     guard !sessionIDs.isEmpty else { return [:] }
     let requests = try select(
@@ -184,8 +163,6 @@ extension CueStore {
     return latest
   }
 
-  /// `host` 那台 Mac 上 `since` 之后结束的会话，最近结束的在前，至多 `limit` 个：Mac 的发送目标据此认出"刚结束的会话"，
-  /// 历史会话（结束时间早于 `since`）不在其中。
   public func endedSessions(on host: String, since: Date, limit: Int) throws -> [SessionState] {
     try select(
       SessionState.self, where: "state = ? AND hostID = ? AND stateSince >= ?", [WorkState.ended.rawValue, host, since],
@@ -196,11 +173,8 @@ extension CueStore {
     try find(SessionState.self, SessionState.recordID(sessionID: sessionID))?.model?.key
   }
 
-  /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
-  /// 手机据此建议给项目绑哪个文件夹（见 `BindRequest`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] { try folders(where: Self.hasFolder, []) }
 
-  /// 记着文件夹的会话：也是文件夹索引（`piSessionStates_folder`，`Schema+Indexes`）的部分条件，不一样就用不上。
   static let hasFolder = "folder IS NOT NULL AND folder != ''"
 
   private func folders(where condition: String, _ arguments: [any SQLBindable]) throws -> [SessionFolder] {

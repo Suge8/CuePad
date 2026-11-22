@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 extension ClaudeHostedSession {
-    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算（早于这一轮的回答），不等它的 `system/init`（中间隔着钩子）。
     func put(_ message: JSONValue) throws {
         try live.write(message)
         emit(.turnStarted)
@@ -19,7 +18,6 @@ extension ClaudeHostedSession {
         clearing.removeAll()
     }
 
-    /// 等的人已超时或走了的也占着自己的位置：它那条 `/clear` 迟到的 `result` 不能算给后面的。
     func endClear(_ outcome: Result<Void, any Error>) {
         guard !clearing.isEmpty else { return }
         clearWaits.resolve(clearing.removeFirst(), with: outcome)

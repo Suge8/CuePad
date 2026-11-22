@@ -23,7 +23,7 @@ import Testing
     _ = try await store.createCard(body: ref(shared))
     let trashed = try await store.createCard(body: ref(inTrash))
     try await store.trashCard(trashed.id)
-    try await store.recordSend(ref(sent), to: SendTarget(kind: .piSession, name: "s", ref: "s1"), card: doomed.id)  // 一键重发还要用它
+    try await store.recordSend(ref(sent), to: SendTarget(kind: .piSession, name: "s", ref: "s1"), card: doomed.id)
     try await store.addCueMessage(.you, text: ref(inCue))
 
     try await store.purgeCard(doomed.id)

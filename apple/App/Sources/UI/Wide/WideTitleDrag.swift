@@ -2,12 +2,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 宽屏栏头里那一块的名字，拖起的是那一块（会话 `DraggedColumn`、灵感 `DraggedCard`）。
 struct WideTitleDrag: UIViewRepresentable {
     let title: String
     let type: UTType
     let item: any Encodable & Sendable
-    /// 拖起时报给宽屏主区的落点（`Workspace.dragging`）。
     let pane: WideNavigation.Beside
     @Environment(Workspace.self) private var workspace
 
@@ -22,7 +20,6 @@ struct WideTitleDrag: UIViewRepresentable {
         view.pane = pane
     }
 
-    /// 只占名字那么宽（放不下时截断）：名字后面紧跟的「已结束」挨着它，同 Mac。
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: WideTitleLabel, context: Context) -> CGSize? {
         let ideal = view.intrinsicContentSize
         return CGSize(width: min(ideal.width, proposal.width ?? ideal.width), height: ideal.height)

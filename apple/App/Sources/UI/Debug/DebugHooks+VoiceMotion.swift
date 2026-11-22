@@ -1,7 +1,6 @@
 import QuartzCore
 
 extension DebugHooks {
-    /// 声纹播放门的现场取证；只在显式启动参数下记状态变化，不记音量或每帧日志。
     static func voiceRibbon(_ ribbon: VoiceRibbon, on layer: VoiceRibbonLayer) {
         #if DEBUG
         guard DebugScene.args.voiceOpts.motionTrace else { return }

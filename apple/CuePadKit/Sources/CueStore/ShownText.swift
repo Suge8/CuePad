@@ -9,7 +9,6 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
 
   public init(_ value: String.LocalizationValue) { self.value = value }
 
-  /// 错误的说法：能交给别的设备按它的语言显示的（`ShownError`）存句式与参数，别的（系统、第三方的错误）存这台的原文。
   public init(_ error: any Error) {
     self = (error as? any ShownError).map { ShownText($0.shown) } ?? .verbatim(error.localizedDescription)
   }
@@ -20,7 +19,6 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
     return ShownText(String.LocalizationValue(stringInterpolation: words))
   }
 
-  /// 这台设备当前语言的字：嵌着的话（`embedded`）先各按这台的语言取字，再填进句式。
   public var text: String {
     guard var words = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? [String: Any],
       let arguments = words["arguments"] as? [[String: Any]],
@@ -33,8 +31,6 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
     return String(localized: resolved)
   }
 
-  /// 嵌进另一句里的写法（`ShownText("我起不来了：\(reason.embedded)")`）：句式的参数里只能放字，这一句整个编成一个带记号的字，
-  /// 读的时候（`text`）认出来，按读的设备的语言取字。只用作 `ShownText` 句式里的参数，不直接显示。
   public var embedded: String { Self.embeddedMark + stored }
 
   private static let embeddedMark = "\u{FFFC}shown:"
@@ -53,7 +49,6 @@ public struct ShownText: Equatable, Sendable, StoredJSON {
   }
 }
 
-/// 说法要交给别的设备按它的语言显示的错误（写进同步记录的，见 `ShownText`）：`shown` 是唯一的说法，`errorDescription` 由它取这台的字。
 public protocol ShownError: LocalizedError {
   var shown: String.LocalizationValue { get }
 }

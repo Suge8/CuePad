@@ -1,12 +1,7 @@
 import CueText
 import Foundation
 
-/// `createdForTaskID` 持久保存会话的创建来源，纯关联（没有任务创建来源）不授权结束；`executing` 的会话拒绝本地借用；跨端后到的关联不撤回已发出的结束，可以指向历史。
-/// 结束请求领取时固定一个请求 ID 集合，源端实际结束与这些请求的结果在同一个事务里写回；同步只合并同一条请求，不凭时间或 ended 的回声确认别的请求。
-/// 重启后没有证据的会话保持“未知”；会话页与 Cue 可以明确结束它，这只覆盖受理那一刻已知的旧未知，不扩到之后的新请求。
-
 extension CueStore {
-  /// 算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的子任务抛 `stepsRemaining`、什么都不改；否则完成它，结束没人再用的会话（`endUnusedSessions`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果（`CueReport.text`）：你不认可就把它改回没做完，或直接告诉 Cue。结果上只挂 Cue 点名的图（`shots`），没点名就不挂；点名的不在发到手机的里抛 `shotMissing`、什么都不改。已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（子任务与已完成的为 nil）与结束请求。
   @discardableResult
   public func finishTask(_ task: UUID, evidence: [String], shots: [CueShot] = [], answeredRequests: [UUID]? = []) throws -> (report: CueMessage?, ended: [DeliveryRequest]) {
     try write {
@@ -27,7 +22,6 @@ extension CueStore {
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
   }
 
-  /// 已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态。
   @discardableResult
   public func completeTask(_ id: UUID) throws -> TaskStatus {
     try write {
@@ -38,9 +32,6 @@ extension CueStore {
     }
   }
 
-  /// 你亲手点的完成：做完与它带出来的休眠（`sessionsFreed`）写在同一个事务里——分两次写，中间那一拍会话还算等你，它在看板上的卡先跳回等你再飞走。
-  /// 自动结束先结（`reconcileTaskSessionEvents`，提交前本来也要跑）：它已经请结束的，这里不再点名一遍。
-  /// 那台 Mac 说了离开的不在这里写（写了没人领），交回调用方照点名结束的路走（先拉一次同步再定，`AppServices.end`）。
   public func completeTask(_ id: UUID, sleepingAt moment: Speech.Moment) throws -> (status: TaskStatus, unreached: [SessionState]) {
     try write { try completeSleeping(id, at: moment) }
   }
@@ -64,8 +55,6 @@ extension CueStore {
     return (status, unreached)
   }
 
-  /// 此刻完成 `task` 会让哪些会话歇下（确认框的预告）：照 `completeTask(_:sleepingAt:)` 做一遍、看哪些会话有结束在路上，再整个回滚。
-  /// 不另写一份规则去猜：休眠有两条路（你点的 `sessionsFreed` 与自动的 `taskSessionCanEnd`），另写的那份和照做的对不上过（自动结束的那条漏算）。
   public func sessionsEnding(byCompleting task: UUID, at moment: Speech.Moment) throws -> Set<String> {
     struct Rehearsed: Error { let sessions: Set<String> }
     do {
@@ -80,8 +69,6 @@ extension CueStore {
     return []
   }
 
-  /// 撤销一次完成：它还是那一次做完的（完成时刻是 `time`）、没归档没删才撤，连同那一次连带做完的下级（其间单独归档了的不动）、那一次才带着开始的上级；否则抛 `changedSinceUndo`。
-  /// 那一次结束的会话、停掉的定时不恢复（同 `reopen`：再对它说话就在后台恢复）。
   public func uncompleteTask(_ id: UUID, completedAt time: Date) throws {
     try write {
       guard let card = try find(Card.self, id), card.completedAt == time, card.archivedAt == nil, card.deletedAt == nil else {
@@ -91,7 +78,6 @@ extension CueStore {
       try db.run(
         "UPDATE cards SET completedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND completedAt = ?3 AND archivedAt IS NULL",
         [now, id, time])
-      // 完成时带着开始的上级（`applyStatus` 用同一个时刻记的）：下面没有别的开始了，就回到待办
       try db.run(
         "UPDATE cards SET startedAt = NULL, modifiedAt = ?1 WHERE id IN (SELECT value FROM json_each(?2)) AND startedAt = ?3 AND completedAt IS NULL",
         [now, Self.idList(try ancestors(of: id)), time])
@@ -102,8 +88,6 @@ extension CueStore {
     try write { try reopen([id]) }
   }
 
-  /// 你对会话说了话：绑着它的已完成任务回到进行中（绑着会话就是开始过，不回待办）。写下这句话时（`insertDelivery`）与执行的 Mac 领取它时（`claimDelivery`）各一次：
-  /// 写的那台设备可能还没同步到完成，领取时带 `before`（这句话写下的时刻）只认在那之前做完的；话还在路上时你才点的完成不翻回。必须在写事务内调用。
   func reopenTasks(spokenToIn session: String, before: Date? = nil) throws {
     let done = try db.query(
       "SELECT id FROM cards WHERE piSessionID = ?1 AND completedAt IS NOT NULL AND (?2 IS NULL OR completedAt < ?2) AND \(Self.cardVisible)",
@@ -113,7 +97,6 @@ extension CueStore {
     for task in done { try beginTask(task, at: now) }
   }
 
-  /// 不再算做完，只在这里写。`tasks` 连同各自已完成的上级清掉完成时间：开始过的回到进行中，没开始过的回到待办；在归档里的，整件连同下级取回。你对它的会话说话也经这里（`insertDelivery`）。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
     let chains = try tasks.map { [$0] + (try ancestors(of: $0)) }
     let done = try select(
@@ -126,9 +109,6 @@ extension CueStore {
     try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
-  /// 任务离开看板，或明确开工换会话时（纯关联不收尾），这件事里此刻绑着的、为它开的会话各看一遍（换下来的不看：它可能已结束后被你恢复起来另用），可以结束（`taskSessionCanEnd`）的请它所在的 Mac 结束。
-  /// 不是为任务开的不结束，它随这件事从看板收起（`isLoose`），再有动静才回来；已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
-  /// `task` 可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。必须在写事务内调用。
   @discardableResult
   func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
     guard let card = try find(Card.self, task), card.isTask else { return [] }
@@ -164,7 +144,6 @@ extension CueStore {
     return card
   }
 
-  /// 不在库里或在回收站抛 `notFound`，不是任务抛 `notATask`。
   @discardableResult
   private func requireTask(_ id: UUID) throws -> Card {
     guard let card = try find(Card.self, id), card.deletedAt == nil else { throw CueStoreError.notFound }

@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 测试用的模型提供方：`fake`（`FakeModel`，两个模型，窗口不同、都有 low / high 两档强度）。`echo` 是缺省，`echo-b` 是就地换到的那个
 let openCodeTestModel = ModelKey(provider: OpenCodeSandbox.fake, id: "echo")
 let openCodeOtherModel = ModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
 
@@ -23,7 +22,6 @@ final class OpenCodeSandbox: Sendable {
     let paths: AgentPaths
     let model: FakeModel
 
-    /// - Parameter model: 剧本要在 OpenCode 起来之前写好时先建好交进来。
     init(model: FakeModel? = nil) async throws {
         try Self.pinned.require()
         let root = try makeTempDirectory()
@@ -92,7 +90,6 @@ final class OpenCodeSandbox: Sendable {
         return data.isEmpty ? [:] : (try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:])
     }
 
-    /// 失败现场：服务里每个会话的消息与待答表单、桥上的会话，写进临时目录外的一个文件（临时目录随后删掉），路径记进测试结果。
     @MainActor func dump(_ bridge: Bridge) async {
         guard let sessions = try? await api("GET", "/api/session?limit=100")["data"] as? [[String: Any]] else { return }
         var dump: [String: Any] = ["sessions": sessions, "bridge": String(describing: bridge.sessions.filter { $0.agent == .opencode })]

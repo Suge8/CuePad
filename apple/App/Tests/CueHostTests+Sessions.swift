@@ -61,7 +61,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// `stop` 是假扩展报的停下（被打断是做到一半进程没了）。
     @Test(arguments: ["idle", "waiting_user", "error", "interrupted"])
     func 他开的一轮停下不叫醒Cue_当场留给他回(stop: String) async throws {
         let rig = try await Rig()
@@ -69,10 +68,8 @@ extension CueHostTests {
         func woke() -> Int { rig.rounds.filter(\.wake.isSessionActivity).count }
         try await eventually("Cue 开的那一轮停下叫醒它，它做完") { woke() == 1 && rig.rounds.allSatisfy { $0.finishedAt != nil } }
         let session = try #require(rig.app.host.extensions.values.first)
-        // 远处排一个定时：对账后睡下，`reconciled` 才等得到
         _ = try await rig.store.noteCueLine("下周的事", source: .you, remindAt: rig.clock.now.addingTimeInterval(7 * 86_400))
 
-        // 他从回复框说的这句开了这一轮：停下的状态比这句读进对话先到库里，也认得出是他的
         let his = try await rig.store.speak("顺便看下注册页", to: session.sessionID, host: TestApp.hostID)
         try await eventually("他那句交给了会话") { session.messages.contains { $0.deliveryID == his.id.uuidString } }
         session.setState(["kind": "thinking"])
@@ -93,7 +90,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 工具是读一个命名管道：没人往里写，读就停在那里，"工具进行中"一直在库里，断言完再写一行放行。
     @Test func Cue用工具时库里写下动作_说完回到歇着() async throws {
         let rig = try await Rig()
         let gate = rig.app.directory.appending(path: "gate")

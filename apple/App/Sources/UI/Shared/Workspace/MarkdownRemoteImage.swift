@@ -2,7 +2,6 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// 阅读和分享走同一个有界下载；原始字节留给原图分享，阅读及长图只解码到所需分辨率。
 nonisolated enum MarkdownRemoteImage {
     struct Asset: Sendable { let file: URL; let image: CGImage }
     private static let timeout: TimeInterval = 30

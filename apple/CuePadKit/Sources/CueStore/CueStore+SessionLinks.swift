@@ -2,7 +2,6 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 发送记录只记“内容”的投送。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话（`linkCard`）。执行投送的那台 Mac 记，请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
   public func recordSend(
     _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
@@ -21,7 +20,6 @@ extension CueStore {
     }
   }
 
-  /// 纯记账，不重放卡片绑定。历史回填与主动投送共用同一份发送记录。
   @discardableResult
   func insertSendRecord(
     _ content: String, to target: SendTarget, card: UUID?, delivery: UUID?, origin: Open<DeliveryOrigin>?
@@ -35,7 +33,6 @@ extension CueStore {
     return record
   }
 
-  /// 已受理内容的发送记录；主动关联另走 linkDeliveredCard，历史回填不带这个副作用。
   public func recordDelivery(_ request: DeliveryRequest, content: String, to target: SendTarget) throws {
     try write {
       if try db.first("SELECT 1 FROM sendRecords WHERE deliveryID = ?", [request.id], { _ in true }) != nil { return }
@@ -43,7 +40,6 @@ extension CueStore {
     }
   }
 
-  /// 执行中的主动关联，不同于历史记账。请求写下后用户已经改绑或解绑的，不能被晚到的 ACK 抢回去。
   public func linkDeliveredCard(_ request: DeliveryRequest, toSession session: String) throws {
     try write { try linkDeliveredCardInTransaction(request, toSession: session) }
   }
@@ -58,8 +54,6 @@ extension CueStore {
     }
   }
 
-  /// 卡片、请求或成功回执晚到时兑现原关联意图；只用仍在库里的请求及其修订，不从发送历史猜测。
-  /// start 的目标由 launchToken 认领；已有会话的内容与命令按成功请求的固定目标补齐。
   func reconcileDeliveredCards(cards: Set<UUID> = [], deliveries: Set<UUID> = []) throws {
     guard !cards.isEmpty || !deliveries.isEmpty else { return }
     let requests = try select(DeliveryRequest.self, where: """
@@ -71,7 +65,6 @@ extension CueStore {
     }
   }
 
-  /// 不写发送记录：发给 Agent 的命令带着卡片时用。没开始的任务进行中；完成了的不变。任务的会话只记在叶子上（`homeLeaf`）；一个叶子最多一个会话，一个会话可以绑好几个叶子。
   public func linkCard(_ card: UUID, toSession session: String) throws {
     try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
   }
@@ -92,8 +85,6 @@ extension CueStore {
     if card.isTask { try beginTask(id, at: now) }
   }
 
-  /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，
-  /// 换上的（以前用过又换回来的）从里面拿掉，正在用的不在里面。只记任务的：灵感交给别的会话不算用过。
   static func keepingFormerSession(_ new: String) -> String {
     """
     formerSessionIDs = CASE WHEN cards.todoAt IS NULL THEN cards.formerSessionIDs ELSE (
@@ -106,7 +97,6 @@ extension CueStore {
     """
   }
 
-  /// 有子任务的抛 `notALeaf`，不是任务抛 `notATask`。叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子。没开始的任务置为进行中，完成了的不变。绑会话不发任务的正文：它在做的事已经在会话里。
   public func bindSession(_ sessionID: String, to task: UUID) throws {
     try write {
       guard let link = try link(of: task) else { throw CueStoreError.notFound }
@@ -141,12 +131,10 @@ extension CueStore {
     ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
   }
 
-  /// 会话所在的各处：它属于的叶子任务（`tasks(boundTo:)`）与它们的上级。挂在会话上的提问（`questionsOn`）、一轮兜底时这个会话有没有去处都按它认。
   func sessionPlaces(_ sessionID: String) throws -> [UUID] {
     try tasks(boundTo: sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
   }
 
-  /// （项目页的任务顺序：同级手动顺序，子任务紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {
     let open = try tasks(in: project ?? Project.defaultID, .todo, .inProgress)
     let byID = Dictionary(open.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -160,7 +148,6 @@ extension CueStore {
     return result
   }
 
-  /// 卡 `alias` 用过会话 `session`（SQL 表达式）：正在用的（`piSessionID`）或换下来的（`formerSessionIDs`，`Card.formerSessionIDs`）。“哪些卡用过这个会话”只按它与 `sessionsUsed`。
   static func usedSession(_ alias: String, _ session: String) -> String {
     """
     (\(alias).piSessionID = \(session) OR (\(alias).formerSessionIDs IS NOT NULL
@@ -168,7 +155,6 @@ extension CueStore {
     """
   }
 
-  /// 满足 `condition`（对卡片表的条件，不带别名）的卡用过的会话（同 `usedSession`），作子查询用。
   static func sessionsUsed(where condition: String) -> String {
     """
     SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (\(condition))

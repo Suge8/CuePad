@@ -1,14 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 滚动开始与结束、"回到最新"圆钮出现与消失都会让 `SessionChat` 重算 body，而这时对话数据没变：几百条的条目不用每次都推一遍。
 final class ChatDerived {
     private struct Key: Equatable {
         let messages: [ChatMessage]
         let previews: [PreviewItem]
         let cueSent: Set<UUID>
         let deliveries: [DeliveryRequest]
-        /// 没送到的话到点就换位置（`Chat.entries`）；此刻只在到点与同步通断时变（`SpeechClock`）。
         let moment: Speech.Moment
     }
 

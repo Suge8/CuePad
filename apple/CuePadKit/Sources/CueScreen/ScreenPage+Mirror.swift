@@ -1,8 +1,5 @@
 #if os(macOS)
 extension ScreenPage {
-  /// 画面上那一层看不见的元素（只有桌面窗口那一种）：照服务那头说的（`/outline`，`ScreenSource.outline`）一个元素摆一个、压在它在画面里的位置上。
-  /// 画面本身只是一块画布，读页面的什么都读不到；有了这一层，Agent 的 snapshot、click、fill、press、wait 与用户的点选同对一张网页一样用：
-  /// 它们点的是这一层的元素，落点正是画面里那个控件，按下去照常经 `hands` 送进应用。
   static let mirror = #"""
     const layer = stage.querySelector("section"), made = new Map();
     // 画面横着是应用里的多少点（`attend` 照它算放多大）

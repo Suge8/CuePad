@@ -1,26 +1,19 @@
 import CueStore
 import SwiftUI
 
-/// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。
-
-/// 段名只在分段上（Mac 工具栏、手机页顶）。页上没有纸也没有卡：分组小标题与行（`LibraryEntry`）直接排在桌面上，靠间距分组。
 enum LibraryLayout {
-    /// 这一页与文件页正文同一列（同灵感的编辑页）。
     static let column: CGFloat = 680
     static let gap = Spacing.section
     static let margin = Spacing.page
     static let bottom = Spacing.section
-    /// 正文离栏边同页边，与灵感的编辑页（`CardEditorScreen`）同一列。
     static let textInset = Spacing.page
     #if os(macOS)
-    /// 行尾的前进箭头：Mac 上点行打开的是盖在主区上的文件页（浮层，不是进一页），不画
     static let chevron = false
     #else
     static let chevron = true
     #endif
 }
 
-/// 一组：小标题（可带个数、行尾可带一颗钮）与它下面的行。
 struct LibraryGroup<Label: View, Action: View, Content: View>: View {
     var count: Int?
     @ViewBuilder var label: Label
@@ -53,12 +46,10 @@ extension LibraryGroup where Action == EmptyView {
     }
 }
 
-/// 纸上的一行：图标垫一小块底、名字、下面一行灰字。
 struct LibraryEntry<Icon: View, Trailing: View>: View {
     let title: String
     var dim = false
     let detail: String
-    /// 灰字那行放不下时一直折下去（整理的那几件要读全），不然最多两行。
     var wraps = false
     @ViewBuilder var icon: Icon
     @ViewBuilder var trailing: Trailing
@@ -79,7 +70,6 @@ struct LibraryEntry<Icon: View, Trailing: View>: View {
         .contentShape(.rect)
     }
 
-    /// 图标底的边长：两行字的高。
     #if os(macOS)
     private static var tile: CGFloat { 32 }
     #else
@@ -87,7 +77,6 @@ struct LibraryEntry<Icon: View, Trailing: View>: View {
     #endif
 }
 
-/// 该整理的那几件就是纸上最前面的一组行：标题行尾一颗小钮。整理完这一组收起、下面的跟着上移（是你点了才变的）。
 struct TidySlot: View {
     let library: AgentLibrary
     let rules: Bool
@@ -96,7 +85,6 @@ struct TidySlot: View {
 
     var body: some View {
         let tidies = library.automaticTidies.filter { ($0.instruction != nil) == rules }
-        // Group：这一段没有时不占位置
         Group {
             if !tidies.isEmpty {
                 LibraryGroup(count: tidies.count) {
@@ -123,7 +111,6 @@ struct TidySlot: View {
     }
 }
 
-/// 每件两行：哪里不对、一键整理会对它做什么（`TidyFact`）。点之前就看得到会动哪几个，不另开说明。
 struct TidyFacts: View {
     let tidies: [LibraryTidy]
     let library: AgentLibrary
@@ -161,7 +148,6 @@ struct TidyLabel: View {
     }
 }
 
-/// 全局规则与各家自己那几份同在"全局"一组，全局规则排第一。
 struct InstructionSection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
@@ -192,12 +178,10 @@ struct InstructionSection: View {
         .buttonStyle(.row)
     }
 
-    /// 各家自己那份的文件名在下面那行，名字不带。
     private func name(_ kind: LibraryInstruction.Kind) -> String {
         if case .agent(let agent, _) = kind { String(localized: "\(agent.name) 的全局规则") } else { workspace.instructionName(kind) }
     }
 
-    /// 文件名，再用字写谁读（不画记号）：全局规则写谁在读、谁另写了一份（点开在文件页顶上合并，`MergeBar`），项目规则写哪几家读不到。
     private func detail(_ instruction: LibraryInstruction) -> String {
         guard instruction.hash != nil else { return String(localized: "还没有") }
         let file = URL(filePath: instruction.path).lastPathComponent

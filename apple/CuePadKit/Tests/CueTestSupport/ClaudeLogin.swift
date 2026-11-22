@@ -9,7 +9,6 @@ public enum ClaudeLogin {
   public static let tokenCommand =
     "/usr/bin/security find-generic-password -s 'Claude Code-credentials' -w | /usr/bin/plutil -extract claudeAiOauth.accessToken raw -o - -"
 
-  /// 此刻的访问令牌；这台 Mac 上的 Claude Code 没登录为 nil。
   public static var token: String? {
     let process = Process(), output = Pipe()
     process.executableURL = URL(filePath: "/bin/sh")

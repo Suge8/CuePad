@@ -55,7 +55,6 @@ extension FakeModel {
     }
 }
 
-/// 临时的 Grok 配置目录、家目录与工作目录：钉住的真 Grok（`pinnedGrok`）起在这里，连本用例的假模型，不读写真实的 ~/.grok 与资料库。
 @MainActor
 final class GrokRig {
     let root: URL
@@ -84,7 +83,6 @@ final class GrokRig {
         try runtime.start()
     }
 
-    /// 终端界面里接着这个会话的真 Grok：`script` 给它一个伪终端。
     func terminal(resuming sessionID: String) async throws -> ChildProcess {
         let environment = grokEnvironment(model: model, home: root.appending(path: "user"), grokHome: home)
             .merging(["PATH": "/usr/bin:/bin", "TERM": "xterm-256color"]) { $1 }
@@ -112,7 +110,6 @@ final class GrokRig {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
-    /// 最近一条回答里有这个词
     func replied(_ word: String, in id: Session.ID) -> Bool {
         bridge.session(id: id).flatMap { replies($0).last?.contains(word) } == true
     }
@@ -122,7 +119,6 @@ final class GrokRig {
         model.requests.filter { $0.system.hasPrefix("You are Grok") && $0.prompt.contains(text) }
     }
 
-    /// 会话的进程是钉住的那份 Grok（不是别处的另一个），并且在跑
     func runsPinnedGrok(_ id: Session.ID) -> Bool {
         guard let pid = bridge.session(id: id)?.pid else { return false }
         var path = [CChar](repeating: 0, count: 4096)

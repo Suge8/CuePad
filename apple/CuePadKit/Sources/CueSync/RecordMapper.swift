@@ -1,9 +1,7 @@
 import CloudKit
 import Foundation
 
-/// 加密字段（`Field.Storage.encrypted`）放 `encryptedValues`，其余放明文字段。
 enum RecordMapper {
-  /// 附件记录的资产字段：文件本身，不是列（`CloudKitSchema`）。拉取不带它，文件另走一路（`FileCloud`）。
   static let fileKey = "file"
 
   static func table(named recordType: String) -> Table? {
@@ -33,7 +31,6 @@ enum RecordMapper {
     return record
   }
 
-  /// 未知记录类型返回 nil。缺失的字段读作 NULL（其他版本没有的列）。
   static func row(from record: CKRecord) -> SyncRow? {
     guard let table = table(named: record.recordType) else { return nil }
     var fields: [String: SQLValue] = ["id": .text(record.recordID.recordName)]

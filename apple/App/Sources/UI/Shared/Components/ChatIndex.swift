@@ -1,10 +1,6 @@
 import CueText
 import SwiftUI
 
-/// 对话目录：对话右缘一列记号，你说过的一句一道短横、换了上下文（压缩）一颗小点；展开成一块面板，一行一句（这句话的第一行），点一行当帧跳过去（`EdgeIndex`）。
-/// 此刻读到的那一句（可见区上三分之一那条线落在的那一条往前最近的一句，`ChatReading`）用正常墨色标出，其余淡着。
-/// 阅读栏贴着边、右边距放不下记号再隔一条缝（`crowded`，iPhone 与窄窗口）时平时不露也不接手指，滚动时出来、停手后再留一会儿：常驻的话像一把尺子贴在气泡边上。
-/// 键盘弹着时淡出让开（手机、iPad）：这时在写字，可见区只剩键盘上面一截，记号挤在输入框旁边只是碍眼。
 struct ChatIndex: View {
     let marks: [ChatMark]
     let ids: [UUID]
@@ -14,7 +10,6 @@ struct ChatIndex: View {
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 目录的下沿还要让开浮在对话底上的回复框（Mac）。在这里读而不在 `ChatColumn` 读：它一读，回复框一变高矮整段对话都要重排。
     @Environment(\.chatBottomInset) private var bottomInset
     @ScaledMetric(relativeTo: .body) private var row: CGFloat = 32
     @State private var lingering = false
@@ -41,7 +36,6 @@ struct ChatIndex: View {
             .padding(.top, JumpToNewest.clearance)
             .padding(.bottom, bottomInset + JumpToNewest.clearance)
             .opacity(shown ? 1 : 0)
-            // 平时不露时也不接手指：贴右缘滚对话的拇指不会抓到看不见的记号；滚起来它露出来，停手后还留一会儿可以抓
             .allowsHitTesting(shown)
             .readerHidden(keyboard)
             .animation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion), value: shown)

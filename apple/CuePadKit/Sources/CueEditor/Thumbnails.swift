@@ -3,10 +3,6 @@ import Foundation
 import ImageIO
 import QuickLookThumbnailing
 
-/// 缩略图，全 App 只此一处（在后台调用）。图片由 ImageIO 直接降采样解码（已按 EXIF 方向校正、不放大），原图不整张进内存；
-/// 别的文件（PDF 的页、视频的帧、文稿的首屏）是系统快速查看的缩略图（`system`、文件牌的 `chip`）。
-/// `image(at:maxPixel:)` 的结果按"文件 + 尺寸"缓存（编辑器、卡片墙、全屏页）；系统内存紧张时 NSCache 自动清空，下次需要时重新降采样。
-/// `decoded` 按原图尺寸定要多大、不进这份缓存：调用方自己留（交付物缩略图、附件条）。
 public enum Thumbnails {
     public static func image(at url: URL, maxPixel: Int) -> CGImage? {
         let key = key(url, maxPixel)
@@ -16,7 +12,6 @@ public enum Thumbnails {
         return image
     }
 
-    /// 按原图的像素尺寸（计入方向标记）定最长边解码：`longestSide` 拿到尺寸、给出要解到的最长边。
     public static func decoded(at url: URL, longestSide: (CGSize) -> Int) -> CGImage? {
         source(url).flatMap { downsample($0, longestSide: longestSide) }
     }
@@ -37,13 +32,11 @@ public enum Thumbnails {
         return header.turned ? CGSize(width: size.height, height: size.width) : size
     }
 
-    /// 原图的像素尺寸，只读文件头，计入方向标记（全屏页按它定能放大到多少、清楚的那张解多大）。
     public static func pixelSize(at url: URL) -> CGSize? {
         guard let header = source(url).flatMap(header) else { return nil }
         return header.turned ? CGSize(width: header.pixels.height, height: header.pixels.width) : header.pixels
     }
 
-    /// 首帧的属性与像素尺寸；`turned`：方向标记要把它转 90°（宽高对调）。读不到为 nil。
     private static func header(_ source: CGImageSource) -> (props: [CFString: Any], pixels: CGSize, turned: Bool)? {
         guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
@@ -78,7 +71,6 @@ public enum Thumbnails {
         return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
     }
 
-    /// 文件牌左边那一块（正文里的、附件条与对话里的同一份）：系统缩略图，出不了画面给类型图标，缩到 `side`（点）见方以内。
     @concurrent public static func chip(at url: URL, side: CGFloat, scale: CGFloat) async -> CGImage? {
         let pixels = Int((side * scale).rounded())
         guard let image = await system(at: url, fitting: CGSize(width: pixels, height: pixels), scale: scale, icons: true) else { return nil }

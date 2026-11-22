@@ -62,7 +62,6 @@ private struct PreviewPager: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭", icon: .close, role: .cancel) { leave() }
                 }
-                // PDF 的页内搜索（系统的查找条，`PreviewFinds`）：与分享并排在右上；接了键盘 ⌘F 也是它（压过根上的 ⌘F 搜索）
                 if let file = findable {
                     ToolbarItem(placement: .primaryAction) {
                         Button("在文中搜索", icon: .search) { finds.present(file) }.labelStyle(.iconOnly).keyboardShortcut("f")
@@ -106,7 +105,6 @@ private struct PreviewPager: View {
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
         .background { PreviewDismissGuard() }
         .background(palette.desk)
-        // 写批注时点一下内容就交出键盘（`PreviewNoteField` 失焦即记下、收起），接着看；这一下照常落到内容上
         .simultaneousGesture(TapGesture().onEnded {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         })

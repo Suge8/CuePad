@@ -30,7 +30,6 @@ struct CueEvalBenchTests {
         }
     }
 
-    /// 不巡视：历史停在几年前，按真实时钟算他早就"很久没说话"，刚启用完就会巡视、把问题并进那一轮
     private static let never = Duration.seconds(100 * 365 * 86400)
 
     private static let output = URL(filePath: evalEnvironment["CUEPAD_CUE_EVAL_OUT"] ?? "/tmp/cue-eval/bench", directoryHint: .isDirectory)
@@ -49,7 +48,6 @@ struct CueEvalBenchTests {
                         brain: brain, patrolAfter: Self.never, clock: { asked }, prepare: { try await $0.store.seed(question.log) })
                 }
             ) { eval in
-                // 有几题的历史里有晚于提问时刻的会话（官方也照样给）：问题记在它们之后，排进 Cue 订阅的最近对话里才叫得醒它
                 let at = max(asked, (question.log.last?.at ?? asked) + 1)
                 try await eval.trigger { try await eval.rig.store.say(question.question, at: at) }
                 let round = try #require(eval.round)
@@ -83,14 +81,11 @@ struct CueEvalBenchTests {
 }
 
 extension CueStore {
-    /// 他在 `at` 说了一句（问题记在提问时刻：recall 搜得到这句，时刻要与信封上的此刻一致，不能是真实的今天）。
     func say(_ text: String, at: Date) throws {
         try write { _ = try insertCueMessage(.you, text: text, at: at) }
     }
 }
 
-/// 一道题（`bench.py sample` 写的一行）：历史已按时刻排好、一句一条（他的或 Cue 的），提问时刻是 epoch 秒；
-/// 判分要的字段（标准答案、该不该拒答、证据原话）这里不读，`line` 原样留着写进结果。
 nonisolated struct BenchQuestion: Decodable, Sendable {
     let bench, id, type, question, answer, date: String
     let asked: Date

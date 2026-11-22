@@ -19,8 +19,6 @@ final class StatusItemController: NSObject {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
-    /// 菜单栏的字随菜单栏明暗着色，不另上色：数字跟在图标右边、与图标同一条中线。
-    /// 有要你管的换成会话状态标的图形：有拍板是气泡问号，只剩新回复是信封；没有就是 Cue。换图淡过去，不跳。
     func show(_ tally: CueNow.Tally) {
         guard let button = item.button else { return }
         let count = tally.needsYou

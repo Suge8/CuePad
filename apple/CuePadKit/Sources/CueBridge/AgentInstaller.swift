@@ -18,13 +18,11 @@ public struct InstallPrerequisite: Sendable, Equatable {
     public let minimum: AgentVersion
     public let site: URL
 
-    /// 下限取要它的几家里最高的（Pi 的安装脚本、dsh 依赖的 `engines`）
     static let node = InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!)
 }
 
 /// 官方脚本装进家目录（`~/.local/bin`、OpenCode 的 `~/.opencode/bin`，检测本来就查那里）。
 extension AgentIntegration {
-    /// 返回退出码与输出（标准错误并在一起，失败时取末尾给人看）；起不来或超过 `installLimit` 为 nil。
     @concurrent public func runInstaller(_ kind: AgentKind, _ presence: AgentStatus.Presence) async -> (status: Int32, output: String)? {
         let shell = URL(filePath: "/bin/sh")
         let environment = await locate().environment(launching: shell, overrides: paths.environment)
@@ -32,7 +30,6 @@ extension AgentIntegration {
             shell, ["-c", "{ \(installCommand(kind, presence)); } 2>&1"], environment: environment, timeout: Self.installLimit)
     }
 
-    /// 返回时进程已起：调用方 `waitForExit()` 等它结束、`end()` 提前结束它。
     public func startLogin(_ kind: AgentKind, executable: URL) async throws -> ChildProcess {
         let environment = await locate().environment(launching: executable, overrides: paths.environment)
         return try await ChildProcess(executable, kind.facts.loginArguments ?? [], environment: environment, placement: .group, keepErrors: false)
