@@ -119,6 +119,7 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
         let render = commands.makeRenderCommandEncoder(descriptor: pass)!
         render.setRenderPipelineState(gpu.pipeline)
         render.setFragmentBytes(&uniforms, length: MemoryLayout<ThinkingUniforms>.stride, index: 0)
+        render.setFragmentBytes(Halftone.table, length: Halftone.table.count * MemoryLayout<Float>.stride, index: 1)
         render.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         render.endEncoding()
         commands.present(drawable)
@@ -227,13 +228,6 @@ static float noise(float2 p) {
     return mix(mix(hash(i), hash(i + float2(1, 0)), u.x), mix(hash(i + float2(0, 1)), hash(i + float2(1, 1)), u.x), u.y);
 }
 
-// 8×8 有序抖动的阈值，与 Cue 页的天同一张表：按位交错算出来，不另抄一份。
-static float bayer(uint2 c) {
-    uint x = c.x ^ c.y, y = c.y, v = 0;
-    for (uint b = 0; b < 3; b++) v |= ((x >> b) & 1) << (5 - 2 * b) | ((y >> b) & 1) << (4 - 2 * b);
-    return (float(v) + 0.5) / 64.0;
-}
-
 static float3 ramp(float x, constant Uniforms &u) {
     x = clamp(x, 0.0, 1.0);
     return x < 0.5 ? mix(u.low.rgb, u.mid.rgb, x * 2) : mix(u.mid.rgb, u.high.rgb, x * 2 - 1);
@@ -263,7 +257,7 @@ static float motes(float2 p, float row, float shift, float stretch, float densit
     return sum;
 }
 
-fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buffer(0)]]) {
+fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buffer(0)]], constant float *halftone [[buffer(1)]]) {
     float scale = u.b.x, time = u.a.z, e = u.a.w, fill = max(u.b.z, 0.05);
     if (u.b.y > 0.5 && e < 0.002) return float4(0);
     // 格里每个像素取格心的值
@@ -305,8 +299,8 @@ fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buf
     light += exp(-pow((dk - since * h * 6.0) / (h * 0.4), 2.0)) * kick * 1.6;
     tone += light * (0.6 + 0.4 * along) + kick * 0.7;
 
-    // 只抖明暗、不抖色相（同一种墨深浅两级相间，不冒杂色），四级一档，阈值同 Cue 页的天
-    float q = floor(max(tone, 0.0) * 4.0 + bayer(cell)) / 4.0;
+    // 只抖明暗、不抖色相（同一种墨深浅两级相间，不冒杂色），四级一档，阈值是 `Halftone.table`
+    float q = floor(max(tone, 0.0) * 4.0 + halftone[(cell.y & 7) * 8 + (cell.x & 7)]) / 4.0;
     float3 hue = ramp(along * e, u);
     float3 glow = mix(float3(1.0), u.spark.rgb, blaze * 0.6);
     float3 c = q <= 1.0 ? mix(hue * 0.55, hue, q) : mix(hue, glow, min((q - 1.0) * 1.6, 1.0));
