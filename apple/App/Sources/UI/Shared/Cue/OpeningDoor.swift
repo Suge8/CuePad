@@ -127,7 +127,7 @@ struct OpeningDoor {
         let far = Double(corners.map { hypot($0.x - heart.x, $0.y - heart.y) }.max()! + 2 * OpeningLight.cell)
         let threshold = (0..<grid.rows * grid.columns).map { index in
             let (row, column) = index.quotientAndRemainder(dividingBy: grid.columns), at = grid.center(SIMD2(column, row))
-            return Double(hypot(at.x - heart.x, at.y - heart.y)) / far * (1 - spread) + OpeningLight.bayer(SIMD2(column, row)) * spread
+            return Double(hypot(at.x - heart.x, at.y - heart.y)) / far * (1 - spread) + Halftone.bayer(column, row) * spread
         }
         return (0...Int(reveal * fps)).map { frame in
             let front = Double(inOut3(Double(frame) / fps / reveal)) * 1.22 - 0.04

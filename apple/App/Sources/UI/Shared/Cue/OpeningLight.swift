@@ -77,7 +77,7 @@ nonisolated struct OpeningLight: Sendable {
             letter = CueWordmark.cells.contains(at &- grid.mark)
             u = Double((0.8 * p.x + 0.45 * p.y) / (0.8 * size.width + 0.45 * size.height))
             hue = OpeningLight.ramp(Double(p.x / size.width) * 0.8 + Double(p.y / size.height) * 0.3, paint)
-            threshold = OpeningLight.bayer(at)
+            threshold = Halftone.bayer(at.x, at.y)
         }
 
         /// 离斜光多近（1 在光正中），与光扫过它多久了（0 还没到，1 早过去了）。
@@ -120,14 +120,6 @@ nonisolated struct OpeningLight: Sendable {
             }
         }
         return context.makeImage()!
-    }
-
-    /// 8×8 有序抖动的阈值，同 Cue 页的天与思考档（按位交错算出来）。
-    static func bayer(_ cell: SIMD2<Int>) -> Double {
-        let x = (cell.x ^ cell.y) & 7, y = cell.y & 7
-        var v = 0
-        for bit in 0..<3 { v |= ((x >> bit) & 1) << (5 - 2 * bit) | ((y >> bit) & 1) << (4 - 2 * bit) }
-        return (Double(v) + 0.5) / 64
     }
 
     private static func hash(_ x: Double, _ y: Double) -> Double {

@@ -2382,18 +2382,18 @@
         }
       }
     },
-    "Agent 在等你回答或确认，Cue 带选项来问你或有急事" : {
+    "Agent 在等你回答，或 Cue 带选项来问你、有急事" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent is waiting for your answer or approval, or Cue has a question or something urgent"
+            "value" : "An agent is waiting for your answer, or Cue has a question or something urgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 在等你回答或确认，Cue 带选项来问你或有急事"
+            "value" : "Agent 在等你回答，或 Cue 带选项来问你、有急事"
           }
         }
       }

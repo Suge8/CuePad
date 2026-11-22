@@ -47,16 +47,19 @@ struct DitherImage: View {
     }
 }
 
-/// 网点：格子边长与 8×8 阈值表，出字显影与飞着的气泡共用；Cue 页的天、思考档位在着色器里用同一张表（`DitherGPU`、`ThinkingShaders`）。
+/// 网点：格子边长与全 App 唯一的一张 8×8 有序抖动阈值表（按位交错算出来）。出字显影、飞着的气泡、开门的光查 `bayer`；
+/// 着色器（Cue 页的天 `DitherGPU`、思考档位 `ThinkingShaders`）由调用方把 `table` 传进去，着色器里不另写一份。
 enum Halftone {
     static func cell(scale: CGFloat) -> CGFloat { DitherGPU.cell * 2 / scale }
 
-    nonisolated static func bayer(_ cx: Int, _ cy: Int) -> Double {
-        let x = (cx & 7) ^ (cy & 7), y = cy & 7
+    nonisolated static let table: [Float] = (0..<64).map { i in
+        let x = (i & 7) ^ (i >> 3), y = i >> 3
         var v = 0
         for b in 0..<3 { v |= ((x >> b) & 1) << (5 - 2 * b) | ((y >> b) & 1) << (4 - 2 * b) }
-        return (Double(v) + 0.5) / 64
+        return (Float(v) + 0.5) / 64
     }
+
+    nonisolated static func bayer(_ x: Int, _ y: Int) -> Double { Double(table[(y & 7) * 8 + (x & 7)]) }
 }
 
 /// 显卡那一份，全 App 共用：着色器第一次用时在运行时编（同 `FigureGPU`，项目不装 Metal 编译工具链），只留最近用的那张原图（带 mip 约 8 MB）：一天里会换着用八张，全留着就是几十 MB。
@@ -98,6 +101,7 @@ final class DitherGPU {
         encoder.setTexture(source, index: 0)
         encoder.setBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.setBuffer(out, offset: 0, index: 1)
+        encoder.setBytes(Halftone.table, length: Halftone.table.count * MemoryLayout<Float>.stride, index: 2)
         encoder.dispatchThreads(MTLSize(width: width, height: height, depth: 1), threadsPerThreadgroup: MTLSize(width: 16, height: 16, depth: 1))
         encoder.endEncoding()
         await withCheckedContinuation { done in
@@ -140,17 +144,11 @@ struct Job {
     float cell, fade;    // 一格、上沿散开那一截（设备像素）
 };
 
-constant float bayer[64] = {
-     0, 32,  8, 40,  2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26,
-    12, 44,  4, 36, 14, 46,  6, 38, 60, 28, 52, 20, 62, 30, 54, 22,
-     3, 35, 11, 43,  1, 33,  9, 41, 51, 19, 59, 27, 49, 17, 57, 25,
-    15, 47,  7, 39, 13, 45,  5, 37, 63, 31, 55, 23, 61, 29, 53, 21 };
-
-kernel void dither(texture2d<float> src [[texture(0)]], constant Job &j [[buffer(0)]], device uchar4 *out [[buffer(1)]],
+kernel void dither(texture2d<float> src [[texture(0)]], constant Job &j [[buffer(0)]], device uchar4 *out [[buffer(1)]], constant float *halftone [[buffer(2)]],
                    uint2 gid [[thread_position_in_grid]]) {
     if (gid.x >= j.width || gid.y >= j.height) return;
     constexpr sampler s(filter::linear, mip_filter::linear, address::clamp_to_edge);
-    float t = (bayer[(gid.y % 8) * 8 + gid.x % 8] + 0.5) / 64.0;
+    float t = halftone[(gid.y & 7) * 8 + (gid.x & 7)];
     uint index = gid.y * j.width + gid.x;
     float2 at = (float2(gid) + 0.5) * j.cell;
     if (at.y < j.fade && at.y / j.fade <= t) { out[index] = uchar4(0); return; }
