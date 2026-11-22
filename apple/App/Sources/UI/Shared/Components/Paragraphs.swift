@@ -62,7 +62,7 @@ struct Paragraphs: View {
     }
 
     private func renderer(_ frame: RevealFrame, _ starts: ArraySlice<Int>, end: Int) -> RevealRenderer {
-        RevealRenderer(frame: frame, starts: Array(starts), end: end, cell: DitherGPU.cell * 2 / scale, hot: palette.thinkingHigh, warm: palette.thinkingMid)
+        RevealRenderer(frame: frame, starts: Array(starts), end: end, cell: Halftone.cell(scale: scale), hot: palette.thinkingHigh, warm: palette.thinkingMid)
     }
 
     /// 每段的起点（UTF-16）：段与段之间隔一个换行。

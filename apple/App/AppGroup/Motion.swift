@@ -89,7 +89,7 @@ extension Motion {
     nonisolated enum Send {
         static let lift = Animation.spring(duration: 0.32)
         static let drift = Animation.spring(duration: 0.45)
-        static let grow = Animation.easeOut(duration: 0.3)
+        static let develop = Animation.linear(duration: Reveal.develop)
         static let takeoff: CGFloat = 16
         static let wait: Duration = .seconds(1)
     }

@@ -45,6 +45,18 @@ struct DitherImage: View {
     }
 }
 
+/// 网点：格子边长与 8×8 阈值表，出字显影与飞着的气泡共用；Cue 页的天、思考档位在着色器里用同一张表（`DitherGPU`、`ThinkingShaders`）。
+enum Halftone {
+    static func cell(scale: CGFloat) -> CGFloat { DitherGPU.cell * 2 / scale }
+
+    nonisolated static func bayer(_ cx: Int, _ cy: Int) -> Double {
+        let x = (cx & 7) ^ (cy & 7), y = cy & 7
+        var v = 0
+        for b in 0..<3 { v |= ((x >> b) & 1) << (5 - 2 * b) | ((y >> b) & 1) << (4 - 2 * b) }
+        return (Double(v) + 0.5) / 64
+    }
+}
+
 /// 显卡那一份，全 App 共用：着色器第一次用时在运行时编（同 `FigureGPU`，项目不装 Metal 编译工具链），只留最近用的那张原图（带 mip 约 8 MB）：一天里会换着用八张，全留着就是几十 MB。
 final class DitherGPU {
     static let shared = DitherGPU()

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 发出的那句从输入框飞进对话。按下时字留在输入框里原处（写进库、排出气泡要几帧，输入框这时已经空了，不留这一下空白）；
-/// 气泡一排好就飞过去：竖着比横着快，走一道弧，一路长出气泡的底，落下时换成真的那颗（飞着时它透明）。
+/// 气泡一排好就飞过去：竖着比横着快，走一道弧，一路显影出气泡的底（`Developing`），落下时换成真的那颗（飞着时它透明）。
 /// 一个对话区（`FloatingReply`）一份：输入框报字的位置（`origin`），气泡按"按下之后说的、字一样"认出自己（`carries`）、报落点（`aim`）。
 /// 只飞纯文字：带附件、批注、技能调用的气泡长相不同；没有看得见的落点就原地淡掉。减弱动态效果时不给这一份，不飞。
 /// 只平移与改留白，不缩放：缩放时每帧重画字形。
@@ -119,7 +119,7 @@ private struct FlyingWords: View {
     let trip: SendFlight.Trip
     let base: CGPoint
     @State private var spot: CGPoint
-    @State private var grown = false
+    @State private var developed = false
     @State private var gone = false
     @State private var legs = Legs()
     @Environment(\.palette) private var palette
@@ -134,16 +134,12 @@ private struct FlyingWords: View {
     var body: some View {
         let landing = flight.landing, look = landing?.look ?? .session, full = look.padding
         let width = landing.map { $0.frame.width - full.leading - full.trailing } ?? trip.from.width
-        Paragraphs(verbatim: trip.text, lineSpacing: Typography.readingLineSpacing, lineLimit: UserBubble<EmptyView>.foldedLines)
-            .font(Typography.reading).foregroundStyle(palette.ink)
-            .frame(width: width, alignment: .leading)
-            .padding(grown ? full : EdgeInsets())
-            .background {
-                look.shape.fill(palette.bubble)
-                    .overlay { if let edge = palette.bubbleEdge { look.shape.strokeBorder(edge) } }
-                    .opacity(grown ? 1 : 0)
-            }
-            .opacity(gone ? 0 : grown ? landing?.opacity ?? 1 : 1)
+        Developing(progress: developed ? 1 : 0, look: look, padding: full) {
+            Paragraphs(verbatim: trip.text, lineSpacing: Typography.readingLineSpacing, lineLimit: UserBubble<EmptyView>.foldedLines)
+                .font(Typography.reading).foregroundStyle(palette.ink)
+                .frame(width: width, alignment: .leading)
+        }
+            .opacity(gone ? 0 : developed ? landing?.opacity ?? 1 : 1)
             .offset(x: spot.x - base.x, y: spot.y - base.y)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .onChange(of: landing, initial: true) { fly(to: landing) }
@@ -154,9 +150,9 @@ private struct FlyingWords: View {
             }
     }
 
-    /// 两个方向各记各的最后一段：落点只在一个方向上挪了时，另一个方向还在走，两边都停了才落下。
+    /// 两个方向与显影各记各的最后一段：落点只在一个方向上挪了时，另一个方向还在走，都停了才落下；显影没完就落下的话，真的那颗一下盖掉还带色的格子。
     private struct Legs {
-        var y = 0, x = 0
+        var y = 0, x = 0, develop = 0
         var moving: Set<WritableKeyPath<Self, Int>> = []
     }
 
@@ -167,7 +163,7 @@ private struct FlyingWords: View {
             withAnimation(Motion.Send.lift) { spot.y -= Motion.Send.takeoff }
             return
         }
-        withAnimation(Motion.Send.grow) { grown = true }
+        if !developed { start(\.develop, Motion.Send.develop) { developed = true } }
         let to = landing.frame.origin
         move(\.y, Motion.Send.lift, from: spot.y, to: to.y) { spot.y = to.y }
         move(\.x, Motion.Send.drift, from: spot.x, to: to.x) { spot.x = to.x }
@@ -176,6 +172,10 @@ private struct FlyingWords: View {
     /// 终点没挪（同一处又报了一次，只差小数点后几位）就不开新的一段：值没变的动画当场回调完成，会在半路落地。
     private func move(_ axis: WritableKeyPath<Legs, Int>, _ animation: Animation, from: CGFloat, to: CGFloat, _ change: () -> Void) {
         guard abs(to - from) >= Self.still else { return }
+        start(axis, animation, change)
+    }
+
+    private func start(_ axis: WritableKeyPath<Legs, Int>, _ animation: Animation, _ change: () -> Void) {
         legs[keyPath: axis] += 1
         legs.moving.insert(axis)
         let current = legs[keyPath: axis]
@@ -187,4 +187,63 @@ private struct FlyingWords: View {
     }
 
     private static let still: CGFloat = 0.5
+}
+
+/// 飞着的气泡在路上显影，同回答的字（`RevealRenderer`）：底从左往右按网点一格格长出来（`Halftone`），刚长出的格子是热的（玫红），
+/// 按长出的先后经紫冷却成气泡的颜色，看着是一道带色的网点边从字头扫到字尾；留白同时从字边长到气泡的边。显影完是一整块气泡色，与真的那颗一样，落下时换过去看不出来。
+/// 字一直是实的：它从输入框里飞出来，本来就看得见，跟着闪的话读不成句。
+private struct Developing<Words: View>: View, Animatable {
+    var progress: Double
+    let look: BubbleLook
+    let padding: EdgeInsets
+    @ViewBuilder let words: Words
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var scale
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    var body: some View {
+        let grow = 1 - pow(1 - min(1, progress / Self.spread), 2)
+        words
+            .padding(EdgeInsets(top: padding.top * grow, leading: padding.leading * grow, bottom: padding.bottom * grow, trailing: padding.trailing * grow))
+            .background {
+                Canvas { [progress, look, cell = Halftone.cell(scale: scale), heat = heatColors] context, size in
+                    let outline = look.shape.path(in: CGRect(origin: .zero, size: size))
+                    guard progress < 1 else { return context.fill(outline, with: .color(heat[0])) }
+                    context.clip(to: outline)
+                    var bands = Array(repeating: Path(), count: heat.count)
+                    let columns = Int((size.width / cell).rounded(.up))
+                    for y in 0..<Int((size.height / cell).rounded(.up)) {
+                        for x in 0..<columns {
+                            let birth = Double(x) / Double(columns) * (1 - Self.soft) + Halftone.bayer(x, y) * Self.soft
+                            let age = progress - birth * Self.spread
+                            guard age > 0 else { continue }
+                            let band = Int((max(0, 1 - age / Self.cool) * Double(heat.count - 1)).rounded())
+                            bands[band].addRect(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
+                        }
+                    }
+                    for (band, path) in bands.enumerated() where !path.isEmpty { context.fill(path, with: .color(heat[band])) }
+                }
+                .overlay { if let edge = palette.bubbleEdge { look.shape.strokeBorder(edge).opacity(progress) } }
+            }
+    }
+
+    /// 从冷到热：气泡色 → 紫 → 玫红，与回答显影同一套色（`thinkingMid`、`thinkingHigh`）。
+    private var heatColors: [Color] {
+        (0..<Self.bands).map { band in
+            let heat = Double(band) / Double(Self.bands - 1)
+            return heat > 0.5 ? palette.thinkingMid.mix(with: palette.thinkingHigh, by: (heat - 0.5) * 2) : palette.bubble.mix(with: palette.thinkingMid, by: heat * 2)
+        }
+    }
+
+    /// 格子在前 `spread` 里按阈值表陆续长出（留白也在这一段长满），每一格长出后用 `cool` 冷却，到 1 正好全冷。
+    /// 冷得快：带色的只是刚长出的那一圈，看着是网点一格格亮起来；冷得慢的话整颗先是一颗紫气泡、再褪色。
+    private static var spread: Double { 0.75 }
+    private static var cool: Double { 0.25 }
+    private static var bands: Int { 8 }
+    /// 扫过去的那道边有多宽（占整颗的几成）：边里按阈值表抖开，太窄是一道硬线，太宽又成了整颗一起闪。
+    private static var soft: Double { 0.35 }
 }
