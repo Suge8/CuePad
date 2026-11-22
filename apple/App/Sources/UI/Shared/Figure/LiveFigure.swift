@@ -63,6 +63,7 @@ struct LiveFigure: View {
     @State private var pin: CGFloat = 0
     @LoopsPlay private var plays
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.chatRise) private var rise
 
     nonisolated enum Stage: Equatable {
         case absent, here(FigureLive), lingering(FigureLive), leaving(FigureLive), resting
@@ -86,6 +87,7 @@ struct LiveFigure: View {
     /// 对话这时也不动（让出的高留成留白，`ChatScroll.keep`），跟着挪的话它一下跳到字上、再随每一行往下掉。
     /// 位置量在对话内容里（`chatContentSpace`）：对话整段上滑是渲染端的平移，它照样跟着走。此刻的位置在画的这一遍里读（`visualEffect`）：
     /// 经状态回报的话回复长出来的那一帧还按旧位置画，它先跳到字上、下一帧才回来。
+    /// 它头上长出东西（工具、思考的字）时对话整段上滑（`ChatRise`），它是被推下去的那一截：反着同一条曲线挪回来，原地不动，上面的让开。
     var body: some View {
         let handed = stage.shown != nil && handoff != arrivedWith
         let holds = switch stage {
@@ -99,6 +101,10 @@ struct LiveFigure: View {
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(chatContentSpace)) } action: { if holds { pin = $0.minY } }
         .visualEffect { [holds, pin] content, place in
             content.offset(y: holds ? 0 : pin - place.frame(in: .named(chatContentSpace)).minY)
+        }
+        .keyframeAnimator(initialValue: CGFloat.zero, trigger: rise.count) { content, y in content.offset(y: y) } keyframes: { [rise] now in
+            MoveKeyframe(now - rise.height)
+            LinearKeyframe(0, duration: Motion.Glide.duration, timingCurve: Motion.Glide.unit)
         }
         .onAppear {
             FigureGPU.warm()

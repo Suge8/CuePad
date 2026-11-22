@@ -172,6 +172,7 @@ extension EnvironmentValues {
     @Entry var chatJump: ChatJump?
     @Entry var chatStay: ChatStay?
     @Entry var chatBottomInset: CGFloat = 0
+    @Entry var chatRise = ChatRise()
     @Entry var chatHeight: CGFloat = .infinity
     @Entry var chatMargin: CGFloat = 0
 }

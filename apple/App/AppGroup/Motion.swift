@@ -57,6 +57,7 @@ extension Motion {
     nonisolated enum Glide {
         static let duration: TimeInterval = 0.28
         fileprivate static let curve: (Double, Double, Double, Double) = (0.4, 0, 0.2, 1)
+        static var unit: UnitCurve { .bezier(startControlPoint: UnitPoint(x: curve.0, y: curve.1), endControlPoint: UnitPoint(x: curve.2, y: curve.3)) }
         static var timing: CAMediaTimingFunction {
             CAMediaTimingFunction(controlPoints: Float(curve.0), Float(curve.1), Float(curve.2), Float(curve.3))
         }

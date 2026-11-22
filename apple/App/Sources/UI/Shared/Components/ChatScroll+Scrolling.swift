@@ -104,6 +104,7 @@ extension ChatScroll {
     func rise(by height: CGFloat) {
         guard !reduceMotion else { return }
         lift.slide(by: height)
+        rose = ChatRise(count: rose.count + 1, height: height)
     }
 
     static var end: String { "chat.end" }

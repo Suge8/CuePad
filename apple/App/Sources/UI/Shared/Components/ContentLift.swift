@@ -3,6 +3,12 @@ import SwiftUI
 
 /// 叠加（`additive`）、每次各用各的键：上一段没走完又来一条时两段相加，屏上从当前位置连续接上。
 /// 否决的方案：SwiftUI 的偏移逐帧挪——每帧要主线程更新，Mac 上发出一句到回复与结果卡出来的那几秒主线程指令多近两成。
+/// 贴着最新、对话整段上滑了一次（`ContentLift.slide`）：第几次、滑了多高。末尾那一行（小人）按它反着挪回去，原地不动。
+struct ChatRise: Equatable {
+    var count = 0
+    var height: CGFloat = 0
+}
+
 @MainActor final class ContentLift {
     weak var probe: PlatformView?
     private var slides = 0
