@@ -29,7 +29,7 @@ struct SessionTaskTests {
         #expect(empty.todo.isEmpty && empty.advancing.map(\.id) == ["session/s1"])
         let envelope = CueEnvelope.render(try await CueEnvelope.read(
             from: store, wake: .idle, changes: [], now: .now, host: TestApp.hostID, language: nil, retrying: nil, related: []))
-        #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 空闲"))
+        #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 他自己来 · 空闲"))
 
         let cue = CueTools(store: store, wait: 0)
         let said = try #require(await cue.call("task", ["action": "say", "session": "修登录", "text": "补上登录的测试"]))
@@ -101,6 +101,7 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录", projectID: project.id)
         let workspace = Workspace(services: services)
         try await store.bindSession("s1", to: old.id)
+        try await store.setTier(.full, of: "s1")
         let mark = try await store.lastWrite()
         try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
         try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
@@ -124,9 +125,9 @@ struct SessionTaskTests {
         try await workspace.complete(stepped.id)
         let cue = CueTools(store: store, wait: 0)
         let peek = try #require(await cue.call("task", ["action": "peek"]))
-        #expect(peek.text.contains("- 会话「修登录」（s1） · 空闲"))
-        #expect(peek.text.contains("最近完成的") && peek.text.contains("- 修登录（\(old.id.shortID)） · 会话「修登录」（s1） · 空闲"))
-        #expect(peek.text.contains("- 加语言参数（\(stepped.id.shortID)） · 会话「加 --lang」（s2） · 空闲"))
+        #expect(peek.text.contains("- 会话「修登录」（s1） · 全权 · 空闲"))
+        #expect(peek.text.contains("最近完成的") && peek.text.contains("- 修登录（\(old.id.shortID)） · 会话「修登录」（s1） · 全权 · 空闲"))
+        #expect(peek.text.contains("- 加语言参数（\(stepped.id.shortID)） · 会话「加 --lang」（s2） · 他自己来 · 空闲"))
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "补注册页", "session": "s1"]))
         #expect(!added.isError)

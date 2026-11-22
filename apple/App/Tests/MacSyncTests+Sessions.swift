@@ -155,6 +155,7 @@ extension MacSyncTests {
         let turn = Date.now.addingTimeInterval(-30 * 60)
         let delivery = UUID()
         try await store.recordSend("发版", to: SendTarget(kind: .piSession, name: "发版", ref: "s1"), delivery: delivery, origin: .known(.cue))
+        try await store.setTier(.full, of: "s1")
         let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn, deliveryID: delivery)
         try await services.stateRecorder.update(
             sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: SessionTimes(stateSince: turn, busySince: turn), turnStartedAt: turn)

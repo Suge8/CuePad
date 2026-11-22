@@ -132,6 +132,7 @@ extension SessionTaskTests {
         let recorder = try await app.runtimeRecorder(on: services.hostID)
         let questions = [("s1", Question(promptID: "p", kind: .confirm, text: "继续？")), ("s2", Question(promptID: nil, kind: .confirm, text: "允许打开浏览器吗？"))]
         for (session, question) in questions {
+            try await store.setTier(.full, of: session)
             try await recorder.update(sessionID: session, state: .thinking, title: session)
             try await recorder.update(sessionID: session, state: .waitingForUser, question: question)
         }
@@ -156,6 +157,7 @@ extension SessionTaskTests {
         clock.advance(.seconds(1))
         try await eventually("Cue 那台过期、等的变 2 件") { counts.withLock { $0.last } == 2 }
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
+        try await store.setTier(.full, of: "s3")
         try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
         try await recorder.update(sessionID: "s3", state: .waitingForUser, question: Question(promptID: "p3", kind: .confirm, text: "删旧分支？"))
         #expect(try await store.sessionItems(sessionIDs: ["s3"])["s3"]?.state.notify == .alert(.waitingForUser))

@@ -176,7 +176,7 @@ public enum CueEnvelope {
     return text
   }
 
-  static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = [], tiers: [String: CueTier] = [:], schedules: [CueMemoryLine] = []) -> String {
+  static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft], tiers: [String: CueTier], schedules: [CueMemoryLine]) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if let line = schedules.first(where: { $0.task == item.task.id }) {
       if let repeats = line.repeats {
@@ -196,7 +196,7 @@ public enum CueEnvelope {
     }).joined(separator: "\n")
   }
 
-  static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft] = [], tiers: [String: CueTier] = [:]) -> String {
+  static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft], tiers: [String: CueTier]) -> String {
     var parts = [sessionName(session), tierNote(CueTier.of(session, chosen: tiers)), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
     if left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
     if let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
