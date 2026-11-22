@@ -9,23 +9,6 @@ public enum CueTier: String, CaseIterable, Comparable, Sendable {
   public static func of(_ session: SessionState, chosen: [String: CueTier]) -> CueTier { chosen[session.sessionID] ?? .yours }
 }
 
-extension Schema {
-  static let tiersArrived = 104
-
-  /// 档位上线前 Cue 正在接的任务会话（这一轮是 Cue 开的）记成全权，时刻取会话开出来的那一刻：之后他选的都比它新。
-  /// 写序归零：这些停下 Cue 升级前已经接过，不当成刚换了档再叫醒它。
-  static func adoptCueTurns(_ connection: SQLite) throws {
-    let sessions = try connection.query("SELECT sessionID, createdAt FROM piSessionStates WHERE createdForTaskID IS NOT NULL AND turnByCue = 1") {
-      ($0.text(0), $0.int(1))
-    }
-    for (session, createdAt) in sessions {
-      let mark = Mark.tier(session, .full)
-      try connection.run("INSERT OR IGNORE INTO marks (id, kind, subject, modifiedAt) VALUES (?1, ?2, ?3, ?4)", [mark.id, mark.kind, mark.subject, createdAt])
-      try connection.run("UPDATE marks SET writeSeq = 0 WHERE id = ?", [mark.id])
-    }
-  }
-}
-
 extension CueStore {
   /// 记的时刻晚于这个会话已有的每一档：时钟慢的设备看到别处的选择之后再选，也算后选。
   public func setTier(_ tier: CueTier, of sessionID: String) throws {
