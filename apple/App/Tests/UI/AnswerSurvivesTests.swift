@@ -13,8 +13,7 @@ struct AnswerSurvivesTests {
         let recorder = try await app.runtimeRecorder(on: "mac")
         let question = Question(promptID: "p-1", kind: .select, text: "要覆盖吗？", options: ["覆盖", "另存"])
         try await recorder.update(sessionID: "s", state: .waitingForUser, title: "homepage", question: question)
-        let wait = try #require(try await CueThread.read(from: store).waiting.first)
-        guard case .session(let session, _) = wait.wait else { throw Mismatch() }
+        let session = try #require(try await store.cueWaiting().first).session
 
         let request = try await app.services.answer(.option("另存"), to: session)
         try await store.requestDelivery("顺便把 Atom 也输出", to: session.target, on: "mac")
@@ -25,4 +24,3 @@ struct AnswerSurvivesTests {
     }
 }
 
-private struct Mismatch: Error {}

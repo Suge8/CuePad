@@ -106,7 +106,7 @@ nonisolated struct DebugArgs: Decodable {
     let replies: Int
     /// `-CuePadSampleCrash YES`：存几份样例诊断，设置里出现"上次崩溃"
     let sampleCrash: Bool
-    /// `-CuePadSampleCue <秒>`（仅 Mac）：过这么久写一条 Cue 请你允许推送的消息，经 Cue 的通知出口发出（隔离库里 Cue 不值班，不会自己推）
+    /// `-CuePadSampleCue <秒>`（仅 Mac）：过这么久写一条 Cue 的急事消息，经 Cue 的通知出口发出（隔离库里 Cue 不值班，不会自己推）
     let sampleCue: Double
     /// `-CuePadScene <画面>`：初始画面；画面名与摆法见各画面文件登记在 `DebugScene.entries` 里的那一条
     let scene: String?

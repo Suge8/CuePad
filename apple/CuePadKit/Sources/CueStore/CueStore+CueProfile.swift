@@ -44,7 +44,7 @@ extension CueStore {
     guard let profile = try cueProfile(), let host = profile.activeHost else { return nil }
     let state = try cueState()
     guard profile.onDuty(state, hostOnline: try macOnline(host)) else { return nil }
-    return CueDuty(name: profile.name, left: state?.left ?? [])
+    return CueDuty(name: profile.name, left: state?.left ?? [], tiers: try chosenTiers())
   }
 
   @discardableResult
@@ -59,7 +59,7 @@ extension CueStore {
 
   public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> SessionState? {
     try write {
-      guard let session = try sessionState(stop.sessionID), stop.holds(for: session), try question(waitingOn: session.sessionID) == nil else { return nil }
+      guard let session = try sessionState(stop.sessionID), stop.holds(for: session) else { return nil }
       guard !given.contains(session.id), given.isDisjoint(with: try sessionPlaces(session.sessionID)) else { return nil }
       if try cueState()?.left.contains(where: { $0.holds(for: session) }) != true { try putLeft([session]) }
       return session
@@ -69,15 +69,15 @@ extension CueStore {
   public func takeBack(_ sessionID: String) throws -> Bool {
     try write {
       guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return false }
-      try putLeft([], removing: sessionID)
+      try putLeft([], removing: [sessionID])
       return true
     }
   }
 
   @discardableResult
-  func putLeft(_ sessions: [SessionState], removing: String? = nil) throws -> Bool {
+  func putLeft(_ sessions: [SessionState], removing: [String] = []) throws -> Bool {
     let current = try cueState()
-    let replaced = Set(sessions.map(\.sessionID) + [removing].compactMap(\.self))
+    let replaced = Set(sessions.map(\.sessionID) + removing)
     let others = current?.left.filter { !replaced.contains($0.sessionID) } ?? []
     let live = try select(SessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
     let left = others.filter { entry in live.contains(where: entry.holds) } + sessions.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) }

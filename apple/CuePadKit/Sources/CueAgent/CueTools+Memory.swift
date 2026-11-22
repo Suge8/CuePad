@@ -114,11 +114,16 @@ extension CueTools {
     return .ok(found.isEmpty ? "没找到。" : found.map { replyLine($0, around: words) }.joined(separator: "\n"))
   }
 
-  func ask(_ args: Args) async throws -> Result {
-    let asking = try CueAsking(habit: args.string("rule"))
-    try await store.addCueMessage(.cue, text: try args.required("text"), ask: asking)
-    return .ok("已问他。")
+  func keep(_ args: Args) async throws -> Result {
+    let rule = try args.required("rule").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !rule.isEmpty, rule.count <= Self.ruleLimit, !rule.contains(where: \.isNewline) else {
+      throw Failure("rule 写那条做法本身，一行、≤\(Self.ruleLimit) 字，照他的话")
+    }
+    try await store.keepHabit(rule, telling: try args.required("text"))
+    return .ok("已记成重点并告诉他。")
   }
+
+  static let ruleLimit = 30
 
   func merge(_ args: Args) async throws -> Result {
     let range = try Self.range(args)

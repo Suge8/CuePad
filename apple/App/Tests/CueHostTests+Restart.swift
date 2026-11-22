@@ -34,6 +34,7 @@ extension CueHostTests {
             let file = rig.folder.appending(path: "s\(index).jsonl")
             try Data("{}\n".utf8).write(to: file)
             try await store.linkCard(step.id, toSession: "s\(index)")
+            try await store.setTier(.full, of: "s\(index)")
             sessions.append(try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path))
         }
         try await eventually("三个会话都记下在干活") { try await store.allSessionStates().filter { $0.state.isWorking }.count == 3 }

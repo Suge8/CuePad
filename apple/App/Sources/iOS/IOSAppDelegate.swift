@@ -16,8 +16,6 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         launch = Self.open()
         super.init()
         connect()
-        // 实时活动的"允许一次"在 App 进程里执行，可能是被叫到后台、没有窗口的时候：由这里答（`AllowOnceIntent`）
-        AppDependencyManager.shared.add { self as any CueQuestionAnswering }
     }
 
     func relaunch() {
@@ -63,17 +61,6 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         guard case .ready(let services) = launch else { return .failed }
         return await services.refreshFromPush()
-    }
-}
-
-extension IOSAppDelegate: CueQuestionAnswering {
-    func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
-        guard case .ready(let services) = launch else { throw LibraryClosed() }
-        try await services.answerRemoteCueQuestion(message, choice)
-    }
-
-    private struct LibraryClosed: LocalizedError {
-        var errorDescription: String? { String(localized: "CuePad 的资料库没打开，到 App 里看看") }
     }
 }
 #endif

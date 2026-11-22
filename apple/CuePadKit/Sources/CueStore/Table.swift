@@ -49,7 +49,7 @@ extension Table {
   package var localColumns: [String] {
     let maintained: [String] =
       switch self {
-      case .cards, .piSessionStates, .cueMessages: ["writeSeq"]
+      case .cards, .piSessionStates, .cueMessages, .marks: ["writeSeq"]
       case .deliveryRequests: ["writeSeq", "cueToldAt"]
       case .attachments: ["registeredHere"]
       case .piMessages: ["arrival"]

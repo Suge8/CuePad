@@ -23,9 +23,6 @@ extension Schema {
   static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
   static let taskOriginIndex = "CREATE INDEX piSessionStates_createdForTaskID ON piSessionStates(createdForTaskID) WHERE createdForTaskID IS NOT NULL;"
   static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(agent);"
-  static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
-  static let openQuestionIndex = "CREATE INDEX cueMessages_open ON cueMessages(createdAt) WHERE \(CueStore.openQuestion);"
-  static let setAsideIndex = "CREATE INDEX cueMessages_setAside ON cueMessages(createdAt) WHERE \(CueStore.setAside);"
   static let toDeliverIndex = "CREATE INDEX cueMessages_toDeliver ON cueMessages(createdAt) WHERE \(CueStore.toDeliver);"
   static let stateIndex = "CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince, projectID, id);"
   static let launchTokenIndex = "CREATE INDEX piSessionStates_launchToken ON piSessionStates(launchToken) WHERE launchToken IS NOT NULL;"
@@ -38,7 +35,10 @@ extension Schema {
     \(stamped("cards", when: ["completedAt", "parentID", "todoAt"]))
     \(stamped("deliveryRequests", when: ["status"]))
     \(cueMessageWrites)
+    \(markWrites)
     """
+
+  static let markWrites = stamped("marks", when: ["modifiedAt"])
 
   private static let cueMessageWrites = """
     \(stamped("cueMessages", when: ["answeredRequests"]))

@@ -51,7 +51,7 @@ extension Duty {
         let hot = try await next(p.page2, count: /2 ?个|两个/, page: /价格/, upcoming: /博客|blog/)
         let cold = try await next(p.page3, count: /5 ?个|五个/, page: /博客/, upcoming: /文档|docs/)
         let pickedA = answers([p.widget], to: p.site) == ["A"], keeps = answers([p.widgetAgain], to: p.site) == ["保持 A，接着修占位按钮"]
-        let leftToHim = calls(p.widgetAgain, "tell").contains { $0.args["ask"] != nil } || calls(p.widgetAgain, "task", ["leave"]).contains { !$0.call.failed }
+        let leftToHim = calls(p.widgetAgain, "task", ["leave"]).contains { !$0.call.failed }
         let finishIndex = steps.firstIndex { $0.label == p.finish.label } ?? steps.count
         let loginClosed = calls(p.finish, "task", ["done"]).contains { !$0.call.failed && target($0.args)?.task.id == p.loginTask }
         let startsSendGrid = { (step: Step) in self.calls(step, "task", ["start"]).contains { !$0.call.failed && ($0.call.result ?? "").localizedCaseInsensitiveContains("SendGrid") } }

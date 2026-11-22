@@ -102,13 +102,17 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
 public struct CueDuty: Equatable, Sendable {
   public var name: String
   public var left: [CueLeft]
+  public var tiers: [String: CueTier]
 
-  public init(name: String, left: [CueLeft] = []) {
+  public init(name: String, left: [CueLeft] = [], tiers: [String: CueTier] = [:]) {
     self.name = name
     self.left = left
+    self.tiers = tiers
   }
 
   public func leftToYou(_ session: SessionState) -> Bool { left.contains { $0.holds(for: session) } }
+
+  public func tier(of session: SessionState) -> CueTier { CueTier.of(session, chosen: tiers) }
 }
 
 extension CueState: Record, SyncedColumns {

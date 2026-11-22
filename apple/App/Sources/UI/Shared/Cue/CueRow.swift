@@ -79,8 +79,6 @@ struct CueRow: View, Equatable {
             SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, look: .cue(joined: joined)) { _ in
                 MessageActions(text: message.text, kind: .cue)
             }
-        case .answer(let question, let quoted):
-            CueAnswer(question: question, quoted: quoted, joined: joined)
         case .cue(let message, let task):
             CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, joined: joined)
         case .result(let message, let task):
@@ -89,12 +87,19 @@ struct CueRow: View, Equatable {
             CueNoteLog(rounds: rounds, settled: settled && !unread)
         case .process(_, let touches):
             BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
-                CueTrace(touches: touches).frame(maxWidth: .infinity, alignment: .leading)
+                CueTrace(touches: touches).frame(maxWidth: .infinity, alignment: .leading).onSky()
             }
         }
     }
 
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
+}
+
+extension View {
+    /// 天空上读不清的一块（经过、动静）垫一层玻璃；气泡自己有底，不再垫。
+    func onSky() -> some View {
+        padding(.vertical, Spacing.tight).padding(.horizontal, Spacing.item).glass(in: .rect(cornerRadius: Radius.sheet))
+    }
 }
 
 struct CueEnding: View {

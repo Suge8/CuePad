@@ -245,6 +245,22 @@
         }
       }
     },
+    "%@ 全权" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ decides"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 全权"
+          }
+        }
+      }
+    },
     "%@ 出错了" : {
       "localizations" : {
         "en" : {
@@ -385,6 +401,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ 必须是绝对路径，收到「%2$@」"
+          }
+        }
+      }
+    },
+    "%@ 推进" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ keeps it going"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 推进"
           }
         }
       }
@@ -886,22 +918,6 @@
       },
       "shouldTranslate" : false
     },
-    "%@「%@」？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@: “%2$@”?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@「%2$@」？"
-          }
-        }
-      }
-    },
     "%@前发出" : {
       "localizations" : {
         "en" : {
@@ -1248,34 +1264,6 @@
         }
       }
     },
-    "%lld 个子代理工作中" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagent working"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagents working"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个子代理工作中"
-          }
-        }
-      }
-    },
     "%lld 个工作中" : {
       "localizations" : {
         "en" : {
@@ -1444,78 +1432,6 @@
         }
       }
     },
-    "%lld 件拍板" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld needs your call"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld need your call"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件拍板"
-          }
-        }
-      }
-    },
-    "%lld 件推进中" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld active"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件推进中"
-          }
-        }
-      }
-    },
-    "%lld 件新回复" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld new reply"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld new replies"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件新回复"
-          }
-        }
-      }
-    },
     "%lld 件要你管" : {
       "localizations" : {
         "en" : {
@@ -1664,34 +1580,6 @@
         }
       }
     },
-    "%lld 子代理" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagent"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld subagents"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 子代理"
-          }
-        }
-      }
-    },
     "%lld 小时" : {
       "localizations" : {
         "en" : {
@@ -1704,6 +1592,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 小时"
+          }
+        }
+      }
+    },
+    "%lld 工作中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld working"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 工作中"
           }
         }
       }
@@ -1764,22 +1668,6 @@
         }
       }
     },
-    "%lld 拍板" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld for you"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 拍板"
-          }
-        }
-      }
-    },
     "%lld 推进中" : {
       "localizations" : {
         "en" : {
@@ -1792,34 +1680,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 推进中"
-          }
-        }
-      }
-    },
-    "%lld 新回复" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld new reply"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld new replies"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 新回复"
           }
         }
       }
@@ -2302,12 +2162,6 @@
           }
         }
       }
-    },
-    "9:41" : {
-      "localizations" : {
-
-      },
-      "shouldTranslate" : false
     },
     "<名字>" : {
       "localizations" : {
@@ -3493,22 +3347,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CuePad 的工具服务没连上（%@）"
-          }
-        }
-      }
-    },
-    "CuePad 的资料库没打开，到 App 里看看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad’s library isn’t open. Check the app."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 的资料库没打开，到 App 里看看"
           }
         }
       }
@@ -5255,6 +5093,22 @@
         }
       }
     },
+    "不做判断，帮你推进" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keeps it moving, makes no calls"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不做判断，帮你推进"
+          }
+        }
+      }
+    },
     "不再定时" : {
       "localizations" : {
         "en" : {
@@ -5395,22 +5249,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不提供查询"
-          }
-        }
-      }
-    },
-    "不用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No thanks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不用"
           }
         }
       }
@@ -5891,38 +5729,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从 iCloud 取来"
-          }
-        }
-      }
-    },
-    "以后%@都不用问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Don't ask again about %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以后%@都不用问"
-          }
-        }
-      }
-    },
-    "以后「%@」里%@不用问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Don't ask again about %2$@ in “%1$@”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以后「%1$@」里%2$@不用问"
           }
         }
       }
@@ -6499,22 +6305,6 @@
         }
       }
     },
-    "你的规矩要先问的事" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "things your rules say to ask about"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的规矩要先问的事"
-          }
-        }
-      }
-    },
     "你的话发送中" : {
       "localizations" : {
         "en" : {
@@ -6639,22 +6429,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你说的"
-          }
-        }
-      }
-    },
-    "你说过「%@」。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You said: “%@”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你说过「%@」。"
           }
         }
       }
@@ -7023,22 +6797,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "允许 %1$@ %2$@？"
-          }
-        }
-      }
-    },
-    "允许一次" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Allow Once"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "允许一次"
           }
         }
       }
@@ -7899,22 +7657,6 @@
         }
       }
     },
-    "刚做完「%@」" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Just finished “%@”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刚做完「%@」"
-          }
-        }
-      }
-    },
     "刚刚" : {
       "localizations" : {
         "en" : {
@@ -8055,22 +7797,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除"
-          }
-        }
-      }
-    },
-    "删除文件、分支或数据" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "deleting files, branches, or data"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除文件、分支或数据"
           }
         }
       }
@@ -8391,22 +8117,6 @@
         }
       }
     },
-    "动项目外的东西" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "touching things outside the project"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "动项目外的东西"
-          }
-        }
-      }
-    },
     "升级" : {
       "localizations" : {
         "en" : {
@@ -8563,22 +8273,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原记录不可用，无法继续此操作"
-          }
-        }
-      }
-    },
-    "原话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Original"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原话"
           }
         }
       }
@@ -8819,22 +8513,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发出 Mac 版的下载链接"
-          }
-        }
-      }
-    },
-    "发布或部署" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "releasing or deploying"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发布或部署"
           }
         }
       }
@@ -9247,38 +8925,6 @@
         }
       }
     },
-    "可以" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OK"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以"
-          }
-        }
-      }
-    },
-    "可以%@吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以%@吗？"
-          }
-        }
-      }
-    },
     "可以开始" : {
       "localizations" : {
         "en" : {
@@ -9403,22 +9049,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "合并好了"
-          }
-        }
-      }
-    },
-    "合并进共享分支" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "merging into a shared branch"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合并进共享分支"
           }
         }
       }
@@ -9691,22 +9321,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用 %@"
-          }
-        }
-      }
-    },
-    "启用 %@ 后再答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn on %@ to answer"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用 %@ 后再答"
           }
         }
       }
@@ -11515,22 +11129,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "审查中"
-          }
-        }
-      }
-    },
-    "审美取舍" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "design choices"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "审美取舍"
           }
         }
       }
@@ -13975,22 +13573,6 @@
         }
       }
     },
-    "把常说的做法记成重点" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pinning something you keep telling agents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把常说的做法记成重点"
-          }
-        }
-      }
-    },
     "把技能与规则收到一处" : {
       "localizations" : {
         "en" : {
@@ -14179,6 +13761,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按 Tab 换去处"
+          }
+        }
+      }
+    },
+    "按你的习惯判断，直到做完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decides the way you would, until it's done"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按你的习惯判断，直到做完"
           }
         }
       }
@@ -14451,54 +14049,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "推进中"
-          }
-        }
-      }
-    },
-    "推进中 %lld 件，都空闲" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld active, none running now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推进中 %lld 件，都空闲"
-          }
-        }
-      }
-    },
-    "推送代码" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pushing code"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推送代码"
-          }
-        }
-      }
-    },
-    "提问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Question"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问"
           }
         }
       }
@@ -14879,22 +14429,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收起 %@"
-          }
-        }
-      }
-    },
-    "收起原话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide original"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起原话"
           }
         }
       }
@@ -18735,22 +18269,6 @@
         }
       }
     },
-    "没记" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not saved"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没记"
-          }
-        }
-      }
-    },
     "没连 Wi-Fi" : {
       "localizations" : {
         "en" : {
@@ -19663,22 +19181,6 @@
         }
       }
     },
-    "看 Cue 的原话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Cue's original message"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看 Cue 的原话"
-          }
-        }
-      }
-    },
     "看全文" : {
       "localizations" : {
         "en" : {
@@ -19691,22 +19193,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看全文"
-          }
-        }
-      }
-    },
-    "看图：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look at: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看图：%@"
           }
         }
       }
@@ -21179,6 +20665,22 @@
         }
       }
     },
+    "自己来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mine"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自己来"
+          }
+        }
+      }
+    },
     "自己那份内容相同，换成指向全局规则的链接" : {
       "localizations" : {
         "en" : {
@@ -21699,22 +21201,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记下（↩）"
-          }
-        }
-      }
-    },
-    "记住" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remember this"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记住"
           }
         }
       }
@@ -22479,22 +21965,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "资料库读写出错：%@"
-          }
-        }
-      }
-    },
-    "超出预算" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "going over budget"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "超出预算"
           }
         }
       }
@@ -24659,22 +24129,6 @@
         }
       }
     },
-    "选项" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选项"
-          }
-        }
-      }
-    },
     "通用" : {
       "localizations" : {
         "en" : {
@@ -26239,6 +25693,22 @@
         }
       }
     },
+    "（以下是 %@ 补充的）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(Added by %@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（以下是 %@ 补充的）"
+          }
+        }
+      }
+    },
     "（切前后台、场景更新时没按时答复）" : {
       "localizations" : {
         "en" : {
@@ -26333,22 +25803,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "，%@"
-          }
-        }
-      }
-    },
-    "；" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "; "
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "；"
           }
         }
       }

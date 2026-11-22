@@ -76,6 +76,7 @@ extension MCPTests {
       #expect(try await store.deliveryRequests().count == 2)
 
       let question = Question(promptID: "p", kind: .confirm, text: "继续？")
+      try await store.setTier(.full, of: "s1")
       try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
       let answer = ["action": "say", "task": pi.id.uuidString, "model": "openai/gpt-6-sol", "effort": "low"]
       try await server.refused("task", answer.merging(["text": "也许"]) { $1 })

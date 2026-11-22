@@ -16,9 +16,7 @@ struct CueWaitPick: Equatable {
 /// 手机上按给的高一次挑排法（`CueWaitFit`）。放得下时不进滚动区：滚动区里的按钮按下要晚一下才有反馈。
 struct CueWaitCard: View {
     let pick: CueWaitPick
-    let shots: [CueShown]?
     let counter: AccessibilityFocusState<String?>.Binding
-    let open: (PreviewOpening) -> Void
     @Environment(Workspace.self) private var workspace
     #if os(iOS)
     @Environment(\.palette) private var palette
@@ -32,25 +30,18 @@ struct CueWaitCard: View {
     nonisolated static let lead: CGFloat = 6
 
     #if os(macOS)
-    static func floor(_ wait: CueWait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
-        let pictures = wait.message.flatMap { shots[$0.id] }.map { gap + CueShots.floor(count: $0.count, width: width - 2 * side) } ?? 0
-        return edge + CueWaitEyebrow.height + lead + Typography.titleSize + pictures + gap + ControlSize.compact.height + edge + CueWaitDock.below
-    }
+    static let floor = edge + CueWaitEyebrow.height + lead + Typography.titleSize + gap + ControlSize.compact.height + edge + CueWaitDock.below
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             eyebrow
             Yielding {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Self.gap) {
-                        CueQuestionLine(wait: pick.wait)
-                        pictures
-                    }
-                    .padding(.top, Self.lead)
+                    CueQuestionLine(wait: pick.wait).padding(.top, Self.lead)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }
-            WaitAnswer(wait: pick.wait.wait).padding(.top, Self.gap).layoutPriority(1)
+            WaitAnswer(session: pick.wait.session).padding(.top, Self.gap).layoutPriority(1)
         }
         .padding(.horizontal, Self.side).padding(.bottom, Self.edge)
     }
@@ -59,8 +50,7 @@ struct CueWaitCard: View {
         CueWaitFit {
             eyebrow.fitPart(.sheet, hidden: folded)
             CueQuestionLine(wait: pick.wait).fitPart(.sheet, hidden: folded)
-            pictures.fitPart(.pictures, hidden: folded)
-            WaitAnswer(wait: pick.wait.wait).fitPart(.sheet, hidden: folded)
+            WaitAnswer(session: pick.wait.session).fitPart(.sheet, hidden: folded)
             line.fitFrame()
                 .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: { folded = $0 }
                 .fitRole(.folded, hidden: !folded)
@@ -73,7 +63,7 @@ struct CueWaitCard: View {
         } label: {
             HStack(spacing: Spacing.item) {
                 StateGlyph(status: .asking).font(Typography.title)
-                Text(pick.wait.asked.line).font(Typography.title).foregroundStyle(palette.ink).lineLimit(1)
+                Text(pick.wait.session.asked.line).font(Typography.title).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, Self.side)
@@ -99,18 +89,12 @@ struct CueWaitCard: View {
             counter.wrappedValue = next.id
         }
     }
-
-    @ViewBuilder private var pictures: some View {
-        if let message = pick.wait.message, let shots {
-            CueShots(shots: shots, group: "waiting", reply: .answer(message), chosen: CueShots.chosen(for: message.asking, in: shots), open: open)
-        }
-    }
 }
 
 #if os(iOS)
 /// 手机上卡里几部分按给的高一次排（不用 `ViewThatFits`：它把每一档连同整张卡各建一遍）。
 struct CueWaitFit: Layout {
-    enum Part { case sheet, pictures, folded }
+    enum Part { case sheet, folded }
     struct Role: LayoutValueKey { static let defaultValue = Part.sheet }
 
     private struct Plan {
@@ -132,8 +116,6 @@ struct CueWaitFit: Layout {
         let room = proposal.height ?? .infinity
         let full = stack { _ in true }
         if full.height <= room { return full }
-        let compact = stack { $0 != .pictures }
-        if compact.height <= room { return compact }
         let line = zip(subviews, roles).map { $1 == .folded ? $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height : 0 }
         return Plan(heights: line, height: line.reduce(0, +), folded: true)
     }

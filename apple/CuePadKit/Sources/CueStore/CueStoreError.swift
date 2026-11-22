@@ -49,8 +49,7 @@ public enum CueStoreError: Error, Equatable {
   case memoryLineTooLong(Int)
   case staleMemoryRange
   case cueNotEnabled
-  case questionEnded
-  case notAChoice(String)
+  case questionIsHis(String)
   case phrase(field: String, hint: String, limit: Int)
   case shots(limit: Int)
   case shotMissing(String)
@@ -110,8 +109,7 @@ extension CueStoreError: LocalizedError {
     case .memoryLineTooLong(let limit): String(localized: "一条记忆最多 \(limit) 字节（UTF-8）")
     case .staleMemoryRange: "记忆区间的输入已变化，请读取新视图后重新整理或展开"
     case .cueNotEnabled: "Cue 没有启用"
-    case .questionEnded: String(localized: "这条提问已经结束了")
-    case .notAChoice(let answer): String(localized: "「\(answer)」不是这条提问的选项")
+    case .questionIsHis(let title): "会话「\(title)」在问他，这个会话没交给你全权：它问的由他自己回，没答"
     case .phrase(let field, let hint, let limit): "\(field)：\(hint)，一行、不超过 \(limit) 字"
     case .shots(let limit): "点名的图至多 \(limit) 张、不能重复"
     case .shotMissing(let id): "发到手机的里没有 \(id)"

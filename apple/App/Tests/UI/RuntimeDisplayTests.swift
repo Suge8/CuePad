@@ -128,7 +128,9 @@ struct RuntimeDisplayTests {
             try await recorder.update(sessionID: "extra-\(index)", state: .thinking, title: task.title)
             try await store.bindSession("extra-\(index)", to: task.id)
         }
-        _ = try await store.addCueMessage(.cue, text: "需要确认", ask: try CueAsking(.rule, action: "推送全部并行交付的修复", rule: "提交前需要确认全部并行修改已经验收并通过检查"))
+        try await app.runtimeRecorder(on: "mac-ask").update(
+            sessionID: "ask", state: .waitingForUser, title: "并行交付需要确认",
+            question: Question(promptID: "p", kind: .confirm, text: "提交前需要确认全部并行修改已经验收并通过检查，推送全部并行交付的修复吗？"))
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "mac-b"
             profile.enabledAt = clock.now

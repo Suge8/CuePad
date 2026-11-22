@@ -12,6 +12,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var catalog: AgentCatalog?
     var defaultModel: ModelOption?
     var task: SessionTask?
+    var tier: CueTier?
 
     func fetchingTranscript(at moment: Speech.Moment) -> Bool {
         deliveries.contains { $0.mode == .known(.transcript) && Speech.trip($0, at: moment).inTransit }
@@ -60,7 +61,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
             catalog: try session.flatMap { try store.catalog(of: $0) },
             defaultModel: try session.flatMap { try $0.model == nil ? store.defaultModel(of: $0) : nil },
-            task: item?.task)
+            task: item?.task,
+            tier: try session.flatMap { session in try store.cueProfile()?.activeHost == nil ? nil : CueTier.of(session, chosen: store.chosenTiers()) })
     }
 }
 
@@ -129,7 +131,7 @@ struct QuestionCard: View {
 
     var body: some View {
         Callout(.asking, text: question.text, docked: true) {
-            WaitAnswer(wait: .session(session, task: nil), replyElsewhere: true)
+            WaitAnswer(session: session, replyElsewhere: true)
         }
     }
 }

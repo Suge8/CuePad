@@ -122,6 +122,7 @@ struct EvalBrain {
 
     func enable(_ rig: CueHostTests.Rig) async throws {
         let host = TestApp.hostID
+        try await rig.services.macAgents.record()
         try await rig.store.updateCueProfile { [runtime, model, effort] profile in
             profile.hostID = host
             profile.enabledAt = .now

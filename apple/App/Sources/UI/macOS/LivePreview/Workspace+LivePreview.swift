@@ -6,7 +6,7 @@ import WebKit
 
 extension Workspace {
     func toggleLivePreview() {
-        guard case .wide(var state) = navigation, !state.home, case .session(let session) = state.main else { return }
+        guard case .wide(var state) = navigation, case .session(let session) = state.main else { return }
         if !state.beside.contains(.preview) {
             let preview = livePreviews[session.id] ?? LivePreview()
             preview.sessionID = preview.sessionID ?? session.sessionID

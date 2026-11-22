@@ -6,23 +6,19 @@ import SwiftUI
 /// 它嵌在自己的托管视图里（`WideColumnHost`）：在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）。
 struct CueColumn: View {
     let fits: Bool
-    let home: Bool
-    let lead: CGFloat
 
     var body: some View {
-        CuePage(grounded: !fits)
+        CuePage()
             .safeAreaPadding(.top, CueTitle.band)
-            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits, home: home)))
-            .overlay(alignment: .top) { CueTitle(fits: fits, home: home, lead: lead) }
-            .cuePanel(fits: fits, home: home)
+            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits)))
+            .overlay(alignment: .top) { CueTitle(fits: fits) }
+            .cuePanel(fits: fits)
             .ignoresSafeArea(.container, edges: .top)
     }
 }
 
 struct CueTitle: View {
     let fits: Bool
-    let home: Bool
-    let lead: CGFloat
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pageActive) private var active
@@ -35,7 +31,7 @@ struct CueTitle: View {
         let shape = RoundedRectangle(cornerRadius: PlateStyle.column.height / 2)
         VStack(spacing: 0) {
             Button { toggle() } label: {
-                CuePlate(card: open, style: .column, reserve: home || open ? 0 : Self.fold, opens: open ? nil : false).frame(width: Self.width)
+                CuePlate(card: open, style: .column, reserve: open ? 0 : Self.fold, opens: open ? nil : false).frame(width: Self.width)
             }
             .buttonStyle(PressStyle(.button))
             .allowsHitTesting(!open)
@@ -52,7 +48,7 @@ struct CueTitle: View {
         .glass(in: shape)
         .grownInPlace(isPresented: $open) { toggle(to: false) }
         .overlay(alignment: .topTrailing) {
-            if !home, !open {
+            if !open {
                 Button("收起右栏", icon: .rightColumn) { workspace.hideCue(fits: fits) }
                     .labelStyle(.iconOnly)
                     .buttonStyle(ControlButtonStyle(kind: .icon))
@@ -62,7 +58,7 @@ struct CueTitle: View {
                     .transition(.opacity)
             }
         }
-        .padding(.horizontal, home ? lead : Spacing.page)
+        .padding(.horizontal, Spacing.page)
         .padding(.top, (Self.band - PlateStyle.column.height) / 2)
         .frame(maxWidth: .infinity)
         .frame(height: Self.band, alignment: .top)

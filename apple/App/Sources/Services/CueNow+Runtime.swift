@@ -164,8 +164,7 @@ nonisolated struct RuntimeTimeline {
             source.works.firstIndex { CueTally.holds($0, task: task, session: session.sessionID) }
         }
         for waiting in source.waiting {
-            guard case .session(let session, let task) = waiting else { continue }
-            let index = owner(task, session)
+            let session = waiting.session, index = owner(waiting.task, session)
             if let index { works[index].held += 1 }
             if let due = session.runtimeUntil {
                 events[due, default: []].append(Removal(work: index, asks: 1, visible: waiting.id))
@@ -187,10 +186,7 @@ nonisolated struct RuntimeTimeline {
             if work.unknown > 0 { unconfirmed = true }
         }
         subagents = sessions.reduce(0) { $0 + $1.contribution }
-        waiting = source.waiting.map { wait in
-            let until: Date? = if case .session(let session, _) = wait { session.runtimeUntil } else { nil }
-            return (until, CueNow.wait(wait, name: digest.name))
-        }
+        waiting = source.waiting.map { ($0.session.runtimeUntil, CueNow.wait($0)) }
         dates = events.keys.sorted()[...]
         freezeTimes()
     }

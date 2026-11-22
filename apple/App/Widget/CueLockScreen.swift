@@ -1,5 +1,4 @@
 #if os(iOS)
-import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -30,7 +29,7 @@ private struct Poster {
         } else if let reply = take(.reply) {
             head = .item(reply)
         } else if now.tally.moving > 0 {
-            head = .count(now.advancing)
+            head = .count(now.tally.moving)
             step = switch now.cue {
             case .working(let woke, let doing, _): doing ?? woke ?? CueNow.thinking
             case .hearing: String(localized: "你的话在路上")
@@ -41,11 +40,27 @@ private struct Poster {
             head = .item(done)
             tone = .done
         } else {
-            head = .line(now.quietLine)
+            head = .line(Self.quietLine(now))
         }
         self.tone = stale ? .quiet : tone
         self.step = step
         rows = Array(items.prefix(4))
+    }
+
+    private static func quietLine(_ now: CueNow) -> String {
+        switch now.cue {
+        case .away(let reason, _): reason
+        case .hearing: String(localized: "你的话在路上")
+        case .working(let woke, let doing, _): doing ?? woke ?? CueNow.thinking
+        case .idle:
+            if now.unconfirmed {
+                String(localized: "状态未确认")
+            } else if let counts = Dotted(now.counts.map(\.words)).nonEmpty {
+                counts.visible
+            } else {
+                now.elsewhere ?? String(localized: "手上没有事")
+            }
+        }
     }
 
     var eyebrow: CueNow.Item.Kind? {
@@ -129,10 +144,10 @@ struct CueLockScreen: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(count, format: .number).font(IslandType.posterBig).monospacedDigit().foregroundStyle(signal.ink)
                     .contentTransition(.numericText())
-                Text("推进中").font(IslandType.posterHeadWord).foregroundStyle(signal.soft)
+                Text("工作中").font(IslandType.posterHeadWord).foregroundStyle(signal.soft)
             }
             .frame(height: 44)
-            .accessibilityElement(children: .ignore).accessibilityLabel(now.spoken)
+            .accessibilityElement(children: .ignore).accessibilityLabel(Text("\(count) 工作中"))
         case .line(let line):
             Text(line).font(IslandType.posterTitle).foregroundStyle(signal.ink).lineLimit(1)
         }
@@ -140,18 +155,8 @@ struct CueLockScreen: View {
 
     @ViewBuilder private func under(_ poster: Poster, _ signal: Palette.Signal) -> some View {
         switch poster.head {
-        case .wait(let wait):
-            if let allow = wait.allow {
-                HStack(spacing: 12) {
-                    AllowTick(allow: allow, fill: signal.ink, tick: signal.fill, size: CGSize(width: 72, height: 44))
-                    if let since = now.clock {
-                        Text("已等 \(ActivityElapsed.text(since: since))").font(IslandType.posterTime).foregroundStyle(signal.soft).lineLimit(1)
-                    }
-                }
-                .padding(.top, 4)
-            } else if let since = now.clock {
-                big(since, signal)
-            }
+        case .wait:
+            if let since = now.clock { big(since, signal) }
         case .item(let item):
             if item.kind != .done { big(item.since, signal) }
         case .count:

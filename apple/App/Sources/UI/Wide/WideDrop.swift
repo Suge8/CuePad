@@ -182,6 +182,7 @@ struct WideSessionTitle: View {
     let title: String
     let project: Project?
     var ended = false
+    var tier: CueTierButton?
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(\.wideWindowID) private var windowID
@@ -229,6 +230,7 @@ struct WideSessionTitle: View {
                     .padding(.leading, Spacing.tight)
                     .transition(.opacity)
             }
+            if let tier { tier.padding(.leading, Spacing.tight) }
             if closes { PaneClose { workspace.closeColumn(column) } }
         }
         .font(Typography.toolbarTitle)

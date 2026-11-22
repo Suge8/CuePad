@@ -95,7 +95,7 @@ extension CueKeeper {
 
     func ready(_ pending: [CueMessage]) -> [CueMessage] {
         pending.filter { message in
-            guard message.author == .known(.you), !unfetchable.contains(message.id) else { return true }
+            guard !unfetchable.contains(message.id) else { return true }
             let missing = CueFormat.attachmentKeys(in: message.text).filter { store.files.fileURL(for: $0) == nil }
             guard !missing.isEmpty else { return true }
             if fetchingFiles[message.id] == nil {

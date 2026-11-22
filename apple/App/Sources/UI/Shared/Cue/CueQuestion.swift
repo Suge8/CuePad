@@ -1,57 +1,28 @@
 import CueStore
 import SwiftUI
 
-struct CueQuestionLine<Below: View>: View {
-    enum Tone { case card, ended }
-
+struct CueQuestionLine: View {
     let question: String
     let note: String?
-    var tone = Tone.card
-    @ViewBuilder var below: Below
-    @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
+
+    init(wait: CueWait) {
+        (question, note) = wait.session.asked
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            if tone != .ended { StateGlyph(status: .asking).font(Typography.title).readerHidden(true) }
+            StateGlyph(status: .asking).font(Typography.title).readerHidden(true)
             VStack(alignment: .leading, spacing: Spacing.tight) {
-                VStack(alignment: .leading, spacing: Spacing.tight) {
-                    line.fixedSize(horizontal: false, vertical: true)
-                    if let note {
-                        Text(CueQuestionLine<EmptyView>.keepingTail(note)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
-                    }
+                Text(Self.keepingTail(question)).font(Typography.title).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                if let note {
+                    Text(Self.keepingTail(note)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel([question, note].compactMap(\.self).joined(separator: "，"))
-                below
             }
-            if tone == .card { Spacer(minLength: 0) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel([question, note].compactMap(\.self).joined(separator: "，"))
+            Spacer(minLength: 0)
         }
-    }
-
-    @ViewBuilder private var line: some View {
-        let line = Text(CueQuestionLine<EmptyView>.keepingTail(question))
-        switch tone {
-        case .card: line.font(Typography.title).foregroundStyle(palette.ink)
-        case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(readingSpacing)
-        }
-    }
-}
-
-extension CueQuestionLine {
-    init(message: CueMessage, tone: Tone = .card, @ViewBuilder below: () -> Below) {
-        self.init(question: message.headline ?? "", note: message.asking?.why, tone: tone, below: below)
-    }
-}
-
-extension CueQuestionLine where Below == EmptyView {
-    init(message: CueMessage, tone: Tone = .card) {
-        self.init(message: message, tone: tone) { EmptyView() }
-    }
-
-    init(wait: CueWait) {
-        let asked = wait.asked
-        self.init(question: asked.line, note: asked.detail) { EmptyView() }
     }
 
     /// 只给显示：句尾最后 4 个字（汉字一个算一个，英文单词、数字一整段算一个，不算标点）连同其间与其后的标点粘成一块，
@@ -75,81 +46,9 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-struct CueChoices: View {
-    let message: CueMessage
-    var disabled = false
-    let pick: (String) -> Void
-    var decline: (() -> Void)?
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.palette) private var palette
-
-    #if os(macOS)
-    static let onceWidth: CGFloat = 96
-    #else
-    static let onceWidth: CGFloat = 88
-    #endif
-    private static let inset = 2 * ControlSize.regular.padding
-
-    var body: some View {
-        let cue = workspace.cue, paused = !cue.canHear, accessible = typeSize.isAccessibilitySize, options = message.choices ?? []
-        let side = VStack(alignment: accessible ? .trailing : .leading, spacing: 0) {
-            if paused { note(String(localized: "启用 \(cue.name) 后再答")) }
-            if !paused { ForEach(options.dropFirst(), id: \.self) { link($0) } }
-        }
-        .multilineTextAlignment(accessible ? .trailing : .leading)
-        let primary = HStack(spacing: Spacing.item) {
-            if !paused, let decline, message.asking?.ask.declinable == true {
-                Button(action: decline) { Image(.close) }.buttonStyle(ControlButtonStyle(kind: .round)).accessibilityLabel("不用").disabled(disabled)
-            }
-            once(options.first ?? CueAsk.once, paused: paused)
-        }
-        .fixedSize()
-        if accessible {
-            VStack(alignment: .trailing, spacing: Spacing.tight) {
-                primary
-                side
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        } else {
-            HStack(spacing: Spacing.group) {
-                side
-                Spacer(minLength: 0)
-                primary
-            }
-        }
-    }
-
-    private func link(_ option: String) -> some View {
-        Button { pick(option) } label: {
-            Text(message.shownChoice(option)).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-                .padding(.vertical, Self.linkInset).contentShape(.rect)
-        }
-        .buttonStyle(PressStyle(.inline))
-        .disabled(disabled)
-    }
-
-    private static let linkInset = Spacing.glyph
-
-    private func note(_ text: String) -> some View {
-        Text(text).font(Typography.meta).foregroundStyle(palette.ink2)
-    }
-
-    private func once(_ option: String, paused: Bool) -> some View {
-        Button { pick(option) } label: {
-            Image(.checked).font(Glyph.large.weight(.semibold)).frame(minWidth: Self.onceWidth - Self.inset)
-        }
-        .buttonStyle(ControlButtonStyle(kind: paused ? .secondary : .primary))
-        .accessibilityLabel(message.shownChoice(option))
-        .disabled(disabled || paused)
-    }
-}
-
 struct CueShots: View {
     let shots: [CueShown]
     let group: String
-    var reply: PreviewReply?
-    var chosen: UUID?
     let open: (PreviewOpening) -> Void
     @Environment(\.palette) private var palette
 
@@ -168,21 +67,15 @@ struct CueShots: View {
 
     static func floor(count: Int, width: CGFloat) -> CGFloat { count == 0 ? 0 : cell(count: count, width: width) }
 
-    static func chosen(for asking: CueAsking?, in shots: [CueShown]) -> UUID? {
-        guard let action = asking?.action, shots.count > 1 else { return nil }
-        let named = shots.filter { action.contains($0.look.split(separator: "：", maxSplits: 1).first ?? "") }
-        return named.count == 1 ? named[0].id : nil
-    }
-
     var body: some View {
         let batch = shots.map(\.preview), looks = Dictionary(uniqueKeysWithValues: shots.map { ($0.id, $0.look) })
         ShotRow {
             ForEach(shots) { shot in
                 VStack(alignment: .leading, spacing: Spacing.item) {
                     DeliverableTile(
-                        preview: shot.preview, label: shot.look, shape: .shot(side: Self.side, chosen: shot.id == chosen), captioned: false,
+                        preview: shot.preview, label: shot.look, shape: .shot(side: Self.side), captioned: false,
                         zoom: PreviewZoomKey(group: group, preview: shot.id)
-                    ) { open(PreviewOpening(preview: $0, batch: batch, group: group, reply: reply, looks: looks)) }
+                    ) { open(PreviewOpening(preview: $0, batch: batch, group: group, looks: looks)) }
                     caption(shot.look)
                 }
             }

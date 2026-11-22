@@ -34,7 +34,7 @@ nonisolated enum CueBeat: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    /// 全身的那张叫什么：Cue 页舞台画 "cue-stage-" 接它（200pt），锁屏的实时活动画 "cue-pose-" 接它（`CuePoses`，同一张缩到 140pt：
+    /// 全身的那张叫什么：Cue 页的天空上画 "cue-stage-" 接它（`CueSky`，200pt），锁屏的实时活动画 "cue-pose-" 接它（`CuePoses`，同一张缩到 140pt：
     /// 实时活动里比那一块还大的图系统可能不画）。
     var pose: String {
         switch self {

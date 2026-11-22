@@ -7,7 +7,6 @@ nonisolated enum WidgetIcon: String, Sendable {
     case mail
     case agent
     case done
-    case tick
     case session
     case relay
 

@@ -52,7 +52,7 @@ private struct CueView: View {
             CueNowFace(now: now, size: family == .systemSmall ? 48 : 52, badge: true, rim: palette.desk)
             Spacer(minLength: 0)
             Text(now.name).font(.headline).lineLimit(1)
-            CueLedger(now: now, gap: 6).font(.footnote)
+            CueLedger(now: now).font(.footnote)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

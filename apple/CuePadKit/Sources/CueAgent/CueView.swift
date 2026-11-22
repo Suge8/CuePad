@@ -10,16 +10,12 @@ public enum CueView {
   static let roundLimit = 300
 
   public static func render(_ messages: [CueMessage]) -> String? {
-    var plain: [Int: String] = [:]
     var kept: [Entry] = [], total = 0
-    for slot in slots(messages).reversed() {
-      let message = messages[slot.order]
-      let text = plain[slot.order] ?? CueEnvelope.clip(CueFormat.plainText(message.text), Int.max)
-      plain[slot.order] = text
-      guard let line = line(slot, message, text) else { continue }
+    for message in messages.reversed() {
+      guard let line = line(message, CueEnvelope.clip(CueFormat.plainText(message.text), Int.max)) else { continue }
       total += line.count
       guard total <= budget else { break }
-      kept.append(Entry(at: slot.at, text: line))
+      kept.append(Entry(at: message.createdAt, text: line))
     }
     guard !kept.isEmpty else { return nil }
     let calendar = Calendar(identifier: .gregorian)
@@ -41,44 +37,12 @@ public enum CueView {
     var text: String
   }
 
-  private struct Slot {
-    var at: Date
-    var order: Int
-    var answer = false
-  }
-
-  private static func slots(_ messages: [CueMessage]) -> [Slot] {
-    var slots: [Slot] = []
-    for (order, message) in messages.enumerated() {
-      switch message.author.known {
-      case .you:
-        if message.deliveredAt != nil { slots.append(Slot(at: message.createdAt, order: order)) }
-      case .cue:
-        slots.append(Slot(at: message.createdAt, order: order))
-        if message.answer != nil, let answeredAt = message.answeredAt, let delivered = message.deliveredAt, delivered >= answeredAt {
-          slots.append(Slot(at: answeredAt, order: order, answer: true))
-        }
-      case .note, .round:
-        slots.append(Slot(at: message.createdAt, order: order))
-      case nil:
-        continue
-      }
-    }
-    return slots.sorted { ($0.at, $0.order, $0.answer ? 1 : 0) < ($1.at, $1.order, $1.answer ? 1 : 0) }
-  }
-
-  private static func line(_ slot: Slot, _ message: CueMessage, _ text: String) -> String? {
+  private static func line(_ message: CueMessage, _ text: String) -> String? {
     switch message.author.known {
-    case .you:
-      return "他：" + text.clipped(hisLimit)
-    case .cue:
-      guard !text.isEmpty else { return nil }
-      if slot.answer { return "他在卡上选了「\(message.answer!)」：答「\(text.clipped(40))」" }
-      return message.choices.map { "你问他：\(text.clipped(yourLimit))（选项：\($0.joined(separator: " / "))）" } ?? "你：" + text.clipped(yourLimit)
-    case .note, .round:
-      return round(message.tools)
-    case nil:
-      return nil
+    case .you: message.deliveredAt == nil ? nil : "他：" + text.clipped(hisLimit)
+    case .cue: text.isEmpty ? nil : "你：" + text.clipped(yourLimit)
+    case .note, .round: round(message.tools)
+    case nil: nil
     }
   }
 

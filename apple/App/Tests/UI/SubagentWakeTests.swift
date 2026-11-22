@@ -62,6 +62,7 @@ struct SubagentWakeTests {
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("修好登录页 子代理停住", in: project.id)
         try await store.linkCard(task.id, toSession: "remote-1")
+        try await store.setTier(.full, of: "remote-1")
         let his = try await store.createTask("修好注册页 他那一轮", in: project.id)
         try await store.linkCard(his.id, toSession: "remote-his")
         let due = rig.clock.now.addingTimeInterval(60)
@@ -87,7 +88,7 @@ struct SubagentWakeTests {
         #expect(woke.count == 1)
         let stalled = try #require(woke.first)
         #expect(stalled.startedAt >= due)
-        #expect(stalled.sent.first?.contains("[等子代理 20 分钟没动静] 修好登录页 子代理停住（\(task.id.shortID)）：ui：bash · swift test") == true, "\(stalled.sent)")
+        #expect(stalled.sent.first?.contains("[等子代理 20 分钟没动静] 修好登录页 子代理停住（\(task.id.shortID)）（全权）：ui：bash · swift test") == true, "\(stalled.sent)")
         #expect(stalled.sent.first?.contains("[等子代理 20 分钟没动静] 修好注册页") == false, "\(stalled.sent)")
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
 
@@ -105,6 +106,7 @@ struct SubagentWakeTests {
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("修好登录页 子代理停住 先出两次错", in: project.id)
         try await store.linkCard(task.id, toSession: "remote-2")
+        try await store.setTier(.full, of: "remote-2")
         let due = rig.clock.now.addingTimeInterval(60)
         let ui = SubagentState(
             name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,

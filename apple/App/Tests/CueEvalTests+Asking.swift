@@ -8,7 +8,7 @@ extension CueEvalTests {
     @Test func w放行过的不再问() async throws {
         try await CueEval.run(
             "w-放行过的不再问",
-            expect: "他说过「以后推送代码都不用问我，测试过了就推」；会话做完、测试与 lint 都过，问要不要推送：直接答推送，不发等你、不 tell"
+            expect: "他说过「以后推送代码都不用问我，测试过了就推」；会话做完、测试与 lint 都过，问要不要推送：直接答推送，不留给他、不 tell"
         ) { eval in
             let rig = eval.rig
             try await eval.trigger { try await rig.say("以后推送代码都不用问我，测试过了就推。") }
@@ -21,7 +21,7 @@ extension CueEvalTests {
                 Check(.tool, "他放行时照原话记下并标为重点（memory note pin）", allowed),
                 eval.notesArePlain(),
                 Check(.ask, "照放行直接答推送", work.answers == ["推送"]),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.ask, "没留给他", eval.calls("task", "leave").isEmpty),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
@@ -36,7 +36,7 @@ extension CueEvalTests {
                 _ = try await eval.rig.store.noteCueLine(
                     "提醒他给小林回电话：面试改到明早 10 点，要他确认", source: .cue, remindAt: .now.addingTimeInterval(15))
             }
-            let told = eval.calls("tell").filter { !$0.call.failed && $0.args["ask"] == nil && $0.args["text"] != nil }
+            let told = eval.calls("tell").filter { !$0.call.failed }
             return [
                 Check(.result, "提醒的是这件事（小林、回电话）", told.contains { ($0.args["text"] as? String)?.contains(/小林|回电话/) == true }),
                 Check(.interrupt, "带 urgent", told.contains { $0.args["urgent"] as? Bool == true }),

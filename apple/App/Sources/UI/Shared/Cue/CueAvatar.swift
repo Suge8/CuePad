@@ -53,7 +53,7 @@ struct CueAvatar: View {
         Image(beat.still).resizable().scaledToFit()
             .frame(width: size.side * 1.45).offset(y: size.side * 0.08)
             .frame(width: size.side, height: size.side, alignment: .top)
-            .background(palette.paper)
+            .background(plate ? palette.paper : .clear)
             .clipShape(.circle)
             .cueMarks(size: size.side, beat: beat)
     }

@@ -27,7 +27,7 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "done", "task": a.id.uuidString, "evidence": ["完成"]])
       #expect(try await store.card(a.id)?.status == .done)
       #expect(try await store.card(b.id)?.status == .todo)
-      #expect(try await server.refused("task", ["action": "unknown"]) == "task 没有 unknown：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+      #expect(try await server.refused("task", ["action": "unknown"]) == "task 没有 unknown：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done / tier")
     }
   }
 
@@ -126,11 +126,10 @@ extension MCPTests {
       let evidence = ["登录测试 12 个全过", "截图里错误提示对上了"]
       for _ in 0..<2 { _ = try await server.call("task", ["action": "done", "task": task.id.uuidString, "evidence": evidence]) }
       #expect(try await store.card(task.id)?.status == .done)
-      #expect(try await store.cueMessagesWaitingForYou().isEmpty)
       let reports = try await store.cueMessages().filter { $0.author == .known(.cue) }
       #expect(reports.count == 1)
       let report = try #require(reports.first)
-      #expect(report.choices == nil && report.taskID == task.id)
+      #expect(report.taskID == task.id)
       #expect(report.text == "「修好登录页」做完了\n\n- 登录测试 12 个全过\n- 截图里错误提示对上了")
       let ends = try await store.deliveryRequests().filter { $0.mode == .known(.end) }
       #expect(ends.compactMap(\.target.ref) == ["s1"] && ends.allSatisfy { $0.isFromCue && $0.hostID == "mac-a" })

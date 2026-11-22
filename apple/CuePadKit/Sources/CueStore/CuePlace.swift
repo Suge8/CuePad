@@ -12,9 +12,8 @@ public struct CuePlace: Codable, Equatable, Sendable {
 
   static func key(session: String) -> String { "session:" + session }
   static func key(task: UUID) -> String { "task:" + task.uuidString.lowercased() }
-  static func key(project: UUID) -> String { "project:" + project.uuidString.lowercased() }
 
-  static func capture(task: UUID?, wake: CueWake?, project: UUID? = nil, in db: SQLite) throws -> [String: CuePlace] {
+  static func capture(task: UUID?, wake: CueWake?, in db: SQLite) throws -> [String: CuePlace] {
     var sessions: [String] = [], tasks: [UUID] = task.map { [$0] } ?? []
     if case .sessionActivity(let stirs)? = wake {
       for stir in stirs {
@@ -33,9 +32,6 @@ public struct CuePlace: Codable, Equatable, Sendable {
         name: card.heading.isEmpty ? nil : card.heading, status: card.status.map(Open.known),
         steps: steps.map { Steps(done: $0.done, total: $0.total) })
     }
-    if let project, let name = try db.first("SELECT name FROM projects WHERE id = ?", [project], { $0.text(0) }) {
-      places[key(project: project)] = CuePlace(name: name)
-    }
     return places
   }
 }
@@ -43,19 +39,4 @@ public struct CuePlace: Codable, Equatable, Sendable {
 extension CueMessage {
   public func place(session: String) -> CuePlace? { places[CuePlace.key(session: session)] }
   public func place(task: UUID) -> CuePlace? { places[CuePlace.key(task: task)] }
-
-  public var shownChoices: [String]? { choices.map { $0.map(shownChoice) } }
-
-  public func shownChoice(_ choice: String) -> String {
-    CueAsked.shownChoice(choice, choices: choices, asked: asked, places: places)
-  }
-}
-
-extension CueAsked {
-  public static func shownChoice(_ choice: String, choices: [String]?, asked: CueAsked?, places: [String: CuePlace]) -> String {
-    guard let ask = asked?.ask.known, let index = choices?.firstIndex(of: choice) else { return choice }
-    guard index > 0 else { return CueAsk.once }
-    let project = asked?.project.map { id in places[CuePlace.key(project: id)]?.name.map { Project.shownName(id: id, name: $0) } ?? "" }
-    return ask.always(in: project) ?? choice
-  }
 }

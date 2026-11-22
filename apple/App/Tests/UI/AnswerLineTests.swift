@@ -11,35 +11,6 @@ struct AnswerLineTests {
 
     private func thread() async throws -> CueThread { try await CueThread.read(from: store) }
 
-    @Test func Cue的提问_答完在答的那一刻留下你的回答() async throws {
-        let workspace = Workspace(services: app.services)
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let task = try await store.createTask("发言轮次乱序", in: project.id)
-        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "把发言顺序的修复推送到 origin/main"), task: task.id)
-        let delete = try await store.addCueMessage(.cue, text: "要删掉旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/billing-legacy 目录"))
-        let gone = try await store.addCueMessage(.cue, text: "要发布吗？", ask: try CueAsking(.release, action: "发布 1.4.3"))
-        for index in 0..<CueThread.limit { _ = try await store.addCueMessage(.cue, text: "第 \(index) 句") }
-        _ = try await store.addCueMessage(.cue, text: "重连用例我也补上了。")
-
-        try await workspace.services.answerCueQuestion(push.id, CueAsk.once)
-        let always = try #require(delete.choices?.last)
-        try await workspace.services.answerCueQuestion(delete.id, always)
-        _ = try await store.endCueQuestion(gone.id, .withdrawn)
-
-        let thread = try await thread()
-        let rows = thread.rows.suffix(3)
-        guard case .cue(let later, _) = rows.first, case .answer(let first, quoted: true) = rows.dropFirst().first, case .answer(let second, quoted: true) = rows.last
-        else { Issue.record("最后是 Cue 后来那句与你的两条回答：\(thread.rows.map(\.id))"); return }
-        #expect(later.text == "重连用例我也补上了。")
-        #expect(first.id == push.id && first.answer == CueAsk.once && thread.rows.prefix(2).map(\.id) == [push.id, delete.id])
-        #expect(first.asking?.question == "可以把发言顺序的修复推送到 origin/main 吗？")
-        #expect(second.id == delete.id && second.answer == always)
-        #expect(!thread.rows.contains { if case .answer(let question, _) = $0 { question.id == gone.id } else { false } })
-        #expect(thread.rows.last?.speaker == .trailing)
-        #expect(thread.marks.map(\.preview).suffix(2) == [CueAsk.once, always].map { ChatMark.firstLine($0) })
-        #expect(thread.waiting.isEmpty)
-    }
-
     @Test func 会话的提问_答完在答的那一刻留下你的回答() async throws {
         let recorder = StateRecorder(store: store, hostID: "mac")
         let question = Question(promptID: "p-1", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml"])

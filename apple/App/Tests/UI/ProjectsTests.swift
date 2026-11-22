@@ -14,7 +14,7 @@ struct ProjectsTests {
         Task { await workspace.follow() }
     }
 
-    @Test func 启动在Cue_主区留着项目列表_失效设置清掉_数字键按当下顺序取() async throws {
+    @Test func 启动时主区是进展_失效设置清掉_数字键按当下顺序取() async throws {
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
         try await store.updateProject(pinned.id) { $0.isPinned = true }
@@ -24,13 +24,13 @@ struct ProjectsTests {
         let catalog = observing(workspace)
         defer { await catalog.stop() }
         try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
-        #expect(workspace.mainRoute == .shelf)
+        #expect(workspace.mainRoute == .progress)
 
         services.settings.currentProject = pinned.id
         let fresh = Workspace(services: services)
         let freshCatalog = observing(fresh)
         defer { await freshCatalog.stop() }
-        #expect(fresh.cueHome && fresh.mainRoute == .shelf && fresh.shownPane == nil)
+        #expect(fresh.mainRoute == .progress && fresh.shownPane == .progress)
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
         try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }
@@ -50,10 +50,10 @@ struct ProjectsTests {
         await #expect(throws: CueStoreError.defaultProjectUndeletable) { try await store.trashProject(Project.defaultID) }
         let only = Workspace(services: services)
         await only.reconcileCurrentProject()
-        #expect(only.mainRoute == .shelf && services.settings.currentProject == nil)
+        #expect(only.mainRoute == .progress && services.settings.currentProject == nil)
     }
 
-    @Test func 并排着回到Cue再变窄_只剩Cue_没回Cue时两个会话都在栈里() {
+    @Test func 并排着变窄_两个会话都在栈里() {
         let workspace = Workspace(services: services)
         workspace.openSession(UUID(), sessionID: "a")
         workspace.openSession(UUID(), sessionID: "b", in: .aside)
@@ -61,13 +61,6 @@ struct ProjectsTests {
 
         workspace.setLayout(.narrow)
         #expect(workspace.navigation.trail == "cue > session > session")
-
-        workspace.setLayout(.wide)
-        workspace.openSession(UUID(), sessionID: "a")
-        workspace.openSession(UUID(), sessionID: "b", in: .aside)
-        workspace.goHome()
-        workspace.setLayout(.narrow)
-        #expect(workspace.navigation.trail == "cue")
     }
 
     @Test func 进展选了项目_全部归档只归档这个项目做完的_选全部才归档别的() async throws {
@@ -112,7 +105,7 @@ struct ProjectsTests {
         #expect(task.projectID == Project.defaultID && workspace.notice?.isError == true)
     }
 
-    @Test func 别处删掉正看着的项目_主区回到项目列表_Cue铺满时只换下面那页() async throws {
+    @Test func 别处删掉正看着的项目_主区回到项目列表() async throws {
         let shown = try await store.createProject(name: "A", color: "#000000"), under = try await store.createProject(name: "B", color: "#000000")
         let workspace = Workspace(services: services)
         let catalog = observing(workspace)
@@ -121,13 +114,6 @@ struct ProjectsTests {
         workspace.show(.project(shown.id))
         try await store.trashProject(shown.id)
         try await eventually("主区离开 A") { workspace.mainRoute == .shelf }
-        #expect(!workspace.cueHome)
-
-        workspace.show(.project(under.id))
-        workspace.goHome()
-        try await store.trashProject(under.id)
-        try await eventually("留着的那页换成项目列表") { workspace.mainRoute == .shelf }
-        #expect(workspace.cueHome)
     }
 
     @Test func 别处删掉正编辑的卡_编辑收起_主区留在项目() async throws {
@@ -218,7 +204,6 @@ struct ProjectsNavigationTests {
         #expect(pad.mainRoute == .project(project.id))
         try await store.trashProject(project.id)
         try await eventually("主区离开项目") { pad.mainRoute == .shelf }
-        #expect(!pad.cueHome)
     }
 }
 #endif

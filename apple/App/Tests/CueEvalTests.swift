@@ -36,7 +36,6 @@ struct CueEvalTests {
                 Check(.result, "开工（开出了会话）", rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
                 Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
                 Check(.interrupt, "回复不报模型与强度", reply.map { !reportsConfig($0.text) } == true),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.ask, "没问用户", reply.map { !$0.text.contains("？") && !$0.text.contains("?") } == true),
                 Check(.interrupt, "他发起的一轮不另 tell", eval.calls("tell").isEmpty),
             ]
@@ -89,7 +88,7 @@ struct CueEvalTests {
     }
 
     @Test func i按规矩先问() async throws {
-        try await CueEval.run("i-按规矩先问", expect: "他交代过「以后改数据库结构前先问我」，会话要执行建表迁移才能往下做：不替他答应，请他允许（tell 带 ask=rule 关联任务）") { eval in
+        try await CueEval.run("i-按规矩先问", expect: "他交代过「以后改数据库结构前先问我」，会话要执行建表迁移才能往下做：不替他答应，留给他（task leave），不 tell") { eval in
             try await eval.trigger { try await eval.rig.say("以后改数据库结构前先问我") }
             let work = try await eval.rig.working(Self.title, Self.body)
             try await eval.trigger {
@@ -97,22 +96,17 @@ struct CueEvalTests {
                     work, said: "重置令牌要存进新表 password_resets（令牌哈希、过期时间、是否已用），迁移脚本 20261019_add_password_resets 写好了，不建表后端没法往下做。",
                     question: "要执行迁移 20261019_add_password_resets 吗？", options: ["执行", "先不"])
             }
-            let asked = try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id }
             return [
                 Check(.ask, "没替他答应执行迁移", !work.answers.contains("执行")),
-                Check(.ask, "按规矩请他允许（等你关联到这件任务）", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "rule" }),
-                Check(.tool, "卡片写得出要做的动作与哪条规矩（迁移或建表、数据库）", try await eval.said().contains { message in
-                    guard let asking = message.asking else { return false }
-                    return asking.action.contains(/迁移|表/) && asking.rule?.contains("数据库") == true
-                }),
-                Check(.tool, "text 不写分类名（rule）", !eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("rule") == true }),
+                Check(.ask, "按规矩留给他（task leave）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.interrupt, "没 tell", eval.calls("tell").isEmpty),
                 eval.notesArePlain(),
             ]
         }
     }
 
     @Test func j不拿规矩兜底() async throws {
-        try await CueEval.run("j-不拿规矩兜底", expect: "会话做完后端、问要不要接着做前端（正文里本来就要做）：他的规矩（改数据库结构前先问）与这一步无关，Cue 自己让它接着做，不发等你") { eval in
+        try await CueEval.run("j-不拿规矩兜底", expect: "会话做完后端、问要不要接着做前端（正文里本来就要做）：他的规矩（改数据库结构前先问）与这一步无关，Cue 自己让它接着做，不留给他") { eval in
             try await eval.trigger { try await eval.rig.say("以后改数据库结构前先问我") }
             let work = try await eval.rig.working(Self.title, Self.body)
             try await eval.trigger {
@@ -122,7 +116,7 @@ struct CueEvalTests {
             }
             return [
                 Check(.result, "对会话 say 让它继续", !eval.calls("task", "say").isEmpty),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
+                Check(.ask, "没留给他", eval.calls("task", "leave").isEmpty),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]
         }

@@ -75,26 +75,16 @@ import Testing
     #expect(settled.title == "homepage 新回复" && settled.body == "结论 改好了，feed.xml 没动。 测试全过")
   }
 
-  @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
+  @Test func aCueMessageFlaggedForPushIsRewrittenFromTheDecryptedRecord() async throws {
     let rig = try Rig()
     try await rig.store.updateCueProfile { $0.name = "小管家" }
-    let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).png")
-    try Data("png".utf8).write(to: file)
-    let shot = try #require(try await rig.store.addPreviews([(file, "登录页")], sessionID: "s1").first).preview
-    let message = try await rig.store.addCueMessage(
-      .cue, text: "要合并到 main 吗？", ask: try CueAsking(.merge, action: "把登录页修复合并进 main"),
-      shots: [CueShot(preview: shot.id, look: "改后的登录页")])
+    let message = try await rig.store.addCueMessage(.cue, text: "登录页的证书**过期了**，要你续一下", urgent: true)
 
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(message.id)))
-    #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == "要合并到 main 吗？" && record["ask"] as? String == "merge")
+    #expect(record["notify"] as? String == "cue" && record.encryptedValues["text"] as? String == message.text)
     let profile = try #require(try await rig.coordinator.record(for: CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: zone)))
     let text = try #require(CueAlertText.content(message: record, profile: profile))
-    #expect(text.title == "小管家" && text.body == "可以把登录页修复合并进 main 吗？\n看图：改后的登录页\n可以 / 以后合并进共享分支都不用问")
-
-    try await rig.simulatePush()
-    try await rig.store.endCueQuestion(message.id, .answered(CueAsk.once))
-    let answered = try #require(try await rig.coordinator.record(for: rig.recordID(message.id)))
-    #expect(answered["notify"] == nil && answered.encryptedValues["answer"] as? String == CueAsk.once)
+    #expect(text.title == "小管家" && text.body == "登录页的证书过期了，要你续一下")
   }
 
   // MARK: 到不到你
@@ -117,8 +107,8 @@ import Testing
     #expect(CueAlertText.content(message: record, profile: nil)?.body == "登录页修好了，测试全过")
 
     let round = Date.now
-    let card = try await rig.store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送登录页的修复"))
-    #expect(try await flag(rig, card.id) == "cue")
+    let urgent = try await rig.store.addCueMessage(.cue, text: "证书过期了，要你续一下", urgent: true)
+    #expect(try await flag(rig, urgent.id) == "cue")
     #expect(try await flag(rig, reply("问你了", startedAt: round)) == "said")
 
     try await rig.store.recordMacPresence(host: "mac") { true }
@@ -159,7 +149,7 @@ import Testing
     #expect(try await flag(rig, session) == nil)
     try await round(his: "顺便把限流加上")
     #expect(try await flag(rig, session) == nil)
-    _ = try await rig.store.leaveHisStops(after: 0)
+    _ = try await rig.store.leaveStopsCueSkips(after: 0)
     let left = try #require(try await rig.store.cueDuty()?.left.first)
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(session)))

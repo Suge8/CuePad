@@ -10,7 +10,6 @@ extension Workspace {
             remember(route)
             state.main = WideNavigation.Main(route)
         }
-        state.home = false
         cueDrawer = false
         railDrawer = false
         navigation = .wide(state)
@@ -22,20 +21,7 @@ extension Workspace {
         #if os(macOS)
         presses.clearSelection()
         #endif
-        if case .wide(var state) = navigation, state.home {
-            state.home = false
-            navigation = .wide(state)
-        }
         overlay = page
-    }
-
-    func goHome() {
-        guard case .wide(var state) = navigation, !state.home else { return }
-        openTask = nil
-        state.home = true
-        cueDrawer = false
-        railDrawer = false
-        navigation = .wide(state)
     }
 
     func toggleRail(_ sizes: WideMetrics) {
@@ -68,12 +54,16 @@ extension Workspace {
 
     func hideCue(fits: Bool) {
         cueDrawer = false
-        if fits, !cueHome { services.settings.cueOpen = false }
+        if fits { services.settings.cueOpen = false }
     }
 
     func cueShown(_ sizes: WideMetrics) -> Bool { sizes.cue > 0 || !sizes.cueFits && cueDrawer }
 
-    func toggleCue(_ sizes: WideMetrics) {
+    var cueVisible: Bool { wideSizes.map(cueShown) ?? false }
+
+    /// 右栏放得下时开合它，放不下时拉出、收起抽屉：会话条上的 Cue 格与 ⌃⌘I 同一个动作。
+    func toggleCue() {
+        guard let sizes = wideSizes else { return }
         if cueShown(sizes) { hideCue(fits: sizes.cueFits) } else { showCue() }
     }
 
@@ -94,7 +84,6 @@ extension Workspace {
             state.beside.removeAll { $0 == .session(session) }
             state.main = .session(session)
         }
-        state.home = false
         presentWide(state)
     }
 
@@ -144,8 +133,7 @@ extension Workspace {
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
         if state.mainSession == nil, column == .main {
-            state.main = .browse
-            state.home = true
+            state.main = .empty
         } else {
             state.close(at: column.index)
         }

@@ -7,6 +7,7 @@ extension CueTools {
     let board = try await store.cueBoard()
     let left = try await store.cueState()?.left ?? []
     let schedules = try await store.cueScheduleLines()
+    let tiers = try await store.chosenTiers()
     let recent = try await store.cueRecentlyDone(limit: Self.recentlyDone)
     let items = board.tasks
     let names = Dictionary(uniqueKeysWithValues: try await store.projects().map { ($0.id, $0.name) })
@@ -17,11 +18,11 @@ extension CueTools {
         group = item.task.projectID
         lines.append(((names[item.task.projectID] ?? "") + "：", false))
       }
-      lines.append(("- " + CueEnvelope.boardLine(item, now: now, left: left, schedules: schedules), true))
+      lines.append(("- " + CueEnvelope.boardLine(item, now: now, left: left, tiers: tiers, schedules: schedules), true))
     }
     if !board.sessions.isEmpty {
       lines.append(("不归没做完的事的会话：", false))
-      lines += board.sessions.map { ("- " + CueEnvelope.sessionLine($0, now: now, left: left), true) }
+      lines += board.sessions.map { ("- " + CueEnvelope.sessionLine($0, now: now, left: left, tiers: tiers), true) }
     }
     let total = items.count + board.sessions.count
     let room = Self.overviewLimit - 1 - (recent.isEmpty ? 0 : recent.count + 1)
@@ -32,7 +33,7 @@ extension CueTools {
     }
     if !recent.isEmpty {
       lines.append(("最近完成的（他接着交代其中一件的下一步：edit 加子任务再 start；在它的会话上做另一件事：add 带 session）：", false))
-      lines += recent.map { ("- \($0.task.heading)（\($0.task.id.shortID)） · " + CueEnvelope.sessionLine($0.session, now: now), true) }
+      lines += recent.map { ("- \($0.task.heading)（\($0.task.id.shortID)） · " + CueEnvelope.sessionLine($0.session, now: now, left: [], tiers: tiers), true) }
     }
     return .ok(
       (total == 0 ? "没有没做完的事。" : "没做完的 \(total) 件，在做 \(board.active.count) 件：")

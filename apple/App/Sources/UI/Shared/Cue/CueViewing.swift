@@ -5,8 +5,6 @@ struct CueViewing: ViewModifier {
     let catchingUp: Bool
     @Binding var seen: [UUID: Date]
     @Binding var follow: ChatFollow
-    let staged: Bool
-    let revisit: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.pageActive) private var active
@@ -28,18 +26,14 @@ struct CueViewing: ViewModifier {
         content
             .onAppear { appeared = true }
             .onDisappear {
-                if watching { services.settings.cueLeft = .now }
                 appeared = false
                 services.viewer.showCue(false, by: token)
             }
-            .onChange(of: watching, initial: true) { was, on in
+            .onChange(of: watching, initial: true) { _, on in
                 services.viewer.showCue(on, by: token)
-                guard on else {
-                    if was { services.settings.cueLeft = .now }
-                    return
-                }
+                guard on else { return }
                 follow.oweLanding()
-                if !was, CueStage.opens(left: services.settings.cueLeft, at: .now) { revisit() } else { land() }
+                land()
             }
             .onChange(of: reading && thread != nil) { _, start in if start { land() } }
             .onChange(of: thread?.unread) { land() }
@@ -52,7 +46,7 @@ struct CueViewing: ViewModifier {
     }
 
     private func land() {
-        guard follow.owesLanding, reading, !staged, let thread else { return }
+        guard follow.owesLanding, reading, let thread else { return }
         let first: UUID?
         do { first = try services.store.snapshot { try $0.cueUnread().first }.value } catch {
             workspace.fail(error)

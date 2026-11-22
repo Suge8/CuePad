@@ -4,8 +4,6 @@ import SwiftUI
 struct CueWaitDock: View {
     let waiting: [CueWait]
     let asking: String?
-    let shots: [UUID: [CueShown]]
-    let open: (PreviewOpening) -> Void
     @Binding var moving: Bool
     #if os(iOS)
     @Environment(Workspace.self) private var workspace
@@ -21,11 +19,9 @@ struct CueWaitDock: View {
     @State private var level: CGFloat
     @State private var watching = Date.now
 
-    init(waiting: [CueWait], asking: String?, shots: [UUID: [CueShown]], open: @escaping (PreviewOpening) -> Void, moving: Binding<Bool>) {
+    init(waiting: [CueWait], asking: String?, moving: Binding<Bool>) {
         self.waiting = waiting
         self.asking = asking
-        self.shots = shots
-        self.open = open
         _moving = moving
         _shown = State(initialValue: Self.pick(in: waiting, asking: asking))
         _level = State(initialValue: waiting.isEmpty ? 0 : 1)
@@ -85,7 +81,7 @@ struct CueWaitDock: View {
     }
 
     private func card(_ pick: CueWaitPick) -> some View {
-        let card = CueWaitCard(pick: pick, shots: pick.wait.message.flatMap { shots[$0.id] }, counter: $counter, open: open)
+        let card = CueWaitCard(pick: pick, counter: $counter)
             .frame(maxWidth: .infinity, alignment: .leading)
         #if os(iOS)
             .contentShape(.rect(cornerRadius: Radius.field))

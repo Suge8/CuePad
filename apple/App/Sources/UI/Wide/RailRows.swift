@@ -54,19 +54,33 @@ struct RailTool: View {
     let icon: Icon
     let help: LocalizedStringResource
     let action: () -> Void
-    @Environment(\.palette) private var palette
 
     static var lead: CGFloat { RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2 }
 
     var body: some View {
-        Button(action: action) {
-            Image(icon).font(Glyph.control).foregroundStyle(palette.ink2)
+        Button(action: action) { Label { Text(help) } icon: { Image(icon) } }
+            .railTool()
+            .help(Text(help))
+    }
+}
+
+extension View {
+    /// 侧栏底下那排钮的样子：只画图标，次要字的颜色，按下的底比图标宽一圈；点开菜单的钮（`Menu`）同一个样子。
+    func railTool() -> some View { labelStyle(RailToolLabel()).menuStyle(.button).buttonStyle(PressStyle(.button)) }
+}
+
+private struct RailToolLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View { Face(icon: configuration.icon) }
+
+    private struct Face<Icon: View>: View {
+        let icon: Icon
+        @Environment(\.palette) private var palette
+
+        var body: some View {
+            icon.font(Glyph.control).foregroundStyle(palette.ink2)
                 .frame(width: ControlSize.compact.height, height: ControlSize.compact.height)
                 .contentShape(.circle)
         }
-        .buttonStyle(PressStyle(.button))
-        .help(Text(help))
-        .accessibilityLabel(Text(help))
     }
 }
 
@@ -77,7 +91,7 @@ struct RailHome: View {
     var body: some View {
         let cue = workspace.cue, moving = cue.now.tally.moving
         HStack(spacing: Spacing.item) {
-            tile(Text(verbatim: cue.name), selected: workspace.cueHome) { workspace.goHome() } content: {
+            tile(Text(verbatim: cue.name), selected: workspace.cueVisible) { workspace.toggleCue() } content: {
                 CueAvatar(cue.beat, size: .card, plate: false).overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
             }
             tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } content: {
@@ -221,7 +235,7 @@ struct RailSessions: View {
     }
 
     private var projectsHeader: some View {
-        let selected = workspace.mainRoute == .shelf && !workspace.cueHome
+        let selected = workspace.mainRoute == .shelf
         return Button { workspace.selectPane(.projects) } label: {
             HStack(spacing: Spacing.glyph) {
                 Text("项目").fontWeight(selected ? .semibold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
@@ -237,7 +251,7 @@ struct RailSessions: View {
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
-        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id) && !workspace.cueHome, open: expanded.contains(project.id)) {
+        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id), open: expanded.contains(project.id)) {
             workspace.show(.project(project.id))
             expand { $0.insert(project.id) }
         } toggle: {

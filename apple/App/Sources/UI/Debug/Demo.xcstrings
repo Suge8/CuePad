@@ -273,22 +273,6 @@
         }
       }
     },
-    "1.4.2 在预发分支上打好包了，要部署到预发吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1.4.2 is built on the staging branch. Deploy to staging?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1.4.2 在预发分支上打好包了，要部署到预发吗？"
-          }
-        }
-      }
-    },
     "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？" : {
       "localizations" : {
         "en" : {
@@ -333,22 +317,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "6 人 · 按首次加入时间排"
-          }
-        }
-      }
-    },
-    "6 人同时重连的压测" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stress test of six people reconnecting at once"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "6 人同时重连的压测"
           }
         }
       }
@@ -535,22 +503,6 @@
         }
       }
     },
-    "README 换成新截图" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "README uses the new screenshots"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "README 换成新截图"
-          }
-        }
-      }
-    },
     "README 的截图也交给你，换成 Swift 版的样子，参考这张" : {
       "localizations" : {
         "en" : {
@@ -727,22 +679,6 @@
         }
       }
     },
-    "staging.roundtable.app · 今天 10:12" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "staging.roundtable.app · Today 10:12"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "staging.roundtable.app · 今天 10:12"
-          }
-        }
-      }
-    },
     "| 用例 %lld | %@ | %lld ms | 第 %lld 轮的第 %lld 个检查 |" : {
       "localizations" : {
         "en" : {
@@ -771,22 +707,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "| 用例 | 结果 | 耗时 | 说明 |"
-          }
-        }
-      }
-    },
-    "• 重连后保留原来的轮次" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "• Keep the original turn order after reconnecting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "• 重连后保留原来的轮次"
           }
         }
       }
@@ -1287,38 +1207,6 @@
         }
       }
     },
-    "以后「圆桌」里推送代码不用问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Don’t ask again about pushing code in “Roundtable”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以后「圆桌」里推送代码不用问"
-          }
-        }
-      }
-    },
-    "以后不用问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Don’t ask again"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以后不用问"
-          }
-        }
-      }
-    },
     "以指针为锚点换算平移" : {
       "localizations" : {
         "en" : {
@@ -1347,22 +1235,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "优化回收站性能\n\n回收站在 {{数据量}} 条时明显卡顿，先测量再优化。"
-          }
-        }
-      }
-    },
-    "你在三个会话里都交代过少写测试，要我记成重点吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You've asked for fewer tests in three sessions. Should I keep that as a key point?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你在三个会话里都交代过少写测试，要我记成重点吗？"
           }
         }
       }
@@ -1491,38 +1363,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "修复拖入图片\n\n拖入 HEIC 时缩略图空白。"
-          }
-        }
-      }
-    },
-    "修复验过了，三处证据都在。要合并进 main 吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fix verified; all three pieces of evidence are in. Merge into main?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "修复验过了，三处证据都在。要合并进 main 吗？"
-          }
-        }
-      }
-    },
-    "修好" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fixed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "修好"
           }
         }
       }
@@ -1959,22 +1799,6 @@
         }
       }
     },
-    "删掉 scripts/billing-legacy 目录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete scripts/billing-legacy"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删掉 scripts/billing-legacy 目录"
-          }
-        }
-      }
-    },
     "剪产品演示短片" : {
       "localizations" : {
         "en" : {
@@ -2071,22 +1895,6 @@
         }
       }
     },
-    "压测" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stress test"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "压测"
-          }
-        }
-      }
-    },
     "压缩当前上下文，可附上说明" : {
       "localizations" : {
         "en" : {
@@ -2135,22 +1943,6 @@
         }
       }
     },
-    "发言计时到点会轻震一下" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A light buzz when speaking time is up"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发言计时到点会轻震一下"
-          }
-        }
-      }
-    },
     "发言轮次乱序" : {
       "localizations" : {
         "en" : {
@@ -2179,22 +1971,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发言顺序修复"
-          }
-        }
-      }
-    },
-    "发言顺序修好了，测试都过了。要推送到 origin/main 吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaking order is fixed and tests pass. Push to origin/main?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发言顺序修好了，测试都过了。要推送到 origin/main 吗？"
           }
         }
       }
@@ -2279,22 +2055,6 @@
         }
       }
     },
-    "可以推送 scheduler 的重连修复吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Push the scheduler reconnect fix?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以推送 scheduler 的重连修复吗？"
-          }
-        }
-      }
-    },
     "可以推送 v1.4 到 TestFlight 吗？" : {
       "localizations" : {
         "en" : {
@@ -2307,22 +2067,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可以推送 v1.4 到 TestFlight 吗？"
-          }
-        }
-      }
-    },
-    "同一时刻入座按座位号排" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Same-time seats sorted by number"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同一时刻入座按座位号排"
           }
         }
       }
@@ -3543,22 +3287,6 @@
         }
       }
     },
-    "少写测试，只写真正重要的，举证不全就删" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fewer tests, only ones that matter"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "少写测试，只写真正重要的，举证不全就删"
-          }
-        }
-      }
-    },
     "就像排队上厕所：建索引要把整张表锁一下，可前面有人一直占着没出来，它只能在门口等。占着的人走了，它马上就能进去。" : {
       "localizations" : {
         "en" : {
@@ -4071,22 +3799,6 @@
         }
       }
     },
-    "把 1.4.2 部署到预发环境" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deploy 1.4.2 to staging"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把 1.4.2 部署到预发环境"
-          }
-        }
-      }
-    },
     "把 Notion 页面导出成 Markdown" : {
       "localizations" : {
         "en" : {
@@ -4151,38 +3863,6 @@
         }
       }
     },
-    "把发言顺序的修复合并进 main" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Merge speaking order fix"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把发言顺序的修复合并进 main"
-          }
-        }
-      }
-    },
-    "把发言顺序的修复推送到 origin/main" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Push order fix to origin/main"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把发言顺序的修复推送到 origin/main"
-          }
-        }
-      }
-    },
     "把报价单备份到网盘" : {
       "localizations" : {
         "en" : {
@@ -4227,38 +3907,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把登录回调改走统一网关，改完跑一遍集成测试"
-          }
-        }
-      }
-    },
-    "把登录回调的超时修复推送到 origin/main" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Push login timeout fix"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把登录回调的超时修复推送到 origin/main"
-          }
-        }
-      }
-    },
-    "把登录页的修复推送到 origin/main" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Push login page fix"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把登录页的修复推送到 origin/main"
           }
         }
       }
@@ -4551,22 +4199,6 @@
         }
       }
     },
-    "按方案 1 决定单改提问卡" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rework ask card per option 1"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按方案 1 决定单改提问卡"
-          }
-        }
-      }
-    },
     "按清单检查并部署到生产" : {
       "localizations" : {
         "en" : {
@@ -4839,102 +4471,6 @@
         }
       }
     },
-    "提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I redrew the ask card in three directions, all in the message below. Pick one. I’d go with 1: one tap and you’re done."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。"
-          }
-        }
-      }
-    },
-    "提问卡我重画了四个方向，你挑一个。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I redrew the ask card in four directions. Pick one."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问卡我重画了四个方向，你挑一个。"
-          }
-        }
-      }
-    },
-    "提问卡方案 1：决定单" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ask card option 1: Decision sheet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问卡方案 1：决定单"
-          }
-        }
-      }
-    },
-    "提问卡方案 2：对话里问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ask card option 2: Ask in thread"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问卡方案 2：对话里问"
-          }
-        }
-      }
-    },
-    "提问卡方案 3：郑重放行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ask card option 3: Solemn approval"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问卡方案 3：郑重放行"
-          }
-        }
-      }
-    },
-    "提问卡方案 4：抽屉" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ask card option 4: Drawer"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问卡方案 4：抽屉"
-          }
-        }
-      }
-    },
     "撤销栈合并连续拖拽" : {
       "localizations" : {
         "en" : {
@@ -5111,54 +4647,6 @@
         }
       }
     },
-    "改前 / 改后" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Before / After"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改前 / 改后"
-          }
-        }
-      }
-    },
-    "改前改后" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Before and After"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改前改后"
-          }
-        }
-      }
-    },
-    "改前改后的发言顺序" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speaking order before and after"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改前改后的发言顺序"
-          }
-        }
-      }
-    },
     "改动说明.md" : {
       "localizations" : {
         "en" : {
@@ -5303,22 +4791,6 @@
         }
       }
     },
-    "改进" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Improved"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改进"
-          }
-        }
-      }
-    },
     "数据.xlsx" : {
       "localizations" : {
         "en" : {
@@ -5431,22 +4903,6 @@
         }
       }
     },
-    "断线重连后保留发言轮次" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Turn order kept after reconnecting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "断线重连后保留发言轮次"
-          }
-        }
-      }
-    },
     "新分支叫什么？" : {
       "localizations" : {
         "en" : {
@@ -5475,70 +4931,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建、打磨或审查界面"
-          }
-        }
-      }
-    },
-    "方案 1 决定单：大按钮占满一行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option 1, decision sheet: big buttons fill the row"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方案 1 决定单：大按钮占满一行"
-          }
-        }
-      }
-    },
-    "方案 2 对话里问：按钮贴输入框" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option 2, ask in thread: buttons sit by the input"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方案 2 对话里问：按钮贴输入框"
-          }
-        }
-      }
-    },
-    "方案 3 郑重放行：滑过去才同意" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option 3, solemn approval: slide to agree"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方案 3 郑重放行：滑过去才同意"
-          }
-        }
-      }
-    },
-    "方案 4 抽屉：从底下拉出来" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Option 4, drawer: pulls up from the bottom"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方案 4 抽屉：从底下拉出来"
           }
         }
       }
@@ -5619,22 +5011,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "旧方案：轮询会话状态\n\n每两秒查一次，耗电。"
-          }
-        }
-      }
-    },
-    "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The `scripts/billing-legacy` directory has no callers left, and CI no longer runs it. Delete it?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？"
           }
         }
       }
@@ -6119,22 +5495,6 @@
         }
       }
     },
-    "测试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tests"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "测试"
-          }
-        }
-      }
-    },
     "测试只用替身，不向别的应用发键鼠事件" : {
       "localizations" : {
         "en" : {
@@ -6275,22 +5635,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "渲染"
-          }
-        }
-      }
-    },
-    "滑过去，可以 ›" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Slide to allow ›"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滑过去，可以 ›"
           }
         }
       }
@@ -6467,22 +5811,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录回调改走统一网关"
-          }
-        }
-      }
-    },
-    "登录回调的修复验过了，要**推送到 origin/main** 吗？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The login callback fix is verified. Push to **origin/main**?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登录回调的修复验过了，要**推送到 origin/main** 吗？"
           }
         }
       }
@@ -8583,22 +7911,6 @@
         }
       }
     },
-    "重连用例全部通过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All reconnect cases pass"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重连用例全部通过"
-          }
-        }
-      }
-    },
     "重连用例加了几个？" : {
       "localizations" : {
         "en" : {
@@ -8787,38 +8099,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "预发"
-          }
-        }
-      }
-    },
-    "预发 1.4.2" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Staging 1.4.2"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "预发 1.4.2"
-          }
-        }
-      }
-    },
-    "预发 1.4.2 要上的四处改动" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The four changes going out in staging 1.4.2"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "预发 1.4.2 要上的四处改动"
           }
         }
       }

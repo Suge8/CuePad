@@ -21,7 +21,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         self.waiting = waiting
         self.shots = shots
         self.unread = unread
-        let rows = Self.rows(messages, waiting: Set(waiting.compactMap(\.message?.id)), shots: shots, lines: lines)
+        let rows = Self.rows(messages, shots: shots, lines: lines)
         self.rows = rows
         let stamps = Self.stamps(rows)
         self.stamps = stamps
@@ -31,18 +31,15 @@ nonisolated struct CueThread: Equatable, Sendable {
         marks = ChatMark.enough(rows.compactMap { row in
             switch row {
             case .you(let message): ChatMark(id: message.id, kind: .said, preview: ChatMark.firstLine(message.text))
-            case .answer(let question, _): ChatMark(id: row.id, kind: .said, preview: ChatMark.firstLine(question.answer ?? ""))
             case .cue, .result, .notes, .process: nil
             }
         })
     }
 
     static func read(from store: isolated CueStore) throws -> CueThread {
-        let recent = try store.cueMessages(limit: limit)
-        let messages = try store.cueQuestionsAnswered(outside: recent) + recent
-        let waits = try CueWait.read(try store.cueWaiting(), from: store)
-        let waiting = waits.compactMap(\.message)
-        let pointed = (messages + waiting).filter { !$0.shots.isEmpty }
+        let messages = try store.cueMessages(limit: limit)
+        let waits = try CueWait.read(try store.cueWaiting(), handed: try store.cueDuty(), from: store)
+        let pointed = messages.filter { !$0.shots.isEmpty }
         let previews = try store.previews(Set(pointed.flatMap { $0.shots.map(\.preview) }))
         var shots: [UUID: [CueShown]] = [:]
         for message in pointed {
@@ -59,7 +56,6 @@ nonisolated struct CueThread: Equatable, Sendable {
 
     enum Row: Identifiable, Equatable, Sendable {
         case you(CueMessage)
-        case answer(CueMessage, quoted: Bool)
         case cue(CueMessage, task: UUID?)
         case result(CueMessage, task: UUID)
         case notes([CueNoteRound])
@@ -68,7 +64,6 @@ nonisolated struct CueThread: Equatable, Sendable {
         var id: UUID {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _), .process(let message, _): message.id
-            case .answer(let question, _): Self.answerID(of: question.id)
             case .notes(let rounds): rounds[0].id
             }
         }
@@ -76,7 +71,6 @@ nonisolated struct CueThread: Equatable, Sendable {
         var date: Date {
             switch self {
             case .you(let message), .cue(let message, _), .result(let message, _), .process(let message, _): message.createdAt
-            case .answer(let question, _): question.answeredAt ?? question.createdAt
             case .notes(let rounds): rounds[0].date
             }
         }
@@ -85,23 +79,17 @@ nonisolated struct CueThread: Equatable, Sendable {
             if case .notes(let rounds) = self { rounds[rounds.count - 1].date } else { date }
         }
 
-        static func answerID(of question: UUID) -> UUID {
-            var bytes = question.uuid
-            bytes.0 ^= 0xA5
-            return UUID(uuid: bytes)
-        }
-
         var taskID: UUID? {
             switch self {
             case .cue(_, let task): task
             case .result(_, let task): task
-            case .you, .answer, .notes, .process: nil
+            case .you, .notes, .process: nil
             }
         }
 
         var speaker: HorizontalEdge? {
             switch self {
-            case .you, .answer: .trailing
+            case .you: .trailing
             case .cue: .leading
             case .result, .notes, .process: nil
             }
@@ -124,26 +112,15 @@ nonisolated struct CueThread: Equatable, Sendable {
     }
 
     private static func rows(
-        _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: CueMemoryLine]
+        _ messages: [CueMessage], shots: [UUID: [CueShown]], lines: [UUID: CueMemoryLine]
     ) -> [Row] {
-        var answers = messages.enumerated().filter { $0.element.answer != nil && $0.element.answeredAt != nil }
-            .sorted { ($0.element.answeredAt!, $0.offset) < ($1.element.answeredAt!, $1.offset) }.map(\.element)[...]
         var shown = Set<UUID>()
         var rows: [Row] = []
-        func placeAnswers(before time: Date?) {
-            while let next = answers.first, time.map({ next.answeredAt! < $0 }) ?? true {
-                let follows = if case .cue(let asked, _) = rows.last { asked.id == next.id } else { false }
-                rows.append(.answer(next, quoted: !follows))
-                answers.removeFirst()
-            }
-        }
         for message in messages {
-            placeAnswers(before: message.createdAt)
             switch message.author.known {
             case .you: rows.append(.you(message))
             case .cue:
-                if waiting.contains(message.id) { continue }
-                if message.choices == nil, shots[message.id] != nil, let id = message.taskID {
+                if shots[message.id] != nil, let id = message.taskID {
                     shown.insert(id)
                     rows.append(.result(message, task: id))
                     continue
@@ -165,7 +142,6 @@ nonisolated struct CueThread: Equatable, Sendable {
             case nil: break
             }
         }
-        placeAnswers(before: nil)
         return rows.compactMap { row in
             guard case .notes(let rounds) = row else { return row }
             let shown = rounds.filter { !$0.isEmpty }

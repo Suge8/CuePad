@@ -26,15 +26,12 @@ extension CueEvalTests {
     @Test func f3说话被拒() async throws {
         try await CueEval.run(
             "f3-说话被拒",
-            expect: "他在卡上允许推送，会话开在另一台 Mac 上、那台不在线，say 被拒：回复照结果里的原因（那台不在线）说没送到，不许诺之后再发、不猜别的原因"
+            expect: "他在 Cue 页说推送，会话开在另一台 Mac 上、那台不在线，say 被拒：回复照结果里的原因（那台不在线）说没送到，不许诺之后再发、不猜别的原因"
         ) { eval in
             let rig = eval.rig
             let task = try await rig.store.createTask("\(Self.title)\n\(Self.body)", in: try Self.demo(rig).id)
             try await Self.remoteSession(rig, bound: task, reply: Self.pushReady)
-            let card = try await rig.store.addCueMessage(
-                .cue, text: "登录页的忘记密码做好了，测试与 lint 都过，要推送吗？", ask: try CueAsking(.push, action: "推送登录页的忘记密码"), task: task.id)
-            let allow = try #require(card.choices?.first)
-            try await eval.trigger { try await rig.services.answerCueQuestion(card.id, allow) }
+            try await eval.trigger { try await rig.say("「\(Self.title)」做好了就推送吧") }
             return try await Self.refusalChecks(eval)
         }
     }

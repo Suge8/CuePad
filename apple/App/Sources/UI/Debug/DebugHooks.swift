@@ -34,9 +34,7 @@ enum DebugHooks {
         var scheduleOpen = false
         var mergePreview = false
         var cuePanelOpen = false
-        /// Cue 页打开时舞台开着（true）或收着（false），nil 照上次离开的时刻定（`-CuePadCueStage`）。
-        var cueStage: Bool?
-        /// 舞台的天空钉成哪个时段（`-CuePadCueSky`，`CueStage.Period`）。
+        /// Cue 页的天空钉成哪个时段（`-CuePadCueSky`，`CueSky.Period`）。
         var cueSky: String?
         /// 贴这一边的边缘索引一出现就展开成面板（`-CuePadIndexOpen`）。
         var indexOpen: HorizontalEdge?

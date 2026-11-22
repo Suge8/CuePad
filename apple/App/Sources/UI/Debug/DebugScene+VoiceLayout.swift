@@ -29,7 +29,6 @@ extension DebugScene {
                 try await store.markCueMessagesDelivered([request.id])
                 _ = try await store.addCueMessage(.cue, text: String(localized: "**演示结果 \(index + 1)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo"), answeredRequests: [request.id])
             }
-            if let ask = args.cueOpts.ask { try await seedAsk(ask, store: store, task: nil) }
             if let draft = args.cueOpts.draft { workspace.cue.draft.text = draft }
             for await ready in Observations({ workspace.cue.canHear }) where ready { break }
             workspace.showCue()

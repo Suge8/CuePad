@@ -37,7 +37,7 @@ import Testing
     try await store.recordQuota(
       QuotaReport(provider: "anthropic", windows: [QuotaWindow(seconds: 18_000, used: 0.2, resetsAt: .now)], complete: true,
         account: PiAccount(kind: .oauth, scope: "mapping-account")), host: "mac")
-    try await store.addCueMessage(.cue, text: "要发布吗？", ask: try CueAsking(.release, action: "发布 1.4"), urgent: true, task: card.id)
+    try await store.addCueMessage(.cue, text: "1.4 打好了，装机验一下", urgent: true, task: card.id)
     try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
     try await store.updateCueProfile { $0.hostID = "mac" }
     try await store.setCueState(.tool, detail: "建任务 · 修好登录页")

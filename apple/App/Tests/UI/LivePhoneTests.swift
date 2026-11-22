@@ -162,9 +162,6 @@ struct LivePhoneTests {
         workspace.toggleLivePreview()
         #expect(previewWidth() < 1600, "收起过就不再铺满")
 
-        workspace.goHome()
-        try await show("live")
-        try await eventually("Cue 铺满着时也让出来") { if case .wide(let state) = workspace.navigation { !state.home } else { false } }
         workspace.showEditor(UUID())
         try await show("live")
         try await eventually("盖着编辑页时揭开") { workspace.overlay == nil }

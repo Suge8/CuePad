@@ -33,6 +33,7 @@ import Testing
     try await store.linkCard(open.id, toSession: "s1")
     try await store.linkCard(done.id, toSession: "s1")
     try await store.setStatus(done.id, .done)
+    try await store.setTier(.full, of: "s1")
     let since = CueMarks(try await store.lastWrite())
 
     try await store.runtimeRecorder(on: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")

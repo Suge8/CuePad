@@ -20,11 +20,19 @@ public struct CueChange: Equatable, Sendable {
   public var detail: String?
   public var recap: Recap?
   public var interrupted = false
+  public var tier: CueTier?
 }
 
 extension SessionState {
   var atStop: Bool { runtimeState.known?.isStopped == true && (runtimeState != .known(.settled) || answered) }
-  var hisTurn: Bool { turnOpener?.cue == false }
+
+  func reachesCue(_ tier: CueTier) -> Bool {
+    switch tier {
+    case .yours: false
+    case .push: state != .known(.waitingForUser)
+    case .full: true
+    }
+  }
 }
 
 public struct CueMarks: Codable, Equatable, Sendable {

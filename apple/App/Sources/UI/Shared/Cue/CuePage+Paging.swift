@@ -30,8 +30,7 @@ extension CuePage {
     private static func covered(_ thread: CueThread, size: CGSize) -> CGFloat {
         #if os(macOS)
         let composer = ComposerMetrics.textTop + ComposerMetrics.textBottomOpen + ComposerMetrics.slot
-        let floor = thread.waiting.map { CueWaitCard.floor($0, shots: thread.shots, width: min(size.width, readingWidth) - 2 * inset) }.min() ?? 0
-        let dock = min(floor, size.height / 2)
+        let dock = thread.waiting.isEmpty ? 0 : min(CueWaitCard.floor, size.height / 2)
         return composer + Spacing.replyBottom + dock
         #else
         0
@@ -49,8 +48,7 @@ extension CuePage {
         func answer(_ text: String) -> CGFloat { TextFloor.markdown(text, width: width(CueBubble.cueWidth), spacing: Typography.readingLineSpacing) }
         let body: CGFloat = switch row {
         case .you(let message): bubble + said(message.text)
-        case .answer(let question, let quoted): bubble + (quoted ? note + 6 : 0) + said(question.answer ?? "")
-        case .cue(let message, _): bubble + answer(message.asking?.question ?? message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
+        case .cue(let message, _): bubble + answer(message.text) + (shots == 0 ? 0 : 8 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)))
         case .result(let message, _):
             bubble + answer(message.text) + 12 + CueShots.floor(count: shots, width: width(CueBubble.cueWidth)) + 12 + CueTaskLine.lineHeight
         case .notes: CueNoteRows.height

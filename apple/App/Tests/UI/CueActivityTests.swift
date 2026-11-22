@@ -8,7 +8,7 @@ struct CueActivityTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func Cue此刻是岛与Cue那一行的同一份_允许一次后下一件接上_没活了就结束() async throws {
+    @Test func Cue此刻是岛与Cue那一行的同一份_等你的答了就接着跑_没活了就结束() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let release = try await store.createTask("发布 v1.4", in: project.id)
@@ -16,7 +16,6 @@ struct CueActivityTests {
         let canvas = try await store.createTask("画布缩放", in: project.id)
         let readme = try await store.createTask("README 截图换成 Swift 版", in: project.id)
         try await workspace.complete(readme.id)
-        let push = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送 v1.4 到 TestFlight"), task: step.id)
         let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "testflight", state: .thinking, title: "testflight", projectID: project.id)
         try await store.bindSession("testflight", to: step.id)
@@ -28,18 +27,9 @@ struct CueActivityTests {
         func kinds(_ now: CueNow) -> [CueNow.Item.Kind] { now.items.map(\.kind) }
 
         var cue = try await now()
-        #expect(kinds(cue) == [.asks, .asks, .running, .done] && cue.advancing == 1 && cue.isLive)
-        let first = try #require(cue.first)
-        #expect(first.title == "可以推送 v1.4 到 TestFlight 吗？" && first.detail == nil && first.open == DeepLink.cue.url)
-        let allow = try #require(first.allow)
-        #expect(allow.message == push.id && allow.choice == CueAsk.once)
-
-        try await rig.services.answerCueQuestion(allow.message, allow.choice)
-        cue = try await now()
-        #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1)
+        #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1 && cue.isLive)
         #expect(cue.items[1].name == "发布 v1.4")
-        #expect(cue.first == CueNow.Wait(
-            title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(SessionState.recordID(sessionID: "zoom")).url, allow: nil))
+        #expect(cue.first == CueNow.Wait(title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(SessionState.recordID(sessionID: "zoom")).url))
 
         try await recorder.update(sessionID: "zoom", state: .thinking)
         cue = try await now()
@@ -62,8 +52,8 @@ struct CueActivityTests {
         }
         let cueRecorder = try await rig.runtimeRecorder(on: "mac-cue")
         cue = try await now()
-        #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」")
-        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
+        #expect(cue.counts.isEmpty && cue.justDone?.name == "发布 v1.4")
+        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).justDone == nil)
 
         try await cueRecorder.updateCue(.thinking)
         cue = try await now()
@@ -75,7 +65,7 @@ struct CueActivityTests {
         try await store.bindSession("ship", to: ship.id)
         try await cueRecorder.updateCue(.settled)
         cue = try await now()
-        #expect(cue.spoken == "1 件推进中" && cue.needsYou == 0)
+        #expect(cue.counts.map(\.words) == ["1 工作中"] && cue.needsYou == 0)
     }
 
     @Test func Cue话未确认不沿用旧忙碌也不结束活动_迟到回执后按真实状态继续() async throws {

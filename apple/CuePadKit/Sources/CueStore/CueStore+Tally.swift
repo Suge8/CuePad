@@ -1,22 +1,16 @@
 import Foundation
 
 public struct CueTally: Equatable, Sendable {
-  public enum Wait: Identifiable, Equatable, Sendable {
-    case message(CueMessage, task: UUID?)
-    case session(SessionState, task: UUID?)
+  public struct Wait: Identifiable, Equatable, Sendable {
+    public var session: SessionState
+    public var task: UUID?
 
-    public var id: String {
-      switch self {
-      case .message(let message, _): "message/\(message.id.uuidString)"
-      case .session(let state, _): "session/\(state.sessionID)"
-      }
+    public init(session: SessionState, task: UUID?) {
+      self.session = session
+      self.task = task
     }
 
-    public var task: UUID? {
-      switch self {
-      case .message(_, let task), .session(_, let task): task
-      }
-    }
+    public var id: String { "session/\(session.sessionID)" }
   }
 
   public struct Reply: Identifiable, Equatable, Sendable {
@@ -35,7 +29,7 @@ public struct CueTally: Equatable, Sendable {
   public var advancing: [CueWork] { works.filter { held(of: $0) == 0 } }
 
   public func held(of work: CueWork) -> Int {
-    waiting.count { if case .session(let state, let task) = $0 { Self.holds(work, task: task, session: state.sessionID) } else { false } }
+    waiting.count { Self.holds(work, task: $0.task, session: $0.session.sessionID) }
       + replies.count { Self.holds(work, task: $0.task, session: $0.session.sessionID) }
   }
 
@@ -48,7 +42,7 @@ public struct CueTally: Equatable, Sendable {
   public var waiting: [Wait]
   public var replies: [Reply]
   public var held: Set<UUID> {
-    Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))
+    Set(waiting.compactMap(\.task) + replies.compactMap(\.task))
   }
 
   public init(works: [CueWork], waiting: [Wait], replies: [Reply]) {
@@ -71,12 +65,9 @@ extension CueStore {
   }
 
   public func cueWaiting() throws -> [CueTally.Wait] {
-    let messages = try cueMessagesWaitingForYou()
     let sessions = try sessionsAskingYou()
     let owners = try sessionOwners(sessions.map(\.sessionID))
-    return try messages.map { message in
-      CueTally.Wait.message(message, task: try message.taskID.flatMap { try card($0) == nil ? nil : top(of: $0) })
-    } + sessions.map { CueTally.Wait.session($0, task: owners[$0.sessionID]?.task.id) }
+    return sessions.map { CueTally.Wait(session: $0, task: owners[$0.sessionID]?.task.id) }
   }
 
   public func sessionOwners(_ sessionIDs: [String]) throws -> [String: (task: Card, leaf: Card)] {

@@ -22,7 +22,8 @@ enum Schema {
   /// 写回时盖掉新字段、读不出就卡住同步；新加的表、字段与句式旧版只是不认（照旧字段显示、跳过读不出的），不抬：一抬，旧设备在更新前什么都发不出去。
   /// 抬的那一版先发 iOS、TestFlight 处理完再发 Mac：Mac 经 Sparkle 几分钟就装上，反过来发，苹果处理 iOS 的那段时间里手机停下收发。与 `baseVersion` 各定各的。
   /// 93：旧端会把晚到投送重新关联，也会误结束纯关联的托管会话；自动结束请求须由新端复核创建来源。
-  static let peerFloor = 93
+  /// 104：旧端的 Cue 不认会话的档位，他选了自己来照样替他答；旧端在拍板卡上点的答案新端收不到。
+  static let peerFloor = 104
 
   static let upgrades = [
     "ALTER TABLE piSessionStates ADD COLUMN turnDelivery TEXT; ALTER TABLE piSessionStates ADD COLUMN turnByCue INTEGER;",
@@ -38,6 +39,22 @@ enum Schema {
     \(Schema.modifiedIndex(.marks))
     """,
     liveAddresses,
+    """
+    ALTER TABLE marks ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+    \(markWrites)
+    DROP INDEX cueMessages_open;
+    DROP INDEX cueMessages_answered;
+    DROP INDEX cueMessages_setAside;
+    DROP INDEX cueMessages_toDeliver;
+    ALTER TABLE cueMessages DROP COLUMN choices;
+    ALTER TABLE cueMessages DROP COLUMN answer;
+    ALTER TABLE cueMessages DROP COLUMN answeredAt;
+    ALTER TABLE cueMessages DROP COLUMN ask;
+    ALTER TABLE cueMessages DROP COLUMN askAction;
+    ALTER TABLE cueMessages DROP COLUMN askRule;
+    ALTER TABLE cueMessages DROP COLUMN setAsideBy;
+    \(toDeliverIndex)
+    """,
   ]
 
   static let liveAddresses = "CREATE TABLE liveAddresses (sessionID TEXT PRIMARY KEY NOT NULL, url TEXT NOT NULL, found INTEGER NOT NULL, sentAt INTEGER NOT NULL) STRICT;"

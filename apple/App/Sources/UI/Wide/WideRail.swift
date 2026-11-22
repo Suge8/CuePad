@@ -54,6 +54,7 @@ struct WideRail: View {
             RailTool(icon: .search, help: "搜索") { workspace.openSearch() }
             RailTool(icon: .instruction, help: "技能与规则") { workspace.push(.library) }
             RailTool(icon: .settings, help: "设置") { workspace.push(.settings) }
+            RemoteMacButton().railTool()
             #endif
             Spacer(minLength: 0)
             RailQuota()
@@ -75,7 +76,7 @@ struct RailTopTools: View {
         HStack(spacing: Spacing.item) {
             tool(.sidebar, "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleRail(sizes) }
                 .railWaitingDot(hidden: !workspace.railShown(sizes))
-            if !sizes.home { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
+            if floating { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, floating ? Chrome.lead : RailTool.lead)

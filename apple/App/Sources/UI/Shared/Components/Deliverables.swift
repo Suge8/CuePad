@@ -68,7 +68,7 @@ struct DeliverableTile: View {
         case hero
         case column
         case strip(height: CGFloat)
-        case shot(side: CGFloat, chosen: Bool)
+        case shot(side: CGFloat)
     }
 
     static let captionGap = Spacing.tight
@@ -137,7 +137,6 @@ struct DeliverableTile: View {
     private var loading: Bool { file != nil && shown == nil }
 
     private var isShot: Bool { if case .shot = shape { true } else { false } }
-    private var isChosen: Bool { if case .shot(_, true) = shape { true } else { false } }
 
     private var kindIcon: Icon { Self.icon(preview.kind) }
 
@@ -211,14 +210,14 @@ struct DeliverableTile: View {
                 }
             }
             .clipShape(shape)
-            .overlay(shape.strokeBorder(isChosen ? palette.signatureFill : isShot ? palette.mediaEdge : palette.hair, lineWidth: isChosen ? 2 : 1))
+            .overlay(shape.strokeBorder(isShot ? palette.mediaEdge : palette.hair, lineWidth: 1))
             .previewSource(zoom, cornerRadius: radius, aspect: isShot ? nil : shown?.aspect, crop: isShot ? .detail : .aligned(crop)) { [image = shown?.image, whole] in
                 await whole?() ?? image
             }
     }
 
     private var whole: (() async -> CGImage?)? {
-        guard case .shot(let side, _) = shape else { return nil }
+        guard case .shot(let side) = shape else { return nil }
         return { [files = services.store.files, hash = preview.key, scale] in await Thumbnail.picture(hash, height: side, scale: scale, in: files) }
     }
 
@@ -241,7 +240,7 @@ struct DeliverableTile: View {
         case .hero: LookBox(width: pixels(row * 16 / 9), height: pixels(row), fills: true, dark: palette.dark)
         case .column: LookBox(width: pixels(row * 2), height: pixels(row), fills: false, dark: palette.dark)
         case .strip(let height): LookBox(width: 0, height: pixels(height), fills: true, dark: palette.dark)
-        case .shot(let side, _): LookBox(width: pixels(side), height: pixels(side), fills: true, framed: true)
+        case .shot(let side): LookBox(width: pixels(side), height: pixels(side), fills: true, framed: true)
         }
     }
 }

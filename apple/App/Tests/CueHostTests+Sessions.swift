@@ -21,7 +21,7 @@ extension CueHostTests {
                 directory == rig.folder.path && name == "修好登录页" && model == "fake/m" && thinking == "high"
             } else { false }
         })
-        #expect(session.messages.first?.text == "修好登录页\n把登录页修好")
+        #expect(session.messages.first?.text == "修好登录页\n请建个任务并开工\n\n（以下是 Cue 补充的）\n把登录页修好", "他的原话在前，Cue 的补充另起一段")
         #expect(!session.received.contains("config"))
         await rig.stop()
     }
@@ -62,12 +62,13 @@ extension CueHostTests {
     }
 
     @Test(arguments: ["idle", "waiting_user", "error", "interrupted"])
-    func 他开的一轮停下不叫醒Cue_当场留给他回(stop: String) async throws {
+    func 换成自己来的会话停下不叫醒Cue_当场留给他回(stop: String) async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 只看看")
         func woke() -> Int { rig.rounds.filter(\.wake.isSessionActivity).count }
-        try await eventually("Cue 开的那一轮停下叫醒它，它做完") { woke() == 1 && rig.rounds.allSatisfy { $0.finishedAt != nil } }
+        try await eventually("Cue 开的会话全权，停下叫醒它，它做完") { woke() == 1 && rig.rounds.allSatisfy { $0.finishedAt != nil } }
         let session = try #require(rig.app.host.extensions.values.first)
+        try await rig.store.setTier(.yours, of: session.sessionID)
         _ = try await rig.store.noteCueLine("下周的事", source: .you, remindAt: rig.clock.now.addingTimeInterval(7 * 86_400))
 
         let his = try await rig.store.speak("顺便看下注册页", to: session.sessionID, host: TestApp.hostID)

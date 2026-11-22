@@ -14,14 +14,14 @@ extension CueStore {
     }
     let owners = try sessionOwners(Array(sessions.keys))
     let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
-    let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys))
+    let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys)).merging(try tiersChosen(after: 0), uniquingKeysWith: max)
+    let tiers = try chosenTiers()
     func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
-    func stall(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws {
-      guard let at = session.stallsAt, at <= now, marks.stalls.map({ at > $0 }) ?? true else { return }
-      guard !session.hisTurn else { return }
+    func stall(_ session: SessionState, seq: Int, task: Card?, leaf: Card?, tier: CueTier) throws {
+      guard let at = session.stallsAt, at <= now, marks.stalls.map({ at > $0 }) ?? true, session.reachesCue(tier) else { return }
       let running = session.subagents.filter(\.isRunning).map { $0.action.isEmpty ? $0.name : "\($0.name)：\($0.action)" }
       changes.append(CueChange(
-        kind: .stalled, task: task, leaf: leaf, session: session, at: at, seq: seq, detail: running.joined(separator: "；"), recap: session.recap))
+        kind: .stalled, task: task, leaf: leaf, session: session, at: at, seq: seq, detail: running.joined(separator: "；"), recap: session.recap, tier: tier))
     }
     for (task, leaf) in leaves where leaf.id != task.id && task.completedAt == nil {
       guard let done = leaf.completedAt, seq(leaf) > marks.tasks else { continue }
@@ -29,10 +29,10 @@ extension CueStore {
     }
     for session in sessions.values.sorted(by: { $0.sessionID < $1.sessionID }) {
       guard let written = sessionSeqs[session.sessionID] else { continue }
-      let owner = owners[session.sessionID]
-      try stall(session, seq: written, task: owner?.task, leaf: owner?.leaf)
+      let owner = owners[session.sessionID], tier = CueTier.of(session, chosen: tiers)
+      try stall(session, seq: written, task: owner?.task, leaf: owner?.leaf, tier: tier)
       guard written > marks.sessions else { continue }
-      if let change = try sessionChange(session, seq: written, task: owner?.task, leaf: owner?.leaf) { changes.append(change) }
+      if let change = sessionChange(session, seq: written, task: owner?.task, leaf: owner?.leaf, tier: tier) { changes.append(change) }
     }
     let failed = try selectWritten(
       DeliveryRequest.self, where: "origin = '\(DeliveryOrigin.cue.rawValue)' AND status = '\(DeliveryStatus.failed.rawValue)' AND cueToldAt IS NULL AND writeSeq > ?",
@@ -64,7 +64,7 @@ extension CueStore {
   /// 报告事件不替当前运行背书：presence 可以晚于新报告到，`session.runtimeState` 仍保留未确认。
   /// 歇下要等最后一轮的回答读到才算（`SessionState.answered`）：状态由 Agent 报，问答由 Mac 读会话文件写，两路先后不定
   /// （Claude Code 的轮末标记写在报歇下的钩子之后）。读到时收尾时刻一变，这一行盖上新序号，变化随之出现。
-  private func sessionChange(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws -> CueChange? {
+  private func sessionChange(_ session: SessionState, seq: Int, task: Card?, leaf: Card?, tier: CueTier) -> CueChange? {
     let (kind, detail): (CueChange.Kind?, String?) =
       switch session.state.known {
       case .settled where !session.answered: (nil, nil)
@@ -73,21 +73,34 @@ extension CueStore {
       case .error: (.failed, session.detail)
       default: (nil, nil)
       }
-    guard let kind, !session.hisTurn else { return nil }
+    guard let kind, session.reachesCue(tier) else { return nil }
     return CueChange(
       kind: kind, task: task, leaf: leaf, session: session, at: session.stateSince, seq: seq,
-      detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted))
+      detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted), tier: tier)
   }
 
-  public func leaveHisStops(after mark: Int) throws -> Int {
+  public func leaveStopsCueSkips(after mark: Int) throws -> Int {
     try write {
       let latest = try lastWrite()
       guard latest > mark else { return latest }
-      let stopped = try select(SessionState.self, where: "state IN (\(sqlList(WorkState.allCases.filter(\.isStopped)))) AND writeSeq > ?", [mark])
-      let his = stopped.filter { $0.atStop && $0.hisTurn }
-      try putLeft(his)
+      let rechosen = Set(try tiersChosen(after: mark).keys)
+      let stopped = try select(
+        SessionState.self,
+        where: "state IN (\(sqlList(WorkState.allCases.filter(\.isStopped)))) AND (writeSeq > ? OR sessionID IN (SELECT value FROM json_each(?)))",
+        [mark, JSONColumn.encode(Array(rechosen))])
+      let tiers = try chosenTiers()
+      let atStop = stopped.filter(\.atStop)
+      func reaches(_ session: SessionState) -> Bool { session.reachesCue(CueTier.of(session, chosen: tiers)) }
+      try putLeft(atStop.filter { !reaches($0) }, removing: atStop.filter { rechosen.contains($0.sessionID) && reaches($0) }.map(\.sessionID))
       return latest
     }
+  }
+
+  private func tiersChosen(after mark: Int) throws -> [String: Int] {
+    Dictionary(
+      try db.query("SELECT subject, MAX(writeSeq) FROM marks WHERE kind LIKE '\(Mark.tierPrefix)%' AND writeSeq > ? GROUP BY subject", [mark]) {
+        ($0.text(0), Int($0.int(1)))
+      }, uniquingKeysWith: max)
   }
 
   private func failedLeaf(_ card: UUID) throws -> [(task: Card?, leaf: Card?)] {

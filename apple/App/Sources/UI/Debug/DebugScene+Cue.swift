@@ -80,7 +80,7 @@ extension DebugScene {
                     shots: [CueShot(preview: evidence.id, look: String(localized: "浅色：新的 README 截图", table: "Demo"))])
             }
             try await later(25)
-            let asked = try await store.addCueMessage(
+            _ = try await store.addCueMessage(
                 .cue, text: String(localized: """
                     预发上验过了，截图在这里。重连用例都过了：
 
@@ -94,13 +94,7 @@ extension DebugScene {
                     ```
 
                     要把改动**推送到 origin/main** 吗？推上去 CI 会自动部署到正式环境。
-                    """, table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把发言顺序的修复推送到 origin/main", table: "Demo")), shots: try await deployShots(store), task: order?.id)
-            if !cueFlows, args.driveOpts.waitKinds, let billing = task(String(localized: "清理旧的计费脚本", table: "Demo")) {
-                _ = try await store.addCueMessage(
-                    .cue, text: String(localized: "旧的计费脚本目录 `scripts/billing-legacy` 已经没有调用方了，CI 里也不再跑。要删掉吗？", table: "Demo"),
-                    ask: try CueAsking(.delete, action: String(localized: "删掉 scripts/billing-legacy 目录", table: "Demo")), task: billing.id)
-            }
-            if let variant = args.cueOpts.ask { try await seedAsk(variant, store: store, task: order?.id) }
+                    """, table: "Demo"), shots: try await deployShots(store), task: order?.id)
             let forgotten = try await store.noteCueLine(String(localized: "旧的计费脚本还在用", table: "Demo"), source: .cue)
             try await store.forgetCueLine(forgotten.id)
             for (minutes, wake, tools) in [
@@ -138,8 +132,7 @@ extension DebugScene {
             try await seedReplies(args.replies, store: store)
             try await atlasIfAsked(store)
             try await taskLinesIfAsked(store)
-            if cueFlows { _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once)) }
-            try await seedPresence(presence, store: store, asked: asked, order: order, panel: panel, importing: importing, context: context, you: you)
+            try await seedPresence(presence, store: store, order: order, panel: panel, importing: importing, context: context, you: you)
         } catch {
             abandon("Cue 演示数据没写成", error)
         }

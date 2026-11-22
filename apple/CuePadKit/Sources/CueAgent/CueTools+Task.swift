@@ -48,10 +48,6 @@ extension CueTools {
     case .leave:
       _ = try await host()
       let target = try await speaker(args)
-      if let question = try await store.question(waitingOn: target.session) {
-        let asked = question.asking?.question ?? CueEnvelope.clip(CueFormat.plainText(question.text), 40)
-        throw Failure("等你里问着他「\(asked)」（\(question.id.shortID)），他在卡上答了你再转给会话：不用留给他回")
-      }
       try await store.leaveToYou(target.session)
       return .ok("已把\(target.label)留给他回：进了等你、推到他手机，他或你再对它说话就作废。（\(target.short)）")
     case .take:
@@ -60,6 +56,11 @@ extension CueTools {
       guard try await store.takeBack(target.session) else { throw Failure("\(target.label)没留给他回（或已作废），不用收回") }
       return .ok("已收回\(target.label)：不再是新回复、出了等你。（\(target.short)）")
     case .done: return try await done(args)
+    case .tier:
+      let target = try await speaker(args)
+      guard let tier = args.string("tier").flatMap(CueTier.init(rawValue:)) else { throw Failure("tier 写 \(CueTier.allCases.map(\.rawValue).joined(separator: " / "))") }
+      try await store.setTier(tier, of: target.session)
+      return .ok("已把\(target.label)换成「\(CueEnvelope.tierNote(tier))」。（\(target.short)）")
     }
   }
 
@@ -133,7 +134,8 @@ extension CueTools {
       let unstarted = launch == nil ? "" : "，也没开工（它没开工就 start）"
       return .ok("已有没做完的「\(same.heading)」（\(same.id.shortID)），没再建\(dropped)\(unstarted)：同一件事接着用它。")
     }
-    let top = try await store.createTask(CueLines.joined(title: heading, rest: args.string("body")), in: projectID)
+    let rest = session == nil ? Self.body(said: try await store.cueSaidInHand(), added: args.string("body"), by: try await store.cueProfile()?.name) : nil
+    let top = try await store.createTask(CueLines.joined(title: heading, rest: rest), in: projectID)
     var steps: [UUID] = []
     for step in names { steps.append(try await store.createTask(step, under: top.id).id) }
     var text = "建好了「\(top.heading)」（\(top.id.shortID)）" + (steps.isEmpty ? "" : "，\(steps.count) 个子任务")
@@ -150,6 +152,14 @@ extension CueTools {
     } catch {
       return Result(text: text + "没开工：\(Self.message(error))（建好的任务照留，修好后 start）", isError: true)
     }
+  }
+
+  static func body(said: [String], added: String?, by name: String?) -> String? {
+    let added = added?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !said.isEmpty else { return added.isEmpty ? nil : added }
+    let words = said.joined(separator: "\n\n")
+    guard !added.isEmpty else { return words }
+    return words + "\n\n" + String(localized: "（以下是 \(name ?? CueProfile.defaultName) 补充的）") + "\n" + added
   }
 
   private func edit(_ args: Args) async throws -> Result {
@@ -213,13 +223,13 @@ extension CueTools {
 
   private func start(_ args: Args) async throws -> Result {
     let leaf = try await references.workingLeaf(try args.required("task"))
-    return try await start(leaf, try await Launch(args, tools: self))
+    return try await start(leaf, try await Launch(args, tools: self), said: try await store.cueSaidInHand(after: leaf.createdAt))
   }
 
-  private func start(_ leaf: Card, _ launch: Launch) async throws -> Result {
+  private func start(_ leaf: Card, _ launch: Launch, said: [String] = []) async throws -> Result {
     let host = launch.host
     let request = try await store.startLeaf(
-      leaf.id, agent: launch.agent, fresh: launch.fresh, model: launch.model, thinking: launch.thinking, host: host, cue: true)
+      leaf.id, agent: launch.agent, fresh: launch.fresh, model: launch.model, thinking: launch.thinking, host: host, cue: true, said: said)
     if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）\n\(CueToolReceipt(.request, request.id).mark)") }
     return try await spoken(request, "已请求「\(leaf.heading)」沿用上一步的会话，正文作为下一句", tail: leaf.id.shortID, from: host)
   }

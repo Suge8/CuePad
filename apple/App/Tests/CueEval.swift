@@ -147,7 +147,7 @@ final class CueEval {
     }
 
     func reply(since: Date? = nil) async throws -> CueMessage? {
-        try await said(since: since).last { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil }
+        try await said(since: since).last { $0.author == .known(.cue) && $0.taskID == nil }
     }
 
     private func write(_ name: String, expect: String, suite: EvalSuite, checks: [Check], failure: (any Error)?) async {
@@ -203,7 +203,6 @@ final class CueEval {
         lines += ["", "## Cue 写的消息"]
         for message in (try? await said(since: begin)) ?? [] {
             var head = "- **\(message.author.rawValue)**"
-            if let choices = message.choices { head += "（等你：\(choices.joined(separator: " / "))）" }
             if message.taskID != nil { head += "（关联任务）" }
             lines += ["", head, "", message.text.split(separator: "\n", omittingEmptySubsequences: false).map { "  > \($0)" }.joined(separator: "\n")]
         }

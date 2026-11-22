@@ -57,7 +57,7 @@ extension Duty {
             Check(.carry, "(c) 没对同一个会话把同一件事说两遍", repeated.isEmpty, note: repeated.isEmpty ? "" : "（\(repeated.map(\.title).joined(separator: "、"))）"),
             Check(.result, "(c) 会话的每次动静都有接手", unhandled.isEmpty, note: unhandled.isEmpty ? "" : "（没接：\(unhandled.map(\.label).joined(separator: "、"))）"),
             Check(.ask, "(d) 设置页问拆不拆标签页：按他说的保持一页，不留给他、不问他",
-                  tabsAnswers == ["保持一页长列表"] && calls(key.tabs, "tell").allSatisfy { $0.args["ask"] == nil }),
+                  tabsAnswers == ["保持一页长列表"] && calls(key.tabs, "tell").isEmpty && calls(key.tabs, "task", ["leave"]).isEmpty),
             Check(.memory, "(d) 他否掉之后没再提分标签页", !afterRejection.contains(where: EvalReading.proposesTabs)),
             try await recalled("(e) 他顺口说的行程：答出下周三下午 3 点", key.trip) { EvalReading.flight($0, month: flight.month, day: flight.day) },
             try await recalled("(f) 已完成的调研里顺带的细节：答出 13 封", key.bounce) { $0.contains(/13|十三/) },

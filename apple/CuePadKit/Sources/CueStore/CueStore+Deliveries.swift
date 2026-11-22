@@ -46,10 +46,6 @@ extension CueStore {
     try insert(request)
     for key in Set(request.attachmentKeys) { try registerAttachment(key) }
     if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
-      let on = try questionsOn(session)
-      _ = try endQuestions(setAsideBy: request.id, where: on.predicate, on.bindings)
-    }
-    if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
       try reopenTasks(spokenToIn: session)
       try noteRestored(session)
     }
@@ -237,15 +233,12 @@ extension CueStore {
 
   func removeFailedDelivery(_ id: UUID) throws -> Bool {
     try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = '\(DeliveryStatus.failed.rawValue)'", [id])
-    guard db.changes > 0 else { return false }
-    try reopen(where: "setAsideBy = ?", [id])
-    return true
+    return db.changes > 0
   }
 
   public func deleteDelivery(_ id: UUID) throws {
     try write {
       try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id])
-      try reopen(where: "setAsideBy = ?", [id])
     }
   }
 
@@ -260,8 +253,6 @@ extension CueStore {
         AND (hostID = ?2 OR NOT EXISTS (
           SELECT 1 FROM syncRecords WHERE recordName = ?1 AND (sentModifiedAt IS NOT NULL OR pushedModifiedAt IS NOT NULL)))
       """, [id, host])
-    guard db.changes > 0 else { return false }
-    try reopen(where: "setAsideBy = ?", [id])
-    return true
+    return db.changes > 0
   }
 }

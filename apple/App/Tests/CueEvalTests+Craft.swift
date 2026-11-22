@@ -26,11 +26,11 @@ extension CueEvalTests {
         }
     }
 
-    @Test func n2反复交代的做法提议成规矩() async throws {
+    @Test func n2反复交代的做法记成重点() async throws {
         try await CueEval.run(
-            "n2-反复交代的做法提议成规矩",
-            expect: "他在三个会话里都交代过别加没人要的测试（一次换了说法），夹在几十句只管手头那件事的话里：后台整理记忆的大脑问他一次要不要记成重点（引他的原话），"
-                + "只在一个会话里说了三遍的不问；问之前不记；他点可以后 Cue 把原话 note 带 pin 与 his"
+            "n2-反复交代的做法记成重点",
+            expect: "他在三个会话里都交代过别加没人要的测试（一次换了说法），夹在几十句只管手头那件事的话里：后台整理记忆的大脑把它记成他说的重点，并告诉他一句（引他的原话），"
+                + "只在一个会话里说了三遍的不记"
         ) { eval in
             let rig = eval.rig
             let habit = [
@@ -53,22 +53,16 @@ extension CueEvalTests {
                     try await rig.read(one, in: item.work.id)
                 }
             }
-            func proposals() async throws -> [CueMessage] { try await rig.store.cueHabitQuestions() }
-            try? await eventually("后台整理记忆的大脑问了他") { try await !proposals().isEmpty }
-            let asked = try await proposals()
-            let early = try await rig.store.cueMemory().lines.contains { $0.pinned && $0.deletedAt == nil }
-            var pinned = false
-            if let card = asked.first {
-                try await eval.trigger { try await rig.services.answerCueQuestion(card.id, CueAsk.once) }
-                pinned = try await rig.store.cueMemory().lines.contains { $0.deletedAt == nil && $0.pinned && $0.source == .known(.you) && $0.text.contains("测试") }
+            func kept() async throws -> [CueMemoryLine] {
+                try await rig.store.cueMemory().lines.filter { $0.deletedAt == nil && $0.pinned && $0.source == .known(.you) }
             }
-            eval.report.append("后台问的：\n" + asked.map { "- \($0.text)（卡上：\($0.asking?.question ?? "")\($0.asking?.why ?? "")）" }.joined(separator: "\n"))
+            try? await eventually("后台整理记忆的大脑记了一条重点") { try await !kept().isEmpty }
+            let lines = try await kept(), told = try await eval.said(since: .distantPast).filter { $0.author == .known(.cue) }
+            eval.report.append("记下的：\n" + lines.map { "- \($0.text)" }.joined(separator: "\n") + "\n告诉他的：\n" + told.map { "- \($0.text)" }.joined(separator: "\n"))
             return [
-                Check(.ask, "问了一次、只问这一条", asked.count == 1),
-                Check(.ask, "问的话里引了他的原话（提到测试是负债）", asked.first?.text.contains("测试是负债") == true),
-                Check(.ask, "只在一个会话里说的没问（没提数据库）", !asked.contains { $0.text.contains("数据库") }),
-                Check(.ask, "他点头前没记成重点", !early),
-                Check(.result, "他点可以后记成他说的重点", pinned),
+                Check(.result, "只记了一条，是测试那条", lines.count == 1 && lines[0].text.contains("测试")),
+                Check(.ask, "只在一个会话里说的没记（没提数据库）", !lines.contains { $0.text.contains("数据库") }),
+                Check(.interrupt, "告诉了他一句，引了他的原话（提到测试是负债）", told.count == 1 && told[0].text.contains("测试是负债")),
             ]
         }
     }

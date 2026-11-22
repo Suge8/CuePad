@@ -50,7 +50,7 @@ private struct SessionPageBody: View {
                     .overlay(alignment: .top) {
                         if let session {
                             WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
-                                             ended: session.staysEnded(by: digest?.delivery, at: services.speech), column: column)
+                                             ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }, column: column)
                                 .contextMenu { if secondary { menu(session, digest) } }
                         }
                     }
@@ -65,6 +65,7 @@ private struct SessionPageBody: View {
                         SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
                     }
                 } trailing: {
+                    if let session, let tier = digest?.tier { CueTierButton(sessionID: session.sessionID, tier: tier, compact: true) }
                     LivePhoneTool(session: id, zoom: zoom)
                 }
                 .livePhoneCover(id, zoom: zoom)

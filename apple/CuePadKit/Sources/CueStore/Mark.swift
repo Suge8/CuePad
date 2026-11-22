@@ -4,19 +4,23 @@ public enum Mark: Hashable, Sendable {
   case cueRead
   case sessionSeen(String)
   case sessionUnread(String)
+  case tier(String, CueTier)
+
+  static let tierPrefix = "tier."
 
   var kind: String {
     switch self {
     case .cueRead: "cueRead"
     case .sessionSeen: "sessionSeen"
     case .sessionUnread: "sessionUnread"
+    case .tier(_, let tier): Self.tierPrefix + tier.rawValue
     }
   }
 
   var subject: String {
     switch self {
     case .cueRead: ""
-    case .sessionSeen(let session), .sessionUnread(let session): session
+    case .sessionSeen(let session), .sessionUnread(let session), .tier(let session, _): session
     }
   }
 
@@ -57,14 +61,15 @@ extension SessionState {
 
 extension CueStore {
   public func mark(_ mark: Mark, at moment: Date? = nil) throws {
-    let moment = moment ?? .stamp
-    try write {
-      try db.run(
-        """
-        INSERT INTO marks (id, kind, subject, modifiedAt) VALUES (?1, ?2, ?3, ?4)
-        ON CONFLICT(id) DO UPDATE SET modifiedAt = excluded.modifiedAt WHERE excluded.modifiedAt > marks.modifiedAt
-        """, [mark.id, mark.kind, mark.subject, moment])
-    }
+    try write { try putMark(mark, at: moment ?? .stamp) }
+  }
+
+  func putMark(_ mark: Mark, at moment: Date) throws {
+    try db.run(
+      """
+      INSERT INTO marks (id, kind, subject, modifiedAt) VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(id) DO UPDATE SET modifiedAt = excluded.modifiedAt WHERE excluded.modifiedAt > marks.modifiedAt
+      """, [mark.id, mark.kind, mark.subject, moment])
   }
 
   public func sessionMarks() throws -> [String: SessionMarks] {
