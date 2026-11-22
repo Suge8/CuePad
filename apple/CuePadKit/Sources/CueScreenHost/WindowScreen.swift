@@ -39,6 +39,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     let (stages, wanted) = AsyncStream.makeStream(of: Stage?.self, bufferingPolicy: .bufferingNewest(1))
     self.wanted = wanted
     super.init()
+    Self.muteAttention()
     Task.detached { [weak self] in
       var stream: (SCStream, Stage)?
       for await stage in stages {
@@ -84,6 +85,13 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   }
 
   private static let under = NSWindow.Level(Int(CGWindowLevelForKey(.minimumWindow)))
+
+  /// 后台的应用开表单、弹警告时 AppKit 自己请求用户注意，程序坞图标跳起来（实测 macOS 27.2）；它的窗在壁纸底下，看它在预览里，不跳。
+  @MainActor private static func muteAttention() {
+    guard let method = class_getInstanceMethod(NSApplication.self, #selector(NSApplication.requestUserAttention(_:))) else { return }
+    let ours: @convention(block) (NSApplication, UInt) -> Int = { _, _ in 0 }
+    method_setImplementation(method, imp_implementationWithBlock(ours))
+  }
 
   // MARK: ScreenSource
 
