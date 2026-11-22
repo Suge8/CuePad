@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// 盖在窗口上的三层：墨色（开门时换成一格格散开的逐帧图）、字标（开门时跟着墨色一格格碎掉）与小人。
+/// 盖在窗口上的三层：墨色（开门时换成一格格散开的逐帧图）、光（点阵屏与字标，`OpeningLight`；开门时跟着墨色一格格碎掉）与小人。
 final class OpeningCurtain {
     private let canvas = CALayer()
     private let veil = CALayer()
+    private let light = CALayer()
+    private let matrix = CALayer()
     private let mark = CALayer()
     private let figure = CALayer()
     private let world: CALayer?
@@ -12,7 +14,7 @@ final class OpeningCurtain {
     /// Cue 在墨色上等门开时一呼一吸地浮着（启动屏上它是静的，从原位起步，接缝看不出）。
     private static let breath = (rise: CGFloat(3), period: 1.4)
 
-    init(root: CALayer, world: CALayer?, ink: CGColor, pose: (idle: CGImage, jump: CGImage), stage: OpeningDoor.Stage, mark first: CGImage, up: CGFloat, breathes: Bool) {
+    init(root: CALayer, world: CALayer?, ink: CGColor, pose: (idle: CGImage, jump: CGImage), stage: OpeningDoor.Stage, mark still: CGImage, up: CGFloat, breathes: Bool) {
         self.world = world
         self.pose = pose
         CATransaction.begin()
@@ -21,8 +23,11 @@ final class OpeningCurtain {
         veil.frame = root.bounds
         veil.backgroundColor = ink
         veil.magnificationFilter = .nearest
+        light.frame = root.bounds
+        matrix.frame = stage.grid.frame
+        matrix.magnificationFilter = .nearest
         mark.frame = stage.mark
-        mark.contents = first
+        mark.contents = still
         mark.magnificationFilter = .nearest
         figure.contents = pose.idle
         figure.contentsGravity = .resize
@@ -38,21 +43,32 @@ final class OpeningCurtain {
             figure.add(breathe, forKey: "breathe")
         }
         canvas.addSublayer(veil)
-        canvas.addSublayer(mark)
+        light.addSublayer(matrix)
+        light.addSublayer(mark)
+        canvas.addSublayer(light)
         canvas.addSublayer(figure)
         canvas.zPosition = 10_001
         root.addSublayer(canvas)
         CATransaction.commit()
     }
 
-    /// 等门时金光来回扫（从第 0 帧起，与启动图那一帧接上）。
-    func shimmer(_ frames: [CGImage]) {
-        let loop = CAKeyframeAnimation(keyPath: "contents")
-        loop.values = frames
-        loop.duration = CueWordmark.period
-        loop.calculationMode = .discrete
-        loop.repeatCount = .infinity
-        mark.add(loop, forKey: "shimmer")
+    /// 点阵屏亮起来：从第 0 帧（一格不亮、字米白，与启动图接上）放到最后一帧停住。
+    func glow(_ frames: OpeningLight.Frames) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let dots = CALayer()
+        dots.frame = matrix.bounds
+        dots.contents = frames.dots
+        matrix.mask = dots
+        for (layer, values) in [(matrix, frames.matrix), (mark, frames.mark)] {
+            let play = CAKeyframeAnimation(keyPath: "contents")
+            play.values = values
+            play.duration = OpeningLight.span
+            play.calculationMode = .discrete
+            layer.contents = values.last
+            layer.add(play, forKey: "glow")
+        }
+        CATransaction.commit()
     }
 
     /// 呼吸停在半路的那一下，用 0.25 秒落回原位，不跳。
@@ -75,7 +91,7 @@ final class OpeningCurtain {
             CATransaction.setDisableActions(true)
             CATransaction.setCompletionBlock { done.resume() }
             stopBreathing()
-            veil.frame = OpeningDoor.grid(in: door.bounds)
+            veil.frame = matrix.frame
             veil.backgroundColor = nil
             veil.contents = veils.last
             let reveal = CAKeyframeAnimation(keyPath: "contents")
@@ -84,11 +100,11 @@ final class OpeningCurtain {
             reveal.calculationMode = .discrete
             veil.add(reveal, forKey: "reveal")
             let crumble = CALayer()
-            crumble.frame = canvas.convert(veil.frame, to: mark)
+            crumble.frame = veil.frame
             crumble.contents = veils.last
             crumble.magnificationFilter = .nearest
             crumble.add(reveal, forKey: "reveal")
-            mark.mask = crumble
+            light.mask = crumble
             figure.anchorPoint = CGPoint(x: 0.5, y: up < 0 ? 1 : 0)
             let foot = { (cue: CGRect) in CGPoint(x: cue.midX, y: up < 0 ? cue.maxY : cue.minY) }
             let last = frames.last!.cue

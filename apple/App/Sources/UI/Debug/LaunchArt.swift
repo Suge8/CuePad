@@ -4,10 +4,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 extension DebugScene {
-    /// 启动图与开门前第一帧同一套摆法（`OpeningDoor.Stage`）、同一张字标（`CueWordmark` 第 0 帧）；系统把图摆在屏幕正中，图就裁成以整组为中心的最小一块。
+    /// 启动图与开门前第一帧同一套摆法（`OpeningDoor.Stage`）、同一张米白字标（`OpeningLight.still`）；系统把图摆在屏幕正中，图就裁成以整组为中心的最小一块。
     static func launchArtIfAsked() {
         guard let folder = args.launchArt else { return }
-        let cue = CueOpening.image("cue-stage-idle"), mark = CueWordmark.image(at: 0, .launch)
+        let cue = CueOpening.image("cue-stage-idle"), mark = OpeningLight.still(.launch)
         for scale in [2, 3] {
             let s = CGFloat(scale), probe = OpeningDoor.Stage(in: .zero, scale: s, up: 1), box = probe.cue.union(probe.mark)
             let half = CGSize(width: max(-box.minX, box.maxX), height: max(-box.minY, box.maxY))

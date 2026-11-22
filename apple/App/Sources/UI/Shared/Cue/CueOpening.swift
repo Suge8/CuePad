@@ -1,10 +1,10 @@
 import QuartzCore
 import SwiftUI
 
-/// 开门：每次冷启动，窗口先是启动屏那一幕（图标的墨色、正中站着 Cue、脚下一行像素字标，iOS 的启动屏就是它：`LaunchBackground`、`LaunchStage`），
+/// 开门：每次冷启动，窗口先是启动屏那一幕（图标的墨色、正中两行米白的像素字标、Cue 站在字上，iOS 的启动屏就是它：`LaunchBackground`、`LaunchStage`），
 /// 两者与这里盖的第一帧要一模一样，接缝才看不出。模拟器的 splashboardd 把资源目录缓存在内存里、重装也不重读（装的路径不变）：
 /// 改了这两样，要 kill -9 它（普通的结束信号它不理，launchd 会再起）并删掉 App 数据目录下 Library/SplashBoard/Snapshots 里的旧图，才看得到新的启动屏。
-/// 等门时字标上一道金光来回扫；Cue 页的天空第一次画好后开门：墨色连字标从 Cue 身上碎成方格、由近及远散开（同 Cue 页天空的像素），前沿一圈是签名色；
+/// App 接手后点阵屏亮起来（`OpeningLight`）；光扫完、Cue 页的天空也第一次画好后开门：墨色连点阵与字标从 Cue 身上碎成方格、由近及远散开，前沿一圈是签名色；
 /// 整个窗口从近处退回原位，Cue 蹲一下、跳着落回它住的地方（空着的 Cue 页落在云上，否则落进头像，`relaySpot(cue:)`）。
 /// 一个进程只放一次：回前台、开第二个窗口都不放。降低动态效果时墨色直接淡掉。
 /// 画法同接力（`CueRelayStage`）：整块交给 Core Animation，盖在窗口最底层之上；冷启动时主线程正忙，逐帧不经 App 进程才不掉帧。
@@ -49,20 +49,19 @@ final class CueOpening {
         guard !began else { return }
         began = true
         if reduceMotion { phase = .open }
-        let up = RelayFlight.up(in: root), stage = OpeningDoor.Stage(in: root.bounds, scale: scale, up: up), lettering = CueWordmark.Paint.launch
+        let up = RelayFlight.up(in: root), stage = OpeningDoor.Stage(in: root.bounds, scale: scale, up: up), paint = OpeningLight.Paint.launch
         let curtain = OpeningCurtain(
-            root: root, world: world, ink: ink, pose: pose, stage: stage, mark: CueWordmark.image(at: 0, lettering), up: up, breathes: !reduceMotion)
-        let bounds = root.bounds, center = stage.cue.center, paint = (ink: OpeningDoor.pixel(OpeningDoor.rgb(ink)), edge: OpeningDoor.pixel(OpeningDoor.rgb(edge)))
-        let veils = Task.detached { OpeningDoor.veil(in: bounds, from: center, up: up, ink: paint.ink, edge: paint.edge) }
-        if !reduceMotion {
-            // 在外面开：放进下面那个 Task 里再开，调试版一启动就崩在任务分配器上（"freed pointer was not the last allocation"，Swift 6.4）。
-            let shimmer = Task.detached { CueWordmark.frames(lettering) }
-            Task { curtain.shimmer(await shimmer.value) }
-        }
+            root: root, world: world, ink: ink, pose: pose, stage: stage, mark: OpeningLight.still(paint), up: up, breathes: !reduceMotion)
+        let pixels = (ink: OpeningDoor.pixel(OpeningDoor.rgb(ink)), edge: OpeningDoor.pixel(OpeningDoor.rgb(edge)))
+        let veils = Task.detached { OpeningDoor.veil(on: stage.grid, from: stage.heart, ink: pixels.ink, edge: pixels.edge) }
+        // 在外面开：放进下面那个 Task 里再开，调试版一启动就崩在任务分配器上（"freed pointer was not the last allocation"，Swift 6.4）。
+        let light = reduceMotion ? nil : Task.detached { OpeningLight(grid: stage.grid, paint: paint).frames(scale: scale) }
         Task {
-            let clock = ContinuousClock(), start = clock.now
-            await sky(by: start + OpeningDoor.patience)
-            try? await clock.sleep(until: start + OpeningDoor.dwell)
+            let clock = ContinuousClock(), deadline = clock.now + OpeningDoor.patience
+            if let light { curtain.glow(await light.value) }
+            let lit = clock.now
+            await sky(by: deadline)
+            try? await clock.sleep(until: lit + OpeningDoor.dwell)
             await NextFrame.drawn()
             guard !reduceMotion else { return await curtain.fade() }
             let landing = Self.landing(in: window, root: root)
