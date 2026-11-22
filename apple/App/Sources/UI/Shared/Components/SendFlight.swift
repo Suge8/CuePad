@@ -189,7 +189,7 @@ private struct FlyingWords: View {
     private static let still: CGFloat = 0.5
 }
 
-/// 飞着的气泡在路上显影：底只用气泡自己的颜色，从字头往字尾一格格长出来，边上按阈值表抖开（`Halftone`），格子大到一眼看得出是像素；
+/// 飞着的气泡在路上显影：底用气泡自己的颜色，从字头往字尾一格格长出来，边上按阈值表抖开（`Halftone`），格子大到一眼看得出是像素；
 /// 留白同时从字边长到气泡的边。显影完是一整块气泡色，与真的那颗一样，落下时换过去看不出来。
 /// 字一直是实的：它从输入框里飞出来，本来就看得见，跟着闪的话读不成句。
 private struct Developing<Words: View>: View, Animatable {
@@ -210,23 +210,37 @@ private struct Developing<Words: View>: View, Animatable {
         words
             .padding(EdgeInsets(top: padding.top * grow, leading: padding.leading * grow, bottom: padding.bottom * grow, trailing: padding.trailing * grow))
             .background {
-                Canvas { [progress, look, cell = (Self.grain * scale).rounded() / scale, color = palette.bubble] context, size in
+                Canvas { [progress, look, cell = (Self.grain * scale).rounded() / scale, tints = tints] context, size in
                     let outline = look.shape.path(in: CGRect(origin: .zero, size: size))
-                    guard progress < 1 else { return context.fill(outline, with: .color(color)) }
+                    guard progress < 1 else { return context.fill(outline, with: .color(tints[0])) }
                     context.clip(to: outline)
-                    var grown = Path()
+                    var grown = Array(repeating: Path(), count: tints.count)
                     let columns = Int((size.width / cell).rounded(.up))
                     for y in 0..<Int((size.height / cell).rounded(.up)) {
-                        for x in 0..<columns where Double(x) / Double(columns) * (1 - Self.soft) + Halftone.bayer(x, y) * Self.soft < progress {
-                            grown.addRect(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
+                        for x in 0..<columns {
+                            let age = progress - (Double(x) / Double(columns) * (1 - Self.soft) + Halftone.bayer(x, y) * Self.soft)
+                            guard age > 0 else { continue }
+                            let band = Int((max(0, 1 - age / Self.fresh) * Double(tints.count - 1)).rounded())
+                            grown[band].addRect(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
                         }
                     }
-                    context.fill(grown, with: .color(color))
+                    for (band, path) in grown.enumerated() where !path.isEmpty { context.fill(path, with: .color(tints[band])) }
                 }
                 .overlay { if let edge = palette.bubbleEdge { look.shape.strokeBorder(edge).opacity(progress) } }
             }
     }
 
+    /// 刚长出的格子带一点回答显影的色（`thinkingMid`、`thinkingHigh`），最多掺到 `tint`，`fresh` 内冷回气泡色：只有扫过去的那道边上有一丝。
+    private var tints: [Color] {
+        (0..<Self.bands).map { band in
+            let heat = Double(band) / Double(Self.bands - 1)
+            return palette.bubble.mix(with: palette.thinkingMid.mix(with: palette.thinkingHigh, by: heat), by: heat * Self.tint)
+        }
+    }
+
+    private static var tint: Double { 0.4 }
+    private static var fresh: Double { 0.18 }
+    private static var bands: Int { 4 }
     /// 一格的边长（点，取整到设备像素）：回答显影的网点（约 2 点）放在一整颗气泡上太细，看着是一层灰雾。
     private static var grain: CGFloat { 4 }
     /// 扫过去的那道边有多宽（占整颗的几成）：边里按阈值表抖开，太窄是一道硬线，太宽又成了整颗一起闪。
