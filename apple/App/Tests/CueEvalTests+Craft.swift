@@ -57,7 +57,7 @@ extension CueEvalTests {
                 try await rig.store.cueMemory().lines.filter { $0.deletedAt == nil && $0.pinned && $0.source == .known(.you) }
             }
             try? await eventually("后台整理记忆的大脑记了一条重点") { try await !kept().isEmpty }
-            let lines = try await kept(), told = try await eval.said().filter { $0.author == .known(.cue) }
+            let lines = try await kept(), told = try await eval.said(since: .distantPast).filter { $0.author == .known(.cue) }
             eval.report.append("记下的：\n" + lines.map { "- \($0.text)" }.joined(separator: "\n") + "\n告诉他的：\n" + told.map { "- \($0.text)" }.joined(separator: "\n"))
             return [
                 Check(.result, "只记了一条，是测试那条", lines.count == 1 && lines[0].text.contains("测试")),
