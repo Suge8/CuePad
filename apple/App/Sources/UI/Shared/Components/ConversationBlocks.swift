@@ -110,10 +110,8 @@ private struct MachineCard: View {
 
 /// 在跑的一轮：过程接在对话末尾，Mac 上正在说的那句跟在最后，子代理与角色在下面。这一轮做完，对话里的回答（`ReplyBlock`）在原处接上同样的排法。
 /// 摆不摆过程只看库里这一轮还开着没有（`pendingTools`），不看 Agent 此刻的状态：Mac 上状态先歇下，回答过一会儿才读进库。
-/// 手机上这一轮的状态与对话分两条通道同步，状态走快的那条。状态先到、清掉了过程时，接着摆刚才那份（`held`），
-/// 直到这一轮的结局进了对话（`Chat.awaiting`）：回答按身份认（`Chat.landed`，过程里的项或升成回答的那句话），
-/// "已停下"按收尾的时刻（`answeredAt`）认；空着收的尾、又来了新的一句、或另一轮已经收尾（回答摘要变了）都不再接着摆。
-/// 回答先到时，已经落进回答的那份不再摆
+/// 手机上状态与对话分两条队列同步，谁先到都有：回答先到时，已经落进回答的那份（`Chat.landed`）不再摆；
+/// 状态先到时过程先撤、回答随后接上，不在这里猜后面还有没有回答（一句没说就收尾的轮猜不出来）
 struct LiveRound<Below: View>: View {
     let session: SessionState
     let messages: [ChatMessage]
@@ -121,13 +119,11 @@ struct LiveRound<Below: View>: View {
     var swapsInPlace = false
     let floating: CGFloat
     @ViewBuilder let below: Below
-    @State private var held: (tools: ChatMessage.Tools, reply: String?)?
 
     var body: some View {
         let open = session.pendingTools.flatMap { Chat.landed($0, in: messages.last { $0.role == .known(.pi) }) ? nil : $0 }
-        let shown = open ?? held.flatMap { Chat.awaiting($0.tools, endedWith: $0.reply, session: session, messages: messages) ? $0.tools : nil }
         VStack(alignment: .leading, spacing: Conversation.spacing) {
-            RoundProcess(tools: shown, draft: draft, session: session, fadesIn: !swapsInPlace)
+            RoundProcess(tools: open, draft: draft, session: session, fadesIn: !swapsInPlace)
                 .transition(swapsInPlace ? .asymmetric(insertion: .entry, removal: .identity) : .entry)
             ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
                 VStack(alignment: .leading, spacing: Spacing.item) {
@@ -137,7 +133,6 @@ struct LiveRound<Below: View>: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .onChange(of: session.pendingTools) { old, new in held = new == nil ? old.map { (tools: $0, reply: session.lastReply) } : nil }
     }
 }
 

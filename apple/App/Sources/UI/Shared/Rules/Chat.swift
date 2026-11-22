@@ -167,12 +167,6 @@ nonisolated enum Chat {
         return !keys(pending).isDisjoint(with: keys(reply.tools).union([reply.id.uuidString]))
     }
 
-    static func awaiting(_ tools: ChatMessage.Tools, endedWith reply: String?, session: SessionState, messages: [ChatMessage]) -> Bool {
-        guard reply?.isEmpty != true, session.lastReply == reply, session.pendingPrompt == nil else { return false }
-        if let end = session.answeredAt, let last = messages.last, last.at >= end { return false }
-        return !landed(tools, in: messages.last { $0.role == .known(.pi) })
-    }
-
     enum ProcessRow: Hashable {
         case step(Int)
         case looks(Range<Int>)
