@@ -17,8 +17,8 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var previews: [PreviewItem] = []
     var question: String?
     var fromCue = false
-    /// 你说的这句在途时已经作为请求（`outgoing`）摆在对话里：落库后换成的这一条接在同一处，不再淡入一遍。
-    var replacesOutgoing = false
+    /// 你说的这句在途时已经作为请求（`outgoing`）摆在对话里：落库后换成的这一条接在同一处，不再淡入一遍；还在飞的话按请求的编号接着认领（`SendFlight`）。
+    var replaces: UUID?
 }
 
 private nonisolated extension ChatEntry {
@@ -89,7 +89,7 @@ nonisolated enum Chat {
             place(before: message.at)
             entries.append(ChatEntry(
                 id: message.id, role: role, text: message.text, took: took(message), tools: message.tools,
-                fromCue: message.saidByCue(cueSent), replacesOutgoing: message.deliveryID.map(requested.contains) == true))
+                fromCue: message.saidByCue(cueSent), replaces: message.deliveryID.flatMap { requested.contains($0) ? $0 : nil }))
         }
         place(before: nil)
         entries += outgoing[tail...].map(ChatEntry.outgoing)

@@ -24,7 +24,7 @@ import SwiftUI
 
     func depart(_ draft: ComposerDraft, as id: UUID) {
         let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let origin, !text.isEmpty, draft.files.isEmpty, draft.attachments.isEmpty, draft.notes.isEmpty else { return }
+        guard let origin, !text.isEmpty, draft.files.isEmpty, draft.importing.isEmpty, draft.attachments.isEmpty, draft.notes.isEmpty else { return }
         landing = nil
         trip = Trip(id: id, text: text, from: origin)
     }
@@ -152,6 +152,7 @@ private struct FlyingWords: View {
     /// 按下当帧就先往上起飞一小段（气泡要几帧后才排出来，停在原处会压着输入框里冒出来的占位字）；
     /// 落点到了、或在飞的途中挪了（滚到最新、键盘收起）就改终点：弹簧从当前的位置与速度接着走。
     private func fly(to landing: SendFlight.Landing?) {
+        guard !gone else { return }
         guard let landing else {
             withAnimation(Motion.Send.lift) { spot.y -= Motion.Send.takeoff }
             return
