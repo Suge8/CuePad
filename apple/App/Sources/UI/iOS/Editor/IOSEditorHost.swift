@@ -10,7 +10,6 @@ final class IOSEditorHandle {
     @ObservationIgnored fileprivate var refocus = false
     fileprivate var focusChanges = 0
     var source: ComposerSource?
-    var editingVariables = false
 
     var text: String? { view?.storedText }
     var selection: String? { view?.selectedStoredText }
@@ -33,20 +32,22 @@ struct IOSEditorHost: UIViewRepresentable {
     let theme: CueEditorTheme
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
-    var onInsertImage: (() -> Void)?
-    var onInsertFile: (() -> Void)?
-    var onVariables: (() -> Void)?
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
     var fits = false
+    var topInset: CGFloat = 0
     var bottomInset: CGFloat = 0
     var editable = true
-    var keyboardBar = true
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
 
-    func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
+    final class Coordinator {
+        var watching: Task<Void, Never>?
+        var focus: [any NSObjectProtocol] = []
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     private static let settle: Duration = .milliseconds(650)
 
@@ -54,7 +55,6 @@ struct IOSEditorHost: UIViewRepresentable {
         let view = CueTextView(files: services.store.files, theme: theme)
         view.storedText = initialText
         context.coordinator.watching = AttachmentLooks.follow(services, in: view)
-        if keyboardBar { view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator, plain: onInsertImage == nil) }
         context.coordinator.focus = [UITextView.textDidBeginEditingNotification, UITextView.textDidEndEditingNotification].map { name in
             NotificationCenter.default.addObserver(forName: name, object: view, queue: .main) { [handle] _ in
                 MainActor.assumeIsolated { handle.focusChanges += 1 }
@@ -91,6 +91,11 @@ struct IOSEditorHost: UIViewRepresentable {
     func updateUIView(_ view: CueTextView, context: Context) {
         // 光标跟随避开的是滚动 inset；只给正文末尾留白，UIKit 输入时仍会把光标推到纸边。
         if view.contentInset.bottom != bottomInset { view.contentInset.bottom = bottomInset }
+        if view.contentInset.top != topInset {
+            let atTop = view.contentOffset.y <= -view.adjustedContentInset.top
+            view.contentInset.top = topInset
+            if atTop { view.contentOffset.y = -view.adjustedContentInset.top }
+        }
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
@@ -99,9 +104,6 @@ struct IOSEditorHost: UIViewRepresentable {
             let frame = picture.offsetBy(dx: -view.contentOffset.x, dy: -view.contentOffset.y)
             handle.spot.open(DraftFile(key: key, name: name), at: frame, in: workspace, with: openPreview)
         }
-        context.coordinator.insertImage = onInsertImage ?? {}
-        context.coordinator.insertFile = onInsertFile ?? {}
-        context.coordinator.variables = onVariables ?? {}
         if view.isEditable != editable { setEditable(view) }
         if view.theme != theme {
             view.theme = theme
@@ -120,7 +122,7 @@ struct IOSEditorHost: UIViewRepresentable {
         if editable, handle.refocus { view.becomeFirstResponder() }
     }
 
-    static func dismantleUIView(_ view: CueTextView, coordinator: KeyboardBar.Actions) {
+    static func dismantleUIView(_ view: CueTextView, coordinator: Coordinator) {
         coordinator.watching?.cancel()
         coordinator.focus.forEach(NotificationCenter.default.removeObserver)
     }
@@ -129,43 +131,5 @@ struct IOSEditorHost: UIViewRepresentable {
         guard fits, let width = proposal.width else { return nil }
         return CGSize(width: width, height: uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
     }
-}
-
-final class KeyboardBar: UIToolbar {
-    private static let itemSize: CGFloat = 44
-    final class Actions {
-        var insertImage: () -> Void = {}
-        var insertFile: () -> Void = {}
-        var variables: () -> Void = {}
-        var watching: Task<Void, Never>?
-        var focus: [any NSObjectProtocol] = []
-    }
-
-    init(textView: CueTextView, actions: Actions, plain: Bool) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: Self.itemSize))
-        func item(_ label: String, _ icon: Icon, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
-            let button = UIButton(type: .system, primaryAction: UIAction { [weak textView] _ in
-                guard let textView else { return }
-                action(textView)
-            })
-            button.setImage(icon.platformImage, for: .normal)
-            button.accessibilityLabel = label
-            button.addInteraction(UIToolTipInteraction(defaultToolTip: label))
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.itemSize).isActive = true
-            button.heightAnchor.constraint(equalToConstant: Self.itemSize).isActive = true
-            return UIBarButtonItem(customView: button)
-        }
-        items = (plain ? [] : [
-            item(String(localized: "插入图片"), .photo) { _ in actions.insertImage() },
-            item(String(localized: "插入文件"), .file) { _ in actions.insertFile() },
-            item(String(localized: "变量取值"), .variables) { _ in actions.variables() },
-        ]) + [
-            .flexibleSpace(),
-            item(String(localized: "收起键盘"), .dismissKeyboard) { $0.resignFirstResponder() },
-        ]
-        sizeToFit()
-    }
-
-    required init?(coder: NSCoder) { nil }
 }
 #endif

@@ -8,7 +8,6 @@ struct SceneRoot: View {
 
     var body: some View {
         IOSRoot(services: services)
-            .panelHost()
             .modifier(PaletteProvider())
             .debugCompact()
             .environment(alerts)

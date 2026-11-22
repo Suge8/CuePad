@@ -1,7 +1,6 @@
 #if os(iOS)
 import CueEditor
 import CueStore
-import CueText
 import SwiftUI
 
 struct CardTextField: View {
@@ -10,8 +9,9 @@ struct CardTextField: View {
     let theme: CueEditorTheme
     var fits = false
     var editable = true
-    var keyboardBar = true
+    var underHeader = false
     @Environment(Workspace.self) private var workspace
+    @Environment(\.headerClearance) private var headerClearance
 
     var body: some View {
         @Bindable var handle = editing.handle
@@ -20,75 +20,26 @@ struct CardTextField: View {
             theme: theme,
             handle: handle,
             onChange: { [editing] in editing.changed($0) },
-            onInsertImage: { handle.source = .photos },
-            onInsertFile: { handle.source = .files },
-            onVariables: { handle.editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits, bottomInset: fits ? 0 : theme.verticalInset, editable: editable, keyboardBar: keyboardBar)
+            fits: fits, topInset: underHeader ? headerClearance : 0, bottomInset: fits ? 0 : CardEditorBar.clearance(theme), editable: editable)
         .overlay { AttachmentSpotLayer(spot: handle.spot) }
+        .overlay(alignment: .bottom) { if !fits { CardEditorBar(card: card, editing: editing, theme: theme) } }
         .modifier(FileSources(source: $handle.source) { handle.insert($0) })
-        .sheet(isPresented: $handle.editingVariables) {
-            VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? editing.initialText))
-        }
     }
 }
 
-struct CardInsertMenu: View {
+struct CardInsertMenu<Label: View>: View {
     let editing: CardEditing
+    @ViewBuilder let label: () -> Label
 
     var body: some View {
         let handle = editing.handle
         let files = ComposerSource.fileChoices.map { choice in
             ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { handle.source = choice.source }
         }
-        let variables = editing.hasVariables
-            ? [ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "变量取值", image: .icon(.variables)) { handle.editingVariables = true }])] : []
-        MenuButton(sections: [ChoiceMenu.Section(choices: files)] + variables, press: .button, accessibilityLabel: "添加") { PlusGlyph() }
+        MenuButton(sections: [ChoiceMenu.Section(choices: files)], press: .button, accessibilityLabel: "添加", label: label)
             .fixedSize()
-    }
-}
-
-private struct VariablesSheet: View {
-    let card: Card
-    let names: [String]
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.palette) private var palette
-    @State private var values: [String: String] = [:]
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Group {
-                if names.isEmpty {
-                    Text("正文里还没有 {{变量}}").foregroundStyle(palette.ink2)
-                }
-                ForEach(names, id: \.self) { name in
-                    LabeledContent("{{\(name)}}") {
-                        TextField(String(localized: "取值"), text: Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }), palette: palette)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
-                }
-                .listRowBackground(palette.paper)
-            }
-            .deskBackground()
-            .onSubmit(saveAndClose)
-            .navigationTitle("变量取值")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消", role: .cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("完成", action: saveAndClose) }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .onAppear { values = card.variableValues }
-    }
-
-    private func saveAndClose() {
-        workspace.saveVariables(values, of: card)
-        dismiss()
     }
 }
 #endif

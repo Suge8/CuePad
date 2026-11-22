@@ -22,8 +22,8 @@ struct CardEditorPage: View {
     @State private var settled = false
     @State private var gone = false
 
-    fileprivate static let textWidth = InspirationPaper.textWidth
-    fileprivate static let inset = Spacing.page
+    private static let textWidth = InspirationPaper.textWidth
+    private static let inset = Spacing.page
 
     private var isOpen: Bool { workspace.openCard == cardID }
 
@@ -36,15 +36,6 @@ struct CardEditorPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk.ignoresSafeArea())
-        .overlay(alignment: .bottom) {
-            if mounted, let data, let editing {
-                EditorBar(card: data.card, editing: editing)
-                    .column()
-                    .padding(.bottom, Spacing.block)
-                    .disabled(!shown)
-                    .accessibilityHidden(!shown)
-            }
-        }
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)
         .debugSettling(isOpen ? !settled : !gone)
@@ -108,16 +99,7 @@ struct CardEditorPage: View {
     }
 
     private func editor(_ card: Card, _ editing: CardEditing) -> some View {
-        editing.field(card, theme: .inspiration(palette, horizontalInset: Self.inset, maxTextWidth: Self.textWidth),
-                      bottomInset: editing.hasVariables ? EditorBar.clearance : 0)
-    }
-}
-
-private extension View {
-    func column() -> some View {
-        frame(maxWidth: CardEditorPage.textWidth, alignment: .leading)
-            .padding(.horizontal, CardEditorPage.inset)
-            .frame(maxWidth: .infinity)
+        editing.field(card, theme: .inspiration(palette, horizontalInset: Self.inset, maxTextWidth: Self.textWidth))
     }
 }
 #endif

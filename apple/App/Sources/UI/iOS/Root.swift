@@ -56,6 +56,7 @@ struct IOSRoot: View {
         .modifier(CueRelayStage(workspace: workspace))
         .environment(\.zoomNamespace, zoom)
         .followsUndo(workspace)
+        .panelHost()
         .environment(workspace)
         .environment(workspace.services)
         .onChange(of: sizeClass, initial: true) { workspace.setLayout(sizeClass == .regular ? .wide : .narrow) }

@@ -2147,12 +2147,6 @@
       },
       "shouldTranslate" : false
     },
-    "+%lld" : {
-      "localizations" : {
-
-      },
-      "shouldTranslate" : false
-    },
     "3D 模型" : {
       "localizations" : {
         "en" : {
@@ -8651,22 +8645,6 @@
         }
       }
     },
-    "取值" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Value"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取值"
-          }
-        }
-      }
-    },
     "取回" : {
       "localizations" : {
         "en" : {
@@ -14075,38 +14053,6 @@
         }
       }
     },
-    "插入图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Insert Image"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "插入图片"
-          }
-        }
-      }
-    },
-    "插入文件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Insert File"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "插入文件"
-          }
-        }
-      }
-    },
     "插入文件…" : {
       "localizations" : {
         "en" : {
@@ -14563,22 +14509,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收起活预览：%@"
-          }
-        }
-      }
-    },
-    "收起键盘" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide Keyboard"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起键盘"
           }
         }
       }
@@ -17423,22 +17353,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正文里有附件找不到了，无法发送"
-          }
-        }
-      }
-    },
-    "正文里还没有 {{变量}}" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No {{variables}} in the notes yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正文里还没有 {{变量}}"
           }
         }
       }

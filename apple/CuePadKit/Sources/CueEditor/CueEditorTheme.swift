@@ -32,6 +32,11 @@ public struct CueEditorTheme: Equatable, @unchecked Sendable {
     public var imageCornerRadius: CGFloat
     public var title: Title?
 
+    public func horizontalInset(forWidth width: CGFloat) -> CGFloat {
+        guard let maxTextWidth else { return horizontalInset }
+        return max(horizontalInset, ((width - maxTextWidth) / 2).rounded(.down))
+    }
+
     public struct Title: Equatable, @unchecked Sendable {
         public var font: CueFont
         public var color: CueColor

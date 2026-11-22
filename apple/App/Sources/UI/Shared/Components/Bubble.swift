@@ -75,6 +75,12 @@ nonisolated struct BubblePlacement: Equatable {
             tailEdge = .bottom
             side = 1
         }
+        // 键盘起来后控件落到了键盘后面（量到的框还是起来之前的）：贴着键盘上沿摆，尾巴指不到它就不画
+        if let low = bottom, low > bounds.maxY {
+            bottom = bounds.maxY
+            maxHeight = bounds.height
+            tailEdge = nil
+        }
     }
 
     var narrowest: CGFloat {
@@ -115,12 +121,6 @@ nonisolated struct BubblePlacement: Equatable {
     func tail(width: CGFloat) -> BubbleTail? {
         guard let tailEdge, let anchor else { return nil }
         return BubbleTail(edge: tailEdge, offset: min(max(anchor - x(width: width), Self.tailInset), width - Self.tailInset))
-    }
-
-    func lifted(_ lifted: Bool) -> BubblePlacement {
-        var placement = self
-        if lifted { placement.tailEdge = nil }
-        return placement
     }
 
     /// 不缩放（实测，Instruments）：缩放时每一帧字都按新的大小重画一遍（字形重新栅格化），开合各约 400ms 里主线程三成在重画字，掉帧；
@@ -210,8 +210,9 @@ struct BubbleFrame<Content: View, Area: View>: View {
             // 有没有脚都是这一个结构：脚晚一拍出现时换结构，滚动区连同里面的文字区会被重建一份（编辑器的句柄指向被扔掉的那份）
             VStack(spacing: 0) {
                 ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .scrollDismissesKeyboard(placement.sheet ? .immediately : .automatic)
+                    // 底部的纸里内容短到不用滚时也要拖得动：往下滑收键盘靠滚动区的拖动
+                    .scrollBounceBehavior(placement.sheet ? .always : .basedOnSize)
+                    .scrollDismissesKeyboard(placement.sheet ? .interactively : .automatic)
                     .debugScrollsToMiddle()
                     .mask {
                         VStack(spacing: 0) {
@@ -232,9 +233,6 @@ struct BubbleFrame<Content: View, Area: View>: View {
 }
 
 struct BubbleStage: Layout {
-    var floor: CGFloat?
-    var ceiling: CGFloat = 0
-
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
@@ -244,12 +242,8 @@ struct BubbleStage: Layout {
             guard let spot = subview[BubbleSpot.self] else { continue }
             let (x, width) = spot.frame(ideal: subview.sizeThatFits(ProposedViewSize(width: spot.widest, height: nil)).width)
             let ideal = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
-            var height = min(ideal.height, spot.maxHeight)
-            var y = spot.top ?? ((spot.bottom ?? 0) - height)
-            if let floor, y + height > floor {
-                height = min(height, floor - ceiling)
-                y = floor - height
-            }
+            let height = min(ideal.height, spot.maxHeight)
+            let y = spot.top ?? ((spot.bottom ?? 0) - height)
             subview.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: ProposedViewSize(width: width, height: height))
         }
     }
