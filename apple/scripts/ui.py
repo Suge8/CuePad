@@ -74,11 +74,10 @@ def read(udid, everything=False):
 
 
 def matches(elements, key, kind=None):
+    pool = [e for e in elements if kind in (None, e["type"])]
     if key.startswith("#"):
-        hits = [e for e in elements if e["id"] == key[1:]]
-    else:
-        hits = [e for e in elements if e["label"] == key] or [e for e in elements if key in (e["label"] or "")]
-    return [e for e in hits if kind in (None, e["type"])]
+        return [e for e in pool if e["id"] == key[1:]]
+    return [e for e in pool if e["label"] == key] or [e for e in pool if key in (e["label"] or "")]
 
 
 def center(e):
