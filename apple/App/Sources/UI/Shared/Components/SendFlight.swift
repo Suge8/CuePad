@@ -189,8 +189,8 @@ private struct FlyingWords: View {
     private static let still: CGFloat = 0.5
 }
 
-/// 飞着的气泡在路上显影，同回答的字（`RevealRenderer`）：底从左往右按网点一格格长出来（`Halftone`），刚长出的格子是热的（玫红），
-/// 按长出的先后经紫冷却成气泡的颜色，看着是一道带色的网点边从字头扫到字尾；留白同时从字边长到气泡的边。显影完是一整块气泡色，与真的那颗一样，落下时换过去看不出来。
+/// 飞着的气泡在路上显影：底只用气泡自己的颜色，从字头往字尾一格格长出来，边上按阈值表抖开（`Halftone`），格子大到一眼看得出是像素；
+/// 留白同时从字边长到气泡的边。显影完是一整块气泡色，与真的那颗一样，落下时换过去看不出来。
 /// 字一直是实的：它从输入框里飞出来，本来就看得见，跟着闪的话读不成句。
 private struct Developing<Words: View>: View, Animatable {
     var progress: Double
@@ -206,44 +206,29 @@ private struct Developing<Words: View>: View, Animatable {
     }
 
     var body: some View {
-        let grow = 1 - pow(1 - min(1, progress / Self.spread), 2)
+        let grow = 1 - pow(1 - progress, 2)
         words
             .padding(EdgeInsets(top: padding.top * grow, leading: padding.leading * grow, bottom: padding.bottom * grow, trailing: padding.trailing * grow))
             .background {
-                Canvas { [progress, look, cell = Halftone.cell(scale: scale), heat = heatColors] context, size in
+                Canvas { [progress, look, cell = (Self.grain * scale).rounded() / scale, color = palette.bubble] context, size in
                     let outline = look.shape.path(in: CGRect(origin: .zero, size: size))
-                    guard progress < 1 else { return context.fill(outline, with: .color(heat[0])) }
+                    guard progress < 1 else { return context.fill(outline, with: .color(color)) }
                     context.clip(to: outline)
-                    var bands = Array(repeating: Path(), count: heat.count)
+                    var grown = Path()
                     let columns = Int((size.width / cell).rounded(.up))
                     for y in 0..<Int((size.height / cell).rounded(.up)) {
-                        for x in 0..<columns {
-                            let birth = Double(x) / Double(columns) * (1 - Self.soft) + Halftone.bayer(x, y) * Self.soft
-                            let age = progress - birth * Self.spread
-                            guard age > 0 else { continue }
-                            let band = Int((max(0, 1 - age / Self.cool) * Double(heat.count - 1)).rounded())
-                            bands[band].addRect(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
+                        for x in 0..<columns where Double(x) / Double(columns) * (1 - Self.soft) + Halftone.bayer(x, y) * Self.soft < progress {
+                            grown.addRect(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
                         }
                     }
-                    for (band, path) in bands.enumerated() where !path.isEmpty { context.fill(path, with: .color(heat[band])) }
+                    context.fill(grown, with: .color(color))
                 }
                 .overlay { if let edge = palette.bubbleEdge { look.shape.strokeBorder(edge).opacity(progress) } }
             }
     }
 
-    /// 从冷到热：气泡色 → 紫 → 玫红，与回答显影同一套色（`thinkingMid`、`thinkingHigh`）。
-    private var heatColors: [Color] {
-        (0..<Self.bands).map { band in
-            let heat = Double(band) / Double(Self.bands - 1)
-            return heat > 0.5 ? palette.thinkingMid.mix(with: palette.thinkingHigh, by: (heat - 0.5) * 2) : palette.bubble.mix(with: palette.thinkingMid, by: heat * 2)
-        }
-    }
-
-    /// 格子在前 `spread` 里按阈值表陆续长出（留白也在这一段长满），每一格长出后用 `cool` 冷却，到 1 正好全冷。
-    /// 冷得快：带色的只是刚长出的那一圈，看着是网点一格格亮起来；冷得慢的话整颗先是一颗紫气泡、再褪色。
-    private static var spread: Double { 0.75 }
-    private static var cool: Double { 0.25 }
-    private static var bands: Int { 8 }
+    /// 一格的边长（点，取整到设备像素）：回答显影的网点（约 2 点）放在一整颗气泡上太细，看着是一层灰雾。
+    private static var grain: CGFloat { 4 }
     /// 扫过去的那道边有多宽（占整颗的几成）：边里按阈值表抖开，太窄是一道硬线，太宽又成了整颗一起闪。
     private static var soft: Double { 0.35 }
 }
