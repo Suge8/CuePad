@@ -62,7 +62,7 @@ import Testing
     func record() async throws -> CKRecord { RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: name)), zoneID: zone) }
 
     let waiting = try #require(AlertText.content(for: try await record(), kind: .waitingForUser))
-    #expect(waiting.title == "homepage 等你拍板" && waiting.body == "要覆盖 public/feed.xml 吗？ 会丢掉手写的条目")
+    #expect(waiting.title == "homepage 等你回答" && waiting.body == "要覆盖 public/feed.xml 吗？ 会丢掉手写的条目")
 
     let earlier = Recap(lastPrompt: "看看首页", lastReply: "上一轮说的话", answeredAt: .now.addingTimeInterval(-600))
     try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: earlier))

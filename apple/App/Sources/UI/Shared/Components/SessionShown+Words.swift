@@ -12,7 +12,7 @@ nonisolated extension SessionShown {
         case .working(.delegating): String(localized: "子代理工作中")
         case .working(.compacting): String(localized: "正在压缩上下文")
         case .working: speaking ? String(localized: "输出中") : CueNow.thinking
-        case .asking: asksForWords ? String(localized: "等你回答") : String(localized: "等你确认")
+        case .asking: String(localized: "等你回答")
         case .awaitsReply, .unread: String(localized: "新回复")
         case .cueAsking: String(localized: "等 \(cue ?? "") 回答")
         case .failed(.network): String(localized: "连不上")
@@ -24,7 +24,7 @@ nonisolated extension SessionShown {
         case .fresh: String(localized: "新开的会话")
         case .ended: String(localized: "已休眠")
         case .interrupted: String(localized: "被打断")
-        case .unknown(let mac?): String(localized: "「\(mac)」没开")
+        case .offline(let mac): String(localized: "「\(mac)」没开")
         case .unknown: String(localized: "状态未确认")
         }
     }
@@ -38,7 +38,7 @@ nonisolated extension SessionShown {
         case .delivery: String(localized: "正在发给 Agent")
         case .working(.compacting): String(localized: "Agent 正在压缩上下文")
         case .working: String(localized: "Agent 正在工作")
-        case .asking: asksForWords ? String(localized: "Agent 等你回答") : String(localized: "Agent 等你确认")
+        case .asking: String(localized: "Agent 等你回答")
         case .awaitsReply: String(localized: "Agent 有新回复，留给你回")
         case .cueAsking: String(localized: "Agent 在等 \(cue ?? "") 回答")
         case .failed: String(localized: "Agent 出错")
@@ -47,14 +47,21 @@ nonisolated extension SessionShown {
         case .fresh: String(localized: "Agent 新会话")
         case .ended: String(localized: "Agent 会话已休眠")
         case .interrupted: String(localized: "Agent 被打断")
-        case .unknown(let mac?): String(localized: "「\(mac)」没开")
+        case .offline(let mac): String(localized: "「\(mac)」没开")
         case .unknown: String(localized: "Agent 状态尚未确认")
         }
     }
 
     var isNewReply: Bool { status == .unread || status == .awaitsReply }
 
-    var isQuiet: Bool { status == .idle || status == .resting }
+    var isOffline: Bool { if case .offline = status { true } else { false } }
+
+    var isQuiet: Bool {
+        switch status {
+        case .idle, .resting, .offline: true
+        default: false
+        }
+    }
 
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 
@@ -73,7 +80,7 @@ nonisolated extension SessionShown {
         case .failed, .delivery(.failed): 2
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): 4
         case .working, .delivery, .cueAsking: 3
-        case .unread, .idle, .resting, .fresh, .interrupted, .unknown: 4
+        case .unread, .idle, .resting, .fresh, .interrupted, .unknown, .offline: 4
         case .ended: 5
         }
     }
@@ -85,7 +92,7 @@ nonisolated extension SessionShown {
         case .unread: 4
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): 1
         case .working, .delivery, .cueAsking: 2
-        case .idle, .resting, .fresh, .interrupted, .unknown: 1
+        case .idle, .resting, .fresh, .interrupted, .unknown, .offline: 1
         case .ended: 0
         }
     }

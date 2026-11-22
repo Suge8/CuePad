@@ -17,7 +17,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
 
     private static func wantsLook(_ shown: SessionShown) -> Bool {
         switch shown.status {
-        case .delivery, .working, .asking, .awaitsReply, .cueAsking, .failed, .unread, .interrupted, .unknown: true
+        case .delivery, .working, .asking, .awaitsReply, .cueAsking, .failed, .unread, .interrupted, .unknown, .offline: true
         case .idle, .resting, .fresh, .ended: false
         }
     }

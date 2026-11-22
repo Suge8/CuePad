@@ -184,7 +184,7 @@ private struct PosterRow: View {
             if item.kind.tone == .moving {
                 ActivityElapsed(since: item.since).font(IslandType.posterTime).minimumScaleFactor(0.7).frame(width: IslandType.posterTimeWidth, alignment: .trailing)
             } else {
-                Text(item.label).font(IslandType.posterRow).fixedSize()
+                if let label = item.label { Text(label).font(IslandType.posterRow).fixedSize() }
             }
         }
         .foregroundStyle(signal.ink)

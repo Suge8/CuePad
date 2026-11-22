@@ -12,8 +12,6 @@ nonisolated struct RuntimeTimeline {
         var running = 0
         var delegating = 0
         var unknown = 0
-        var offlineUnknown = 0
-        var offlineMac: String?
         var agents = 0
         var held = 0
         var pending = 0
@@ -24,7 +22,6 @@ nonisolated struct RuntimeTimeline {
             if delegating > 0 { return .delegating }
             return unknown > 0 ? .unconfirmed : .resting
         }
-        var offline: String? { kind == .unconfirmed && offlineUnknown == unknown ? offlineMac : nil }
         var moving: Int { held == 0 && (kind == .running || kind == .delegating) ? 1 : 0 }
         var delegated: Int { held == 0 && kind == .delegating ? 1 : 0 }
         var advancing: Int { held == 0 ? 1 : 0 }
@@ -35,7 +32,7 @@ nonisolated struct RuntimeTimeline {
             case .delegating: delegatingSince ?? since
             default: since
             }
-            return CueNow.Item(id: id, kind: kind, name: name, since: start, subagents: kind == .delegating ? agents : 0, offline: offline)
+            return CueNow.Item(id: id, kind: kind, name: name, since: start, subagents: kind == .delegating ? agents : 0)
         }
     }
 
@@ -56,8 +53,6 @@ nonisolated struct RuntimeTimeline {
         var pending = 0
         var visible: String?
         var unknown = 0
-        var offlineUnknown = 0
-        var offlineMac: String?
         var startedRunning: Date?
         var startedDelegating: Date?
         var afterRunning: Date?
@@ -69,8 +64,6 @@ nonisolated struct RuntimeTimeline {
             delegating += other.delegating
             agents += other.agents
             unknown += other.unknown
-            offlineUnknown += other.offlineUnknown
-            offlineMac = offlineMac ?? other.offlineMac
             pending += other.pending
             expiredSessions += other.expiredSessions
             startedRunning = [startedRunning, other.startedRunning].compactMap { $0 }.min()
@@ -142,10 +135,6 @@ nonisolated struct RuntimeTimeline {
                 if running > 0 { entry.began = max(entry.began ?? .distantPast, session.busySince ?? session.stateSince) }
                 if state.known == nil {
                     entry.unknown += 1
-                    if let mac = session.macOff(at: moment) {
-                        entry.offlineUnknown += 1
-                        entry.offlineMac = mac
-                    }
                 }
                 if let due = session.runtimeUntil {
                     let runningSince = running > 0 ? session.busySince ?? session.stateSince : nil
@@ -154,7 +143,6 @@ nonisolated struct RuntimeTimeline {
                     entry.delegatingSince = [entry.delegatingSince, delegatingSince].compactMap { $0 }.min()
                     events[due, default: []].append(Removal(
                         work: index, running: running, delegating: delegating, agents: agents, unknown: 1,
-                        offlineUnknown: 1, offlineMac: digest.macNames[session.hostID] ?? MacAgents.unnamed,
                         startedRunning: runningSince, startedDelegating: delegatingSince, expiredSessions: added ? [ref] : []))
                 }
             }
@@ -254,8 +242,6 @@ nonisolated struct RuntimeTimeline {
             works[index].held -= removal.asks + removal.reply
             works[index].pending -= removal.pending
             works[index].unknown += removal.unknown
-            works[index].offlineUnknown += removal.offlineUnknown
-            if let mac = removal.offlineMac { works[index].offlineMac = mac }
             if removal.unknown > 0 {
                 works[index].runningSince = removal.afterRunning
                 works[index].delegatingSince = removal.afterDelegating
@@ -277,7 +263,7 @@ nonisolated struct RuntimeTimeline {
             let work = works[index]
             guard work.held == 0, let slot = workSlots[index] else { continue }
             if shownIDs[slot] == work.id {
-                items.append(.update(slot: slot, kind: work.kind, since: work.item.since, subagents: work.item.subagents, offline: work.offline))
+                items.append(.update(slot: slot, kind: work.kind, since: work.item.since, subagents: work.item.subagents))
             } else {
                 var item = work.item
                 item.slot = slot

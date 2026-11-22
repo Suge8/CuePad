@@ -68,7 +68,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
     var enabled: Bool
     var hostID: String?
     var hostName: String?
-    var macNames: [String: String] = [:]
     var tally: CueTally
     var advancing: Int { tally.advancing.count }
     var unread: Int
@@ -103,7 +102,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
             enabled: profile?.activeHost != nil,
             hostID: profile?.hostID,
             hostName: try profile?.hostID.map { try store.macAgents(on: $0).shownName },
-            macNames: Dictionary(try store.allMacAgents().map { ($0.hostID, $0.shownName) }) { first, _ in first },
             tally: tally,
             unread: try store.cueUnread().count,
             hostUntil: try profile?.activeHost.flatMap { try store.macOnlineUntil($0) },

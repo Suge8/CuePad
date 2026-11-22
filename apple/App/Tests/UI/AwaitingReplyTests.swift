@@ -9,7 +9,7 @@ struct AwaitingReplyTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func 出错留给你回后再说一句_看板当场回到推进中_点卡进卡上的会话() async throws {
+    @Test func 出错留给你回后再说一句_看板当场回到进行中_点卡进卡上的会话() async throws {
         let workspace = Workspace(services: rig.services)
         _ = try await store.updateCueProfile {
             $0.hostID = "mac-cue"

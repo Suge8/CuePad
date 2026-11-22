@@ -56,7 +56,7 @@ public enum AlertText {
   public static func content(title: String, question: String?, reply: String?, failure: String?, kind: AlertKind) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
-      (String(localized: "\(title) 等你拍板"), gist(question) ?? String(localized: "去看看它在问什么"))
+      (String(localized: "\(title) 等你回答"), gist(question) ?? String(localized: "去看看它在问什么"))
     case .awaitsReply, .settled:
       (String(localized: "\(title) 新回复"), gist(failure) ?? gist(reply) ?? String(localized: "去看看它说了什么"))
     }

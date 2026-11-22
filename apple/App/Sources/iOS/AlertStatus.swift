@@ -16,9 +16,9 @@ struct AlertStatus: Equatable {
     init(authorization: UNAuthorizationStatus, registration: AlertCenter.Registration, subscription: AlertSubscriptionStatus) {
         switch (authorization, registration, subscription) {
         case (.denied, _, _):
-            self = Self(.problem, "通知已关闭", "Agent 在等你确认或做完、Cue 回你话时，锁屏收不到提示。", action: .openSettings)
+            self = Self(.problem, "通知已关闭", "Agent 在等你回答或做完、Cue 回你话时，锁屏收不到提示。", action: .openSettings)
         case (.notDetermined, _, _):
-            self = Self(.problem, "还没有开启通知", "开启后，Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。", action: .allow)
+            self = Self(.problem, "还没有开启通知", "开启后，Agent 在等你回答或做完、Cue 回你话时，锁屏会提示你。", action: .allow)
         case (_, .failed(let reason), _):
             self = Self(.problem, "没能向系统注册推送", Self.retrying, diagnostics: reason, action: .retry)
         case (_, _, .failed(let reason)):
@@ -26,7 +26,7 @@ struct AlertStatus: Equatable {
         case (_, _, .offline):
             self = Self(.pending, "等连上 iCloud 再开启", "没有网络或 iCloud 暂时不通；连上后自动开启，这之前锁屏收不到提示。")
         case (_, .registered, .active):
-            self = Self(.on, "已开启", "Agent 在等你确认或做完、Cue 回你话时，锁屏会提示你。")
+            self = Self(.on, "已开启", "Agent 在等你回答或做完、Cue 回你话时，锁屏会提示你。")
         default:
             self = Self(.pending, "正在开启…", nil)
         }

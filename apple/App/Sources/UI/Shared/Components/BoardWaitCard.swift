@@ -19,7 +19,7 @@ struct BoardWaitCard: View {
         .boardDim(project: held.project)
     }
 
-    private var spoken: String { Dotted(held.title, held.deciding ? String(localized: "等你拍板") : String(localized: "新回复"), ask).spoken }
+    private var spoken: String { Dotted(held.title, held.shown.label, ask).spoken }
 
     private func link(@ViewBuilder _ label: () -> some View) -> some View {
         let label = label()
@@ -50,7 +50,7 @@ struct BoardWaitCard: View {
     #if os(macOS)
     private func tip(at now: Date) -> String {
         Dotted(
-            workspace.catalog?.project(held.project)?.shownName, held.deciding ? held.session.asked.line : String(localized: "新回复"),
+            workspace.catalog?.project(held.project)?.shownName, held.deciding ? held.session.asked.line : held.shown.label,
             SessionClock.Waited(since: held.session.stateSince).format(now)
         ).visible
     }
@@ -69,7 +69,7 @@ private struct BoardWaitFace: View {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                     if held.item?.task.isPinned == true { BoardPin() }
                     BoardCardTitle(held.title).foregroundStyle(palette.ink)
-                    Text(held.deciding ? "拍板" : "新回复").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.waiting).fixedSize()
+                    Text(held.shown.label).font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.waiting).fixedSize()
                         .padding(.leading, Spacing.hair)
                 }
                 .font(Typography.bodyStrong).frame(maxWidth: .infinity, alignment: .leading)

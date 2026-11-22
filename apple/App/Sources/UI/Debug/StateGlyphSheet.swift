@@ -62,7 +62,7 @@ struct StateGlyphSheet: View {
         ("压缩上下文", .working(.compacting)),
         ("等子代理", .working(.delegating)),
         ("话在路上", .delivery(.inTransit(.sending))),
-        ("等你确认", .asking),
+        ("等你回答", .asking),
         ("等 Cue 回答", .cueAsking),
         ("新回复", .unread),
         ("新回复（留给你）", .awaitsReply),
@@ -72,7 +72,8 @@ struct StateGlyphSheet: View {
         ("空闲", .idle),
         ("新会话", .fresh),
         ("已休眠", .ended),
-        ("未知", .unknown()),
+        ("未知", .unknown),
+        ("Mac 没开", .offline(mac: "Mac Studio")),
     ]
 
     private static func change(_ kind: CueChange.Kind) -> String {
@@ -121,7 +122,7 @@ private struct StateTour: View {
         ("在跑", .working(.thinking)),
         ("用工具", .working(.tool)),
         ("在跑", .working(.thinking)),
-        ("等你确认", .asking),
+        ("等你回答", .asking),
         ("用工具", .working(.tool)),
         ("压缩上下文", .working(.compacting)),
         ("等子代理", .working(.delegating)),

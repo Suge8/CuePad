@@ -53,6 +53,7 @@ struct SendGlyph: View {
         case idle, ready, sending, stop, stopping
         case save(enabled: Bool)
         case start, retry
+        case asleep
         case call(enabled: Bool)
         case hangUp
     }
@@ -85,7 +86,7 @@ struct SendGlyph: View {
 
     private var disc: Color {
         switch phase {
-        case .idle, .sending, .stopping, .save(enabled: false), .call: palette.fill
+        case .idle, .sending, .stopping, .save(enabled: false), .call, .asleep: palette.fill
         case .ready, .save(enabled: true), .start, .retry, .stop, .hangUp: palette.action
         }
     }
@@ -99,6 +100,7 @@ struct SendGlyph: View {
         case .call(let enabled): (.call, enabled ? palette.ink : palette.ink3, 18)
         case .hangUp: (.close, palette.onAction, 14)
         case .ready: (.send, palette.onAction, Self.sendSide)
+        case .asleep: (.mac, palette.ink3, 17)
         default: (.send, palette.ink3, Self.sendSide)
         }
         return Image(icon)
