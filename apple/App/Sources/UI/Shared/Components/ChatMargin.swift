@@ -92,6 +92,7 @@ struct NoteGlyph: ViewModifier {
 struct ChatMarker<Label: View>: View {
     var ruled = false
     var highlighted = false
+    var glassed = false
     var action: (() -> Void)?
     @ViewBuilder let label: Label
     @Environment(\.palette) private var palette
@@ -113,6 +114,7 @@ struct ChatMarker<Label: View>: View {
             .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
             .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
             .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
+            .glass(in: .capsule, shown: glassed)
             .animation(Motion.fade, value: highlighted)
         if let action {
             Button(action: action) { text.contentShape(.capsule) }
@@ -139,7 +141,7 @@ struct ChatTimeMarker: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        ChatMarker {
+        ChatMarker(glassed: true) {
             if let day = ChatTime.day(date) {
                 Text("\(Text(day).fontWeight(.medium).foregroundStyle(palette.ink2)) \(ChatTime.time(date))")
             } else {

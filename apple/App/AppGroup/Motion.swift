@@ -73,13 +73,6 @@ extension Motion {
         static let stroke = Animation.easeOut(duration: 0.45)
     }
 
-    nonisolated enum Stage {
-        static let riseDuration: TimeInterval = 0.6
-        static let rise = Animation.spring(duration: riseDuration)
-        static let figureDelay: TimeInterval = 0.3
-        static let wordsDelay: TimeInterval = 0.6
-    }
-
     nonisolated enum Fade {
         static let duration: TimeInterval = 0.16
         static let yield: TimeInterval = 0.08

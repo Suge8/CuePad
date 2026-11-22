@@ -129,7 +129,7 @@ extension DebugScene {
                 guard let animation = layer.animation(forKey: key) else { return false }
                 // 一次性的：总时长不过几秒。循环的（光标闪烁、转圈、玻璃的跟随）重复次数或时长是极大值，不等它们
                 let total = animation.repeatDuration > 0 ? animation.repeatDuration : animation.duration * Double(max(animation.repeatCount, 1))
-                // 放完了的还挂在层上，要等下一次提交才摘（会话条图标隔几秒敲一下的 `InkBeat`）：舞台开着时对话不排、久不提交，不跳过它就一直算在动
+                // 放完了的还挂在层上，要等下一次提交才摘（会话条图标隔几秒敲一下的 `InkBeat`）：页面静着时久不提交，不跳过它就一直算在动
                 let ended = animation.beginTime > 0 && layer.convertTime(CACurrentMediaTime(), from: nil) > animation.beginTime + total
                 return total.isFinite && total <= Self.longestOneShot && !ended
             }

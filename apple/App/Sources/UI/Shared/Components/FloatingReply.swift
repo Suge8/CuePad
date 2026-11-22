@@ -48,20 +48,17 @@ private let floatingReplyPage = "FloatingReply.page"
 
 #if os(macOS)
 extension View {
-    func replyTray(_ shown: Bool = true) -> some View { modifier(ReplyTray(shown: shown)) }
+    func replyTray() -> some View { modifier(ReplyTray()) }
 }
 
 private struct ReplyTray: ViewModifier {
-    let shown: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content.background {
-            if shown {
-                UnevenRoundedRectangle(topLeadingRadius: Radius.field, topTrailingRadius: Radius.field)
-                    .fill(palette.desk)
-                    .padding(.bottom, -Spacing.replyBottom)
-            }
+            UnevenRoundedRectangle(topLeadingRadius: Radius.field, topTrailingRadius: Radius.field)
+                .fill(palette.desk)
+                .padding(.bottom, -Spacing.replyBottom)
         }
     }
 }

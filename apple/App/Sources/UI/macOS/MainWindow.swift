@@ -30,12 +30,12 @@ struct MainWindow: View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
-            let under = sizes.split || sizes.home ? 0 : sizes.cue
+            let under = sizes.split ? 0 : sizes.cue
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under, spans: sizes.spans) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.fill, under: under, spans: sizes.spans) {
                     MainColumn().environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
-                        .environment(\.pageActive, !sizes.home && !sizes.fill)
+                        .environment(\.pageActive, !sizes.fill)
                         .environment(\.underCue, under)
                 }
                 .frame(width: sizes.leading + under)
@@ -48,13 +48,12 @@ struct MainWindow: View {
             }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
             .overlay { WideDropFeedback(window: geometry.size.width) }
-            .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
+            .overlay { if !sizes.fill { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
-            .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0, home: sizes.home, lead: Chrome.headLead(rail: sizes.rail)) } }
-            .overlay { if sizes.home { railChrome(sizes) } }
+            .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0) } }
         }
     }
 

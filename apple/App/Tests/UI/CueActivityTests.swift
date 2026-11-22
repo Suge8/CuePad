@@ -62,8 +62,8 @@ struct CueActivityTests {
         }
         let cueRecorder = try await rig.runtimeRecorder(on: "mac-cue")
         cue = try await now()
-        #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」")
-        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
+        #expect(cue.counts.isEmpty && cue.justDone?.name == "发布 v1.4")
+        #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).justDone == nil)
 
         try await cueRecorder.updateCue(.thinking)
         cue = try await now()
@@ -75,7 +75,7 @@ struct CueActivityTests {
         try await store.bindSession("ship", to: ship.id)
         try await cueRecorder.updateCue(.settled)
         cue = try await now()
-        #expect(cue.spoken == "1 件推进中" && cue.needsYou == 0)
+        #expect(cue.counts.map(\.words) == ["1 工作中"] && cue.needsYou == 0)
     }
 
     @Test func Cue话未确认不沿用旧忙碌也不结束活动_迟到回执后按真实状态继续() async throws {

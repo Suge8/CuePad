@@ -2,7 +2,6 @@
 import SwiftUI
 
 struct CueHeader: View {
-    var staged = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.headerHost) private var host
     @Environment(Workspace.self) private var workspace
@@ -28,11 +27,8 @@ struct CueHeader: View {
                 .frame(height: Self.height)
                 .transition(.opacity)
             }
-            if !staged {
-                plate(style).transition(.opacity)
-            }
+            plate(style)
         }
-        .animation(Motion.fade, value: staged)
     }
 
     private func plate(_ style: PlateStyle) -> some View {

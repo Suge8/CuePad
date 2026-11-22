@@ -268,7 +268,7 @@ private struct CueHostLine: View {
         switch cue.presence {
         case .disabled: return settings
         case .asleep, .unreachable:
-            guard !cue.now.ledger.isEmpty, let why = cue.presence.line(host: host, ranBefore: true) else { return settings }
+            guard !cue.now.counts.isEmpty, let why = cue.presence.line(host: host, ranBefore: true) else { return settings }
             return .problem(why, failed: cue.presence.isUnreachable)
         case .unconfirmed, .idle, .sending, .working: return .host(String(localized: "在「\(host)」上运行"))
         }

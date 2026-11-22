@@ -18,7 +18,7 @@ extension Workspace {
         case .narrow(let state):
             if case .session(let route)? = state.path.last { sessions = [route] } else { sessions = [] }
         case .wide(let state):
-            sessions = state.home ? [] : [state.mainSession].compactMap(\.self) + state.besideSessions
+            sessions = [state.mainSession].compactMap(\.self) + state.besideSessions
         }
         return sessions.map { ViewerKeeper.Page(id: $0.id, sessionID: $0.sessionID) }
     }
@@ -69,12 +69,7 @@ extension Workspace {
                 return
             }
             guard case .page(route) = state.main else { return }
-            if state.home {
-                state.main = .browse
-                navigation = .wide(state)
-            } else {
-                selectWide(browseRoute)
-            }
+            selectWide(browseRoute)
         }
     }
 

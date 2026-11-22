@@ -41,11 +41,27 @@ private struct Poster {
             head = .item(done)
             tone = .done
         } else {
-            head = .line(now.quietLine)
+            head = .line(Self.quietLine(now))
         }
         self.tone = stale ? .quiet : tone
         self.step = step
         rows = Array(items.prefix(4))
+    }
+
+    private static func quietLine(_ now: CueNow) -> String {
+        switch now.cue {
+        case .away(let reason, _): reason
+        case .hearing: String(localized: "你的话在路上")
+        case .working(let woke, let doing, _): doing ?? woke ?? CueNow.thinking
+        case .idle:
+            if now.unconfirmed {
+                String(localized: "状态未确认")
+            } else if now.advancing > 0 {
+                String(localized: "推进中 \(now.advancing) 件，都空闲")
+            } else {
+                now.elsewhere ?? String(localized: "手上没有事")
+            }
+        }
     }
 
     var eyebrow: CueNow.Item.Kind? {
@@ -132,7 +148,7 @@ struct CueLockScreen: View {
                 Text("推进中").font(IslandType.posterHeadWord).foregroundStyle(signal.soft)
             }
             .frame(height: 44)
-            .accessibilityElement(children: .ignore).accessibilityLabel(now.spoken)
+            .accessibilityElement(children: .ignore).accessibilityLabel(Text("\(count) 推进中"))
         case .line(let line):
             Text(line).font(IslandType.posterTitle).foregroundStyle(signal.ink).lineLimit(1)
         }

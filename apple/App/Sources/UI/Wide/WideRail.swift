@@ -75,7 +75,7 @@ struct RailTopTools: View {
         HStack(spacing: Spacing.item) {
             tool(.sidebar, "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleRail(sizes) }
                 .railWaitingDot(hidden: !workspace.railShown(sizes))
-            if !sizes.home { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
+            if floating { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, floating ? Chrome.lead : RailTool.lead)

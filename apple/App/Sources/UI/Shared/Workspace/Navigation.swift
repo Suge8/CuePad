@@ -26,13 +26,14 @@ struct IdeaDock: Equatable {
 
 struct WideNavigation: Equatable {
     enum Main: Equatable {
-        case browse
         case session(SessionRoute)
         case page(Route)
 
+        static let empty = Main.page(.progress)
+
         init(_ route: Route) {
             switch route {
-            case .shelf, .progress, .cue: self = .browse
+            case .cue: self = .empty
             case .session(let session): self = .session(session)
             default: self = .page(route)
             }
@@ -47,8 +48,7 @@ struct WideNavigation: Equatable {
 
     static let maxPanes = 3
 
-    var home = true
-    var main: Main = .browse {
+    var main: Main = .empty {
         didSet {
             guard case .session(let now) = main else { return beside = [] }
             if case .session(let before) = oldValue, before.id == now.id { return }
@@ -87,7 +87,6 @@ struct WideNavigation: Equatable {
 
     func dropping(_ pane: Beside, at index: Int, replacing: Bool, room: Int, covering: UUID?) -> WideNavigation? {
         var next = self
-        next.home = false
         if case .session(let session) = pane, mainSession == nil || covering != nil && index == 0 {
             next.beside.removeAll { $0 == pane }
             next.main = .session(session)
@@ -111,8 +110,7 @@ struct WideNavigation: Equatable {
     mutating func close(at index: Int) {
         guard index > 0 else {
             guard let next = besideSessions.first else {
-                main = .browse
-                home = true
+                main = .empty
                 return
             }
             beside.removeAll { $0 == .session(next) }
@@ -187,7 +185,6 @@ extension Workspace {
         case .narrow(let state): state.path.last ?? (state.sidebarOpen ? sidebarRoute : .cue)
         case .wide(let state):
             switch state.main {
-            case .browse: browseRoute
             case .session(let session): .session(session)
             case .page(let route): route
             }
@@ -195,8 +192,7 @@ extension Workspace {
     }
 
     var shownPane: NavigationPane? {
-        if cueHome { return nil }
-        return switch mainRoute {
+        switch mainRoute {
         case .shelf, .project: .projects
         case .progress: .progress
         default: nil
@@ -208,11 +204,7 @@ extension Workspace {
     }
 
     var beside: [WideNavigation.Beside] {
-        if case .wide(let state) = navigation, !state.home { state.beside } else { [] }
-    }
-
-    var cueHome: Bool {
-        if case .wide(let state) = navigation { state.home } else { false }
+        if case .wide(let state) = navigation { state.beside } else { [] }
     }
 
     var navigationPane: NavigationPane { services.settings.navigationPane }
@@ -252,23 +244,20 @@ extension Workspace {
         case .wide(let state):
             var narrow: NarrowNavigation
             switch mainRoute {
-            case _ where state.home: narrow = NarrowNavigation()
             case .shelf, .progress: narrow = NarrowNavigation(sidebarOpen: true)
             case .project: narrow = NarrowNavigation(path: [mainRoute], sidebarOpen: true)
             default: narrow = NarrowNavigation(path: [mainRoute])
             }
-            if !state.home {
-                for session in state.besideSessions { narrow.path.append(.session(session)) }
-                let card = state.beside.lazy.compactMap { if case .card(let id) = $0 { id } else { nil } }.first
-                if let card, case .session(let top)? = narrow.path.last { narrow.dock = IdeaDock(card: card, session: top.id) }
-            }
+            for session in state.besideSessions { narrow.path.append(.session(session)) }
+            let card = state.beside.lazy.compactMap { if case .card(let id) = $0 { id } else { nil } }.first
+            if let card, case .session(let top)? = narrow.path.last { narrow.dock = IdeaDock(card: card, session: top.id) }
             if let overlay { narrow.path.append(overlay.route) }
             overlay = nil
             navigation = .narrow(narrow)
         case .narrow(var state):
             let covering = state.path.last.flatMap(Overlay.init)
             if covering != nil { state.path.removeLast() }
-            var wide = WideNavigation(home: state.path.isEmpty && !state.sidebarOpen && covering == nil)
+            var wide = WideNavigation()
             let dock = state.dock.flatMap { $0.session == nil ? nil : $0.card }
             let sessions = state.path.reversed().prefix { if case .session = $0 { true } else { false } }.prefix(WideNavigation.maxPanes - (dock == nil ? 0 : 1)).reversed()
             if case .session(let first)? = sessions.first {
@@ -277,6 +266,8 @@ extension Workspace {
                 if let dock { wide.beside.append(.card(dock)) }
             } else if let page = state.path.last {
                 wide.main = WideNavigation.Main(page)
+            } else if state.sidebarOpen {
+                wide.main = .page(browseRoute)
             }
             navigation = .wide(wide)
             overlay = covering
@@ -289,9 +280,7 @@ extension Workspace.Navigation {
         switch self {
         case .narrow(let state): return (["cue"] + state.path.map(\.trail)).joined(separator: " > ") + (state.sidebarOpen ? " + sidebar" : "")
         case .wide(let state):
-            if state.home { return "wide cue" }
             return switch state.main {
-            case .browse: "wide browse"
             case .session:
                 (["wide session"] + state.beside.map { pane in
                     switch pane {

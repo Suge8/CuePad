@@ -86,7 +86,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     static let doneWindow: TimeInterval = 10 * 60
     static let fastStale: TimeInterval = 3 * 60
     static let slowStale: TimeInterval = 15 * 60
-    static let quiet = String(localized: "手上没有事")
     static let thinking = String(localized: "思考中")
 
     var justDone: Item? { items.first { $0.kind == .done } }
@@ -164,82 +163,24 @@ nonisolated extension CueNow: SnapshotFile { static let fileName = "cue-v2.json"
 
 nonisolated extension CueNow {
     struct Entry: Hashable, Sendable, Identifiable {
-        enum Kind: Hashable, Sendable {
-            case asks, reply, advancing, subagents
-        }
+        enum Kind: Hashable, Sendable { case waiting, working }
 
         let kind: Kind
         let count: Int
+        let tone: Tone
         var id: Kind { kind }
-
-        var spoken: String {
-            switch kind {
-            case .asks: String(localized: "\(count) 件拍板")
-            case .reply: String(localized: "\(count) 件新回复")
-            case .advancing: String(localized: "\(count) 件推进中")
-            case .subagents: String(localized: "\(count) 个子代理工作中")
-            }
-        }
-
-        var tone: Tone {
-            switch kind {
-            case .asks: .asks
-            case .reply: .reply
-            case .advancing, .subagents: .moving
-            }
-        }
     }
 
-    var yours: [Entry] {
-        [Entry(kind: .asks, count: tally.asks), Entry(kind: .reply, count: tally.reply)].filter { $0.count > 0 }
-    }
-
-    var moving: [Entry] {
-        guard tally.moving > 0 else { return [] }
-        return [Entry(kind: .advancing, count: advancing), Entry(kind: .subagents, count: subagents)].filter { $0.count > 0 }
-    }
-
-    var ledger: [[Entry]] {
-        guard !(yours.isEmpty && moving.isEmpty) else { return [] }
-        return [yours + moving] + (moving.count > 1 ? [yours + moving.prefix(1)] : [])
-    }
-
-    var quietLine: String {
-        switch cue {
-        case .away(let reason, _): reason
-        case .hearing: String(localized: "你的话在路上")
-        case .working(let woke, let doing, _): doing ?? woke ?? Self.thinking
-        case .idle:
-            if unconfirmed {
-                String(localized: "状态未确认")
-            } else if let done = justDone {
-                String(localized: "刚做完「\(done.name)」")
-            } else if advancing > 0 {
-                String(localized: "推进中 \(advancing) 件，都空闲")
-            } else {
-                elsewhere ?? Self.quiet
-            }
-        }
-    }
-
-    var step: String? {
-        guard !ledger.isEmpty else { return nil }
-        return switch cue {
-        case .hearing: String(localized: "你的话在路上")
-        case .working(let woke, let doing, _): Dotted(doing ?? woke ?? Self.thinking, doing == nil ? nil : woke).visible
-        case .away, .idle: nil
-        }
+    /// 名牌、会话条与小组件共用的那一句：等你的与工作中的各数几件，都没有就不写。
+    var counts: [Entry] {
+        [Entry(kind: .waiting, count: needsYou, tone: tally.asks > 0 ? .asks : .reply), Entry(kind: .working, count: tally.moving, tone: .moving)]
+            .filter { $0.count > 0 }
     }
 
     var keyTone: Tone {
         if tally.asks > 0 { return .asks }
         if tally.reply > 0 { return .reply }
-        return isBusy || !moving.isEmpty ? .moving : .quiet
-    }
-
-    var spoken: String {
-        guard let entries = ledger.first else { return quietLine }
-        return Dotted(entries.map(\.spoken)).spoken
+        return isBusy || tally.moving > 0 ? .moving : .quiet
     }
 }
 
