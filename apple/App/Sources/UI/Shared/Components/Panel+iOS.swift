@@ -144,16 +144,14 @@ private struct ControlBubble<Panel: View>: ViewModifier {
 
 private struct BubbleLayer: View {
     let shown: PanelHost.Shown?
-    @State private var keyboardTop: CGFloat?
     @State private var drag: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let source = shown?.source ?? .unanchored
         GeometryReader { proxy in
-            let frame = proxy.frame(in: .global)
-            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets, width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
-            BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.insets.bottom }, ceiling: Self.insets.top) {
+            let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.insets, width: shown?.width ?? .fitting)
+            BubbleStage {
                 if let shown {
                     BubbleFrame(placement: placement) {
                         shown.content
@@ -169,18 +167,11 @@ private struct BubbleLayer: View {
                 }
             }
         }
-        .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)
+        .modifier(KeyboardHold())
+        .ignoresSafeArea(.container, edges: source == .bottom ? .bottom : [])
         .allowsHitTesting(shown != nil)
         .animation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: shown?.identity)
-        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: keyboardTop)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-            guard shown != nil, let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-            // 键盘开着时只往上让、不往下回：菜单一开候选栏收起、键盘矮一截，气泡跟着掉下去再弹回来是看得见的抖（同 `KeyboardHold`）；
-            // 收起时末位在屏幕下面，也不往下挪，随后的 willHide 清掉
-            keyboardTop = min(keyboardTop ?? end.minY, end.minY)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardTop = nil }
-        .onChange(of: shown == nil) { if shown == nil { keyboardTop = nil } else { drag = 0 } }
+        .onChange(of: shown == nil) { if shown != nil { drag = 0 } }
     }
 
     private func dragged(_ translation: CGFloat) {
