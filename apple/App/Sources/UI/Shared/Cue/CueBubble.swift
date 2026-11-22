@@ -35,6 +35,7 @@ struct CueSays: View {
     var open: (PreviewOpening) -> Void = { _ in }
     var card = false
     var joined = false
+    var reveal = RevealRole.landed
     @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
     @State private var selecting = false
@@ -64,7 +65,7 @@ struct CueSays: View {
                 if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }
             }
         } else {
-            MarkdownText(source: parts.body).equatable()
+            MarkdownText(source: parts.body, reveal: reveal).equatable()
         }
     }
 

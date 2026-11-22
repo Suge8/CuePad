@@ -45,6 +45,7 @@ struct ReplyBlock: View {
     let tools: ChatMessage.Tools?
     let session: SessionState
     let notes: [ReplyNote]
+    var newest = false
     var fadesIn = true
     #if os(iOS)
     @Environment(\.replyText) private var replyText
@@ -53,7 +54,7 @@ struct ReplyBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
             RoundProcess(tools: tools, took: took, session: session, message: id, fadesIn: fadesIn)
-            MarkdownText(source: text, notes: notes).equatable()
+            MarkdownText(source: text, notes: notes, reveal: newest ? .newest : .landed).equatable()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
                 .contextMenu { menu }
@@ -116,6 +117,7 @@ struct LiveRound<Below: View>: View {
     let session: SessionState
     let messages: [ChatMessage]
     var draft: String?
+    var speaking = false
     var swapsInPlace = false
     let floating: CGFloat
     @ViewBuilder let below: Below
@@ -123,7 +125,7 @@ struct LiveRound<Below: View>: View {
     var body: some View {
         let open = session.pendingTools.flatMap { Chat.landed($0, in: messages.last { $0.role == .known(.pi) }) ? nil : $0 }
         VStack(alignment: .leading, spacing: Conversation.spacing) {
-            RoundProcess(tools: open, draft: draft, session: session, fadesIn: !swapsInPlace)
+            RoundProcess(tools: open, draft: draft, speaking: speaking, session: session, fadesIn: !swapsInPlace)
                 .transition(swapsInPlace ? .asymmetric(insertion: .entry, removal: .identity) : .entry)
             ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
                 VStack(alignment: .leading, spacing: Spacing.item) {
