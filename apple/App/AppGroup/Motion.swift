@@ -83,6 +83,16 @@ extension Motion {
         static let penFade = 0.45
     }
 
+    /// 发出的那句从输入框飞进对话（`SendFlight`）：竖着走得比横着快，走出一道先升后靠右的弧；气泡的底在路上长出来。
+    /// 气泡 `wait` 内没排出来（没写进库、不在这一页）就原地淡掉。
+    nonisolated enum Send {
+        static let lift = Animation.spring(duration: 0.32)
+        static let drift = Animation.spring(duration: 0.45)
+        static let grow = Animation.easeOut(duration: 0.3)
+        static let takeoff: CGFloat = 16
+        static let wait: Duration = .seconds(1)
+    }
+
     nonisolated enum Write {
         static let delay: Duration = .milliseconds(300)
         static let stroke = Animation.easeOut(duration: 0.45)

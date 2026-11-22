@@ -16,6 +16,7 @@ struct CueComposer: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.sendFlight) private var flight
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
     @State private var launch = RelayLaunch()
@@ -191,6 +192,7 @@ struct CueComposer: View {
         let draft = Bindable(workspace.cue).draft
         if aim == .cue {
             let event = CueWatch.Send(at: .now, beat: workspace.cue.beat)
+            flight?.depart(draft.wrappedValue)
             guard workspace.sayToCue(from: draft) != nil else { return }
             workspace.cue.sent(event)
             workspace.services.settings.play(.send)

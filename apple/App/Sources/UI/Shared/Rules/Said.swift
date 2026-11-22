@@ -19,6 +19,13 @@ nonisolated enum Said: Equatable, Sendable {
         }
     }
 
+    var at: Date {
+        switch self {
+        case .cue(let message, _): message.createdAt
+        case .request(let request): request.createdAt
+        }
+    }
+
     var host: String? {
         switch self {
         case .cue(_, let host): host

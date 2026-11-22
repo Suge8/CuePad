@@ -21,6 +21,7 @@ struct ReplyBar: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
+    @Environment(\.sendFlight) private var flight
     @State private var sentCount = 0
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
@@ -215,6 +216,7 @@ struct ReplyBar: View {
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
         let talked = commandLine == nil
+        if talked { flight?.depart(draft) }
         workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card)
         didSend(talked: talked)
     }

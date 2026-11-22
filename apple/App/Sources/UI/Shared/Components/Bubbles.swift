@@ -39,10 +39,13 @@ struct UserBubble<Menu: View>: View {
     var fromCue = false
     var marksTransit = true
     var quote: BubbleQuote?
+    var said: Date?
     @ViewBuilder var menu: Menu
+    @Environment(\.sendFlight) private var flight
 
     var body: some View {
         let parts = BubbleParts(stored), text = parts.text, images = parts.images, skill = SkillCall.parse(text)
+        let plain = images.isEmpty && parts.files.isEmpty && skill == nil
         let mark: BubbleTrip = switch trip {
         case .sending, .delivered: marksTransit ? trip : .arrived
         case .arrived, .failed: trip
@@ -53,6 +56,7 @@ struct UserBubble<Menu: View>: View {
                     BubbleText(
                         text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, fromCue: fromCue, foldedLines: Self.foldedLines, quote: quote)
                     .tripMark(images.isEmpty && parts.files.isEmpty ? mark : .arrived, above: look.padding.bottom)
+                    .flightLanding(plain && flight?.carries(text, said: said) == true ? flight : nil, look: look, opacity: trip.opacity)
                 }
                 if let skill, !skill.body.isEmpty { SkillBody(skill: skill) }
                 if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(parts.files.isEmpty ? mark : .arrived, above: 0) }

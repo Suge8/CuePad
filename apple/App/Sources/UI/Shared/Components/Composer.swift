@@ -174,6 +174,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             .padding(.horizontal, -GrowingTextView.caretRoom)
             .yieldsFocusWhenCovered(focus)
             #endif
+            .sendsFlight()
             .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
             .overlay(alignment: .leading) {
                 if let shrunkDraft {
