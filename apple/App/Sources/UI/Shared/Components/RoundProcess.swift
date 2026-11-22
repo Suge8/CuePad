@@ -3,7 +3,9 @@ import SwiftUI
 
 /// 一轮的过程：顶上一行写这一轮用了多久、做了多少；中途说的话照回答的样子连着往下排，不夹工具行。
 /// 点开那一行，两句话之间做的步骤在原处插回，先后一目了然。做完的一轮摆在回答上面；在跑的一轮接在对话末尾，
-/// Mac 上正在说的那句（`draft`）跟在最后。只往末尾长：正在说的那句落进过程、回答落进对话都在原处换下，不挪位置
+/// Mac 上正在说的那句（`draft`）跟在最后。只往末尾长：正在说的那句落进过程、回答落进对话都在原处换下，不挪位置。
+/// 一轮里最新的那段话与前面说过的隔开一档（`apart`）：做完的是回答，在跑的是正在说的或刚说完的那句。
+/// 隔开的总是最新那段，它落进过程、落成回答时间距不变，读着的那段不跳
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     var took: String?
@@ -17,18 +19,28 @@ struct RoundProcess: View {
     var body: some View {
         let items = tools?.items ?? [], process = Chat.process(tools)
         let parts = Chat.parts(items).filter { if case .steps = $0 { open } else { true } }
+        let said = items.indices.filter { items[$0].kind == .said }
+        let newest = message == nil && draft == nil && said.count > 1 ? said.last : nil
         if process != nil || !parts.isEmpty || draft != nil {
             VStack(alignment: .leading, spacing: Spacing.item) {
                 if let process { summary(process, items: items) }
                 ForEach(parts) { part in
                     switch part {
-                    case .said(let index): SaidText(text: items[index].target, session: session).transition(fadesIn ? .entry : .identity)
+                    case .said(let index):
+                        SaidText(text: items[index].target, session: session)
+                            .padding(.top, index == newest ? Self.apart : 0)
+                            .transition(fadesIn ? .entry : .identity)
                     case .steps(let range): NoteThread { list(items[range]) }.transition(.opacity)
                     }
                 }
-                if let draft { MarkdownText(source: draft).equatable().transition(.asymmetric(insertion: .entry, removal: .identity)) }
+                if let draft {
+                    MarkdownText(source: draft).equatable()
+                        .padding(.top, said.isEmpty || message != nil ? 0 : Self.apart)
+                        .transition(.asymmetric(insertion: .entry, removal: .identity))
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(Motion.nudge, value: newest)
         }
     }
 
@@ -54,6 +66,8 @@ struct RoundProcess: View {
             NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.ink3) }
         }
     }
+
+    static let apart = Spacing.block - Spacing.item
 
     private static let imageSide: CGFloat = 64
     private static let imageRow = 4

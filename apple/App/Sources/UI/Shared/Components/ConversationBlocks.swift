@@ -57,6 +57,7 @@ struct ReplyBlock: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
                 .contextMenu { menu }
+                .padding(.top, tools?.items.contains { $0.kind == .said } == true ? RoundProcess.apart : 0)
         }
         .transition(fadesIn ? .entry : .identity)
     }
