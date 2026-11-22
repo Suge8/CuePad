@@ -41,10 +41,12 @@ extension DebugScene {
         var tools = ChatMessage.Tools(
             steps: 4,
             items: [
-                .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .edit, target: "scheduler/queue.test.ts", added: 2, removed: 1),
+                .init(kind: .read, target: "scheduler/queue.ts"),
+                .init(kind: .said, target: String(localized: "队列按 `joinedAt` 排序，重连的人会拿到新的时间戳。先把断言补全，再跑一遍看还有没有别的失败。", table: "Demo")),
+                .init(kind: .edit, target: "scheduler/queue.test.ts", added: 2, removed: 1),
                 .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
             ], cache: .init(recached: 182_400, context: 190_300))
-        for index in tools.items.indices { tools.items[index].calls = ["demo-step-\(index)"] }
+        for (step, index) in tools.items.indices.filter({ tools.items[$0].kind != .said }).enumerated() { tools.items[index].calls = ["demo-step-\(step)"] }
         return tools
     }()
 
@@ -224,7 +226,9 @@ extension DebugScene {
                 steps: 4,
                 items: [
                     .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .edit, target: "scheduler/queue.ts", added: 3, removed: 1),
+                    .init(kind: .said, target: String(localized: "排序改成按 `firstJoinedAt` 了，接着改断言。", table: "Demo")),
                     .init(kind: .edit, target: "scheduler/queue.test.ts", added: 8, removed: 2), .init(kind: .command, target: "pnpm tsc --noEmit", failed: true),
+                    .init(kind: .said, target: String(localized: "类型检查说 `firstJoinedAt` 可能为空：旧数据里没有这个字段。先拿 `joinedAt` 兜底，再跑测试。", table: "Demo")),
                 ]), 0),
         ], startedMinutesAgo: 6)
         try await chat("homepage", [

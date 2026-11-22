@@ -43,9 +43,9 @@ extension CueHostTests.Rig {
 
     func spoke(_ said: String, in sessionID: String) async throws {
         try app.host.sessionFiles[sessionID]!.spoke(said)
-        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(ChatMessage.Tools.saidLimit)
+        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines)
         try await eventually("「\(said.prefix(20))」读进这一轮的经过") {
-            try await self.store.sessions(matching: sessionID).first?.pendingTools?.items.last { $0.kind == .said }?.target == shown
+            try await self.store.sessions(matching: sessionID).first?.pendingTools?.lastSaid?.target == shown
         }
     }
 

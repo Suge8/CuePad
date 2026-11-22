@@ -141,6 +141,8 @@ extension ChatMessage {
       public var deliveries: [UUID]? = nil
       public var calls: [String]? = nil
       public var detail: ToolCallDetail? = nil
+      public var at: Date? = nil
+      public var record: UUID? = nil
 
       public init(
         kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,
@@ -185,7 +187,6 @@ extension ChatMessage {
 
     static let itemLimit = 30
     public static let targetLimit = 120
-    public static let saidLimit = 200
 
     func keepingDetails(of old: Tools?) -> Tools {
       guard let old else { return self }
@@ -204,7 +205,9 @@ extension ChatMessage {
     public mutating func record(_ item: Item) {
       guard item.kind != .said else { return items.append(item) }
       steps += 1
-      if item.kind.acts || item.images != nil || items.count(where: { $0.kind != .said }) < Self.itemLimit { items.append(item) }
+      if item.kind.acts || item.images != nil || items.reversed().prefix(while: { $0.kind != .said }).count < Self.itemLimit { items.append(item) }
     }
+
+    public var lastSaid: Item? { items.last { $0.kind == .said } }
   }
 }

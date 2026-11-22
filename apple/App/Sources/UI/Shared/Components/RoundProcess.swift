@@ -1,83 +1,95 @@
 import CueStore
 import SwiftUI
 
+/// 一轮的过程：顶上一行写这一轮用了多久、做了多少；中途说的话照回答的样子连着往下排，不夹工具行。
+/// 点开那一行，两句话之间做的步骤在原处插回，先后一目了然。做完的一轮摆在回答上面；在跑的一轮接在对话末尾，
+/// Mac 上正在说的那句（`draft`）跟在最后。只往末尾长：正在说的那句落进过程、回答落进对话都在原处换下，不挪位置。
+/// 一轮里最新的那段话与前面说过的隔开一档（`apart`）：做完的是回答，在跑的是正在说的或刚说完的那句。
+/// 隔开的总是最新那段，它落进过程、落成回答时间距不变，读着的那段不跳。
+/// 开没开记在对话那一层（`RoundFolds`），按这一轮各项的身份认（`Chat.keys`）：在跑那块与回答那块有共同的项就是同一轮，
+/// 收尾时升成回答的那句话从过程里拿走也认得出，在跑时点开的，回答落下后照样开着
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
-    let ending: Ending
+    var took: String?
+    var draft: String?
     let session: SessionState
     var message: UUID?
+    var fadesIn = true
     @Environment(\.palette) private var palette
-    @State private var open = DebugHooks.preset.toolsOpen
+    @Environment(\.roundFolds) private var folds
+    @State private var flippedHere = false
 
-    nonisolated enum Ending: Equatable {
-        case took(String)
-        case speaking
-        case running
-
-        static let speakingShown = SessionShown(state: .known(.thinking)).speaking(true)
-    }
-
-    var body: some View {
-        let process = Chat.process(tools)
-        if let process, let tools, tools.steps > 0 {
-            VStack(alignment: .leading, spacing: 0) {
-                Fold(open: $open, toggles: !tools.items.isEmpty) {
-                    header(process, open: tools.items.isEmpty ? nil : open)
-                        .accessibilityElement(children: .ignore).accessibilityLabel(spoken(process))
-                        #if os(macOS)
-                        .help(process.spoken.visible)
-                        #endif
-                } content: {
-                    if !tools.images.isEmpty {
-                        NoteThread {
-                            ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: open ? nil : 1)
-                                .padding(.vertical, Spacing.hair)
-                        }
-                    }
-                    if open {
-                        NoteThread { list(tools) }
-                    } else if ending == .running, let said = tools.items.last(where: { $0.kind == .said }) {
-                        NoteThread { SaidRow(text: said.target, lines: 3) }
-                    }
-                }
-                recached(process)
-            }
-        } else {
-            recached(process)
+    private var fold: Binding<Bool> {
+        let preset = DebugHooks.preset.toolsOpen, round = Chat.keys(tools)
+        guard !round.isEmpty, let folds else { return Binding { preset != flippedHere } set: { flippedHere = $0 != preset } }
+        return Binding { preset == folds.flipped.isDisjoint(with: round) } set: { open in
+            if open != preset { folds.flipped.formUnion(round) } else { folds.flipped.subtract(round) }
         }
     }
 
-    @ViewBuilder private func recached(_ process: Chat.Process?) -> some View {
-        if let recached = process?.recached {
+    var body: some View {
+        let open = fold.wrappedValue
+        let items = tools?.items ?? [], process = Chat.process(tools)
+        let parts = Chat.parts(items).filter { if case .steps = $0 { open } else { true } }
+        let said = items.indices.filter { items[$0].kind == .said }
+        let newest = message == nil && draft == nil && said.count > 1 ? said.last : nil
+        if process != nil || !parts.isEmpty || draft != nil {
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                if let process { summary(process, items: items) }
+                ForEach(parts) { part in
+                    switch part {
+                    case .said(let index):
+                        SaidText(text: items[index].target, session: session)
+                            .padding(.top, index == newest ? Self.apart : 0)
+                            .transition(fadesIn ? .entry : .identity)
+                    case .steps(let range): NoteThread { list(items[range]) }.transition(.opacity)
+                    }
+                }
+                if let draft {
+                    MarkdownText(source: draft).equatable()
+                        .padding(.top, said.isEmpty || message != nil ? 0 : Self.apart)
+                        .transition(.asymmetric(insertion: .entry, removal: .identity))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(Motion.nudge, value: newest)
+        }
+    }
+
+    @ViewBuilder private func summary(_ process: Chat.Process, items: [ChatMessage.Tools.Item]) -> some View {
+        if let tools, tools.steps > 0 {
+            let listed = items.contains { $0.kind != .said }
+            Fold(open: fold, toggles: listed) {
+                header(process, open: listed ? fold.wrappedValue : nil)
+                    .accessibilityElement(children: .ignore).accessibilityLabel(Dotted(process.spoken.parts + [took]).spoken)
+                    #if os(macOS)
+                    .help(process.spoken.visible)
+                    #endif
+            } content: {
+                if !tools.images.isEmpty {
+                    NoteThread {
+                        ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: fold.wrappedValue ? nil : 1)
+                            .padding(.vertical, Spacing.hair)
+                    }
+                }
+            }
+        }
+        if let recached = process.recached {
             NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.ink3) }
         }
     }
 
+    static let apart = Spacing.block - Spacing.item
+
     private static let imageSide: CGFloat = 64
     private static let imageRow = 4
 
-    private func spoken(_ process: Chat.Process) -> String {
-        let end: String? = switch ending {
-        case .took(let took): took
-        case .speaking: Ending.speakingShown.label
-        case .running: nil
-        }
-        return [process.spoken.spoken, end].compactMap { $0 }.joined(separator: "，")
-    }
-
     private func header(_ process: Chat.Process, open: Bool?) -> some View {
         NoteLine(open: open) {
-            switch ending {
-            case .took, .running: Image(.tool).imageScale(.small)
-            case .speaking: StateDot(shown: Ending.speakingShown, size: 6)
-            }
+            Image(.tool).imageScale(.small)
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                switch ending {
-                case .took(let took): Text(took).fixedSize()
-                case .speaking: DoingLine(text: Ending.speakingShown.label).lineLimit(1)
-                case .running: EmptyView()
-                }
+                if let took { Text(took).fixedSize() }
                 ForEach(process.counts, id: \.kind) { count in
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.hair) {
                         Image(Self.icon(count.kind)).font(Typography.caption2)
@@ -92,24 +104,12 @@ struct RoundProcess: View {
         }
     }
 
-    @ViewBuilder private func list(_ tools: ChatMessage.Tools) -> some View {
-        ForEach(Chat.rows(tools.items, settled: message != nil), id: \.self) { row in
+    @ViewBuilder private func list(_ items: ArraySlice<ChatMessage.Tools.Item>) -> some View {
+        ForEach(Chat.rows(items, settled: message != nil), id: \.self) { row in
             switch row {
-            case .step(let index): step(tools.items[index], at: index)
-            case .looks(let range): LooksRow(range: range, items: tools.items, session: session, message: message)
+            case .step(let index): StepRow(item: items[index], session: session, message: message, index: index)
+            case .looks(let range): LooksRow(range: range, items: items, session: session, message: message)
             }
-        }
-        let listed = tools.items.count { $0.kind != .said }
-        if tools.steps > listed {
-            Text("另有 \(tools.steps - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).noteGlyph(.indent)
-        }
-    }
-
-    @ViewBuilder private func step(_ item: ChatMessage.Tools.Item, at index: Int) -> some View {
-        if item.kind == .said {
-            SaidRow(text: item.target, lines: 3)
-        } else {
-            StepRow(item: item, session: session, message: message, index: index)
         }
     }
 
@@ -125,9 +125,21 @@ struct RoundProcess: View {
     }
 }
 
+private struct SaidText: View {
+    let text: String
+    let session: SessionState
+
+    var body: some View {
+        MarkdownText(source: text).equatable()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+            .contextMenu { MessageActions(text: text, kind: .reply, session: session) }
+    }
+}
+
 private struct LooksRow: View {
     let range: Range<Int>
-    let items: [ChatMessage.Tools.Item]
+    let items: ArraySlice<ChatMessage.Tools.Item>
     let session: SessionState
     let message: UUID?
     @Environment(\.palette) private var palette
@@ -154,6 +166,15 @@ private struct LooksRow: View {
             }
         }
     }
+}
+
+@MainActor @Observable
+final class RoundFolds {
+    var flipped: Set<String> = []
+}
+
+extension EnvironmentValues {
+    @Entry var roundFolds: RoundFolds?
 }
 
 extension View {
@@ -190,25 +211,5 @@ struct ToolRow<Status: View>: View {
             }
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-struct SaidRow: View {
-    let text: String
-    var lines: Int?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            Image(RoundProcess.icon(.said)).font(Typography.caption2).foregroundStyle(palette.ink3)
-                .readerHidden(true).noteGlyph()
-            let said = Text(text).font(Typography.caption).foregroundStyle(palette.ink2).lineLimit(lines)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if lines == nil { said.fixedSize(horizontal: false, vertical: true).selectable() } else { said }
-        }
-        .padding(.vertical, Spacing.hair)
-        .contentShape(.rect)
-        .accessibilityElement(children: .combine)
-        .transition(.opacity)
     }
 }
