@@ -38,6 +38,22 @@ enum Schema {
     \(Schema.modifiedIndex(.marks))
     """,
     liveAddresses,
+    """
+    ALTER TABLE marks ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+    \(markWrites)
+    DROP INDEX cueMessages_open;
+    DROP INDEX cueMessages_answered;
+    DROP INDEX cueMessages_setAside;
+    DROP INDEX cueMessages_toDeliver;
+    ALTER TABLE cueMessages DROP COLUMN choices;
+    ALTER TABLE cueMessages DROP COLUMN answer;
+    ALTER TABLE cueMessages DROP COLUMN answeredAt;
+    ALTER TABLE cueMessages DROP COLUMN ask;
+    ALTER TABLE cueMessages DROP COLUMN askAction;
+    ALTER TABLE cueMessages DROP COLUMN askRule;
+    ALTER TABLE cueMessages DROP COLUMN setAsideBy;
+    \(toDeliverIndex)
+    """,
   ]
 
   static let liveAddresses = "CREATE TABLE liveAddresses (sessionID TEXT PRIMARY KEY NOT NULL, url TEXT NOT NULL, found INTEGER NOT NULL, sentAt INTEGER NOT NULL) STRICT;"

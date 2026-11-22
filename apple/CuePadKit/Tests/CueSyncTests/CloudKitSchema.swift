@@ -16,7 +16,10 @@ enum CloudKitSchema {
     "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
     "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING"), ("resultDetail", "ENCRYPTED STRING")],
     "piMessages": [("toolCount", "INT64")],
-    "cueMessages": [("acceptance", "INT64")],
+    "cueMessages": [
+      ("acceptance", "INT64"), ("choices", "ENCRYPTED STRING"), ("answer", "ENCRYPTED STRING"), ("answeredAt", "INT64"), ("ask", "STRING"),
+      ("askAction", "ENCRYPTED STRING"), ("askRule", "ENCRYPTED STRING"), ("setAsideBy", "STRING"),
+    ],
     "cueState": [("woke", "STRING")],
     "directoryBindings": [("hostName", "ENCRYPTED STRING")],
     "piSessionStates": [("models", "ENCRYPTED STRING"), ("commands", "ENCRYPTED STRING")],

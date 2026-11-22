@@ -44,7 +44,7 @@ extension CueStore {
     guard let profile = try cueProfile(), let host = profile.activeHost else { return nil }
     let state = try cueState()
     guard profile.onDuty(state, hostOnline: try macOnline(host)) else { return nil }
-    return CueDuty(name: profile.name, left: state?.left ?? [])
+    return CueDuty(name: profile.name, left: state?.left ?? [], tiers: try chosenTiers())
   }
 
   @discardableResult
@@ -59,7 +59,7 @@ extension CueStore {
 
   public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> SessionState? {
     try write {
-      guard let session = try sessionState(stop.sessionID), stop.holds(for: session), try question(waitingOn: session.sessionID) == nil else { return nil }
+      guard let session = try sessionState(stop.sessionID), stop.holds(for: session) else { return nil }
       guard !given.contains(session.id), given.isDisjoint(with: try sessionPlaces(session.sessionID)) else { return nil }
       if try cueState()?.left.contains(where: { $0.holds(for: session) }) != true { try putLeft([session]) }
       return session

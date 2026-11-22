@@ -27,7 +27,6 @@ struct PreviewOpening: Identifiable, Equatable {
 enum PreviewReply: Equatable {
     case cue
     case session(SessionState)
-    case answer(CueMessage)
 }
 
 struct PreviewOpener: Equatable {

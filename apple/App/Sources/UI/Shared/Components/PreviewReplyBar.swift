@@ -17,7 +17,6 @@ struct PreviewReplyBar: View {
         switch reply {
         case .cue: field(String(localized: "说说这一份"), to: .cue).glass(in: .rect(cornerRadius: Radius.field))
         case .session(let session): note(in: session)
-        case .answer(let message): choices(message).glass(in: .rect(cornerRadius: Radius.field))
         }
     }
 
@@ -76,19 +75,6 @@ struct PreviewReplyBar: View {
         let line = String(localized: "关于「\(about)」：\(text)")
         workspace.speak(to: listener, from: $draft, content: { _ in line })
         done()
-    }
-
-    private func choices(_ message: CueMessage) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            CueQuestionLine(message: message)
-            CueChoices(message: message) { option in
-                workspace.attempt { try await workspace.services.answerCueQuestion(message.id, option) }
-                done()
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .padding(Spacing.group)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

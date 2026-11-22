@@ -1,15 +1,6 @@
 import CueStore
 import SwiftUI
 
-nonisolated extension CueWait {
-    var asked: (line: String, detail: String?) {
-        switch wait {
-        case .message(let message, _): (message.headline ?? "", message.asking?.why)
-        case .session(let session, _): session.asked
-        }
-    }
-}
-
 nonisolated extension SessionState {
     var asked: (line: String, detail: String?) {
         let lines = (question?.text ?? SessionProgress.line(of: self) ?? "").split(separator: "\n", maxSplits: 1).map(String.init)

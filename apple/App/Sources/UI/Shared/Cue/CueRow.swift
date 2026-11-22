@@ -79,8 +79,6 @@ struct CueRow: View, Equatable {
             SpeechBubble(said: .cue(message, host: cue.hostID), box: Bindable(cue).draft, showsDelivered: delivered, look: .cue(joined: joined)) { _ in
                 MessageActions(text: message.text, kind: .cue)
             }
-        case .answer(let question, let quoted):
-            CueAnswer(question: question, quoted: quoted, joined: joined)
         case .cue(let message, let task):
             CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, joined: joined)
         case .result(let message, let task):

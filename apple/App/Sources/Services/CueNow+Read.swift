@@ -24,7 +24,7 @@ nonisolated extension CueNow {
         self.init(
             name: digest.name, cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             tally: runtime.tally, advancing: runtime.advancing, subagents: runtime.subagents, items: items,
-            first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
+            first: digest.tally.waiting.first.map(Self.wait), at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil,
             decay: runtime.decay(visible: items), unconfirmed: runtime.unconfirmed || presence.isUnconfirmed || unconfirmed || (!digest.hostOnline && digest.state?.state.isWorking == true), cueUntil: digest.hostUntil, agentCount: agentCount,
             lingersUntil: finished.max().map { $0.addingTimeInterval(Self.doneWindow) })
@@ -54,14 +54,7 @@ nonisolated extension CueNow {
     }
 
     private static func items(_ digest: CueDigest, works: [Item], at now: Date) -> [Item] {
-        let asks = digest.tally.waiting.map { wait in
-            switch wait {
-            case .message(let message, _):
-                Item(id: wait.id, kind: .asks, name: message.asking?.action ?? message.headline ?? String(localized: "\(digest.name) 等你拍板"), since: message.createdAt, subagents: 0)
-            case .session(let state, _):
-                Item(id: wait.id, kind: .asks, name: title(state), since: state.stateSince, subagents: 0)
-            }
-        }
+        let asks = digest.tally.waiting.map { Item(id: $0.id, kind: .asks, name: title($0.session), since: $0.session.stateSince, subagents: 0) }
         let replies = digest.tally.replies.map { reply in
             Item(id: reply.id, kind: .reply, name: title(reply.session), since: reply.session.stateSince, subagents: 0)
         }
@@ -78,21 +71,10 @@ nonisolated extension CueNow {
 
     private static func title(_ state: SessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
 
-    static func wait(_ wait: CueTally.Wait, name: String) -> Wait {
-        switch wait {
-        case .message(let message, _):
-            return Wait(
-                title: message.headline ?? String(localized: "\(name) 等你拍板"),
-                detail: message.asking?.why,
-                open: DeepLink.cue.url,
-                allow: message.choices?.first.map { Allow(message: message.id, choice: $0) })
-        case .session(let state, _):
-            let question = state.question?.text.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) }
-            return Wait(
-                title: title(state),
-                detail: question.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "在等你回答"),
-                open: DeepLink.session(state.id).url,
-                allow: nil)
-        }
+    static func wait(_ wait: CueTally.Wait) -> Wait {
+        let state = wait.session
+        let question = state.question?.text.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) }
+        return Wait(
+            title: title(state), detail: question.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "在等你回答"), open: DeepLink.session(state.id).url)
     }
 }

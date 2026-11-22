@@ -89,11 +89,6 @@ extension DebugScene {
             task.id, evidence: [String(localized: "等授权超过 10 秒就回到登录页，说明了原因", table: "Demo"), String(localized: "超时用例 3 个都过了", table: "Demo")],
             shots: [CueShot(preview: evidence.id, look: String(localized: "超时后回到登录页", table: "Demo"))])
         try await beat(FlowBeat.result)
-        let asked = try await store.addCueMessage(.cue, text: String(localized: "登录回调的修复验过了，要**推送到 origin/main** 吗？", table: "Demo"), ask: try CueAsking(.push, action: String(localized: "把登录回调的超时修复推送到 origin/main", table: "Demo")), task: task.id)
-        try await beat(FlowBeat.asking)
-        try await workspace.services.answerCueQuestion(asked.id, CueAsk.once)
-        try await beat(FlowBeat.answered)
-
         leave(true)
         try await beat(FlowBeat.away)
         leave(false)

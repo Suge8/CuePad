@@ -2,8 +2,6 @@
 
 nonisolated struct CueArgs: Decodable, DebugArgGroup {
     static let prefix = "Cue"
-    /// `-CuePadCueAsk <proposals|push|one|four|evidence>`（配 `-CuePadScene cue` 与演示库）：把"等你"换成提问卡的一种样子，对照设计稿截图
-    let ask: String?
     /// `-CuePadCycle YES`：就绪后循环走过各个画面状态，录屏用
     let cycle: Bool
     /// `-CuePadCueCycleSeconds <秒>`：`-CuePadCueCycle` 各份样例之间的间隔

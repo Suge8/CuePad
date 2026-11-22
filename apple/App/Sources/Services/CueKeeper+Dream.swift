@@ -38,8 +38,7 @@ extension CueKeeper {
             let new = try await store.said(after: heard, limit: Self.heardLimit)
             let listening = new.said.count >= Self.heardBatch
             guard merging || listening else { return }
-            let asked = listening ? try await store.cueHabitQuestions() : []
-            guard let input = CuePrompt.dreamInput(CueMemoryView(try await store.cueMemory()), said: listening ? new.said : [], asked: asked),
+            guard let input = CuePrompt.dreamInput(CueMemoryView(try await store.cueMemory()), said: listening ? new.said : []),
                   let profile = try await store.cueProfile(), case let settings = BrainSettings(profile, detour), let runtime = settings.runtime.known,
                   let launch = try await setup.launch(runtime)
             else { return }

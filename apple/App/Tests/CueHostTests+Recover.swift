@@ -88,10 +88,10 @@ extension CueHostTests {
         let rig = try await Rig()
         let brain = try #require(rig.brainPIDs.first), tools = try #require(rig.toolServerPIDs.first)
         kill(tools, SIGKILL)
-        try await rig.say("请问我一个问题")
+        try await rig.say("你好")
         try await eventually("换了个班次") { rig.brainPIDs.count == 1 && !rig.brainPIDs.contains(brain) }
-        try await rig.say("请问我一个问题")
-        try await rig.message(.cue, containing: "要推送吗？")
+        try await rig.say("在吗")
+        try await rig.message(.cue, containing: "收到：在吗")
         await rig.stop()
     }
 

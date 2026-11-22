@@ -1,5 +1,4 @@
 #if os(iOS)
-import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -212,7 +211,7 @@ private struct Details: View {
     private var rows: ArraySlice<CueNow.Item> {
         var items = now.items.filter { $0.kind != .resting }
         if now.first != nil, let shown = items.firstIndex(where: { $0.kind == .asks }) { items.remove(at: shown) }
-        return items.prefix(Self.room - (now.first.map { $0.allow == nil ? 2 : 3 } ?? 0) - (step == nil ? 0 : 1))
+        return items.prefix(Self.room - (now.first == nil ? 0 : 2) - (step == nil ? 0 : 1))
     }
 
     var body: some View {
@@ -292,28 +291,7 @@ private struct FirstWait: View {
                     if let detail = wait.detail { Text(detail).font(IslandType.row).foregroundStyle(palette.ink2).lineLimit(1) }
                 }
             }
-            if let allow = wait.allow {
-                let signal = palette.signal(.asks)
-                AllowTick(allow: allow, fill: signal.fill, tick: signal.ink, size: CGSize(width: 72, height: 36))
-            }
         }
-    }
-}
-
-/// 同 App 里拍板卡答"可以"的那颗钮：只有对勾。带上"允许一次"四个字，iPhone 17 的岛上问题只剩十个字就被截断。
-struct AllowTick: View {
-    let allow: CueNow.Allow
-    let fill: Color
-    let tick: Color
-    let size: CGSize
-
-    var body: some View {
-        Button(intent: AllowOnceIntent(allow)) {
-            WidgetIcon.tick.image.font(IslandType.posterTick).foregroundStyle(tick)
-                .frame(width: size.width, height: size.height).background(fill, in: .capsule)
-        }
-        .accessibilityLabel("允许一次")
-        .buttonStyle(.plain).fixedSize()
     }
 }
 #endif

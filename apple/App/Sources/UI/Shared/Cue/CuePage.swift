@@ -166,7 +166,7 @@ struct CuePage: View {
     private func bottom() -> some View {
         VStack(spacing: 0) {
             if let thread {
-                CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
+                CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, moving: $docking)
                     .padding(.horizontal, railInset)
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, Spacing.item).transition(.opacity) }
             }

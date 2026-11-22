@@ -114,32 +114,7 @@ extension CueEvalTests {
                 Check(.result, "再 done 了这件事", eval.calls("task", "done").contains { !$0.call.failed }),
                 Check(.result, "请会话结束", ended),
                 Check(.result, "没另开活（没 add、start）", eval.calls("task", "add").isEmpty && eval.calls("task", "start").isEmpty),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
-    @Test func k挑图提问() async throws {
-        try await CueEval.run(
-            "k-挑图提问",
-            expect: "会话交回三个提问卡视觉方案（每个方案手机浅色、深色、原样与 Mac 四张，还夹着先前别的改动的截图），长相只能按他口味定："
-                + "tell 带 ask=taste 关联任务，doing 写推荐的那个，show 每个方案一张、同一种样子、推荐的在前，每张一句看什么；不带别的改动的图，不 leave"
-        ) { eval in
-            let rig = eval.rig
-            let work = try await Self.proposalsDelivered(eval)
-            let previews = try await rig.store.previews(of: work.id)
-            let asked = eval.calls("tell").filter { $0.args["ask"] as? String == "taste" && !$0.call.failed }
-            let shown = Self.shown(asked.last?.args["show"], in: previews)
-            let variants = Set(shown.map { name in Self.proposals.map(\.slug).reduce(name.name) { $0.replacingOccurrences(of: $1, with: "") } })
-            return [
-                Check(.ask, "请他选（tell 带 ask=taste、关联这件任务）", try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id } && !asked.isEmpty),
-                Check(.ask, "没留给他（leave 没成，问着就不是新回复）", !eval.calls("task", "leave").contains { !$0.call.failed }),
-                Check(.tool, "doing 写推荐的方案", (asked.last?.args["doing"] as? String)?.contains(/方案|决定单|对话里问|郑重放行/) == true),
-                Check(.tool, "show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
-                Check(.tool, "同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
-                Check(.tool, "每张一句看什么", (asked.last?.args["show"] as? [[String: Any]])?.allSatisfy { ($0["look"] as? String)?.isEmpty == false } == true),
-                Check(.tool, "没带别的改动的图", !shown.contains { $0.title.hasPrefix("上一轮的改动") }),
             ]
         }
     }
@@ -169,7 +144,7 @@ extension CueEvalTests {
             let done = eval.calls("task", "done").last { !$0.call.failed }
             let picked = done?.args["show"] as? [[String: Any]] ?? []
             let shown = Self.shown(picked, in: previews)
-            let report = try await eval.said().last { $0.taskID == work.task.id && $0.choices == nil }
+            let report = try await eval.said().last { $0.taskID == work.task.id }
             return [
                 Check(.result, "done 了", done != nil),
                 Check(.tool, "挂了最终版", shown.contains { $0.name == "final-mac.png" }),

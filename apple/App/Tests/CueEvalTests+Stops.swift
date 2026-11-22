@@ -10,9 +10,8 @@ import Testing
 extension CueEvalTests {
     @Test func y审美取舍请他选() async throws {
         try await CueEval.run(
-            "y-审美取舍请他选",
-            expect: "会话出了主按钮两个配色方案（效果图发到手机），停下问用哪个：不替他挑，tell 带 ask=taste 关联任务，doing 写推荐的方案 1，"
-                + "show 两张、推荐的在前；他在卡上点了可以，把方案 1 转给会话"
+            "y-审美取舍留给他",
+            expect: "Cue 派的会话出了主按钮两个配色方案（效果图发到手机），停下问用哪个：不替他挑，task leave 留给他，不 tell"
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working("换主按钮配色", "登录页主按钮太灰，换一个更醒目的颜色。做完的标准：改前改后截图发到手机；项目已有的检查通过。")
@@ -22,49 +21,31 @@ extension CueEvalTests {
                     work, said: "出了两个配色方案，效果图发到手机了：1 靛蓝，和 Logo 同色；2 墨绿，更沉稳。我倾向 1。",
                     question: "主按钮用哪个配色？", options: ["1 靛蓝", "2 墨绿"])
             }
-            let asked = eval.calls("tell").filter { !$0.call.failed && $0.args["ask"] != nil }
-            let shown = Self.shown(asked.last?.args["show"], in: try await rig.store.previews(of: work.id))
-            let card = try await eval.said().last { $0.choices != nil && $0.taskID == work.task.id }
-            var checks = [
+            return [
                 Check(.ask, "没替他挑（没对会话 say）", eval.calls("task", "say").isEmpty),
-                Check(.ask, "请他选（tell 带 ask=taste、关联这件任务）", card != nil && asked.contains { $0.args["ask"] as? String == "taste" }),
-                Check(.tool, "doing 写推荐的方案 1", (asked.last?.args["doing"] as? String)?.contains(/1|靛蓝/) == true),
-                Check(.tool, "show 两个方案、推荐的在前", shown.map(\.name) == ["color-indigo.png", "color-green.png"]),
-                Check(.interrupt, "没留给他（leave 没成）、没另 tell", !eval.calls("task", "leave").contains { !$0.call.failed } && !eval.calls("tell").contains { $0.args["ask"] == nil && $0.args["text"] != nil }),
+                Check(.ask, "留给他（task leave）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.interrupt, "没 tell", eval.calls("tell").isEmpty),
             ]
-            guard let card else { return checks }
-            try await eval.trigger { try await rig.services.answerCueQuestion(card.id, CueAsk.once) }
-            checks.append(Check(.result, "他点了可以：把方案 1 转给会话", work.answers == ["1 靛蓝"]))
-            return checks
         }
     }
 
     @Test func o调研交回要他看() async throws {
         try await CueEval.run(
             "o3-调研交回要他看",
-            expect: "调研推送方案交回（正文写着他看完再定）：一句 tell 关联任务说结论与要他定什么，再 task leave 留给他；先不 done、不发等你"
+            expect: "调研推送方案交回（正文写着他看完再定）：task leave 留给他看会话自己的原话，不 tell 转述、先不 done"
         ) { eval in
             let rig = eval.rig
             let work = try await rig.working(
                 "比较两种推送方案",
                 "比较演示项目发推送用 APNs 直连还是 Firebase Cloud Messaging：成本、维护量、安卓支持，给出推荐与理由。他看完再定用哪个。做完的标准：一份对比与推荐。")
             try await eval.trigger { try await rig.settle(work, reply: Self.pushResearch) }
-            let calls = eval.round?.calls ?? []
-            let told = eval.calls("tell").filter { !$0.call.failed && $0.args["ask"] == nil && $0.args["text"] != nil }
-            let text = told.first?.args["text"] as? String ?? ""
-            let tellAt = calls.firstIndex { $0.name == "tell" && !$0.failed }
-            let leaveAt = calls.lastIndex { $0.name == "task" && !$0.failed && $0.arguments.contains(#""leave""#) }
             return [
-                Check(.interrupt, "一句 tell 说完", told.count == 1),
-                Check(.tool, "tell 关联这件任务", told.contains { CueEval.refers($0.args, to: work.id, title: work.task.heading, cards: [work.task]) }),
-                Check(.result, "tell 说了结论（推荐 APNs）与要他定的（安卓）", text.contains("APNs") && text.contains(/安卓|Android/)),
-                Check(.result, "先 tell 再留给他（leave 成了）", tellAt != nil && leaveAt.map { $0 > tellAt! } == true),
+                Check(.result, "留给他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.interrupt, "没 tell 转述", eval.calls("tell").isEmpty),
                 Check(.result, "先不 done", eval.calls("task", "done").isEmpty),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
             ]
         }
     }
-
     static let pushResearch = """
         对比做完了：
 

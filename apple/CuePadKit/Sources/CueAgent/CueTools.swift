@@ -39,7 +39,7 @@ public struct CueTools: Sendable {
   }
 
   enum DreamTool: String {
-    case merge, said, ask
+    case merge, said, keep
   }
 
   static func catalog(_ toolset: Toolset) -> [Tool] {
@@ -56,7 +56,7 @@ public struct CueTools: Sendable {
       [
         Tool(name: DreamTool.merge.rawValue, gist: "", definition: { mergeDefinition }, run: { try await $0.merge($1) }),
         Tool(name: DreamTool.said.rawValue, gist: "", definition: { saidDefinition }, run: { try await $0.said($1) }),
-        Tool(name: DreamTool.ask.rawValue, gist: "", definition: { askDefinition }, run: { try await $0.ask($1) }),
+        Tool(name: DreamTool.keep.rawValue, gist: "", definition: { keepDefinition }, run: { try await $0.keep($1) }),
       ]
     }
   }

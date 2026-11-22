@@ -1,7 +1,7 @@
 import CueStore
 
 enum TaskAction: String, CaseIterable {
-  case add, edit, start, bind, unbind, say, peek, stop, leave, take, done
+  case add, edit, start, bind, unbind, say, peek, stop, leave, take, done, tier
 
   var kind: ChatMessage.Tools.Kind? {
     switch self {
@@ -13,7 +13,7 @@ enum TaskAction: String, CaseIterable {
     case .stop: .stop
     case .leave: .leave
     case .done: .done
-    case .bind, .unbind, .take: nil
+    case .bind, .unbind, .take, .tier: nil
     }
   }
 
@@ -35,7 +35,7 @@ enum TaskAction: String, CaseIterable {
     case .leave: "\(named)留给你回"
     case .take: "收回\(named)（不用他回）"
     case .done: "做完\(named)"
-    case .bind, .unbind: nil
+    case .bind, .unbind, .tier: nil
     }
   }
 }

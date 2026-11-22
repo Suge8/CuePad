@@ -60,8 +60,7 @@ extension CueEval {
         let counted = rounds.filter { $0.wake != .enabled }
         let calls = counted.flatMap(\.calls)
         let tells = Self.calls(in: counted, "tell").filter { !$0.call.failed }
-        let asks = tells.filter { $0.args["ask"] != nil }
-        let spoken = tells.filter { $0.args["ask"] == nil && $0.args["withdraw"] == nil && $0.args["restore"] == nil && ($0.args["text"] as? String)?.isEmpty == false }
+        let spoken = tells.filter { ($0.args["text"] as? String)?.isEmpty == false }
         let leaves = Self.calls(in: counted, "task", ["leave"]).filter { !$0.call.failed }
         let conversation = (try? await rig.store.cueMessages(limit: 5000)) ?? []
         let messages = conversation.filter { $0.author == .known(.cue) && $0.createdAt >= (counted.first?.startedAt ?? .distantFuture) }
@@ -71,8 +70,8 @@ extension CueEval {
         let isReply = { (message: CueMessage) in
             answering.contains { round in message.createdAt >= round.startedAt && message.createdAt <= (round.finishedAt ?? .distantFuture).addingTimeInterval(0.001) }
         }
-        let otherPushes = messages.filter { $0.urgent && $0.choices == nil && !toldTexts.contains($0.text) && !isReply($0) }
-        let replies = messages.filter { $0.choices == nil && $0.taskID == nil && !toldTexts.contains($0.text) && isReply($0) }
+        let otherPushes = messages.filter { $0.urgent && !toldTexts.contains($0.text) && !isReply($0) }
+        let replies = messages.filter { $0.taskID == nil && !toldTexts.contains($0.text) && isReply($0) }
         let asksProgress = { (reply: CueMessage) in
             let round = answering.first { reply.createdAt >= $0.startedAt && reply.createdAt <= ($0.finishedAt ?? .distantFuture) }
             return round.flatMap { round in his.last { $0.createdAt <= round.startedAt } }?.text.contains(Self.progressQuestion) == true
@@ -89,7 +88,7 @@ extension CueEval {
         let background = summaries.count { summary in dreams.contains { $0.contains(summary.createdAt) } }
         let urgent = spoken.count { $0.args["urgent"] as? Bool == true }
         return [
-            "wakes": counted.count, "calls": calls.count, "failed": failed, "asks": asks.count,
+            "wakes": counted.count, "calls": calls.count, "failed": failed,
             "interrupts": ["tell": spoken.count, "urgent": urgent, "leave": leaves.count, "other": otherPushes.count, "total": spoken.count + leaves.count + otherPushes.count],
             "overlong": overlong, "renewals": renewals.count,
             "usage": usage.json,

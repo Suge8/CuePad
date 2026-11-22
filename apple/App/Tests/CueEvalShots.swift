@@ -10,51 +10,8 @@ import Testing
 func mockShot(_ name: String) throws -> Data {
     let dark = name.contains("dark"), mac = name.contains("mac")
     let ink: Color = dark ? .white : .black, paper: Color = dark ? Color(white: 0.16) : .white, fill: Color = dark ? Color(white: 0.28) : Color(white: 0.92)
-    func button(_ text: String, primary: Bool = false) -> some View {
-        Text(text).font(.callout.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
-            .background(primary ? Color.orange : fill, in: .rect(cornerRadius: Radius.block)).foregroundStyle(primary ? .white : ink)
-    }
-    let question = Text("可以推送 scheduler 的重连修复吗？").font(.headline)
-    let why = Text("推上去别人就拉得到，撤不回来。").font(.caption).foregroundStyle(.secondary)
     @ViewBuilder var card: some View {
-        if name.contains("original") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("现在的样子").font(.caption2).foregroundStyle(.secondary)
-                Text("可以推送 scheduler 的重连修复吗？").font(.footnote)
-                HStack {
-                    Text(CueAsk.once).font(.caption).padding(6).background(fill, in: .capsule)
-                    Text("以后不用问").font(.caption).padding(6).background(fill, in: .capsule)
-                }
-            }
-        } else if name.hasPrefix("decision-sheet") {
-            VStack(alignment: .leading, spacing: 10) {
-                question
-                why
-                button("可以", primary: true)
-                button("以后推送代码都不用问")
-            }
-        } else if name.hasPrefix("in-thread") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("重连用例补上了，全过。").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: Radius.block))
-                Text("要推送吗？").font(.callout).padding(10).background(fill, in: .rect(cornerRadius: Radius.block))
-                Spacer().frame(height: 30)
-                HStack { button("可以", primary: true); button("以后不用问") }
-                Text("对 Cue 说").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
-                    .background(fill, in: .capsule)
-            }
-        } else if name.hasPrefix("slide-to-allow") {
-            VStack(alignment: .leading, spacing: 12) {
-                question
-                why
-                HStack {
-                    Circle().fill(Color.orange).frame(width: 34, height: 34)
-                    Text("滑动以允许 →").font(.callout).foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(4).background(fill, in: .capsule)
-                HStack { Text("以后不用问").font(.callout); Spacer(); Capsule().fill(fill).frame(width: 44, height: 24) }
-            }
-        } else if ["plan-", "wip-", "final-"].contains(where: name.hasPrefix) {
+        if ["plan-", "wip-", "final-"].contains(where: name.hasPrefix) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("项目").font(.caption).foregroundStyle(.secondary)
                 ForEach([("圆桌", 3), ("CuePad", 2), ("个人网站", 0)], id: \.0) { project, running in

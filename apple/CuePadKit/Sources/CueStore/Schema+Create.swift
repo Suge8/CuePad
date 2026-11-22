@@ -130,16 +130,13 @@ extension Schema {
     -- 同步的本机状态：同步区令牌（zoneToken）与上次同步的 iCloud 账号（account）。
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
-    -- Cue 的对话（tools 是一轮的经过，ask 是提问的类别与范围，askAction、askRule 是它要做的动作与依据的规矩，askShots 是 Cue 点名要你看的图（提问的与做完的结果，`CueMessage.shots`），setAsideBy 是你开口收起它的那句话，wake 是 Cue 自己醒来的那一轮为什么醒）、记忆、设置与此刻在做什么（round 是在跑的那一轮）。
+    -- Cue 的对话（tools 是一轮的经过，askShots 是做完的结果上挂的图（`CueMessage.shots`），wake 是 Cue 自己醒来的那一轮为什么醒）、记忆、设置与此刻在做什么（round 是在跑的那一轮）。
     CREATE TABLE cueMessages (
-      id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
-      taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT, places TEXT, shownText TEXT, answeredRequests TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
+      id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, urgent INTEGER NOT NULL, taskID TEXT, deliveredAt INTEGER,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, notify TEXT, tools TEXT, askShots TEXT, wake TEXT, places TEXT, shownText TEXT,
+      answeredRequests TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
-    \(openQuestionIndex)
-    \(answeredIndex)
-    \(setAsideIndex)
     \(toDeliverIndex)
     -- 记忆；有 remindAt 的是定时（repeats 是重复规则，`CueRepeat.rule`；taskID 是挂在哪件任务上）
     CREATE TABLE cueLines (
@@ -159,7 +156,9 @@ extension Schema {
     CREATE TABLE cueState (
       id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT, step TEXT, hostID TEXT, bootID TEXT
     ) STRICT;
-    CREATE TABLE marks (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE TABLE marks (
+      id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
     CREATE INDEX marks_kind ON marks(kind, subject, modifiedAt);
 
     \(writeSeq)

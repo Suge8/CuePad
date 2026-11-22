@@ -4,19 +4,23 @@ public enum Mark: Hashable, Sendable {
   case cueRead
   case sessionSeen(String)
   case sessionUnread(String)
+  case tier(String, CueTier)
+
+  static let tierPrefix = "tier."
 
   var kind: String {
     switch self {
     case .cueRead: "cueRead"
     case .sessionSeen: "sessionSeen"
     case .sessionUnread: "sessionUnread"
+    case .tier(_, let tier): Self.tierPrefix + tier.rawValue
     }
   }
 
   var subject: String {
     switch self {
     case .cueRead: ""
-    case .sessionSeen(let session), .sessionUnread(let session): session
+    case .sessionSeen(let session), .sessionUnread(let session), .tier(let session, _): session
     }
   }
 

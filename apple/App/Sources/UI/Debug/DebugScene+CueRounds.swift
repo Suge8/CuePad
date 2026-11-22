@@ -18,12 +18,11 @@ extension DebugScene {
     static func stirred(_ kind: CueChange.Kind, _ session: String) -> CueWake { .sessionActivity([CueStir(kind: kind, session: session)]) }
 
     static func seedPresence(
-        _ presence: String?, store: CueStore, asked: CueMessage, order: Card?, panel: Card?, importing: Card?, context: CueContext,
+        _ presence: String?, store: CueStore, order: Card?, panel: Card?, importing: Card?, context: CueContext,
         you: (String) async throws -> Void
     ) async throws {
         switch presence {
         case "answered":
-            _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
             try await you(String(localized: "顺便看看登录回调那个超时", table: "Demo"))
             let login = try await store.createTask(String(localized: "登录回调超时", table: "Demo"), in: order?.projectID ?? Project.defaultID)
             _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: process(
@@ -54,7 +53,6 @@ extension DebugScene {
         case "sending":
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
         case "away":
-            _ = try await store.endCueQuestion(asked.id, .answered(CueAsk.once))
             try await you(goingAway)
             try await seedAway(store)
         case "asleep":

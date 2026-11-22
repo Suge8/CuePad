@@ -38,53 +38,20 @@ struct CueSays: View {
     @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
     @State private var selecting = false
-    @State private var reading = DebugHooks.preset.toolsOpen
 
     var body: some View {
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
             VStack(alignment: .leading, spacing: card ? Spacing.group : Spacing.item) {
-                words
+                said
                 if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, open: open) }
-                if asks {
-                    foot
-                } else if let task {
-                    CueTaskLine(task: task, message: message)
-                }
+                if let task { CueTaskLine(task: task, message: message) }
             }
-            .animation(Motion.fade, value: reading)
             .modifier(CueSaysSurface(card: card, joined: joined))
             .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
         }
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: message.text) }
         #endif
-    }
-
-    private var asks: Bool { message.asking != nil && !card }
-
-    @ViewBuilder private var words: some View {
-        if asks {
-            CueQuestionLine(message: message, tone: .ended)
-            if reading {
-                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
-                    .padding(Spacing.group).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.fill, in: .rect(cornerRadius: Radius.block))
-                    .transition(.opacity)
-            }
-        } else {
-            said
-        }
-    }
-
-    private var foot: some View {
-        HStack(spacing: Spacing.group) {
-            if message.asking?.ask == .habit, message.answer == nil, message.setAsideBy == nil {
-                Text("没记").font(Typography.meta).foregroundStyle(palette.ink3)
-            }
-            if let task { CueTaskLine(task: task, message: message) }
-            OriginalToggle(open: $reading)
-        }
-        .frame(minHeight: CueTaskLine.lineHeight)
     }
 
     @ViewBuilder private var said: some View {
@@ -138,23 +105,6 @@ private struct CueSaysSurface: ViewModifier {
     }
 }
 
-struct CueAnswer: View {
-    let question: CueMessage
-    let quoted: Bool
-    var joined = false
-    @Environment(\.chatHighlight) private var highlight
-
-    var body: some View {
-        let id = CueThread.Row.answerID(of: question.id), answer = question.answer.map(question.shownChoice) ?? ""
-        AnswerBubble(
-            answer: answer, quote: quoted ? question.headline.map { BubbleQuote(text: $0, target: question.id) } : nil, look: .cue(joined: joined),
-            highlighted: highlight == id
-        ) {
-            MessageActions(text: answer, kind: .cue)
-        }
-    }
-}
-
 extension View {
     /// 只铺一层底：不用卡片那套渐变、一线高光与描边（`paper()`）——气泡小，看不出差别，长对话滚动时每颗多出的层逐帧都要更新；
     /// 增强对比度时才描边（`Palette.bubbleEdge`）。
@@ -170,24 +120,4 @@ private struct CueBubbleSurface: ViewModifier {
     func body(content: Content) -> some View {
         content.padding(CueBubble.padding).background(palette.paper, in: shape).overlay { if let edge = palette.bubbleEdge { shape.strokeBorder(edge) } }
     }
-}
-
-private struct OriginalToggle: View {
-    @Binding var open: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button { open.toggle() } label: {
-            HStack(spacing: Spacing.tight) {
-                Text("原话")
-                Chevron(.expand).rotationEffect(.degrees(open ? 180 : 0))
-            }
-            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            .contentShape(.rect.inset(by: -Self.reach))
-        }
-        .buttonStyle(PressStyle(.inline))
-        .accessibilityLabel(open ? "收起原话" : "看 Cue 的原话")
-    }
-
-    private static let reach: CGFloat = 10
 }

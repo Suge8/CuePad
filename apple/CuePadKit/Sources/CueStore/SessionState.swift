@@ -125,7 +125,7 @@ public struct SessionState: Identifiable, Equatable, Sendable {
 
   public static let detailSeparator = " · "
 
-  public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { !$0.leftToYou(self) } == true && answerableQuestion != nil }
+  public func waitsForCue(_ cue: CueDuty?) -> Bool { cue.map { $0.tier(of: self) == .full && !$0.leftToYou(self) } == true && answerableQuestion != nil }
 
   public func asksYou(_ cue: CueDuty?) -> Bool { runtimeState == .known(.waitingForUser) && !waitsForCue(cue) }
 

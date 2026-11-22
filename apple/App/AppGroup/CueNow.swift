@@ -74,12 +74,6 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         var title: String
         var detail: String?
         var open: URL
-        var allow: Allow?
-    }
-
-    struct Allow: Codable, Hashable, Sendable {
-        var message: UUID
-        var choice: String
     }
 
     static let itemLimit = 8

@@ -107,7 +107,6 @@ nonisolated struct ActivityPush: Encodable, Sendable {
         }
         while try !fits(state), let index = state.now.items.lastIndex(where: { $0.kind != .done }) { state.now.items.remove(at: index) }
         if try !fits(state) { state.now.first?.detail = nil }
-        if try !fits(state) { state.now.first?.allow = nil }
         guard try fits(state) else { throw Oversized() }
         return state
     }

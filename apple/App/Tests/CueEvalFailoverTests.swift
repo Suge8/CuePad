@@ -30,7 +30,7 @@ struct CueEvalFailoverTests {
             var reply: CueMessage?
             if let answered, let finished = answered.finishedAt {
                 reply = try await eval.said(since: answered.startedAt).last { (message: CueMessage) -> Bool in
-                    message.author == .known(.cue) && message.choices == nil && message.taskID == nil && message.createdAt <= finished + 0.001
+                    message.author == .known(.cue) && message.taskID == nil && message.createdAt <= finished + 0.001
                 }
             }
             let profile = try await rig.store.cueProfile()

@@ -144,7 +144,7 @@ class EvalScript {
     func replies(_ step: Step) async throws -> [String] {
         guard let window = step.window else { return [] }
         return try await eval.said(since: window.lowerBound)
-            .filter { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }.map(\.text)
+            .filter { $0.author == .known(.cue) && $0.taskID == nil && $0.createdAt <= window.upperBound }.map(\.text)
     }
 
     func reply(_ step: Step) async throws -> String? { try await replies(step).last }

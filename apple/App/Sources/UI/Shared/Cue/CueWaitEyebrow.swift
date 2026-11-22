@@ -37,30 +37,17 @@ struct CueWaitEyebrow: View {
         }
     }
 
-    @ViewBuilder private var name: some View {
-        let title = wait.title ?? workspace.cue.name
-        switch wait.wait {
-        case .message(let message, _):
-            if let task = wait.task?.id ?? message.taskID {
-                CueTaskButton(task: task) { label(title, linked: true).relaySpot(task: task) }
-                    .accessibilityHint("打开任务")
-            } else {
-                label(title, linked: false)
+    private var name: some View {
+        Button { workspace.openSession(wait.session.id, sessionID: wait.session.sessionID) } label: {
+            HStack(spacing: Spacing.hair) {
+                Text(wait.title).lineLimit(1)
+                Chevron(.forward)
             }
-        case .session(let session, _):
-            Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: { label(title, linked: true) }
-                .buttonStyle(PressStyle())
-                .accessibilityHint("打开会话")
+            .foregroundStyle(palette.ink2)
+            .contentShape(.rect.inset(by: -Self.reach))
         }
-    }
-
-    private func label(_ title: String, linked: Bool) -> some View {
-        HStack(spacing: Spacing.hair) {
-            Text(title).lineLimit(1)
-            if linked { Chevron(.forward) }
-        }
-        .foregroundStyle(palette.ink2)
-        .contentShape(.rect.inset(by: -Self.reach))
+        .buttonStyle(PressStyle())
+        .accessibilityHint("打开会话")
     }
 
     private var position: some View {

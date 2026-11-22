@@ -164,14 +164,6 @@ final class ActivityPublisher {
         islands[device] = island
     }
 
-    private func confirmed(_ publication: Publication, _ services: AppServices) async throws -> Publication? {
-        guard let allow = publication.state.now.first?.allow else { return publication }
-        guard await services.sync?.send(recordNames: [allow.message.uuidString.lowercased()]) == true else { throw URLError(.cannotLoadFromNetwork) }
-        try Task.checkCancellation()
-        guard let fresh = try current(services), fresh.same(as: publication) else { return nil }
-        return fresh
-    }
-
     private func update(_ destination: ActivityDestination, _ publication: Publication, _ services: AppServices) async throws -> Bool {
         let device = destination.device
         func push(_ payload: ActivityPush.Payload, priority: Int) async throws -> Bool {
@@ -189,7 +181,6 @@ final class ActivityPublisher {
         wake(destination.retireAt)
         let old = sent[device]
         if let old, old.destination == destination, old.state.same(as: publication.state) { return false }
-        guard let publication = try await confirmed(publication, services) else { return true }
         let now = publication.state.now, before = old?.state.now
         let urgent = !now.isLive || before?.needsYou != now.needsYou || before?.first != now.first || before?.glance != now.glance
         if try await push(.init(publication.state), priority: urgent ? 10 : 5), now.isLive {
@@ -209,7 +200,6 @@ final class ActivityPublisher {
             wake(ready)
             return false
         }
-        guard let publication = try await confirmed(publication, services), let newest = publication.newest else { return true }
         lastAttempt = .now
         islands[device] = Island(gone: .now, dead: island.dead, started: .now)
         // 开没开出来这里不重试：同一件事再推一次只是再亮一次屏、再占一次额度，没开出来的留给手机到前台自己开

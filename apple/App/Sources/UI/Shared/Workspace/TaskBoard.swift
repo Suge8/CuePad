@@ -77,7 +77,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     private static func heldCards(
         _ tally: CueTally, from store: isolated CueStore, item: (Card) throws -> Item
     ) throws -> [Held] {
-        let asking = tally.waiting.compactMap { wait in if case .session(let session, let task) = wait { (session, task) } else { nil } }
+        let asking = tally.waiting.map { ($0.session, $0.task) }
             .sorted { ($0.0.stateSince, $0.0.sessionID) < ($1.0.stateSince, $1.0.sessionID) }
         let waiting = asking.map { ($0.0, $0.1, true) } + tally.replies.map { ($0.session, $0.task, false) }
         var flown: Set<UUID> = []

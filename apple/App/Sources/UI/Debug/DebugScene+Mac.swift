@@ -11,7 +11,7 @@ extension DebugScene {
         resizeWindow()
         let opened = await prepareLibrary(workspace)
         let sampleCue = args.sampleCue
-        if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
+        if sampleCue > 0 { Task { await cueSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await voiceCallIfAsked(workspace) }
         presetColumns(workspace.services.settings)
@@ -43,12 +43,12 @@ extension DebugScene {
         NSApp.sendAction(action, to: nil, from: nil)
     }
 
-    private static func askSample(after delay: Duration, services: AppServices) async {
+    private static func cueSample(after delay: Duration, services: AppServices) async {
         await Task.wait(for: delay)
-        await running("Cue 请你允许一件事") {
-            let message = try await services.store.addCueMessage(.cue, text: String(localized: "登录页修好了，要推送到 origin/main 吗？", table: "Demo"), ask: CueAsking(.push, action: String(localized: "把登录页的修复推送到 origin/main", table: "Demo")))
+        await running("Cue 说一句") {
+            let message = try await services.store.addCueMessage(.cue, text: String(localized: "登录页修好了，要推送到 origin/main 吗？", table: "Demo"), urgent: true)
             guard let alerts = services.alerts else { return }
-            let content = CueAlert.content(name: try await services.store.cueProfile()?.name, text: message.text, asking: message.asking, choices: message.choices, looks: message.shots.map(\.look))
+            let content = CueAlert.content(name: try await services.store.cueProfile()?.name, text: message.text)
             await alerts.post(title: content.title, body: content.body)
         }
     }

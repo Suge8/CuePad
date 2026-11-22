@@ -48,7 +48,7 @@ struct TaskCountTests {
     }
 
     #if os(macOS)
-    @Test func 看板_拖到推进中就是开始_Cue问它不挪列_拖到做完就是做完() async throws {
+    @Test func 看板_拖到推进中就是开始_拖到做完就是做完() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -58,8 +58,7 @@ struct TaskCountTests {
         func board() async throws -> TaskBoard { try await TaskBoard.read(from: store) }
         func expectCountsMatchCue(_ board: TaskBoard) async throws {
             let cue = CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil))
-            let asks = try await store.cueMessagesWaitingForYou().count
-            #expect(board.count(.advancing) == cue.advancing && board.count(.waiting) == cue.needsYou - asks)
+            #expect(board.count(.advancing) == cue.advancing && board.count(.waiting) == cue.needsYou)
         }
         #expect(try await Set(board().todo.map(\.id)) == [task.id, other.id])
 
@@ -71,22 +70,9 @@ struct TaskCountTests {
         #expect(columns.advancing.map(\.item?.id) == [task.id] && columns.todo.map(\.id) == [other.id])
         try await expectCountsMatchCue(columns)
 
-        let ask = try await store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送发言顺序的修复"), task: task.id)
-        _ = try await store.addCueMessage(.cue, text: "要删旧脚本吗？", ask: try CueAsking(.delete, action: "删掉 scripts/legacy"))
-        columns = try await board()
-        #expect(columns.advancing.map(\.item?.id) == [task.id])
-        try await expectCountsMatchCue(columns)
-
-        try await workspace.services.answerCueQuestion(ask.id, CueAsk.once)
-        #expect(try await board().advancing.map(\.item?.id) == [task.id])
         try await workspace.complete(task.id)
         columns = try await board()
         #expect(columns.done.map(\.id) == [task.id] && columns.advancing.isEmpty, "会话随做完的事收起")
-        try await expectCountsMatchCue(columns)
-
-        _ = try await store.addCueMessage(.cue, text: "要删分支吗？", ask: try CueAsking(.delete, action: "删掉修发言乱序的分支"), task: task.id)
-        columns = try await board()
-        #expect(columns.done.map(\.id) == [task.id])
         try await expectCountsMatchCue(columns)
     }
     #endif

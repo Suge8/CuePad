@@ -9,8 +9,8 @@ public enum CueEnvelope {
     public var changes: [CueChange]
     public var recaps: [Subject: String]
     public var board: CueBoard
-    public var waiting: [CueMessage]
     public var left: [CueLeft]
+    public var tiers: [String: CueTier]
     public var wake: CueWake
     public var fired: [Fired]
     public var schedules: [CueMemoryLine]
@@ -23,7 +23,7 @@ public enum CueEnvelope {
 
     public init(
       now: Date, projects: [Project], changes: [CueChange], recaps: [Subject: String] = [:],
-      board: CueBoard, waiting: [CueMessage], left: [CueLeft] = [], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil,
+      board: CueBoard, left: [CueLeft] = [], tiers: [String: CueTier] = [:], wake: CueWake, fired: [Fired] = [], schedules: [CueMemoryLine] = [], language: String? = nil,
       quotas: [AccountQuota] = [], retrying: String? = nil, related: [String] = []
     ) {
       self.related = related
@@ -33,12 +33,12 @@ public enum CueEnvelope {
       self.schedules = schedules
       self.fired = fired
       self.left = left
+      self.tiers = tiers
       self.now = now
       self.projects = projects
       self.changes = changes
       self.recaps = recaps
       self.board = board
-      self.waiting = waiting
       self.wake = wake
     }
   }
@@ -48,7 +48,7 @@ public enum CueEnvelope {
   ) async throws -> Input {
     Input(
       now: now, projects: try await store.projects(), changes: changes, recaps: try await CueTools(store: store).recaps(for: changes),
-      board: try await store.cueBoard(), waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+      board: try await store.cueBoard(), left: try await store.cueState()?.left ?? [], tiers: try await store.chosenTiers(),
       wake: wake, fired: try await fired(of: wake, in: store), schedules: try await store.cueScheduleLines(), language: language,
       quotas: try await store.accountQuotas(on: host), retrying: retrying, related: related)
   }
@@ -83,13 +83,10 @@ public enum CueEnvelope {
     lines.append("在做 \(active.count) 件" + (active.isEmpty ? "" : "："))
     lines += active.map { work in
       switch work {
-      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left, schedules: input.schedules))"
-      case .session(let session): "- \(sessionLine(session, now: input.now, left: input.left))"
+      case .task(let item): "- \(boardLine(item, now: input.now, left: input.left, tiers: input.tiers, schedules: input.schedules))"
+      case .session(let session): "- \(sessionLine(session, now: input.now, left: input.left, tiers: input.tiers))"
       }
     }
-
-    lines.append("等你 \(input.waiting.count) 件" + (input.waiting.isEmpty ? "" : "："))
-    lines += input.waiting.map { "- " + question($0) }
 
     lines += related(input.related)
 
@@ -103,26 +100,16 @@ public enum CueEnvelope {
     return lines.joined(separator: "\n")
   }
 
-  public static func delivered(_ pending: [CueMessage], setAside: [CueMessage], files: AttachmentFiles, imagesAsFiles: Bool) -> String {
+  public static func delivered(_ pending: [CueMessage], files: AttachmentFiles, imagesAsFiles: Bool) -> String {
     pending.map { message in
-      guard message.author == .known(.you) else {
-        let question = CueFormat.plainText(message.text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        let noted = message.allowsFromNowOn(message.answer) ? "（已照原话记进重点记忆，不用再记）" : ""
-        return "他回答了「\(question)」：\(message.answer ?? "")\(noted)"
-      }
       let paths = CueFormat.parse(message.text).compactMap { token in
         AttachmentFiles.agentFile(token, imagesAsFiles: imagesAsFiles).flatMap { files.agentLine(key: $0.key, name: $0.name) }
       }
-      let said = ([message.text] + paths).joined(separator: "\n")
-      let cards = setAside.filter { $0.setAsideBy == message.id }
-      guard !cards.isEmpty else { return said }
-      return ([said, "", "（他开口收起了等你里的 \(cards.count) 张；他这句与它无关就 tell 带 restore 放回：）"] + cards.map { "- " + question($0) }).joined(separator: "\n")
+      return ([message.text] + paths).joined(separator: "\n")
     }.joined(separator: "\n\n")
   }
 
-  public static func asked(_ pending: [CueMessage]) -> [String] {
-    pending.filter { $0.author == .known(.you) }.map(\.text)
-  }
+  public static func asked(_ pending: [CueMessage]) -> [String] { pending.map(\.text) }
 
   public static func related(_ found: [String]) -> [String] {
     found.isEmpty ? [] : ["他问的话在会话回复里查到的（按他的词查的，不全；要全用 memory recall）："] + found.map { "- " + $0 }
@@ -146,10 +133,6 @@ public enum CueEnvelope {
     if let task = fired.task { parts.append("任务「\(task.heading)」（\(task.id.shortID)）") }
     if CueFire.late(fired.due, at: now) { parts.append("本该 \(CueScheduleWords.time(fired.due, now: now))，错过了，现在补上") }
     return parts.joined(separator: " · ")
-  }
-
-  private static func question(_ message: CueMessage) -> String {
-    "\(clip(CueFormat.plainText(message.text), 80))（\(message.id.shortID)）选项：\((message.choices ?? []).joined(separator: " / "))"
   }
 
   private static func wake(_ wake: CueWake) -> String {
@@ -187,13 +170,13 @@ public enum CueEnvelope {
       case .done: "完成"
       case .stalled: "等子代理 \(Int(SessionState.stallAfter / 60)) 分钟没动静"
       }
-    var text = "[\(label)] \(where_(change))"
+    var text = "[\(label)] \(where_(change))" + (change.tier.map { "（\(tierNote($0))）" } ?? "")
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if reply, let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text
   }
 
-  static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = [], schedules: [CueMemoryLine] = []) -> String {
+  static func boardLine(_ item: CueBoardItem, now: Date, left: [CueLeft] = [], tiers: [String: CueTier] = [:], schedules: [CueMemoryLine] = []) -> String {
     var parts = ["\(item.task.heading)（\(item.task.id.shortID)）"]
     if let line = schedules.first(where: { $0.task == item.task.id }) {
       if let repeats = line.repeats {
@@ -205,16 +188,16 @@ public enum CueEnvelope {
     if let progress = item.progress { parts.append("子任务 \(progress.done)/\(progress.total)") }
     guard item.leaves.count > 1 else {
       let leaf = item.leaves[0]
-      return (parts + leafParts(leaf, named: leaf.leaf.id == item.task.id ? nil : leaf.leaf.heading, now: now, left: left)).joined(separator: " · ")
+      return (parts + leafParts(leaf, named: leaf.leaf.id == item.task.id ? nil : leaf.leaf.heading, now: now, left: left, tiers: tiers)).joined(separator: " · ")
     }
     parts.append("同时在做 \(item.leaves.count) 步：")
     return ([parts.joined(separator: " · ")] + item.leaves.map { leaf in
-      "  - " + leafParts(leaf, named: "\(leaf.leaf.heading)（\(leaf.leaf.id.shortID)）", now: now, left: left).joined(separator: " · ")
+      "  - " + leafParts(leaf, named: "\(leaf.leaf.heading)（\(leaf.leaf.id.shortID)）", now: now, left: left, tiers: tiers).joined(separator: " · ")
     }).joined(separator: "\n")
   }
 
-  static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft] = []) -> String {
-    var parts = [sessionName(session), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
+  static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft] = [], tiers: [String: CueTier] = [:]) -> String {
+    var parts = [sessionName(session), tierNote(CueTier.of(session, chosen: tiers)), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
     if left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
     if let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
     return parts.joined(separator: " · ")
@@ -222,11 +205,20 @@ public enum CueEnvelope {
 
   static let leftNote = "新回复"
 
+  static func tierNote(_ tier: CueTier) -> String {
+    switch tier {
+    case .yours: "他自己来"
+    case .push: "推进"
+    case .full: "全权"
+    }
+  }
+
   static func sessionName(_ session: SessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }
 
-  private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date, left: [CueLeft]) -> [String] {
+  private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date, left: [CueLeft], tiers: [String: CueTier]) -> [String] {
     let state = leaf.session.map { state($0.state) } ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
     var parts = ["\(name.map { "\($0) › " } ?? "")\(state) \(duration(now.timeIntervalSince(leaf.since)))"]
+    if let session = leaf.session { parts.append(tierNote(CueTier.of(session, chosen: tiers))) }
     if let session = leaf.session, left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
     if let session = leaf.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
     return parts

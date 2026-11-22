@@ -1,5 +1,4 @@
 #if os(iOS)
-import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -140,18 +139,8 @@ struct CueLockScreen: View {
 
     @ViewBuilder private func under(_ poster: Poster, _ signal: Palette.Signal) -> some View {
         switch poster.head {
-        case .wait(let wait):
-            if let allow = wait.allow {
-                HStack(spacing: 12) {
-                    AllowTick(allow: allow, fill: signal.ink, tick: signal.fill, size: CGSize(width: 72, height: 44))
-                    if let since = now.clock {
-                        Text("已等 \(ActivityElapsed.text(since: since))").font(IslandType.posterTime).foregroundStyle(signal.soft).lineLimit(1)
-                    }
-                }
-                .padding(.top, 4)
-            } else if let since = now.clock {
-                big(since, signal)
-            }
+        case .wait:
+            if let since = now.clock { big(since, signal) }
         case .item(let item):
             if item.kind != .done { big(item.since, signal) }
         case .count:

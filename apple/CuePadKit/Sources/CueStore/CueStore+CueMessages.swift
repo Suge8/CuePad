@@ -4,26 +4,20 @@ import Foundation
 extension CueStore {
   @discardableResult
   public func addCueMessage(
-    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
+    _ author: CueAuthor, text: String, shots: [CueShot] = [], urgent: Bool = false, task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
     try write {
-      try putCueMessage(author, text: text, ask: ask, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
+      try putCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
     }
   }
 
   func putCueMessage(
-    _ author: CueAuthor, text: String, ask: CueAsking? = nil, shots: [CueShot] = [], urgent: Bool = false,
+    _ author: CueAuthor, text: String, shots: [CueShot] = [], urgent: Bool = false,
     task: UUID? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     try checkShots(shots)
-    guard let ask else {
-      let message = try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
-      if author == .you { _ = try endQuestions(setAsideBy: message.id, where: "1", []) }
-      return message
-    }
-    let project = try projectID(of: task).flatMap { try find(Project.self, $0) }
-    return try insertCueMessage(author, text: text, asking: ask, shots: shots, in: project, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
+    return try insertCueMessage(author, text: text, shots: shots, urgent: urgent, task: task, answeredRequests: answeredRequests, id: id)
   }
 
   @discardableResult
@@ -36,16 +30,14 @@ extension CueStore {
   }
 
   func insertCueMessage(
-    _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
+    _ author: CueAuthor, text: String = "", shown: ShownText? = nil, shots: [CueShot] = [],
     urgent: Bool = false, task: UUID? = nil, tools: ChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
-      id: id, author: .known(author), text: shown?.text ?? text, shownText: shown, choices: asking?.ask.choices(in: project?.name),
-      asked: asking.map { CueAsked($0.ask, project: project?.id) }, askAction: asking?.action, askRule: asking?.rule, shots: shots,
-      urgent: urgent, taskID: task,
-      answer: nil, answeredAt: nil, setAsideBy: nil, deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, answeredRequests: author == .cue ? answeredRequests : nil, wake: wake,
-      places: try CuePlace.capture(task: task, wake: wake, project: asking == nil ? nil : project?.id, in: db), notify: nil)
+      id: id, author: .known(author), text: shown?.text ?? text, shownText: shown, shots: shots, urgent: urgent, taskID: task,
+      deliveredAt: nil, createdAt: time ?? now, modifiedAt: now, tools: tools, answeredRequests: author == .cue ? answeredRequests : nil, wake: wake,
+      places: try CuePlace.capture(task: task, wake: wake, in: db), notify: nil)
     if author == .cue { message.notify = try message.alerts && reaches(.cue) ? .alert : .wake }
     try insert(message)
     try registerAttachments(in: text)
@@ -95,10 +87,7 @@ extension CueStore {
     return try insertCueMessage(author, text: reply, shown: shown, urgent: answersYou && !said.contains(where: \.alerts), answeredRequests: answeredRequests).id
   }
 
-  static let toDeliver = """
-    ((author = 'you' AND deliveredAt IS NULL)
-      OR (author = 'cue' AND answer IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)))
-    """
+  static let toDeliver = "author = 'you' AND deliveredAt IS NULL"
 
   public func cueMessagesToDeliver() throws -> [CueMessage] {
     try select(CueMessage.self, where: Self.toDeliver, orderBy: "createdAt, rowid")
@@ -116,9 +105,7 @@ extension CueStore {
   public func withdrawCueMessage(_ id: UUID) throws -> Bool {
     try write {
       try db.run("DELETE FROM cueMessages WHERE id = ? AND author = 'you' AND deliveredAt IS NULL", [id])
-      guard db.changes > 0 else { return false }
-      try reopen(where: "setAsideBy = ?", [id])
-      return true
+      return db.changes > 0
     }
   }
 
@@ -130,10 +117,15 @@ extension CueStore {
         WHERE r.author = 'cue' AND r.answeredRequests IS NOT NULL GROUP BY lower(j.value))
       SELECT m.id FROM cueMessages m LEFT JOIN answered a ON a.id = m.id
       WHERE m.deliveredAt IS NOT NULL AND (a.at IS NULL OR a.at < m.deliveredAt)
-        AND (m.author = 'you' OR (m.author = 'cue' AND m.answer IS NOT NULL AND m.deliveredAt >= m.answeredAt))
+        AND m.author = 'you'
         AND NOT EXISTS (SELECT 1 FROM cueMessages r WHERE r.author = 'cue' AND r.answeredRequests IS NULL AND r.createdAt >= m.deliveredAt)
       """
     ) { $0.uuid(0) }
+  }
+
+  public func cueSaidInHand() throws -> [String] {
+    try select(CueMessage.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(try cueMessagesUnanswered())], orderBy: "createdAt, rowid")
+      .map(\.text)
   }
 
   public func unmarkCueMessagesDelivered(_ ids: [UUID]) throws {
@@ -153,11 +145,10 @@ extension CueStore {
     try db.query(
       """
       SELECT id FROM cueMessages
-      WHERE author = 'cue' AND choices IS NULL
+      WHERE author = 'cue'
         AND createdAt > MAX(
           IFNULL((SELECT modifiedAt FROM marks WHERE id = ?1), 0),
-          IFNULL((SELECT createdAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC LIMIT 1), 0),
-          IFNULL((SELECT MAX(answeredAt) FROM cueMessages WHERE \(Self.answered)), 0))
+          IFNULL((SELECT createdAt FROM cueMessages WHERE author = 'you' ORDER BY createdAt DESC LIMIT 1), 0))
       ORDER BY createdAt, rowid
       """, [Mark.cueRead.id]
     ) { $0.uuid(0) }

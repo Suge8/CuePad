@@ -97,7 +97,7 @@ struct CueBriefBubble: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let shot = line.shot {
-                    DeliverableTile(preview: shot.preview, label: shot.look, shape: .shot(side: Self.shot, chosen: false), captioned: false,
+                    DeliverableTile(preview: shot.preview, label: shot.look, shape: .shot(side: Self.shot), captioned: false,
                                     zoom: PreviewZoomKey(group: "stage", preview: shot.id)) { _ in }
                         .allowsHitTesting(false)
                 } else {

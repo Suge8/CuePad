@@ -136,10 +136,6 @@ nonisolated struct CueDigest: Equatable, Sendable {
 
 }
 
-nonisolated extension CueMessage {
-    var headline: String? { asking?.question ?? MarkdownBlock.firstPlainLine(CueFormat.plainText(text)) }
-}
-
 nonisolated struct CueFlight: Equatable, Sendable {
     enum Direction: Sendable {
         case wake

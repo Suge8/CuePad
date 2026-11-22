@@ -5,34 +5,15 @@ nonisolated struct CueWait: Identifiable, Sendable, Equatable {
     var wait: CueTally.Wait
     var task: Card?
     var id: String { wait.id }
+    var session: SessionState { wait.session }
+    var title: String { task?.title ?? session.title }
+    var since: Date { session.stateSince }
+    var project: UUID? { task?.projectID ?? TaskBoard.home(session) }
 
-    var message: CueMessage? {
-        if case .message(let message, _) = wait { message } else { nil }
-    }
-
-    var title: String? {
-        if let task { return task.title }
-        if case .session(let session, _) = wait { return session.title }
-        return nil
-    }
-
-    var since: Date {
-        switch wait {
-        case .message(let message, _): message.createdAt
-        case .session(let session, _): session.stateSince
-        }
-    }
-
-    var project: UUID? {
-        if let task { return task.projectID }
-        switch wait {
-        case .session(let session, _): return TaskBoard.home(session)
-        case .message(let message, _): return message.asked?.project
-        }
-    }
-
-    static func read(_ waiting: [CueTally.Wait], from store: isolated CueStore) throws -> [CueWait] {
-        try waiting.map { wait in CueWait(wait: wait, task: try wait.task.flatMap { try store.card($0) }) }
-            .enumerated().sorted { ($0.element.since, $0.offset) < ($1.element.since, $1.offset) }.map(\.element)
+    static func read(_ waiting: [CueTally.Wait], handed duty: CueDuty?, from store: isolated CueStore) throws -> [CueWait] {
+        guard let duty else { return [] }
+        return try waiting.filter { duty.tier(of: $0.session) != .yours }
+            .map { CueWait(wait: $0, task: try $0.task.flatMap { try store.card($0) }) }
+            .sorted { ($0.since, $0.id) < ($1.since, $1.id) }
     }
 }

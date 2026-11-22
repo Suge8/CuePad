@@ -2,36 +2,8 @@ import CueStore
 import SwiftUI
 
 struct WaitAnswer: View {
-    let wait: CueTally.Wait
-    var replyElsewhere = false
-    @Environment(Workspace.self) private var workspace
-    @State private var ending = false
-
-    var body: some View {
-        switch wait {
-        case .message(let message, _):
-            CueChoices(message: message, disabled: ending, pick: { choice in end { try await $0.answerCueQuestion(message.id, choice) } }) {
-                end { try await $0.declineCueQuestion(message.id) }
-            }
-        case .session(let session, _):
-            SessionAnswer(session: session, replyElsewhere: replyElsewhere)
-        }
-    }
-}
-
-extension WaitAnswer {
-    private func end(_ write: @escaping (AppServices) async throws -> Void) {
-        ending = true
-        workspace.attempt {
-            defer { ending = false }
-            try await write(workspace.services)
-        }
-    }
-}
-
-private struct SessionAnswer: View {
     let session: SessionState
-    let replyElsewhere: Bool
+    var replyElsewhere = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette

@@ -14,7 +14,7 @@ extension CueKeeper {
         await claimUnanswered()
         await giveBack([])
         await recordFires()
-        await leaveHisStops()
+        await leaveStopsCueSkips()
         let next = await step(at: now)
         schedule([next, alarm(at: now)].compactMap(\.self).min())
     }
@@ -46,7 +46,7 @@ extension CueKeeper {
                 }
                 guard let shift else { return nil }
                 let ids = pending.map(\.id)
-                let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
+                let said = CueEnvelope.delivered(pending, files: store.files, imagesAsFiles: !shift.brain.seesImages)
                 let images = await images(in: pending, for: shift.brain)
                 let related = try await CueTools(store: store).related(to: CueEnvelope.asked(pending))
                 if shift.turn != nil {
@@ -179,12 +179,12 @@ extension CueKeeper {
         updateShift { $0.turn?.round.sent.append(text) }
     }
 
-    private func leaveHisStops() async {
+    private func leaveStopsCueSkips() async {
         guard let from = handedOver ?? progress.marks?.sessions else { return }
         do {
-            handedOver = try await store.leaveHisStops(after: from)
+            handedOver = try await store.leaveStopsCueSkips(after: from)
         } catch {
-            Self.log.error("他那一轮的停下没能留给他回：\(error.localizedDescription, privacy: .public)")
+            Self.log.error("不归 Cue 的停下没能留给他回：\(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -219,8 +219,7 @@ extension CueKeeper {
 
     private func handsEmpty() async throws -> Bool {
         let board = try await store.cueBoard()
-        guard board.tasks.isEmpty, board.sessions.isEmpty else { return false }
-        return try await store.cueMessagesWaitingForYou().isEmpty
+        return board.tasks.isEmpty && board.sessions.isEmpty
     }
 
     private func patrolDue(idleSince: Date, lastRequest: Date?, now: Date) -> (at: Date, warm: Bool)? {

@@ -13,9 +13,7 @@ nonisolated struct SessionRailData: Equatable, Sendable {
 
     static func read(from store: isolated CueStore) throws -> Self {
         let tally = try store.cueTally()
-        let asking = tally.waiting.compactMap { wait in
-            if case .session(let session, _) = wait { session } else { nil }
-        }.sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
+        let asking = tally.waiting.map(\.session).sorted { ($0.stateSince, $0.sessionID) < ($1.stateSince, $1.sessionID) }
         let waiting = asking + tally.replies.map(\.session)
         var seen = Set(waiting.map(\.sessionID))
         let advancing = tally.works.flatMap(\.sessions)

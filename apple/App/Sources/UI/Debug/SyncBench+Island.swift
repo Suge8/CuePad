@@ -23,9 +23,11 @@ enum IslandBench {
             }
         }
         // 第 0 轮只为让岛开起来（系统只许前台开），脚本不计
+        let recorder = StateRecorder(store: services.store, hostID: "island-bench")
         for round in 0...rounds {
             do {
-                _ = try await services.store.addCueMessage(.cue, text: "同步测量第 \(round) 问", ask: CueAsking(.taste, action: "测量第 \(round) 问"))
+                let question = Question(promptID: "bench-\(round)", kind: .confirm, text: "同步测量第 \(round) 问")
+                try await recorder.update(sessionID: "bench-\(round)", state: .waitingForUser, title: "同步测量", question: question)
                 marks.add("write", round)
                 try await services.snapshots.writeSnapshots()
                 marks.add("snapshots", round)
