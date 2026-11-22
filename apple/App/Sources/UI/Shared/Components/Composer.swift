@@ -28,6 +28,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @Environment(\.palette) var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.sendFlight) private var flight
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
     @State var source: ComposerSource?
@@ -165,8 +166,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
     }
 
+    /// 发出的那句还在飞时不出占位字：字从它上面起飞，叠着读不清；落下那一刻占位字才回来。
     private var text: some View {
-        ComposerField(
+        let prompt = flight?.trip == nil ? prompt : nil
+        return ComposerField(
             text: $draft.text, prompt: promptIcon == nil ? prompt.map { String(localized: $0) } ?? "" : "", label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
             shortcut: shortcut, files: accepts.contains(.files) ? { add($0) } : nil)
             .focused(focus)
