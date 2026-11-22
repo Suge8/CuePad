@@ -73,8 +73,7 @@ struct CuePage: View {
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset + railInset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
-            holding: catchingUp,
-            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil }
+            holding: catchingUp
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             ChatStack(spacing: 0) {

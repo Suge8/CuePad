@@ -4,7 +4,7 @@ import Foundation
 extension CueStore {
   public func speak(
     _ content: String, to sessionID: String, name: String = "", card: UUID? = nil, config: SessionConfig? = nil,
-    host: String, cue: Bool = false
+    host: String, cue: Bool = false, id: UUID = UUID()
   ) throws -> DeliveryRequest {
     try write {
       let session = try sessionTarget(sessionID, name: name)
@@ -16,9 +16,9 @@ extension CueStore {
       }
       try requestConfig(config, in: session, host: host, cue: cue)
       if let answer {
-        return try insertDelivery(answer.stored, to: session.target, on: session.host(or: host), mode: .answer, card: card, cue: cue)
+        return try insertDelivery(answer.stored, to: session.target, on: session.host(or: host), mode: .answer, card: card, cue: cue, id: id)
       }
-      return try say(content, to: session, card: card, host: host, cue: cue)
+      return try say(content, to: session, card: card, host: host, cue: cue, id: id)
     }
   }
 
@@ -38,12 +38,12 @@ extension CueStore {
     _ = try insertDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
-  func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
+  func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool, id: UUID = UUID()) throws -> DeliveryRequest {
     if cue {
       guard let state = session.state else { throw CueStoreError.sessionUnconfirmed(session.target.name) }
       try checkCueCanSpeak(in: state)
     }
-    return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue)
+    return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue, id: id)
   }
 
   private static func answerValue(_ value: String, kind: QuestionKind, options: [String], allowsOther: Bool, leading: Bool) throws -> AnswerValue {

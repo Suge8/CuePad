@@ -31,7 +31,7 @@ extension DebugScene {
                 for await failed in Observations({ if case .failed = services.accountQuotas.phase { true } else { false } }) where failed { return }
             }
         }
-        func reachable() async {
+        @MainActor @Sendable func reachable() async {
             for await offline in Observations({ services.syncing.state.status == .offline }) where !offline { return }
         }
         Task {
@@ -46,22 +46,15 @@ extension DebugScene {
             }
         }
         await running("演示 Mac 接手") {
-            for try await pending in store.observe({ store in
-                try store.deliveryRequests().filter { $0.hostID == host && $0.status == .known(.pending) }.map(\.id)
-            }) where !pending.isEmpty {
+            let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { abandon("演示 Mac 读写库", $0) }) { request, _ in
                 await reachable()
-                try await Task.sleep(for: .seconds(1.2))
-                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { abandon("演示 Mac 读写库", $0) }) { request, _ in
-                    await Task.wait(for: .seconds(1))
-                    return await demoMacOutcome(request, host: host, store: store)
-                }
-                try await executor.start()
-                for try await open in store.observe({ store in
-                    try store.deliveryRequests().contains { pending.contains($0.id) && $0.isOpen }
-                }) where !open { break }
-                await executor.stop()
-                for id in pending { Task { await running("演示 Mac 回一轮") { try await playRound(for: id, store: store, host: host) } } }
+                await Task.wait(for: .seconds(2.2))
+                let outcome = await demoMacOutcome(request, host: host, store: store)
+                if case .succeeded = outcome { Task { await running("演示 Mac 回一轮") { try await playRound(for: request.id, store: store, host: host) } } }
+                return outcome
             }
+            try await executor.start()
+            for await _ in AsyncStream<Void>.makeStream().stream {}
         }
     }
 
@@ -136,16 +129,52 @@ extension DebugScene {
         }
     }
 
+    /// 送达后回一轮。画面摆好后才发出的（按发送钮、手打的）像真的 Agent 那样：这句落进会话、想一下、跑几步工具（中间说一句）、回答落下、歇下；
+    /// 演示预置的只想一下就歇（`preparedAt`），不往别的会话里写对话。
     private static func playRound(for request: UUID, store: CueStore, host: String) async throws {
         guard let asked = try await store.deliveryRequest(request), asked.mode != .known(.end), let ref = asked.target.ref else { return }
-        let recorder = demoRecorder(store, host: host)
-        for (wait, state) in [(0.8, WorkState.thinking), (2.5, .settled)] {
-            await Task.wait(for: .seconds(wait))
-            guard let session = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: ref))).items.first?.state,
-                  session.state != .known(.ended)
-            else { return }
-            try await replay(session, as: state, recorder: recorder)
+        let recorder = demoRecorder(store, host: host, minInterval: .zero)
+        func current() async throws -> SessionState? {
+            try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: ref))).items.first.map(\.state).flatMap { $0.state == .known(.ended) ? nil : $0 }
         }
+        guard let prepared = preparedAt, asked.createdAt > prepared else {
+            for (wait, state) in [(0.8, WorkState.thinking), (2.5, .settled)] {
+                await Task.wait(for: .seconds(wait))
+                guard let session = try await current() else { return }
+                try await replay(session, as: state, recorder: recorder)
+            }
+            return
+        }
+        let seq = Int64(3_000_000 + Int(Date.now.timeIntervalSinceReferenceDate) % 1_000_000 * 2)
+        let you = ChatMessage(sessionID: ref, entryID: "demo-u\(request)", seq: seq, role: .user, text: asked.content, at: .now, deliveryID: request)
+        await Task.wait(for: .seconds(0.6))
+        guard let session = try await current() else { return }
+        try await store.writeTranscript(SessionTranscript(sessionID: ref, messages: [you], recap: Recap(pendingPrompt: you.text)))
+        try await replay(session, as: .thinking, recorder: recorder)
+        var tools = ChatMessage.Tools()
+        let steps: [(WorkState, ChatMessage.Tools.Item?, String?, Double)] = [
+            (.thinking, nil, nil, 1.6),
+            (.tool, .init(kind: .read, target: "Sources/Scheduler/Queue.swift"), "read · Queue.swift", 1.2),
+            (.tool, .init(kind: .search, target: "firstJoinedAt"), "grep · firstJoinedAt", 1.0),
+            (.thinking, .init(kind: .said, target: String(localized: "排序用的是重连时的时间戳，改成首次加入时间。", table: "Demo")), nil, 1.4),
+            (.tool, .init(kind: .edit, target: "Sources/Scheduler/Queue.swift", added: 3, removed: 2), "edit · Queue.swift", 1.2),
+            (.tool, .init(kind: .command, target: "swift test --filter Reconnect"), "bash · swift test --filter Reconnect", 2.0),
+            (.thinking, nil, nil, 1.2),
+        ]
+        for (state, item, detail, wait) in steps {
+            guard let session = try await current() else { return }
+            if let item {
+                tools.record(item)
+                try await store.writeTranscript(SessionTranscript(sessionID: ref, messages: [], recap: Recap(pendingPrompt: you.text, pendingTools: tools)))
+            }
+            try await replay(session, as: state, detail: detail, recorder: recorder)
+            await Task.wait(for: .seconds(wait))
+        }
+        guard let session = try await current() else { return }
+        let reply = String(localized: "改好了：队列按首次加入时间排序，重连的人不再插到最前。\n\n`swift test --filter Reconnect` 4 个用例全部通过，压测里 p95 从 12ms 降到 9ms。", table: "Demo")
+        let answer = ChatMessage(sessionID: ref, entryID: "demo-p\(request)", seq: seq + 1, role: .pi, text: reply, at: .now, tools: tools, roundStartedAt: you.at)
+        try await store.writeTranscript(SessionTranscript(sessionID: ref, messages: [answer], recap: Recap(lastPrompt: you.text, lastReply: reply, answeredAt: .now)))
+        try await replay(session, as: .settled, recorder: recorder)
     }
 
     private static func replay(

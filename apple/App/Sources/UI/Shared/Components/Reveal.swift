@@ -198,23 +198,16 @@ nonisolated struct RevealRenderer: TextRenderer {
         return t * t * (3 - 2 * t)
     }
 
-    /// 格子对齐排版的原点，跨字连成一片；与 Cue 页的天、思考档位同一张 8×8 阈值表。
+    /// 格子对齐排版的原点，跨字连成一片（`Halftone`）。
     private static func dots(covering rect: CGRect, level: Double, cell: CGFloat) -> Path {
         var path = Path()
         let x0 = Int((rect.minX / cell).rounded(.down)), x1 = Int((rect.maxX / cell).rounded(.up))
         let y0 = Int((rect.minY / cell).rounded(.down)), y1 = Int((rect.maxY / cell).rounded(.up))
         for y in y0..<y1 {
-            for x in x0..<x1 where bayer(x, y) < level {
+            for x in x0..<x1 where Halftone.bayer(x, y) < level {
                 path.addRect(CGRect(x: CGFloat(x) * cell, y: CGFloat(y) * cell, width: cell, height: cell))
             }
         }
         return path
-    }
-
-    private static func bayer(_ cx: Int, _ cy: Int) -> Double {
-        let x = (cx & 7) ^ (cy & 7), y = cy & 7
-        var v = 0
-        for b in 0..<3 { v |= ((x >> b) & 1) << (5 - 2 * b) | ((y >> b) & 1) << (4 - 2 * b) }
-        return (Double(v) + 0.5) / 64
     }
 }

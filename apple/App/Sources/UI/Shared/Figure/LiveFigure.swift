@@ -59,8 +59,11 @@ struct LiveFigure: View {
     @State private var shownAt = Date.now
     @State private var arrivedWith = FigureHandoff()
     @State private var visible = true
+    @State private var speaks = true
+    @State private var pin: CGFloat = 0
     @LoopsPlay private var plays
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.chatRise) private var rise
 
     nonisolated enum Stage: Equatable {
         case absent, here(FigureLive), lingering(FigureLive), leaving(FigureLive), resting
@@ -74,10 +77,17 @@ struct LiveFigure: View {
     }
 
     static let dwell: TimeInterval = 0.6
+    /// 新来时先聚成形、再开口：字与它一起出现的话，字比还是一团点的它先被看见。
+    static let speakAfter: Duration = .milliseconds(350)
     private static let height = FigureLayout.size - FigureLayout.headroom
     static let lingerLimit: Duration = .seconds(1)
     static let restLimit: Duration = .milliseconds(800)
 
+    /// 不占位时（交给回复、一轮做完）原地碎开：画在占位时最后的位置（`pin`），不跟着这一块挪——回复从它头上长出来把这一块往下推，
+    /// 对话这时也不动（让出的高留成留白，`ChatScroll.keep`），跟着挪的话它一下跳到字上、再随每一行往下掉。
+    /// 位置量在对话内容里（`chatContentSpace`）：对话整段上滑是渲染端的平移，它照样跟着走。此刻的位置在画的这一遍里读（`visualEffect`）：
+    /// 经状态回报的话回复长出来的那一帧还按旧位置画，它先跳到字上、下一帧才回来。
+    /// 它头上长出东西（工具、思考的字）时对话整段上滑（`ChatRise`），它是被推下去的那一截：反着同一条曲线挪回来，原地不动，上面的让开。
     var body: some View {
         let handed = stage.shown != nil && handoff != arrivedWith
         let holds = switch stage {
@@ -85,9 +95,17 @@ struct LiveFigure: View {
         case .absent, .leaving, .resting: false
         }
         ZStack(alignment: .topLeading) {
-            if let shown = stage.shown { row(shown, fading: handed || stage == .leaving(shown)).offset(y: holds ? -FigureLayout.headroom : 0) }
+            if let shown = stage.shown { row(shown, fading: handed || stage == .leaving(shown)).offset(y: -FigureLayout.headroom) }
         }
-        .frame(maxWidth: .infinity, minHeight: holds ? Self.height : 0, maxHeight: holds ? Self.height : 0, alignment: handed ? .bottomLeading : .topLeading)
+        .frame(maxWidth: .infinity, minHeight: holds ? Self.height : 0, maxHeight: holds ? Self.height : 0, alignment: .topLeading)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(chatContentSpace)) } action: { if holds { pin = $0.minY } }
+        .visualEffect { [holds, pin] content, place in
+            content.offset(y: holds ? 0 : pin - place.frame(in: .named(chatContentSpace)).minY)
+        }
+        .keyframeAnimator(initialValue: CGFloat.zero, trigger: rise.count) { content, y in content.offset(y: y) } keyframes: { [rise] now in
+            MoveKeyframe(now - rise.height)
+            LinearKeyframe(0, duration: Motion.Glide.duration, timingCurve: Motion.Glide.unit)
+        }
         .onAppear {
             FigureGPU.warm()
             if stage == .absent, let live { show(live, arriving: false) }
@@ -98,7 +116,7 @@ struct LiveFigure: View {
         .onChange(of: handoff) {
             guard handoff != arrivedWith else { return }
             switch stage {
-            case .here(let last), .lingering(let last): leave(last, handed: true)
+            case .here(let last), .lingering(let last): stage = .leaving(last)
             case .absent, .leaving, .resting: break
             }
         }
@@ -106,7 +124,7 @@ struct LiveFigure: View {
             switch stage {
             case .lingering(let last):
                 guard await wait(Self.lingerLimit) else { return }
-                leave(last, handed: false)
+                stage = .leaving(last)
             case .leaving:
                 guard await wait(.seconds(FigureMotion.leaveDuration)) else { return }
                 stage = .resting
@@ -128,12 +146,17 @@ struct LiveFigure: View {
                         .offset(x: -FigureLayout.origin.x, y: -FigureLayout.origin.y)
                 }
                 .opacity(plays || !fading ? 1 : 0)
+                .animation(Motion.fade, value: fading)
             FigureStatus(live: shown, since: shown.since ?? arrivedAt)
-                .opacity(fading ? 0 : 1)
+                .opacity(fading || !speaks ? 0 : 1)
         }
         .frame(height: FigureLayout.size)
         // 量角色本身，不量这一块：回复接上时这一块已收成零高、按它量就算不在可见区，画布停在那一帧、碎不开
         .onScrollVisibilityChange(threshold: 0.05) { visible = $0 }
+        .task(id: arrivedAt) {
+            guard !speaks, await wait(Self.speakAfter) else { return }
+            withAnimation(Motion.fade) { speaks = true }
+        }
         .transition(.opacity)
     }
 
@@ -162,21 +185,18 @@ struct LiveFigure: View {
         stage = .here(live)
     }
 
+    /// 来去都不带动画改这一块的高（`stage`）：对话的长高、变矮由滚动区统一滑（`ContentLift`、`ChatScroll.keep`），
+    /// 这里再带一段弹簧的话，对话不满一屏时整段的位置是排版算的、也跟着弹，两段相加先往下掉一截再升上来。来是画布里聚成形，去是碎开。
     private func show(_ live: FigureLive, arriving: Bool) {
         arrives = arriving
+        speaks = !arriving || reduceMotion
         arrivedAt = .now
         shownAt = .now
         arrivedWith = handoff
-        withAnimation(arriving ? grow : nil) { stage = .here(live) }
-    }
-
-    private func leave(_ last: FigureLive, handed: Bool) {
-        withAnimation(plays ? (handed ? nil : grow) : Motion.fade) { stage = .leaving(last) }
+        stage = .here(live)
     }
 
     private func wait(_ duration: Duration) async -> Bool { (try? await Task.sleep(for: duration)) != nil }
-
-    private var grow: Animation { Motion.spatial(Motion.travel, reduceMotion: reduceMotion) ?? Motion.fade }
 }
 
 private struct FigureStatus: View {

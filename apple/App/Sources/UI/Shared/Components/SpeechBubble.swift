@@ -19,7 +19,7 @@ struct SpeechBubble<Menu: View>: View {
     var body: some View {
         let trip = said.trip(at: services.speech), shown = bubble(trip)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
-            UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue, marksTransit: marksTransit) { menu(trip) }
+            UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue, marksTransit: marksTransit, said: said.id) { menu(trip) }
             if case .preparing(let reason) = trip {
                 VStack(alignment: .trailing, spacing: Spacing.tight) {
                     Text(verbatim: reason)

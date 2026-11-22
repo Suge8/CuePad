@@ -10,9 +10,9 @@ public enum SessionLaunchIntent: Sendable {
 extension CueStore {
   @discardableResult
   public func requestDelivery(
-    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, cue: Bool = false, id: UUID = UUID()
   ) throws -> DeliveryRequest {
-    try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue) }
+    try write { try insertDelivery(content, to: target, on: host, mode: mode, card: card, cue: cue, id: id) }
   }
 
   public func requestDeliveryWithdrawal(_ id: UUID) throws -> DeliveryRequest? {

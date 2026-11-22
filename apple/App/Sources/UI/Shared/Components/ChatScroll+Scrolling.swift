@@ -13,42 +13,48 @@ extension ChatScroll {
 
     var pinned: Bool { follow.wrappedValue.pinned(holding: holding) }
 
-    /// 发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
-    /// 那句到了（内容真的长高）再收，与它出现在同一帧；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
+    /// 贴着最新时对话底下让出的高先留成留白（`held`），接着长出来的先填它，填进去的那一截对话不动，填不下的才上滑；留白不自己收，等下一次长出来。
+    /// 让出高的两处：发出时回复框当下收起、发出的话要等写进库才到；一轮做完小人收走、收起一格。跟着变矮的话贴着最新的整段对话先沉下去，
+    /// 接着到的那句、长出的回答又把它顶上来；到时自己收的话回答显完后整段再沉一下。代价是短回答之后回复框上方空着一截，直到下一句。
     /// 看内容长高，不看 `followKey`：它还算着别的（之前那句的送达情况），可能比那句先变。
     /// 排在内容里而不是内容边距：Mac 的滚动区改边距要晚一次排版才生效，那时它自己把偏移一下挪到底，就滑不起来了。
     /// 键盘是安全区，不在这里：发出时键盘随即收起，对话跟着键盘的动画走，不留。
     /// 叠在那一块上方的提示不在这里让：它落在对话末尾常驻的那一行的位置上（`ChatLiveSlot`）。
     var bottomPadding: CGFloat { max(bottomInset, held ?? 0) }
 
+    func keep(_ shrunk: CGFloat) { held = bottomPadding + shrunk }
+
+    /// 长出来的先填留白，返回没填下、要滑上去的那一截。
+    func fill(_ grown: CGFloat) -> CGFloat {
+        guard let held, grown > 0 else { return grown }
+        self.held = held - grown > bottomInset ? held - grown : nil
+        return grown - min(grown, max(0, held - bottomInset))
+    }
+
     final class ScrollOffset {
         private(set) var read: CGFloat = 0
         private(set) var end: CGFloat = 0
         private(set) var container: CGFloat = 0
+        private var width: CGFloat = 0
         /// 不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，拿它比内容变没变高会漏掉。
-        private var delivered: (reading: Reading, container: CGFloat, read: CGFloat)?
-        private var arrival: UUID?
+        private var delivered: (reading: Reading, container: CGFloat, width: CGFloat, read: CGFloat)?
 
         struct Delivered {
             let reading: Reading?
             let viewShrank: Bool
+            let widthChanged: Bool
             let moved: Bool
         }
 
-        func set(read: CGFloat, end: CGFloat, container: CGFloat) {
-            (self.read, self.end, self.container) = (read, end, container)
+        func set(read: CGFloat, end: CGFloat, container: CGFloat, width: CGFloat) {
+            (self.read, self.end, self.container, self.width) = (read, end, container, width)
         }
 
         func deliver(_ reading: Reading) -> Delivered {
-            defer { delivered = (reading, container, read) }
+            defer { delivered = (reading, container, width, read) }
             return Delivered(
-                reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false, moved: delivered.map { $0.read != read } ?? true)
-        }
-
-        func arrived(_ arrival: UUID?) -> Bool {
-            guard let arrival else { return false }
-            defer { self.arrival = arrival }
-            return self.arrival.map { $0 != arrival } ?? false
+                reading: delivered?.reading, viewShrank: delivered.map { container < $0.container } ?? false,
+                widthChanged: delivered.map { width != $0.width } ?? true, moved: delivered.map { $0.read != read } ?? true)
         }
     }
 
@@ -91,13 +97,14 @@ extension ChatScroll {
     }
 
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
-        held = sent ? bottomInset : nil
+        held = sent ? bottomPadding : nil
         withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }
     }
 
     func rise(by height: CGFloat) {
         guard !reduceMotion else { return }
         lift.slide(by: height)
+        rose = ChatRise(count: rose.count + 1, height: height)
     }
 
     static var end: String { "chat.end" }

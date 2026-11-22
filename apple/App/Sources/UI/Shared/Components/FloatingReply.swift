@@ -16,6 +16,8 @@ struct FloatingReply<Chat: View, Reply: View>: View {
     /// 不先按 0 排一遍再挪——那样滚动区的读数在打开的那一帧里多变一次，赶上推入页面时导航栏那一遍，系统丢掉第三次（`ChatScroll`）。
     @State private var height: CGFloat?
     @State private var visible: CGFloat = .infinity
+    @State private var flight = SendFlight()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -40,11 +42,13 @@ struct FloatingReply<Chat: View, Reply: View>: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .overlay { SendFlightLayer(flight: flight) }
+        .environment(\.sendFlight, reduceMotion ? nil : flight)
         .coordinateSpace(.named(floatingReplyPage))
     }
 }
 
-private let floatingReplyPage = "FloatingReply.page"
+nonisolated let floatingReplyPage = "FloatingReply.page"
 
 #if os(macOS)
 extension View {

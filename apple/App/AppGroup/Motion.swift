@@ -57,6 +57,7 @@ extension Motion {
     nonisolated enum Glide {
         static let duration: TimeInterval = 0.28
         fileprivate static let curve: (Double, Double, Double, Double) = (0.4, 0, 0.2, 1)
+        static var unit: UnitCurve { .bezier(startControlPoint: UnitPoint(x: curve.0, y: curve.1), endControlPoint: UnitPoint(x: curve.2, y: curve.3)) }
         static var timing: CAMediaTimingFunction {
             CAMediaTimingFunction(controlPoints: Float(curve.0), Float(curve.1), Float(curve.2), Float(curve.3))
         }
@@ -81,6 +82,16 @@ extension Motion {
         static let develop = 0.4
         static let front = 40.0
         static let penFade = 0.45
+    }
+
+    /// 发出的那句从输入框飞进对话（`SendFlight`）：竖着走得比横着快，走出一道先升后靠右的弧；气泡的底在路上长出来。
+    /// 气泡 `wait` 内没排出来（没写进库、不在这一页）就原地淡掉。
+    nonisolated enum Send {
+        static let lift = Animation.spring(duration: 0.32)
+        static let drift = Animation.spring(duration: 0.45)
+        static let develop = Animation.linear(duration: Reveal.develop)
+        static let takeoff: CGFloat = 16
+        static let wait: Duration = .seconds(1)
     }
 
     nonisolated enum Write {

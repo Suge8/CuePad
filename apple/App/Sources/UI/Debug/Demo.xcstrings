@@ -903,6 +903,22 @@
         }
       }
     },
+    "两处要改：\n\n1. 队列按首次加入时间排序，重连不再插到最前。\n2. 登录回调换成统一网关，超时后重试一次。\n\n改完再跑一遍 `scheduler` 的测试。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Two changes:\n\n1. Sort the queue by first join time, so reconnects no longer jump to the front.\n2. Route the login callback through the shared gateway and retry once on timeout.\n\nThen run the `scheduler` tests again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两处要改：\n\n1. 队列按首次加入时间排序，重连不再插到最前。\n2. 登录回调换成统一网关，超时后重试一次。\n\n改完再跑一遍 `scheduler` 的测试。"
+          }
+        }
+      }
+    },
     "个人网站" : {
       "localizations" : {
         "en" : {
@@ -4343,6 +4359,22 @@
         }
       }
     },
+    "排序用的是重连时的时间戳，改成首次加入时间。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sort used the reconnect timestamp; switching to first join time."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排序用的是重连时的时间戳，改成首次加入时间。"
+          }
+        }
+      }
+    },
     "排查 Pi 桥\n\n日志里 Pi 桥报错 {{错误码}}，查清触发条件再动手。\n%@" : {
       "localizations" : {
         "en" : {
@@ -4727,6 +4759,22 @@
         }
       }
     },
+    "改好了：队列按首次加入时间排序，重连的人不再插到最前。\n\n`swift test --filter Reconnect` 4 个用例全部通过，压测里 p95 从 12ms 降到 9ms。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done: the queue sorts by first join time, so reconnects no longer jump to the front.\n\n`swift test --filter Reconnect` passes all 4 cases, and p95 in the load test dropped from 12ms to 9ms."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改好了：队列按首次加入时间排序，重连的人不再插到最前。\n\n`swift test --filter Reconnect` 4 个用例全部通过，压测里 p95 从 12ms 降到 9ms。"
+          }
+        }
+      }
+    },
     "改完再看看登录回调那个超时" : {
       "localizations" : {
         "en" : {
@@ -4899,6 +4947,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "断线超过 5 分钟按新人排"
+          }
+        }
+      }
+    },
+    "断言也一起改了，12 个用例全部通过。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated the assertions too; all 12 cases pass."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断言也一起改了，12 个用例全部通过。"
           }
         }
       }
@@ -6183,6 +6247,22 @@
         }
       }
     },
+    "看过了，出字一卡一卡的原因在 Mac 这一侧：四家 Agent 都是一小段一小段推过来的，界面每 100 毫秒才换一次字。\n\n改法是在显示这一层加一个出字时钟：来得多就加速追，来得少就匀速吐完，追平了就停下。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Took a look. The stutter comes from the Mac side: all four agents push text in small chunks, and the view only swaps text every 100 ms.\n\nThe fix is a reveal clock in the display layer: speed up when lots arrives, drain at an even pace when little does, and stop once caught up."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看过了，出字一卡一卡的原因在 Mac 这一侧：四家 Agent 都是一小段一小段推过来的，界面每 100 毫秒才换一次字。\n\n改法是在显示这一层加一个出字时钟：来得多就加速追，来得少就匀速吐完，追平了就停下。"
+          }
+        }
+      }
+    },
     "空格" : {
       "localizations" : {
         "en" : {
@@ -6291,6 +6371,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "第 %lld 轮：把上一步的结果整理成表格"
+          }
+        }
+      }
+    },
+    "第一处改在这里：" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The first change is here:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第一处改在这里："
           }
         }
       }
