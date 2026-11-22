@@ -7,9 +7,11 @@ nonisolated struct RelayEnd: Equatable, Sendable {
     var opens = false
 }
 
+/// Cue 住在哪：头像（入口、页头）与空着的 Cue 页云上那个小人。
 enum CueSpot: Int {
     case entry
     case header
+    case perch
 }
 
 enum EndSpot: Equatable {
@@ -35,7 +37,8 @@ extension View {
 
     func relaySpot(task: UUID) -> some View { modifier(TaskSpot(task: task)) }
 
-    func relaySpot(cue spot: CueSpot) -> some View { background { RelayAnchor(role: .cue(spot)) } }
+    /// 开门时小人正往这处落，这处先藏着（`CueOpening`）。
+    func relaySpot(cue spot: CueSpot?) -> some View { modifier(CueSpotMark(spot: spot)) }
 
     func relayArrival(session: String) -> some View { modifier(Arrival(session: session)) }
 }
@@ -68,6 +71,17 @@ private struct TaskSpot: ViewModifier {
         let flying = workspace.relays(session: session, task: task)
         content.background {
             if flying { RelayAnchor(role: .end(.task(task, session: session))).transition(.identity) }
+        }
+    }
+}
+
+private struct CueSpotMark: ViewModifier {
+    let spot: CueSpot?
+
+    func body(content: Content) -> some View {
+        let hidden = spot.map(CueOpening.shared.phase.hides) == true
+        content.opacity(hidden ? 0 : 1).background {
+            if let spot { RelayAnchor(role: .cue(spot)) }
         }
     }
 }

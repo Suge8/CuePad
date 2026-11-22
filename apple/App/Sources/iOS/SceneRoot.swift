@@ -15,6 +15,7 @@ struct SceneRoot: View {
             .onOpenURL { services.handle(url: $0) }
             .modifier(ScenePhaseWork(services: services))
             .background { SceneAppearance(settings: services.settings) }
+            .cueOpening()
     }
 }
 
