@@ -191,7 +191,9 @@ private struct ThinkingTrack: View {
                 Text("思考强度").foregroundStyle(palette.ink3)
                 Spacer(minLength: Spacing.item)
                 Text(verbatim: level?.label ?? meter.label).fontWeight(.semibold).foregroundStyle(palette.ink)
-                    .contentTransition(.interpolate)
+                    .contentTransition(.numericText(value: Double(index ?? 0)))
+                    .modifier(LevelPop(level: level))
+                    .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: level)
             }
             .font(Typography.caption)
             .padding(.horizontal, Spacing.item)
@@ -207,7 +209,7 @@ private struct ThinkingTrack: View {
             choose(next)
         }
         .sensoryFeedback(trigger: level) { _, level in
-            .impact(flexibility: .soft, intensity: 0.35 + 0.65 * (level.flatMap(ThinkingMeter.energy) ?? 0))
+            .impact(flexibility: .soft, intensity: 0.6 + 0.4 * (level.flatMap(ThinkingMeter.energy) ?? 0))
         }
         .task(id: heading) {
             guard heading != nil, dragging == nil, (try? await Task.sleep(for: .seconds(1))) != nil else { return }
@@ -270,17 +272,40 @@ private struct ThinkingTrack: View {
 struct ThinkingWord: View {
     let meter: ThinkingMeter
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @LoopsPlay private var loops
 
     var body: some View {
         if let level = meter.current {
-            let word = Text(level.label).font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
             let energy = ThinkingMeter.energy(level)
-            word
-                .foregroundStyle(energy.map { AnyShapeStyle(LinearGradient(colors: [palette.thinkingInk(0), palette.thinkingInk($0)], startPoint: .leading, endPoint: .trailing)) } ?? AnyShapeStyle(palette.ink3))
-                .overlay { if meter.isMax, loops { LoopLayer(kind: .sheen, color: palette.onFill).mask { word }.allowsHitTesting(false) } }
-                .contentTransition(.opacity)
-                .animation(Motion.fade, value: level)
+            ZStack(alignment: .leading) {
+                ForEach(meter.levels, id: \.self) { Text($0.label).hidden() }
+                Text(level.label)
+                    .foregroundStyle(energy.map { AnyShapeStyle(LinearGradient(colors: [palette.thinkingInk(0), palette.thinkingInk($0)], startPoint: .leading, endPoint: .trailing)) } ?? AnyShapeStyle(palette.ink3))
+                    .overlay { if meter.isMax, loops { LoopLayer(kind: .sheen, color: palette.onFill).mask { Text(level.label) }.allowsHitTesting(false) } }
+                    .contentTransition(.numericText(value: Double(meter.levels.firstIndex(of: level) ?? 0)))
+                    .modifier(LevelPop(level: level))
+            }
+            .font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: level)
+        }
+    }
+}
+
+private struct LevelPop: ViewModifier {
+    let level: ThinkingLevel?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content
+        } else {
+            content.keyframeAnimator(initialValue: 1.0, trigger: level) { content, scale in
+                content.scaleEffect(scale)
+            } keyframes: { _ in
+                SpringKeyframe(1.14, duration: 0.1)
+                SpringKeyframe(1, duration: 0.35, spring: .bouncy)
+            }
         }
     }
 }

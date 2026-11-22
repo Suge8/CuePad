@@ -214,7 +214,8 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     guard let info = (CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]])?.first,
           (info[.status] as? Int).flatMap(SCFrameStatus.init) == .complete, let buffer = sample.imageBuffer else { return }
     // 按窗口取的流不管画面动没动都一直出帧，也不守 `minimumFrameInterval`（实测：不动时每秒四十来帧，每帧都标着整幅有改动；120 Hz 的屏上滚动时近百帧）。
-    // 这里压到每秒 60 帧，和上一帧一样的不往下送：不动的画面不编码、不发。被压掉的那一帧不会就此丢了：画面停住后流还在出同样的帧，下一帧补上
+    // 这里压到每秒 60 帧上下，和上一帧一样的不往下送：不动的画面不编码、不发。被压掉的那一帧不会就此丢了：画面停住后流还在出同样的帧，下一帧补上
+    // 线划在一帧的三分之二：60 Hz 的屏上帧与帧的间隔前后抖几毫秒，划在一帧整（16.4 毫秒）时早到的都被扔，每秒只剩五十来帧、隔几帧顿一下（实测）；120 Hz 的屏上隔一帧扔一帧
     // 画面是窗口那么大；有窗伸出去时 ScreenCaptureKit 把它们的外接矩形等比缩进来，内容就不再铺满，宽高比对不上
     let content = (info[.contentRect] as? NSDictionary).flatMap { CGRect(dictionaryRepresentation: $0) } ?? .zero
     let overflowing = content.height > 0 && abs(content.width / content.height - Double(CVPixelBufferGetWidth(buffer)) / Double(CVPixelBufferGetHeight(buffer))) > 0.005
@@ -223,7 +224,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
       $0.overflowing = overflowing
       return ($0.frame, $0.time)
     }
-    if time - last.1 < 1.0 / 61 { return }
+    if time - last.1 < 1.0 / 90 { return }
     if let frame = last.0, Self.same(frame, buffer) { return }
     shared.withLockUnchecked {
       $0.frame = buffer

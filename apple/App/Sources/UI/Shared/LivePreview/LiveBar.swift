@@ -41,8 +41,9 @@ struct LiveBar: View {
             tool("在浏览器里打开", icon: .openInBrowser) { if let url = preview.shownAddress { LivePreview.openOutside(url) } }
                 .disabled(preview.shownAddress == nil)
             #endif
+            if !narrow { PaneClose { workspace.toggleLivePreview() } }
         }
-        .padding(.horizontal, Spacing.tight)
+        .padding(.horizontal, PaneClose.inset)
         .frame(height: Chrome.control)
         .overlay { LiveProgress(value: preview.progress, shown: loading) }
         .glass(in: .capsule)

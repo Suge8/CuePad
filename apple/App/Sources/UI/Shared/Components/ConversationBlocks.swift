@@ -45,7 +45,6 @@ struct ReplyBlock: View {
     let tools: ChatMessage.Tools?
     let session: SessionState
     let notes: [ReplyNote]
-    var landed: Date?
     var fadesIn = true
     #if os(iOS)
     @Environment(\.replyText) private var replyText
@@ -53,7 +52,7 @@ struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id, landed: landed) }
+            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id) }
             MarkdownText(source: text, notes: notes).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -91,26 +90,19 @@ struct MachineCards: View {
 private struct MachineCard: View {
     let note: MachineNote
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var open = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button { open.toggle() } label: {
-                NoteLine(icon: note.fromFireCode ? .fireCode : .extensionNote, open: note.detail.isEmpty ? nil : open) {
-                    Text(note.who).foregroundStyle(palette.ink3).fixedSize()
-                    Text(note.line).foregroundStyle(note.failed ? palette.failure : palette.ink2)
-                        .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
-                }
+        Fold(open: $open, toggles: !note.detail.isEmpty) {
+            NoteLine(icon: note.fromFireCode ? .fireCode : .extensionNote, open: note.detail.isEmpty ? nil : open) {
+                Text(note.who).foregroundStyle(palette.ink3).fixedSize()
+                Text(note.line).foregroundStyle(note.failed ? palette.failure : palette.ink2)
+                    .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(PressStyle())
-            // 没有全文可看时只是不接点按，不停用：停用的按钮 iOS 整块压淡
-            .allowsHitTesting(!note.detail.isEmpty)
-            .accessibilityLabel("\(note.who)：\(note.line)")
-            .accessibilityExpanded(note.detail.isEmpty ? nil : open)
+            .accessibilityElement(children: .ignore).accessibilityLabel("\(note.who)：\(note.line)")
+        } content: {
             if open { NoteThread { MarkdownText(source: note.detail).equatable() } }
         }
-        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: open)
     }
 }
 

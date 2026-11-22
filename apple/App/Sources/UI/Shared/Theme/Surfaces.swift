@@ -13,8 +13,8 @@ extension View {
         contentTransition(.numericText(value: Double(value))).animation(Motion.nudge, value: value)
     }
 
-    func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .solid) -> some View {
-        modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink))
+    func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .solid, shown: Bool = true) -> some View {
+        modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink, shown: shown))
     }
 }
 
@@ -58,7 +58,8 @@ extension View {
 enum GlassInk: Equatable {
     case clear
     case solid
-    case ground(shown: Bool)
+    case ground
+    case veil
 }
 
 private struct PaperSurface: ViewModifier {
@@ -108,30 +109,42 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     let shape: S
     let interactive: Bool
     let ink: GlassInk
+    let shown: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         if reduceTransparency {
             content
-                .background(palette.paper, in: shape)
-                .overlay(shape.stroke(palette.hair))
+                .background(shown ? palette.paper : .clear, in: shape)
+                .overlay(shape.stroke(shown ? palette.hair : .clear))
         } else {
             switch ink {
             case .clear: content.glassEffect(glass, in: shape)
             case .solid: solid(content)
-            case .ground(let shown): content.background(shown ? palette.desk : .clear, in: shape).glassEffect(shown ? glass : .identity, in: shape)
+            case .veil: veil(content)
+            case .ground: content.background(fill(palette.desk), in: shape).glassEffect(glass, in: shape)
             }
         }
     }
+
+    private func fill(_ color: Color) -> Color { shown ? color : .clear }
 
     /// iOS 只在玻璃里垫一层 `inkWell`：背后的内容照样从玻璃里透出来（通透），字仍够 4.5:1。
     /// Mac 里外各垫一层九成实的：Mac 的玻璃会在它下面那层上再压暗、提亮一档，只垫在里面整块发灰；下面那层让浮在桌面上的（Cue 条、菜单栏面板）不透出壁纸的颜色。
     @ViewBuilder private func solid(_ content: Content) -> some View {
         #if os(iOS)
-        content.background(palette.inkWell, in: shape).glassEffect(glass, in: shape)
+        content.background(fill(palette.inkWell), in: shape).glassEffect(glass, in: shape)
         #else
-        content.background(palette.solidGlass, in: shape).glassEffect(glass, in: shape).background(palette.solidGlass, in: shape)
+        content.background(fill(palette.solidGlass), in: shape).glassEffect(glass, in: shape).background(fill(palette.solidGlass), in: shape)
+        #endif
+    }
+
+    @ViewBuilder private func veil(_ content: Content) -> some View {
+        #if os(iOS)
+        solid(content)
+        #else
+        content.glassEffect(glass, in: shape).background { shape.fill(fill(palette.veilGlass)).elevation(shown ? .panel : nil) }
         #endif
     }
 
@@ -139,6 +152,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     /// 否决了 `.clear`（加淡色 tint 也一样）：我们玻璃后面是文字，它几乎不糊开背后的字，栏上的标题、标签与问题卡和背后的字叠在一起读不出
     /// （系统规范也只把 clear 用在照片、视频这类背景上）；系统自己的返回钮与工具栏圆钮也是 regular，两种并排会不一致。
     private var glass: Glass {
+        guard shown else { return .identity }
         guard ink != .clear else { return .regular.interactive(interactive) }
         return .regular.tint(palette.glassTint).interactive(interactive)
     }

@@ -59,7 +59,7 @@ extension DebugScene {
     }
 
     static func longChatPrompt(_ round: Int) -> String {
-        guard round % 25 != 0 else {
+        guard round % 25 != 0, round != longChatRounds - 2 else {
             return String(localized: "第 \(round) 轮，我把日志贴过来：", table: "Demo") + "\n" + (1...30).map { String(localized: "[\($0)] worker-\($0 % 7) retry=\($0 % 3) 连接被对端重置，正在重连第 \($0) 次", table: "Demo") }.joined(separator: "\n")
         }
         return [String(localized: "继续", table: "Demo"), String(localized: "第 \(round) 轮：把上一步的结果整理成表格", table: "Demo"), String(localized: "这里为什么会慢？给我看一下热点代码", table: "Demo"), String(localized: "好，下一个", table: "Demo"), String(localized: "列一下还剩哪些没做", table: "Demo")][round % 5]

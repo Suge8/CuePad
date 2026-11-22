@@ -27,6 +27,7 @@ struct Palette {
 
     var glassTint: Color { dark ? Color.black.opacity(0.4) : paper.opacity(0.45) }
     var solidGlass: Color { desk.opacity(0.9) }
+    var veilGlass: Color { desk.opacity(dark ? 0.72 : 0.6) }
     var inkWell: Color { desk.opacity(dark ? 0.78 : 0.3) }
 
 

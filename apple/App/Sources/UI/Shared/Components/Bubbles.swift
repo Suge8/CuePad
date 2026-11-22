@@ -40,8 +40,6 @@ struct UserBubble<Menu: View>: View {
     var marksTransit = true
     var quote: BubbleQuote?
     @ViewBuilder var menu: Menu
-    @State private var expanded = false
-    @State private var truncated = false
 
     var body: some View {
         let parts = BubbleParts(stored), text = parts.text, images = parts.images, skill = SkillCall.parse(text)
@@ -53,8 +51,7 @@ struct UserBubble<Menu: View>: View {
             VStack(alignment: .trailing, spacing: Spacing.tight) {
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
-                        text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, fromCue: fromCue, lineLimit: expanded ? nil : Self.foldedLines,
-                        truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil, quote: quote)
+                        text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, fromCue: fromCue, foldedLines: Self.foldedLines, quote: quote)
                     .tripMark(images.isEmpty && parts.files.isEmpty ? mark : .arrived, above: look.padding.bottom)
                 }
                 if let skill, !skill.body.isEmpty { SkillBody(skill: skill) }
@@ -92,19 +89,14 @@ nonisolated struct BubbleParts {
 private struct SkillBody: View {
     let skill: SkillCall
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var open = false
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Button { open.toggle() } label: {
-                NoteLine(icon: .readFile, open: open) { Text("技能 \(skill.name) 的正文").foregroundStyle(palette.ink3) }
-            }
-            .buttonStyle(PressStyle())
-            .accessibilityExpanded(open)
+        Fold(open: $open) {
+            NoteLine(icon: .readFile, open: open) { Text("技能 \(skill.name) 的正文").foregroundStyle(palette.ink3) }
+        } content: {
             if open { NoteThread { MarkdownText(source: skill.body).equatable() }.frame(maxWidth: .infinity, alignment: .leading) }
         }
-        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: open)
     }
 }
 
@@ -114,11 +106,11 @@ struct BubbleText: View {
     var highlighted = false
     var trip = BubbleTrip.arrived
     var fromCue = false
-    var lineLimit: Int?
-    var truncated: Binding<Bool>?
-    var expand: (() -> Void)?
+    var foldedLines: Int?
     var quote: BubbleQuote?
     @Environment(\.palette) private var palette
+    @State private var open = false
+    @State private var truncated = false
 
     var body: some View {
         let shape = look.shape
@@ -126,10 +118,16 @@ struct BubbleText: View {
             if fromCue { CueMark().alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 } }
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 if let quote { QuoteLine(quote: quote) }
-                Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: lineLimit)
-                    .font(Typography.reading).foregroundStyle(palette.ink)
-                    .background(alignment: .topLeading) { if let truncated, let lineLimit { truncationProbe(truncated, lineLimit: lineLimit) } }
-                if let expand { expandButton(expand).frame(maxWidth: .infinity, alignment: .trailing) }
+                if truncated {
+                    Fold(open: $open, edge: .bottom) {
+                        DisclosureChevron(open: open)
+                            .frame(maxWidth: .infinity, minHeight: Self.toggle, alignment: .trailing).contentShape(.rect)
+                            .padding(.bottom, -Spacing.item)
+                            .accessibilityLabel(open ? Text("收起") : Text("展开"))
+                    } content: { words }
+                } else {
+                    words
+                }
             }
         }
             .padding(look.padding)
@@ -140,19 +138,22 @@ struct BubbleText: View {
             .animation(Motion.fade, value: trip)
     }
 
-    private func expandButton(_ expand: @escaping () -> Void) -> some View {
-        Button("展开", action: expand)
-            .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
-            .buttonStyle(PressStyle(.inline))
+    private var words: some View {
+        Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: open ? nil : foldedLines)
+            .font(Typography.reading).foregroundStyle(palette.ink)
+            .background(alignment: .topLeading) { if let foldedLines, !open { truncationProbe(lineLimit: foldedLines) } }
+            .fadesEdge(.bottom, when: truncated && !open)
     }
 
-    private func truncationProbe(_ truncated: Binding<Bool>, lineLimit: Int) -> some View {
+    private static let toggle: CGFloat = 20
+
+    private func truncationProbe(lineLimit: Int) -> some View {
         GeometryReader { shown in
             let folded = shown.size.height
             Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: lineLimit + 1).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
                 .frame(width: shown.size.width, alignment: .leading)
                 .hidden()
-                .onGeometryChange(for: Bool.self) { $0.size.height > folded + 1 } action: { truncated.wrappedValue = $0 }
+                .onGeometryChange(for: Bool.self) { $0.size.height > folded + 1 } action: { truncated = $0 }
         }
     }
 

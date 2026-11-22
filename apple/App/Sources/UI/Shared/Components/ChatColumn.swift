@@ -16,6 +16,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
     @State private var column = UUID()
+    @State private var reading = ChatReading()
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, marks: [ChatMark], ids: [UUID],
@@ -55,9 +56,10 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
                 content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
                     .environment(\.chatMargin, margin)
             }
+            .environment(\.chatReading, reading)
             .overlay(alignment: .trailing) {
                 if !marks.isEmpty {
-                    ChatScrubber(marks: marks, scrolling: follow.scrolling, crowded: margin < ChatScrubber.room) { follow.seek($0) }
+                    ChatIndex(marks: marks, ids: ids, reading: reading, scrolling: follow.scrolling, crowded: margin < ChatIndex.room) { follow.seek($0) }
                 }
             }
             .onChange(of: ids, initial: true) {
@@ -81,7 +83,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
 
     private func seek(_ target: ChatFollow.Target, size: CGSize) {
         if target.landing == .flash { highlight.flash(target.id) }
-        if let index = ids.firstIndex(of: target.id) { show(from: min(index, ids.count - window(size))) }
+        if let index = ids.firstIndex(of: target.id) { show(from: max(0, min(index - paging.step(size, index), ids.count - window(size)))) }
         follow.jump(to: target)
     }
 

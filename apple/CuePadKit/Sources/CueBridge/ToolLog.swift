@@ -137,13 +137,19 @@ private extension ToolLog.Call {
         let kind = Tools.Kind(tool: name)
         let target: String = switch kind {
         case .edit, .read: file ?? name
-        case .command: arguments.command?.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? name
+        case .command: arguments.command.flatMap(Self.told) ?? name
         case .search: arguments.pattern ?? file ?? name
         default: name
         }
         let change = kind == .edit ? arguments.lineChange : nil
         let written = kind == .edit ? arguments.content.map { ToolArguments.lines($0).count } : nil
         self.init(kind: kind, target: target.clipped(Tools.targetLimit), added: change?.added ?? written, removed: change?.removed)
+    }
+
+    private static func told(_ command: String) -> String? {
+        guard let line = command.split(whereSeparator: \.isNewline).lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) else { return nil }
+        let run = line.replacing(/^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|[^\s;&\\"'`()]+)\s*(?:&&|;)|[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s;&\\"'`()]*)(?:\s*(?:&&|;)|\s))\s*)+/, with: "")
+        return run.isEmpty || run.hasPrefix("#") ? line : run
     }
 
     private static func relative(_ path: String, to cwd: String?) -> String {

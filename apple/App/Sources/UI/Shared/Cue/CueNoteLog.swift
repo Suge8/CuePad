@@ -13,9 +13,9 @@ struct CueNoteLog: View {
         let newest = Self.newest(folds)
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
             VStack(alignment: .leading, spacing: 0) {
-                if settled, !unfolded, folds.count > 1 {
-                    Button { unfolded = true } label: {
-                        CueNoteRow { Image(.expand) } text: {
+                if settled, folds.count > 1 {
+                    Fold(open: $unfolded, press: .row) {
+                        CueNoteRow { DisclosureChevron(open: unfolded) } text: {
                             HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                                 summary(folds)
                                 if let time = folds.last?.last.date {
@@ -24,9 +24,9 @@ struct CueNoteLog: View {
                                 }
                             }
                         }
+                    } content: {
+                        if unfolded { ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)).transition(.opacity) } }
                     }
-                    .buttonStyle(.row)
-                    .accessibilityHint("展开")
                 } else {
                     ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)) }
                 }
