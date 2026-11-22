@@ -20,7 +20,7 @@ struct CuePage: View {
     private var catchingUp: Bool { services.syncing.isCatchingUp(on: cue.hostID) }
     var body: some View {
         page
-            .background { CueSky(beat: cue.beat) }
+            .background { CueSky(beat: cue.beat, perched: thread?.rows.isEmpty == true) }
             .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }
             .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }

@@ -27,7 +27,7 @@ struct CueTierButton: View {
 
     private func label(_ name: String) -> some View {
         HStack(spacing: Spacing.tight) {
-            CueAvatar(tier == .yours ? .away : .resting, size: .inline, plate: false)
+            CueAvatar(.resting, size: .inline, plate: false).saturation(tier == .yours ? 0 : 1)
             if tier != .yours, !compact {
                 Text(tier.title(name)).font(Typography.caption.weight(.semibold)).lineLimit(1).fixedSize()
                     .transition(.opacity)
@@ -38,7 +38,6 @@ struct CueTierButton: View {
         .padding(.trailing, tier == .yours || compact ? Spacing.tight : Spacing.item)
         .padding(.vertical, Spacing.tight)
         .background(fill, in: .capsule)
-        .opacity(tier == .yours ? 0.6 : 1)
     }
 
     private var fill: Color {

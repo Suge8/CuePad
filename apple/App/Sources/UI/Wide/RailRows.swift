@@ -54,19 +54,33 @@ struct RailTool: View {
     let icon: Icon
     let help: LocalizedStringResource
     let action: () -> Void
-    @Environment(\.palette) private var palette
 
     static var lead: CGFloat { RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2 }
 
     var body: some View {
-        Button(action: action) {
-            Image(icon).font(Glyph.control).foregroundStyle(palette.ink2)
+        Button(action: action) { Label { Text(help) } icon: { Image(icon) } }
+            .railTool()
+            .help(Text(help))
+    }
+}
+
+extension View {
+    /// 侧栏底下那排钮的样子：只画图标，次要字的颜色，按下的底比图标宽一圈；点开菜单的钮（`Menu`）同一个样子。
+    func railTool() -> some View { labelStyle(RailToolLabel()).menuStyle(.button).buttonStyle(PressStyle(.button)) }
+}
+
+private struct RailToolLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View { Face(icon: configuration.icon) }
+
+    private struct Face<Icon: View>: View {
+        let icon: Icon
+        @Environment(\.palette) private var palette
+
+        var body: some View {
+            icon.font(Glyph.control).foregroundStyle(palette.ink2)
                 .frame(width: ControlSize.compact.height, height: ControlSize.compact.height)
                 .contentShape(.circle)
         }
-        .buttonStyle(PressStyle(.button))
-        .help(Text(help))
-        .accessibilityLabel(Text(help))
     }
 }
 

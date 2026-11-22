@@ -54,6 +54,7 @@ struct WideRail: View {
             RailTool(icon: .search, help: "搜索") { workspace.openSearch() }
             RailTool(icon: .instruction, help: "技能与规则") { workspace.push(.library) }
             RailTool(icon: .settings, help: "设置") { workspace.push(.settings) }
+            RemoteMacButton().railTool()
             #endif
             Spacer(minLength: 0)
             RailQuota()

@@ -14,12 +14,10 @@ struct CueHeader: View {
         let style = host == .page ? PlateStyle.fill : .compact
         ZStack(alignment: .top) {
             // 长开时面板盖住它们、读屏只读面板（模态，`GrowPanel`）：撤掉，不只是变透明——它们的玻璃与面板在同一个容器里由容器一起画，透明度管不到钮上的图标
-            if !expanded {
+            if !expanded, host == .page {
                 HStack {
-                    if host == .page {
-                        Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
-                            .accessibilityIdentifier("narrow-sidebar")
-                    }
+                    Button("侧栏", icon: .sidebar) { workspace.toggleSidebar() }
+                        .accessibilityIdentifier("narrow-sidebar")
                     Spacer(minLength: 0)
                     RemoteMacButton()
                 }

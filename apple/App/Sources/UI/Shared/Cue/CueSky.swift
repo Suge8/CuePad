@@ -2,10 +2,13 @@ import CueStore
 import SwiftUI
 
 /// Cue 页一直铺着的底：按时段的天空，小人（随 `CueBeat` 换姿势）歇在回复框上方那朵云上。它是背景，对话从它上面滑过，不接点击、读屏不读。
+/// 有对话时小人沉进云里：对话贴着回复框往上排（`ChatScroll` 的底部对齐），一条就压在它身上；对话空了再冒出来。
 /// 云与小人按页的大小定位，不跟回复框的高：回复框长高或卡升起时盖住它，不挪云——天空换一次位置就要整张重新抖动一遍（`DitherImage`）。
 struct CueSky: View {
     let beat: CueBeat
+    let perched: Bool
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { room in
@@ -25,10 +28,15 @@ struct CueSky: View {
     }
 
     private func figure(_ sky: Sky) -> some View {
-        Jelly(value: beat, look: { Pose($0) }, move: JellyMove.cue) { beat, _ in
-            Image(decorative: Pose(beat).asset).resizable().frame(width: Pose.size.width * sky.scale, height: Pose.size.height * sky.scale)
+        let height = Pose.size.height * sky.scale, ground = sky.perch + Pose.footing * sky.scale
+        return Jelly(value: beat, look: { Pose($0) }, move: JellyMove.cue) { beat, _ in
+            Image(decorative: Pose(beat).asset).resizable().frame(width: Pose.size.width * sky.scale, height: height)
         }
-        .position(x: sky.size.width / 2, y: sky.perch + Pose.footing * sky.scale - Pose.size.height * sky.scale / 2)
+        .position(x: sky.size.width / 2, y: ground - height / 2)
+        .offset(y: perched || reduceMotion ? 0 : height)
+        .opacity(perched || !reduceMotion ? 1 : 0)
+        .mask(alignment: .top) { Rectangle().frame(height: ground) }
+        .animation(Motion.fading(Motion.travel, reduceMotion: reduceMotion), value: perched)
     }
 }
 
