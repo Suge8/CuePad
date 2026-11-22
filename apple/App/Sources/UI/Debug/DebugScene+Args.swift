@@ -60,6 +60,8 @@ nonisolated struct DebugArgs: Decodable {
     let inspiration: Bool
     /// `-CuePadLaunch YES`（配 newsession 画面）：已经替你在圆桌发出一条会话（看送达中）
     let launch: Bool
+    /// `-CuePadLaunchArt <目录>`：把 iOS 启动图（Cue 连字标，开门前那一幕）按 2x、3x 写成 launch-stage@2x.png、@3x.png 放进目录，拷进 `LaunchStage` 换掉
+    let launchArt: String?
     /// `-CuePadLibraryTab skills`：技能与规则页一打开在技能那一段
     let libraryTab: String?
     /// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有推进中与等你），验收灵动岛；`xc.sh shot ios` 带它时拍系统的岛（收起与长按展开）

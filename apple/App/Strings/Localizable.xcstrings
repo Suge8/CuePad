@@ -2136,17 +2136,6 @@
         }
       }
     },
-    "%lld/%lld" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld/%2$lld"
-          }
-        }
-      },
-      "shouldTranslate" : false
-    },
     "3D 模型" : {
       "localizations" : {
         "en" : {
@@ -4329,22 +4318,6 @@
         }
       }
     },
-    "「%@」不是这条提问的选项" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%@” isn't one of this question's choices"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「%@」不是这条提问的选项"
-          }
-        }
-      }
-    },
     "「%@」做完了\n\n%@" : {
       "localizations" : {
         "en" : {
@@ -4757,22 +4730,6 @@
         }
       }
     },
-    "上一件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Previous"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上一件"
-          }
-        }
-      }
-    },
     "上一句可能已经执行，再说一次可能让 Agent 重复操作。原请求会保留。" : {
       "localizations" : {
         "en" : {
@@ -5041,22 +4998,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一个（→）"
-          }
-        }
-      }
-    },
-    "下一件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下一件"
           }
         }
       }
@@ -14513,22 +14454,6 @@
         }
       }
     },
-    "收起键盘，展开这张卡" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hides the keyboard and expands this card"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起键盘，展开这张卡"
-          }
-        }
-      }
-    },
     "收起（Esc）" : {
       "localizations" : {
         "en" : {
@@ -19645,22 +19570,6 @@
         }
       }
     },
-    "第 %lld 件，共 %lld 件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld of %2$lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "第 %1$lld 件，共 %2$lld 件"
-          }
-        }
-      }
-    },
     "第 %lld 行" : {
       "localizations" : {
         "en" : {
@@ -19761,22 +19670,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等 %lld 件"
-          }
-        }
-      }
-    },
-    "等 Mac 出现再请求通知权限没能启动：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't start waiting for a Mac to ask for notification permission: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 Mac 出现再请求通知权限没能启动：%@"
           }
         }
       }
@@ -23533,22 +23426,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条在别处改过，没能保存的字接在了后面"
-          }
-        }
-      }
-    },
-    "这条提问已经结束了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This question has already closed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这条提问已经结束了"
           }
         }
       }

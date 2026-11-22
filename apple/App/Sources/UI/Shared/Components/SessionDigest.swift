@@ -131,7 +131,7 @@ struct QuestionCard: View {
 
     var body: some View {
         Callout(.asking, text: question.text, docked: true) {
-            WaitAnswer(session: session, replyElsewhere: true)
+            WaitAnswer(session: session)
         }
     }
 }

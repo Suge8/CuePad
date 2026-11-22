@@ -11,6 +11,9 @@ extension AppServices {
         if host == hostID { try await macAgents.record() }
         #endif
         try await store.enableCue(on: host, moving: moving)
+        #if os(iOS)
+        await alerts?.requestAuthorization()
+        #endif
     }
 
     func turnCue(_ on: Bool, here: String?) async throws {

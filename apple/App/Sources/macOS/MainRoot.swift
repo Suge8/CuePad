@@ -18,6 +18,7 @@ struct MainRoot: View {
                 }
             }
             .debugScene(workspace)
+            .cueOpening()
     }
 
     private var content: some View {

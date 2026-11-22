@@ -6,6 +6,7 @@ struct DitherImage: View {
     let placement: CGRect
     let size: CGSize
     var fade: CGFloat = 0
+    var onDraw: () -> Void = {}
     @Environment(\.displayScale) private var scale
     @State private var image: CGImage?
     @State private var drawn: DitherGPU.Job?
@@ -28,6 +29,7 @@ struct DitherImage: View {
                 guard !Task.isCancelled else { return }
                 withAnimation(Motion.fade) { image = rendered }
                 drawn = job
+                onDraw()
             }
             .id(job)
         }

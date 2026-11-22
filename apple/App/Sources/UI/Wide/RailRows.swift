@@ -92,7 +92,8 @@ struct RailHome: View {
         let cue = workspace.cue, moving = cue.now.tally.moving
         HStack(spacing: Spacing.item) {
             tile(Text(verbatim: cue.name), selected: workspace.cueVisible) { workspace.toggleCue() } content: {
-                CueAvatar(cue.beat, size: .card, plate: false).overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
+                CueAvatar(cue.beat, size: .card, plate: false).relaySpot(cue: workspace.cueVisible ? nil : .entry)
+                    .overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
             }
             tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } content: {
                 Image(.task).font(.system(size: Self.glyph, weight: .semibold)).foregroundStyle(palette.signature)

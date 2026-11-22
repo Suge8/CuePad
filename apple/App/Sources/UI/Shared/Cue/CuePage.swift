@@ -7,8 +7,6 @@ struct CuePage: View {
     @State private var thread: CueThread?
     @State private var follow = ChatFollow()
     @State private var opened: PreviewOpening?
-    @State private var docking = false
-    @State private var dockedCard: String?
     @State private var seen: [UUID: Date] = [:]
     @State private var reveals = RevealLedger()
 
@@ -16,8 +14,6 @@ struct CuePage: View {
     static let inset = Spacing.page
 
     private var cue: CueWatch { workspace.cue }
-    private func card(_ thread: CueThread) -> String? { CueWaitDock.current(in: thread.waiting, asking: workspace.cueAsking)?.id }
-    private func sinking(_ thread: CueThread) -> Bool { dockedCard != nil && card(thread) == nil }
     private var catchingUp: Bool { services.syncing.isCatchingUp(on: cue.hostID) }
     var body: some View {
         page
@@ -27,7 +23,6 @@ struct CuePage: View {
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
             .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
-            .onChange(of: thread.flatMap(card), initial: true) { dockedCard = $1 }
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
                 DebugHooks.mark("cue")
@@ -78,7 +73,7 @@ struct CuePage: View {
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset + railInset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
-            holding: catchingUp || docking || sinking(thread)
+            holding: catchingUp
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             ChatStack(spacing: 0) {
@@ -104,23 +99,19 @@ struct CuePage: View {
     private struct FollowKey: Equatable {
         var count: Int
         var last: Date?
-        var waiting: Int
         var live: Bool
 
         init(_ thread: CueThread, live: Bool) {
             count = thread.messages.count
             last = thread.messages.last?.modifiedAt
-            waiting = thread.waiting.count
             self.live = live
         }
     }
 
     private func bottom() -> some View {
         VStack(spacing: 0) {
-            if let thread {
-                CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, moving: $docking)
-                    .padding(.horizontal, railInset)
-                if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, Spacing.item).transition(.opacity) }
+            if let thread, !thread.rows.isEmpty, !cue.canHear {
+                CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, Spacing.item).transition(.opacity)
             }
             #if os(macOS)
             CueVoicePanel()
