@@ -61,14 +61,15 @@ extension SessionState {
 
 extension CueStore {
   public func mark(_ mark: Mark, at moment: Date? = nil) throws {
-    let moment = moment ?? .stamp
-    try write {
-      try db.run(
-        """
-        INSERT INTO marks (id, kind, subject, modifiedAt) VALUES (?1, ?2, ?3, ?4)
-        ON CONFLICT(id) DO UPDATE SET modifiedAt = excluded.modifiedAt WHERE excluded.modifiedAt > marks.modifiedAt
-        """, [mark.id, mark.kind, mark.subject, moment])
-    }
+    try write { try putMark(mark, at: moment ?? .stamp) }
+  }
+
+  func putMark(_ mark: Mark, at moment: Date) throws {
+    try db.run(
+      """
+      INSERT INTO marks (id, kind, subject, modifiedAt) VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(id) DO UPDATE SET modifiedAt = excluded.modifiedAt WHERE excluded.modifiedAt > marks.modifiedAt
+      """, [mark.id, mark.kind, mark.subject, moment])
   }
 
   public func sessionMarks() throws -> [String: SessionMarks] {

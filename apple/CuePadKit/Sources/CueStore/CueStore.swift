@@ -67,6 +67,7 @@ public actor CueStore {
         if version < Schema.baseVersion { throw CueStoreError.schemaTooOld(version) }
         if version > Schema.version { throw CueStoreError.unsupportedSchemaVersion(version) }
         for step in Schema.upgrades[(version - Schema.baseVersion)...] { try connection.exec(step) }
+        if version < Schema.tiersArrived { try Schema.adoptCueTurns(connection) }
       }
       try connection.exec("PRAGMA user_version = \(Schema.version)")
     }

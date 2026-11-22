@@ -83,12 +83,15 @@ extension CueStore {
     try write {
       let latest = try lastWrite()
       guard latest > mark else { return latest }
+      let rechosen = Set(try tiersChosen(after: mark).keys)
       let stopped = try select(
         SessionState.self,
         where: "state IN (\(sqlList(WorkState.allCases.filter(\.isStopped)))) AND (writeSeq > ? OR sessionID IN (SELECT value FROM json_each(?)))",
-        [mark, JSONColumn.encode(Array(try tiersChosen(after: mark).keys))])
+        [mark, JSONColumn.encode(Array(rechosen))])
       let tiers = try chosenTiers()
-      try putLeft(stopped.filter { $0.atStop && !$0.reachesCue(CueTier.of($0, chosen: tiers)) })
+      let atStop = stopped.filter(\.atStop)
+      func reaches(_ session: SessionState) -> Bool { session.reachesCue(CueTier.of(session, chosen: tiers)) }
+      try putLeft(atStop.filter { !reaches($0) }, removing: atStop.filter { rechosen.contains($0.sessionID) && reaches($0) }.map(\.sessionID))
       return latest
     }
   }

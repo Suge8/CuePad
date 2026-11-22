@@ -29,7 +29,7 @@ private struct Poster {
         } else if let reply = take(.reply) {
             head = .item(reply)
         } else if now.tally.moving > 0 {
-            head = .count(now.advancing)
+            head = .count(now.tally.moving)
             step = switch now.cue {
             case .working(let woke, let doing, _): doing ?? woke ?? CueNow.thinking
             case .hearing: String(localized: "你的话在路上")
@@ -144,10 +144,10 @@ struct CueLockScreen: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(count, format: .number).font(IslandType.posterBig).monospacedDigit().foregroundStyle(signal.ink)
                     .contentTransition(.numericText())
-                Text("推进中").font(IslandType.posterHeadWord).foregroundStyle(signal.soft)
+                Text("工作中").font(IslandType.posterHeadWord).foregroundStyle(signal.soft)
             }
             .frame(height: 44)
-            .accessibilityElement(children: .ignore).accessibilityLabel(Text("\(count) 推进中"))
+            .accessibilityElement(children: .ignore).accessibilityLabel(Text("\(count) 工作中"))
         case .line(let line):
             Text(line).font(IslandType.posterTitle).foregroundStyle(signal.ink).lineLimit(1)
         }

@@ -4,25 +4,41 @@ import Foundation
 public enum CueTier: String, CaseIterable, Sendable {
   case yours, push, full
 
-  public static func of(_ session: SessionState, chosen: [String: CueTier]) -> CueTier {
-    if let tier = chosen[session.sessionID] { return tier }
-    return switch session.turnOpener?.cue {
-    case true?: .full
-    case false?: .yours
-    case nil: session.createdForTaskID == nil ? .yours : .full
+  public static func of(_ session: SessionState, chosen: [String: CueTier]) -> CueTier { chosen[session.sessionID] ?? .yours }
+}
+
+extension Schema {
+  static let tiersArrived = 104
+
+  /// 档位上线前 Cue 正在接的任务会话（这一轮是 Cue 开的）记成全权，时刻取会话开出来的那一刻：之后他选的都比它新。
+  /// 写序归零：这些停下 Cue 升级前已经接过，不当成刚换了档再叫醒它。
+  static func adoptCueTurns(_ connection: SQLite) throws {
+    let sessions = try connection.query("SELECT sessionID, createdAt FROM piSessionStates WHERE createdForTaskID IS NOT NULL AND turnByCue = 1") {
+      ($0.text(0), $0.int(1))
+    }
+    for (session, createdAt) in sessions {
+      let mark = Mark.tier(session, .full)
+      try connection.run("INSERT OR IGNORE INTO marks (id, kind, subject, modifiedAt) VALUES (?1, ?2, ?3, ?4)", [mark.id, mark.kind, mark.subject, createdAt])
+      try connection.run("UPDATE marks SET writeSeq = 0 WHERE id = ?", [mark.id])
     }
   }
 }
 
 extension CueStore {
-  public func setTier(_ tier: CueTier, of sessionID: String) throws { try mark(.tier(sessionID, tier)) }
+  /// 记的时刻晚于这个会话已有的每一档：时钟慢的设备看到别处的选择之后再选，也算后选。
+  public func setTier(_ tier: CueTier, of sessionID: String) throws {
+    try write {
+      let latest = try db.first("SELECT MAX(modifiedAt) FROM marks WHERE kind LIKE '\(Mark.tierPrefix)%' AND subject = ?", [sessionID]) { $0.dateOrNil(0) } ?? nil
+      try putMark(.tier(sessionID, tier), at: max(.stamp, (latest ?? .distantPast).addingTimeInterval(0.001)))
+    }
+  }
 
-  /// 每一档各是一条记录：两台设备各选各的，同步时不会盖掉同一行，以最后选的为准。
+  /// 每一档各是一条记录：两台设备各选各的，同步时不会盖掉同一行，以最后选的为准；同一刻选的取自己来（按档名排在最后）。
   public func chosenTiers() throws -> [String: CueTier] {
     Dictionary(
-      try db.query("SELECT subject, kind, MAX(modifiedAt) FROM marks WHERE kind LIKE '\(Mark.tierPrefix)%' GROUP BY subject") { row in
+      try db.query("SELECT subject, kind FROM marks WHERE kind LIKE '\(Mark.tierPrefix)%' ORDER BY modifiedAt, kind") { row in
         CueTier(rawValue: String(row.text(1).dropFirst(Mark.tierPrefix.count))).map { (row.text(0), $0) }
       }.compactMap(\.self),
-      uniquingKeysWith: { first, _ in first })
+      uniquingKeysWith: { _, later in later })
   }
 }

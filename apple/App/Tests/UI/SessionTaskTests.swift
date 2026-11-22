@@ -74,6 +74,7 @@ struct SessionTaskTests {
         try await workspace.complete(task.id)
 
         let cue = CueTools(store: store, wait: 0)
+        try await store.setTier(.full, of: "s1")
         let answered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "覆盖"]))
         #expect(!answered.isError && answered.text.contains("回答"))
         let answer = try #require(try await store.deliveryRequests(toSession: "s1").last)

@@ -69,15 +69,15 @@ extension CueStore {
   public func takeBack(_ sessionID: String) throws -> Bool {
     try write {
       guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return false }
-      try putLeft([], removing: sessionID)
+      try putLeft([], removing: [sessionID])
       return true
     }
   }
 
   @discardableResult
-  func putLeft(_ sessions: [SessionState], removing: String? = nil) throws -> Bool {
+  func putLeft(_ sessions: [SessionState], removing: [String] = []) throws -> Bool {
     let current = try cueState()
-    let replaced = Set(sessions.map(\.sessionID) + [removing].compactMap(\.self))
+    let replaced = Set(sessions.map(\.sessionID) + removing)
     let others = current?.left.filter { !replaced.contains($0.sessionID) } ?? []
     let live = try select(SessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
     let left = others.filter { entry in live.contains(where: entry.holds) } + sessions.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) }

@@ -19,6 +19,7 @@ extension CueStoreError {
     case .turnSourceUnconfirmed: "等它歇下（会叫醒你）再说"
     case .sessionInUse: "那件事做完时 \(TaskAction.done.rawValue) 那件事"
     case .notStopped: "留给他回只用在它空闲、在等回答、出错或被打断时"
+    case .questionIsHis: "\(TaskAction.leave.rawValue) 留给他；他明说交给你全权，先 \(TaskAction.tier.rawValue) 换成 full 再答"
     case .cueNotEnabled: "不能派活：等用户在 CuePad 里重新启用"
     case .shots: "show 只挑回答问题必须看的、证明结论的最终成果"
     case .shotMissing: "照 task \(TaskAction.peek.rawValue) 里列的 id 写"

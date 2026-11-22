@@ -9,7 +9,8 @@ extension CueStore {
     try write {
       let session = try sessionTarget(sessionID, name: name)
       var answer: Answer?
-      if let question = session.state?.answerableQuestion, let promptID = question.promptID, let kind = question.kind.known {
+      if let state = session.state, let question = state.answerableQuestion, let promptID = question.promptID, let kind = question.kind.known {
+        if cue, CueTier.of(state, chosen: try chosenTiers()) != .full { throw CueStoreError.questionIsHis(state.title) }
         let value = CueFormat.plainText(content).trimmingCharacters(in: .whitespacesAndNewlines)
         answer = Answer(promptID: promptID, value: try Self.answerValue(value, kind: kind, options: question.options, allowsOther: question.allowsOther, leading: cue))
       }

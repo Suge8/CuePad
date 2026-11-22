@@ -23,12 +23,13 @@ extension CueStore {
 
   public func startLeaf(
     _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: String? = nil, thinking: ThinkingLevel? = nil,
-    host: String, cue: Bool = false
+    host: String, cue: Bool = false, said: [String] = []
   ) throws -> DeliveryRequest {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
     let card = try requireLeaf(plan.leaf)
     if !fresh, card.piSessionID != nil { throw CueStoreError.alreadyStarted(card.heading) }
-    let content = try opening(of: plan.leaf, plan.opensSession)
+    let opening = try opening(of: plan.leaf, plan.opensSession)
+    let content = (said.filter { !opening.contains($0) } + [opening]).filter { !$0.isEmpty }.joined(separator: "\n\n")
     let handoffs = try handoffRequests(for: [plan.leaf])[plan.leaf] ?? []
     if handoffs.contains(where: { $0.mode == .known(.send) }) { throw CueStoreError.sending(card.heading) }
     if handoffs.contains(where: { $0.mode == .known(.start) }) { throw CueStoreError.launching(card.heading) }

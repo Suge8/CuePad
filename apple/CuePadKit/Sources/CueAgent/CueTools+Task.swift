@@ -223,13 +223,13 @@ extension CueTools {
 
   private func start(_ args: Args) async throws -> Result {
     let leaf = try await references.workingLeaf(try args.required("task"))
-    return try await start(leaf, try await Launch(args, tools: self))
+    return try await start(leaf, try await Launch(args, tools: self), said: try await store.cueSaidInHand())
   }
 
-  private func start(_ leaf: Card, _ launch: Launch) async throws -> Result {
+  private func start(_ leaf: Card, _ launch: Launch, said: [String] = []) async throws -> Result {
     let host = launch.host
     let request = try await store.startLeaf(
-      leaf.id, agent: launch.agent, fresh: launch.fresh, model: launch.model, thinking: launch.thinking, host: host, cue: true)
+      leaf.id, agent: launch.agent, fresh: launch.fresh, model: launch.model, thinking: launch.thinking, host: host, cue: true, said: said)
     if request.mode == .known(.start) { return .ok("已请 Mac 为「\(leaf.heading)」开新会话，正文作为第一句。（\(leaf.id.shortID)）\n\(CueToolReceipt(.request, request.id).mark)") }
     return try await spoken(request, "已请求「\(leaf.heading)」沿用上一步的会话，正文作为下一句", tail: leaf.id.shortID, from: host)
   }

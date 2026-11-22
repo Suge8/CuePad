@@ -75,7 +75,7 @@ extension SessionTaskTests {
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
     }
 
-    @Test func 停下归开这一轮的人_Cue开的报给Cue_他开的不报_子代理交回跟着开它的那句() async throws {
+    @Test func 停下看会话的档_自己来的谁开的轮都不报_交给Cue全权的都报() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
@@ -113,8 +113,12 @@ extension SessionTaskTests {
 
         let byCue = UUID()
         try await store.recordSend("再跑一遍", to: target, delivery: byCue, origin: .known(.cue))
-        #expect(try await settle(after: try await open(.user, "再跑一遍", opener: TurnOpener(delivery: byCue, cue: true)))?.hasPrefix("- [歇下] 修登录") == true)
+        #expect(try await settle(after: try await open(.user, "再跑一遍", opener: TurnOpener(delivery: byCue, cue: true))) == nil)
 
+        try await store.setTier(.full, of: "s1")
+        let byPadLater = UUID()
+        try await store.recordSend("顺便看下注册页", to: target, delivery: byPadLater)
+        #expect(try await settle(after: try await open(.user, "顺便看下注册页", opener: TurnOpener(delivery: byPadLater, cue: false)))?.hasPrefix("- [歇下] 修登录") == true)
         machine = try await open(.machine, returned)
         #expect(try await settle(after: machine)?.hasPrefix("- [歇下] 修登录") == true)
     }

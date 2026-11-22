@@ -6,6 +6,7 @@ extension CueStore {
     try db.run(
       "UPDATE piSessionStates SET createdForTaskID = ?, modifiedAt = ? WHERE sessionID = ? AND launchToken = ? AND createdForTaskID IS NULL",
       [owner, Date.stamp, sessionID, launch.token])
+    if request.isFromCue { try putMark(.tier(sessionID, .full), at: request.createdAt) }
   }
 
   func noteRestored(_ sessionID: String) throws {
