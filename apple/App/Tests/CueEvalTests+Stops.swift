@@ -59,6 +59,25 @@ extension CueEvalTests {
         要你定的：安卓版一年内做不做——要做就直接上 FCM，省得以后迁移。
         """
 
+    @Test func p推进的交回留给他() async throws {
+        try await CueEval.run(
+            "p-推进的交回留给他",
+            expect: "他把会话交给 Cue 推进（不做判断），会话做完交回（带测试输出与截图）：被叫醒、核过证据后 task leave 留给他看；不 done、不 tell"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await rig.store.setTier(.push, of: work.id)
+            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
+            try await eval.trigger { try await rig.settle(work, reply: Self.doneReply) }
+            return [
+                Check(.result, "被叫醒", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
+                Check(.result, "留给他（leave 成了）", eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.result, "没 done", eval.calls("task", "done").isEmpty),
+                Check(.interrupt, "没 tell", eval.calls("tell").isEmpty),
+            ]
+        }
+    }
+
     @Test func t他刚说过话_Cue说的那一轮做完照样收尾() async throws {
         try await CueEval.run(
             "t-Cue说的那一轮做完照样收尾",
