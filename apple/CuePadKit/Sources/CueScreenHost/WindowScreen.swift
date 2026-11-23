@@ -40,6 +40,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     self.wanted = wanted
     super.init()
     Self.muteAttention()
+    Self.groundDrags()
     Task.detached { [weak self] in
       var stream: (SCStream, Stage)?
       for await stage in stages {
