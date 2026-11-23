@@ -14,17 +14,19 @@ nonisolated private final class LayoutMark: CALayer {
 }
 
 final class WideColumnController: UIHostingController<AnyView> {
-    let slot: WideSlot
+    /// 主区的一块（否则是 Cue 那一栏）。
+    let pane: Bool
+    var slot: WideSlot?
     let drop = WideDropState()
     let focus: WideFocus
     let workspace: Workspace
-    private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.view.isHidden = $0 }
+    private(set) lazy var slide = WideColumnSlide { [unowned self] in self.view.isHidden = $0 }
     /// 块的图层最后一个子层：CA 提交时按层树先父后子排版，排到它时这一次提交里块里各处托管的页都已摆到层上，页里各层的补位在这里接上（`WideColumnSlide.laidOut`）。
     /// 在块自己排完时（`viewDidLayoutSubviews`）接的话，SwiftUI 还没把页摆到层上，补的全是 0，居中的、靠右的只跟着整块平移、第一帧先跳到反方向。
     /// 会话页在导航栈里另有一个托管视图，下一次提交才摆：下一圈再排它一次、补上新挪的（`WideColumnSlide.layoutPasses`）。
     private let lastLayout = LayoutMark()
-    init(slot: WideSlot, focus: WideFocus, workspace: Workspace) {
-        self.slot = slot
+    init(pane: Bool, focus: WideFocus, workspace: Workspace) {
+        self.pane = pane
         self.focus = focus
         self.workspace = workspace
         super.init(rootView: AnyView(EmptyView()))
@@ -39,7 +41,7 @@ final class WideColumnController: UIHostingController<AnyView> {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
-        view.clipsToBounds = slot != .cue
+        view.clipsToBounds = pane
         lastLayout.laidOut = { [unowned self] in
             slide.laidOut(view.layer)
             guard slide.awaitsLayout else { return }
@@ -58,7 +60,7 @@ final class WideColumnController: UIHostingController<AnyView> {
     }
 
     private func installDropTargets(in target: UIView) {
-        guard slot.column != nil else { return }
+        guard pane else { return }
         let interactions = target.interactions.compactMap { $0 as? UIDropInteraction }
         // 列表与回复框自带接收器，会截住父栏的拖放；追加只认会话的接收器，保留原处理。
         if (target === view || !interactions.isEmpty) && !interactions.contains(where: { $0.delegate === self }) {

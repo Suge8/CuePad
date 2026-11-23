@@ -23,23 +23,36 @@ enum WideSlot: Hashable, CaseIterable {
     }
 }
 
+/// 一个宽屏窗口里几块之间的焦点。块按它是什么认（`PaneRow`），第几格（`WideSlot`）只是它此刻的位置：换了位置还是那一块，焦点、滚动都留在它身上。
 final class WideFocus {
     let windowID = UUID()
+    private var rows: (was: WideMetrics?, now: WideMetrics?)
+
+    /// 这一排变成现在的样子之前（刚开窗时没有）。新摆出来的块没有自己的旧位置，照它定从哪儿进来（`WideColumnSlide.Arrival`）；滑走的块照它留着原来的宽。
+    /// 样子没变（拖分隔线、视图体重算）问几次答的都是那一个。
+    func before(_ sizes: WideMetrics) -> WideMetrics? {
+        if rows.now?.shape != sizes.shape { rows.was = rows.now }
+        rows.now = sizes
+        return rows.was
+    }
+
     #if os(macOS)
-    private var views: [WideSlot: Weak] = [:]
+    private var views: [Weak] = []
 
     private struct Weak { weak var view: WideColumnView? }
 
-    func register(_ view: WideColumnView, as slot: WideSlot) { views[slot] = Weak(view: view) }
+    func register(_ view: WideColumnView) {
+        views.removeAll { $0.view == nil }
+        views.append(Weak(view: view))
+    }
 
     private func view(_ slot: WideSlot) -> WideColumnView? {
-        guard let view = views[slot]?.view, view.window != nil, !view.isHidden else { return nil }
-        return view
+        views.lazy.compactMap(\.view).first { $0.slot == slot && $0.window != nil && !$0.isHidden }
     }
 
     var current: WideSlot? {
-        guard let responder = WideSlot.allCases.lazy.compactMap({ self.view($0)?.window }).first?.firstResponder as? NSView else { return nil }
-        return WideSlot.allCases.first { slot in view(slot).map(responder.isDescendant(of:)) == true }
+        guard let responder = views.lazy.compactMap({ $0.view?.window }).first?.firstResponder as? NSView else { return nil }
+        return views.lazy.compactMap(\.view).first(where: responder.isDescendant(of:))?.slot
     }
 
     func focus(_ slot: WideSlot) {
@@ -56,22 +69,21 @@ final class WideFocus {
         sequence(first: view, next: \.superview).allSatisfy { !$0.isHidden && $0.alphaValue > 0 && $0.layer?.opacity != 0 }
     }
     #else
-    private var controllers: [WideSlot: Weak] = [:]
+    private var controllers: [Weak] = []
 
     private struct Weak { weak var controller: WideColumnController? }
 
-    func register(_ controller: WideColumnController, as slot: WideSlot) { controllers[slot] = Weak(controller: controller) }
+    func register(_ controller: WideColumnController) {
+        controllers.removeAll { $0.controller == nil }
+        controllers.append(Weak(controller: controller))
+    }
 
     private func controller(_ slot: WideSlot) -> WideColumnController? {
-        guard let controller = controllers[slot]?.controller, controller.view.window != nil, !controller.view.isHidden else { return nil }
-        return controller
+        controllers.lazy.compactMap(\.controller).first { $0.slot == slot && $0.view.window != nil && !$0.view.isHidden }
     }
 
     var current: WideSlot? {
-        WideSlot.allCases.first { slot in
-            guard let controller = controller(slot) else { return false }
-            return controller.isFirstResponder || descendants(controller.view).contains(where: \.isFirstResponder)
-        }
+        controllers.lazy.compactMap(\.controller).first { $0.isFirstResponder || descendants($0.view).contains(where: \.isFirstResponder) }?.slot
     }
 
     func focus(_ slot: WideSlot) {
@@ -101,33 +113,37 @@ final class WideFocus {
     }
 
     func move(by step: Int, in workspace: Workspace) {
-        guard let source = current?.column, let moved = workspace.moveColumn(source, by: step) else { return }
-        Task {
-            await NextFrame.wait()
-            if current != WideSlot(moved) { focus(WideSlot(moved)) }
-        }
+        if let source = current?.column { workspace.moveColumn(source, by: step) }
     }
 }
 
 #if os(macOS)
 struct WideColumnHost<Content: View>: NSViewRepresentable {
-    let slot: WideSlot
+    /// 这一块此刻在第几格；不在这一排里（挂着的页、正滑走的块）是 nil。
+    let slot: WideSlot?
     let focus: WideFocus
     let origin: CGFloat
     let width: CGFloat
     let shape: WideMetrics.Shape
     var hidden = false
     var under: CGFloat = 0
-    var spans: [WideMetrics.Piece: WideMetrics.Span] = [:]
+    var arrival: WideColumnSlide.Arrival?
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace
     @Environment(PanelHost.self) private var panels
 
     func makeNSView(context: Context) -> WideColumnView {
-        let view = WideColumnView(slot: slot, focus: focus, workspace: workspace)
-        focus.register(view, as: slot)
+        let view = WideColumnView(pane: slot != .cue, focus: focus, workspace: workspace)
+        focus.register(view)
         return view
+    }
+
+    /// 撤掉的块当场不画、不留内容：嵌着的托管视图同外面断开时会把页从头再摆一遍，摆的是下一帧就扔的东西。
+    static func dismantleNSView(_ view: WideColumnView, coordinator: ()) {
+        view.yieldsFocus = view.holdsFocus
+        view.isHidden = true
+        view.host.rootView = AnyView(EmptyView())
     }
 
     /// 块的大小只由外面给的框定（`frame(width:)`、铺满的高）：不答的话 SwiftUI 按 Auto Layout 量这块的合适大小，每次换宽都把整棵子树的约束灌进引擎走一遍。
@@ -136,11 +152,16 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WideColumnView, context: Context) {
-        if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape, spans: spans) }
+        if slot == nil, view.slot != nil, view.holdsFocus { Task { [focus] in focus.focus(.main) } }
+        view.slot = slot
+        if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape, leading: slot == .main, arrival: arrival) }
         view.drop.under = under
+        // 宽和内容一起给：等 SwiftUI 来摆这块的框要晚一步，页已经按旧的宽、新的内容（`underCue`）排过一遍——
+        // 从并排的窄块换到最左、垫进 Cue 底下的那一下，对话被当成只有二十几点宽排了一次
+        view.setFrameSize(NSSize(width: width, height: view.frame.height))
         view.host.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
         view.slide.park(hidden)
-        if slot == .main { view.host.layer?.backgroundColor = environment.palette.desk.resolve(in: environment).cgColor }
+        if view.pane { view.host.layer?.backgroundColor = environment.palette.desk.resolve(in: environment).cgColor }
     }
 }
 
@@ -163,20 +184,22 @@ final class ColumnHostingView: NSHostingView<AnyView> {
 final class WideColumnView: NSView {
     let host = ColumnHostingView(rootView: AnyView(EmptyView()))
     let drop = WideDropState()
-    let slot: WideSlot
+    /// 主区的一块（否则是 Cue 那一栏）。
+    let pane: Bool
+    var slot: WideSlot?
     let focus: WideFocus
     let workspace: Workspace
-    private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.isHidden = $0 }
+    private(set) lazy var slide = WideColumnSlide { [unowned self] in self.isHidden = $0 }
     override var acceptsFirstResponder: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
 
-    init(slot: WideSlot, focus: WideFocus, workspace: Workspace) {
-        self.slot = slot
+    init(pane: Bool, focus: WideFocus, workspace: Workspace) {
+        self.pane = pane
         self.focus = focus
         self.workspace = workspace
         super.init(frame: .zero)
         wantsLayer = true
-        clipsToBounds = slot != .cue
+        clipsToBounds = pane
         host.sizingOptions = []
         host.laidOut = { [unowned self] in if let page = host.layer { slide.laidOut(page) } }
         // 不带标题栏那一截安全区：页里的滚动区不再向上伸到栏头底下（伸上去时按下落在滚动视图上，栏头的钮点不进去）；那一排页自己按 `Chrome.band` 让出
@@ -184,10 +207,21 @@ final class WideColumnView: NSView {
         host.autoresizingMask = [.width, .height]
         addSubview(host)
         host.wantsLayer = true
-        if slot.column != nil { addSubview(catcher) }
+        if pane { addSubview(catcher) }
     }
 
     required init?(coder: NSCoder) { nil }
+
+    var holdsFocus: Bool { (window?.firstResponder as? NSView)?.isDescendant(of: self) == true }
+    /// 撤掉时焦点还在这一块里：等它离开窗口，交给最左那块。当场交的话，这块里的页随后拆掉时 SwiftUI 把窗口的焦点又清一次。
+    /// 滑走的块（`slot` 变成 nil）还留在窗口里，当场就交（`WideColumnHost.updateNSView`）。
+    var yieldsFocus = false
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil, yieldsFocus { Task { [focus] in focus.focus(.main) } }
+    }
+
     override func layout() {
         super.layout()
         host.frame = bounds
@@ -209,13 +243,13 @@ final class WideColumnView: NSView {
         let carried = Set((pasteboard.types ?? []).map(\.rawValue))
         let types = Set(WideDrop.types.filter { carried.contains($0.identifier) })
         let x = convert(sender.draggingLocation, from: nil).x
-        let target = slot.column.flatMap { WideDrop.target(types, dragged: drop.pane, at: x / max(1, bounds.width - drop.under), in: $0, workspace: workspace) }
+        let target = slot?.column.flatMap { WideDrop.target(types, dragged: drop.pane, at: x / max(1, bounds.width - drop.under), in: $0, workspace: workspace) }
         if workspace.dropTarget != target { workspace.dropTarget = target }
         guard target == nil else {
             pass(nil, sender)
             return .copy
         }
-        let onPage = slot.column.flatMap { workspace.pane(in: $0)?.page } != nil
+        let onPage = slot?.column.flatMap { workspace.pane(in: $0)?.page } != nil
         return pass(onPage && types.contains(.cuepadCard) ? cardTarget(sender) : nil, sender)
     }
 
@@ -247,12 +281,12 @@ final class WideColumnView: NSView {
 
     override func draggingExited(_ sender: (any NSDraggingInfo)?) {
         stopPassing(sender)
-        if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+        if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
         stopPassing(sender)
-        if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+        if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     private func stopPassing(_ sender: (any NSDraggingInfo)?) {
@@ -267,7 +301,7 @@ final class WideColumnView: NSView {
         }
         let target = workspace.dropTarget
         workspace.dropTarget = nil
-        guard let target, target.column == slot.column else { return false }
+        guard let target, target.column == slot?.column else { return false }
         do {
             guard let pane = try pane(in: sender.draggingPasteboard) ?? nil else { return false }
             return WideDrop.apply(pane, target, workspace: workspace)
@@ -309,31 +343,33 @@ final class WideColumnView: NSView {
 }
 #else
 struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
-    let slot: WideSlot
+    /// 这一块此刻在第几格；不在这一排里（挂着的页、正滑走的块）是 nil。
+    let slot: WideSlot?
     let focus: WideFocus
     let origin: CGFloat
     let width: CGFloat
     let shape: WideMetrics.Shape
     var hidden = false
     var under: CGFloat = 0
-    var spans: [WideMetrics.Piece: WideMetrics.Span] = [:]
+    var arrival: WideColumnSlide.Arrival?
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace
     @Environment(AlertCenter.self) private var alerts
 
     func makeUIViewController(context: Context) -> WideColumnController {
-        let controller = WideColumnController(slot: slot, focus: focus, workspace: workspace)
-        focus.register(controller, as: slot)
+        let controller = WideColumnController(pane: slot != .cue, focus: focus, workspace: workspace)
+        focus.register(controller)
         return controller
     }
 
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
-        controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape, spans: spans)
+        controller.slot = slot
+        controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape, leading: slot == .main, arrival: arrival)
         controller.drop.under = under
         controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
         controller.slide.park(hidden)
-        if slot == .main { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }
+        if controller.pane { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }
     }
 }
 #endif

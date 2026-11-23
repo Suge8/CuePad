@@ -33,6 +33,14 @@ enum WideSlide {
         layer.add(SlideCurve(distance: distance).offset(keyPath), forKey: key)
     }
 
+    /// 占住这一次滑动的时长，不动任何东西：一次提交里加的动画都跑完，那次提交才算完（`CATransaction` 的完成回调）。
+    static func hold(_ layer: CALayer, key: String) {
+        guard !reduceMotion else { return }
+        let animation = CABasicAnimation(keyPath: "wideHold")
+        animation.duration = SlideCurve.duration
+        layer.add(animation, forKey: key)
+    }
+
     static func appear(_ layer: CALayer, key: String) {
         guard !reduceMotion, layer.opacity > 0 else { return }
         layer.add(SlideCurve(distance: -CGFloat(layer.opacity)).appear("opacity"), forKey: key)
@@ -114,10 +122,16 @@ enum WideSlide {
     }
 }
 
+/// 一块自己的滑动：只认自己上一刻在哪、多宽，这一排换了样子就从那里走到新的位置。块换位置时托管视图跟着块走（`PaneRow`），不用去查别的块原先在哪。
 final class WideColumnSlide {
-    private let slot: WideSlot
+    /// 新摆出来的块从哪儿进来：这一排添了一块、它在最右，从窗口右缘滑进来；否则原地淡入。
+    struct Arrival {
+        let before: WideMetrics.Shape
+        let edge: CGFloat?
+    }
+
     private let apply: (_ hidden: Bool) -> Void
-    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, pane: WideMetrics.Piece?, spans: [WideMetrics.Piece: WideMetrics.Span])?
+    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, leading: Bool)?
     private var sequence = 0
     private var sliding: Int?
     private var hidden = false
@@ -132,14 +146,17 @@ final class WideColumnSlide {
     private static let layoutPasses = 2
     #endif
 
-    init(slot: WideSlot, apply: @escaping (_ hidden: Bool) -> Void) {
-        self.slot = slot
+    init(apply: @escaping (_ hidden: Bool) -> Void) {
         self.apply = apply
     }
 
-    func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, spans: [WideMetrics.Piece: WideMetrics.Span] = [:]) {
-        let pane = slot.column.flatMap { shape.order.indices.contains($0.index) ? shape.order[$0.index] : nil }
-        defer { previous = (origin, width, shape, pane, spans) }
+    /// `leading`：这一块在最左。会话条收起时它的左缘一下到位、里面的内容从原处滑过去，不整块平移。
+    func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, leading: Bool = false, arrival: Arrival? = nil) {
+        defer { previous = (origin, width, shape, leading) }
+        if previous == nil, let arrival {
+            guard let edge = arrival.edge else { return WideSlide.appear(layer, key: "wide.appear") }
+            previous = (edge, width, arrival.before, false)
+        }
         guard let previous, previous.shape != shape else { return }
         sequence += 1
         let turn = sequence
@@ -147,15 +164,11 @@ final class WideColumnSlide {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in self?.landed(turn) }
         defer { CATransaction.commit() }
-        let from = pane != previous.pane ? pane.flatMap { previous.spans[$0] }.flatMap { $0.origin.isFinite ? $0 : nil } : nil
-        // 页原地换上来（看完会话回到页）照没换块算：挂着的页本来就排好了（`PageStack`），不等别的落定再淡入
-        let swapped = pane != nil && pane != previous.pane && (from != nil || pane != .page)
-        let distance = (from?.origin ?? previous.origin) - origin
+        // 自己没挪的块也等这一排滑完才算落定：页被新开的会话盖住时，要等它淡入完才藏起（`park`）
+        WideSlide.hold(layer, key: "wide.hold.\(turn)")
+        let distance = previous.origin - origin
         let edge: CGFloat
-        if let from {
-            WideSlide.translate(layer, by: distance, key: "wide.\(turn)")
-            edge = from.width - width
-        } else if slot == .main, shape.rail < previous.shape.rail {
+        if leading, previous.leading, shape.rail < previous.shape.rail {
             WideSlide.slide(layer, "bounds.origin.x", by: -distance, key: "wide.\(turn)")
             edge = previous.width + distance - width
         } else {
@@ -164,10 +177,7 @@ final class WideColumnSlide {
         }
         WideSlide.slide(layer, "bounds.size.width", by: edge, key: "wide.edge.\(turn)")
         WideSlide.slide(layer, "position.x", by: layer.anchorPoint.x * edge, key: "wide.edge.anchor.\(turn)")
-        let entering = hidden && slot.column.map { $0 != .main } == true
-        if swapped {
-            if from == nil, !entering { WideSlide.appear(layer, key: "wide.appear.\(turn)") }
-        } else if !entering, previous.width != width || slot == .main {
+        if !(hidden && !leading), previous.width != width || leading {
             pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses)
         }
     }
