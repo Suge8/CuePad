@@ -27,7 +27,7 @@
 #   xc.sh sheet <出.png> [-cols 列数] [-crop 宽x高[+左+上]] [-fit 长边] [-from 秒 -to 秒 -fps 帧率] <图或片…>
 #                                                   把几张图拼成一张对照图，一次读完：每张先裁（像素，从左上角算）、按列数排开、下面写文件名；片子逐帧排开看动效（sheet.swift）
 #     ios、ipad 的 shot、rec、run 认 -CuePadLandscape YES：起实例前把模拟器横过来（设备的物理朝向，devicectl），这一张拍完转回竖屏（app_sim.py 的 orient）
-#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、scripts/ui.py 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
+#   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 scripts/ui.py 操作（目标 mac、sim）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
 #     iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
 #     活预览里看、点这份 Mac 实例：CUEPAD_SCREEN_PORT=<口> xc.sh run mac …，再 cuepad live <口>
 #     验系统通知：CUEPAD_NOTIFY=1 xc.sh run mac -- -CuePadNotifications YES …，起一份拿得到通知权限的副本（app_mac.py 的 notify_copy）
@@ -39,7 +39,7 @@
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪
 #   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互
 #   xc.sh perf ab <旧检出> <新检出> <轮数> <perf 的参数…>   新旧交替跑同一条 perf（含 idle、launch），每轮一行、最后对比表，前台阻塞到结束（perf-ab.py）
-#   xc.sh release <mac|ios> [提交] | device | provision  发布与签名（apple/App/Config/AGENTS.md）；用到描述文件的那一段全机排队（_lock.sh 规则 3）
+#   xc.sh release <mac|ios> [提交] | device | provision  从主干云端全绿的提交发（在跑就等），两端各发一次；签名见 App/Config/AGENTS.md，描述文件那段全机排队
 #   xc.sh diag [<设备> [all]] | ios crashes [all] | ips <文件…>
 #                                                   真机诊断，只读：读各台设备经 iCloud 送到 Mac 的诊断与日志、拉连着的手机的系统崩溃报告，按发布归档符号化（device_diag.py 头注释）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugScene+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。

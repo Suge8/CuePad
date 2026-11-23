@@ -32,7 +32,7 @@ BUILD = re.compile(r".*/apple/\.derived[^/]*/Build/Products/[^/]+/CuePad\.app")
 WINDOW = "1440x900"
 READY_TIMEOUT = 60
 HOLD = 300  # 截图类的看守上限（另加录屏、测量的秒数）：卡在哪一步都不留实例
-# 一轮 bcu 交互验收用不完；不够就再 run 一次（换掉旧的），要等长任务（在 App 里装 Agent）时用 CUEPAD_RUN_SECONDS 放长。忘了收的实例曾活过 14 小时
+# 一轮交互验收用不完；不够就再 run 一次（换掉旧的），要等长任务（在 App 里装 Agent）时用 CUEPAD_RUN_SECONDS 放长。忘了收的实例曾活过 14 小时
 RUN_TTL = int(os.environ.get("CUEPAD_RUN_SECONDS", 5 * 60))
 REC_SECONDS = float(os.environ.get("CUEPAD_REC_SECONDS", 12))
 

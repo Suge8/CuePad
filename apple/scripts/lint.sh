@@ -55,6 +55,17 @@ for file in App/Sources/UI/Debug/*.swift; do
   status=1
 done
 
+# 导出的拖放类型两端的 Info.plist 都要登记：漏了的那一端落点认不出拖来的东西，编译与测试照过（.column 漏过，胶囊拖不到别处）；要读 plist，暂存区模式不查
+if [ "${1:-}" != --staged ]; then
+  while read -r type; do
+    for plist in App/Config/CuePad-macOS-Info.plist App/Config/CuePad-iOS-Info.plist; do
+      grep -qF "<string>${type/\\(AppIdentity.id)/\$(CUEPAD_APP_ID)}</string>" "$plist" && continue
+      printf '%s\n  → UTType(exportedAs: "%s") 没在它的 UTExportedTypeDeclarations 登记（标识符写 $(CUEPAD_APP_ID).<名>）\n\n' "$plist" "$type"
+      status=1
+    done
+  done < <(rg --no-filename --only-matching --replace '$1' --type swift 'UTType\(exportedAs: "([^"]+)"' App CuePadKit | sort -u)
+fi
+
 # 间距只经 Spacing 的几档（规则在 lint_spacing.py 头注释）
 python3 "$scripts/lint_spacing.py" || status=1
 
