@@ -246,13 +246,18 @@ final class WideColumnView: NSView {
     }
 
     override func draggingExited(_ sender: (any NSDraggingInfo)?) {
-        if let sender { pass(nil, sender) }
+        stopPassing(sender)
         if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
-        passed = nil
+        stopPassing(sender)
         if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+    }
+
+    private func stopPassing(_ sender: (any NSDraggingInfo)?) {
+        passed?.draggingExited(sender)
+        passed = nil
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {

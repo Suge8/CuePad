@@ -49,8 +49,9 @@ final class WideDropState {
 /// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：每一块的胶囊（`PaneTitle`）、会话条的行、带会话的看板卡、灵感卡。
 /// 落在一块的左右四分之一插在它旁边，正中换掉它；放满了只能换。独占的页（进展）只能换掉。
 /// 已在这一排的是挪位置：落在别的块上哪里都有结果，插过去位置没变（本来就挨着）就与那一块对调。
-/// 从页里拖起的卡（带 `.cuepadCard`：看板的气泡、任务行、灵感卡）落在页的正中归页自己，主区不接：看板换列、灵感拖到任务上都在那里；
-/// 进展整页都是正中，气泡在它上面怎么拖都是换列。灵感卡是拿来并排看的，落在别的块正中也放到那一块右边，放满了才换。
+/// 从页里拖起的卡（带 `.cuepadCard`：看板的气泡、任务行、灵感卡）在页上只有右边四分之一是"拖出去并排"（放满了是换掉这一页），
+/// 其余归页自己、主区不接：任务行与卡都靠左排，排序、灵感拖到任务上的落点在左边与正中；位置按落点先判，不看放没放满。
+/// 进展不能并排，整页归它，气泡在上面怎么拖都是换列。灵感卡是拿来并排看的，落在别的块正中也放到那一块右边，放满了才换。
 /// 拖着时只看得到类型、读不到内容，落点只按类型定：带会话的就当会话，只带卡的当灵感（不带会话的任务卡放下时不接）。
 enum WideDrop {
     static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
@@ -68,11 +69,10 @@ enum WideDrop {
         guard over != pane else { return nil }
         let fresh = !state.panes.contains(pane)
         let full = fresh && workspace.wideShown >= workspace.wideRoom
+        let card = types.contains(.cuepadCard)
+        if card, over.page != nil, over.standsAlone || fraction <= 0.75 { return nil }
         var zone: WideDropZone = over.standsAlone || full ? .replace : fraction < 0.25 ? .before : fraction > 0.75 ? .after : .replace
-        if zone == .replace, types.contains(.cuepadCard) {
-            if over.page != nil { return nil }
-            if pane.card != nil, fresh, !full { zone = .after }
-        }
+        if zone == .replace, card, pane.card != nil, fresh, !full { zone = .after }
         func landing(_ zone: WideDropZone) -> WideDropTarget? {
             guard let next = state.dropping(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace, room: workspace.wideRoom),
                   let index = next.panes.firstIndex(of: pane), index < workspace.wideRoom else { return nil }

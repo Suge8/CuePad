@@ -131,14 +131,17 @@ final class PaneGripView: NSView, NSDraggingSource {
     // 胶囊在标题栏那一排，系统把那里的按住拖当成拖窗口，不看按下落在谁身上：名字用 `.draggable` 时拖放起来了、窗口却跟着指针走，
     // 指针相对窗口不动，拖不到别的块上；这层视图答了"不能"、按下也收到了，窗口照样走（macOS 27 实测）。
     // 只有窗口整个不可移动才拦得住，按下那一刻再改已经晚了，所以指针停在名字上时就先关掉、离开时放回。
-    override func mouseEntered(with event: NSEvent) {
-        window?.isMovable = false
-        hover?(true)
+    override func mouseEntered(with event: NSEvent) { settle(true) }
+    override func mouseExited(with event: NSEvent) { settle(false) }
+
+    private func settle(_ inside: Bool) {
+        window?.isMovable = !inside
+        hover?(inside)
     }
 
-    override func mouseExited(with event: NSEvent) {
-        window?.isMovable = true
-        hover?(false)
+    /// 菜单开着、系统拖放进行中，指针的进出不报：收了以后按指针此刻在不在上面重定一次，不然窗口会留在不可移动上。
+    private func resettle() {
+        settle(window.map { bounds.contains(convert($0.mouseLocationOutsideOfEventStream, from: nil)) } ?? false)
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
@@ -166,7 +169,9 @@ final class PaneGripView: NSView, NSDraggingSource {
     }
 
     private func showActions() {
-        actions?().popUp(positioning: nil, at: NSPoint(x: 0, y: -Spacing.tight), in: self)
+        guard let actions else { return }
+        actions().popUp(positioning: nil, at: NSPoint(x: 0, y: -Spacing.tight), in: self)
+        resettle()
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -185,5 +190,7 @@ final class PaneGripView: NSView, NSDraggingSource {
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
         context == .withinApplication ? .copy : []
     }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) { resettle() }
 }
 #endif
