@@ -55,6 +55,9 @@ final class CardEditing {
     }
     #endif
 
+    /// 这条现在叫什么：跟着正在写的字走，不等落盘。
+    var title: String { CardText.label(of: text) }
+
     func changed(_ next: String) {
         text = next
         autosave?.changed(next)

@@ -21,7 +21,7 @@ struct CardEditorScreen: View {
     var body: some View {
         page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
-            .floatingHeader(.verbatim(data.map { $0.card.heading.nonEmpty ?? String(localized: "灵感") } ?? "")) {
+            .floatingHeader(.verbatim(editing?.title ?? "")) {
                 if let card = data?.card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing) }
             } detail: {
                 detail

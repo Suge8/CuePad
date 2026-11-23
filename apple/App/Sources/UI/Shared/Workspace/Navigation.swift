@@ -90,7 +90,7 @@ struct WideNavigation: Equatable {
     }
 
     /// 放到第 `index` 块的位置：`replacing` 换掉那块（已在这一排的两块对调），否则插在它前面。多出 `room` 块时挤掉最右一块（不挤刚放的，也不挤活预览的会话）。
-    /// 会话与它的活预览挪位置时是一个整体：与活预览对调就是与那个会话对调，活预览照旧跟过去。
+    /// 会话与它的活预览挪位置时是一个整体（`anchor`）：挪活预览、与活预览对调，都是它的会话在对调，活预览照旧跟过去。
     /// 独占的页旁边不放东西，只能换掉它。
     @discardableResult mutating func place(_ pane: Pane, at index: Int, replacing: Bool, room: Int) -> Bool {
         var next = panes
@@ -98,8 +98,7 @@ struct WideNavigation: Equatable {
         if next.contains(where: \.standsAlone), !replacing { return false }
         if let old = next.firstIndex(of: pane) {
             if replacing {
-                if let owner = next[index].previewed.flatMap({ session in next.firstIndex { $0.session?.id == session } }) { index = owner }
-                next.swapAt(old, index)
+                next.swapAt(anchor(old), anchor(index))
             } else {
                 next.remove(at: old)
                 if old < index { index -= 1 }
@@ -113,6 +112,11 @@ struct WideNavigation: Equatable {
         }
         panes = next
         return true
+    }
+
+    /// 第 `index` 块算在哪一块上：活预览算在它的会话上，别的就是自己。
+    func anchor(_ index: Int) -> Int {
+        panes[index].previewed.flatMap { session in panes.firstIndex { $0.session?.id == session } } ?? index
     }
 
     func dropping(_ pane: Pane, at index: Int, replacing: Bool, room: Int) -> WideNavigation? {
