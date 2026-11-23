@@ -1,101 +1,13 @@
 import CueStore
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// 宽屏每一块顶上那颗胶囊，全 App 只此一种，都在这一块的左上角：上一级 / 名字 · 记号 · 收起。
-/// 名字是这一块的把手（`handle`）：拖进主区换位、并排（`WideDrop`）。这样东西自己的操作点名字后面的箭头出，右键名字也出；
-/// 名字自己不当菜单钮：Mac 的菜单按下就弹，按住拖不起来。
-struct PaneTitle<Items: View, Marks: View>: View {
-    struct Crumb {
-        let title: String
-        let action: () -> Void
-    }
-
-    var crumb: Crumb?
+/// 胶囊里名字前面那一级：点它去上一级的页。
+struct PaneCrumb {
     let title: String
-    var handle: WideNavigation.Pane?
-    var close: (() -> Void)?
-    @ViewBuilder var menu: Items
-    @ViewBuilder var marks: Marks
-    @Environment(\.wideWindowID) private var windowID
-    @Environment(\.palette) private var palette
-
-    private var opens: Bool { Items.self != EmptyView.self }
-
-    var body: some View {
-        HStack(spacing: Spacing.glyph) {
-            if let crumb {
-                Button(action: crumb.action) { Text(verbatim: crumb.title).lineLimit(1) }
-                    .buttonStyle(PressStyle(.inline))
-                    .foregroundStyle(palette.ink3)
-                Text(verbatim: "/").foregroundStyle(palette.ink3).fixedSize().readerHidden(true)
-            }
-            name
-            if opens {
-                Menu { menu.labelStyle(.titleAndIcon) } label: {
-                    Chevron(.expand).foregroundStyle(palette.ink3)
-                        .padding(.horizontal, Spacing.tight).frame(height: Chrome.control).contentShape(.rect)
-                }
-                #if os(macOS)
-                .menuStyle(.button).menuIndicator(.hidden).fixedSize()
-                #endif
-                .buttonStyle(PressStyle(.inline))
-                .padding(.horizontal, -Spacing.tight)
-                .accessibilityLabel(Text("\(title) 的操作"))
-            }
-            marks
-            if let close { PaneClose(action: close) }
-        }
-        .font(Typography.toolbarTitle)
-        .padding(.leading, Spacing.block)
-        .padding(.trailing, close == nil ? Spacing.block : PaneClose.inset)
-        .frame(height: Chrome.control)
-        .glass(in: .capsule)
-    }
-
-    @ViewBuilder private var name: some View {
-        if let handle, let windowID {
-            if opens { grip(handle, windowID).contextMenu { menu } } else { grip(handle, windowID) }
-        } else {
-            Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1).accessibilityAddTraits(.isHeader)
-        }
-    }
-
-    @ViewBuilder private func grip(_ pane: WideNavigation.Pane, _ windowID: UUID) -> some View {
-        #if os(iOS)
-        switch pane {
-        case .card(let id): WideTitleDrag(title: title, type: .cuepadCard, item: DraggedCard.idea(id), pane: pane)
-        default: WideTitleDrag(title: title, type: DraggedColumn.type, item: DraggedColumn(windowID: windowID, pane), pane: pane)
-        }
-        #else
-        let text = Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1).accessibilityAddTraits(.isHeader).contentShape(.rect)
-        switch pane {
-        case .card(let id): text.draggable(DraggedCard.idea(id))
-        default: text.draggable(DraggedColumn(windowID: windowID, pane))
-        }
-        #endif
-    }
+    let action: () -> Void
 }
 
-extension PaneTitle where Items == EmptyView {
-    init(crumb: Crumb? = nil, title: String, handle: WideNavigation.Pane? = nil, close: (() -> Void)? = nil, @ViewBuilder marks: () -> Marks) {
-        self.init(crumb: crumb, title: title, handle: handle, close: close, menu: { EmptyView() }, marks: marks)
-    }
-}
-
-extension PaneTitle where Items == EmptyView, Marks == EmptyView {
-    init(crumb: Crumb? = nil, title: String, handle: WideNavigation.Pane? = nil, close: (() -> Void)? = nil) {
-        self.init(crumb: crumb, title: title, handle: handle, close: close, menu: { EmptyView() }, marks: { EmptyView() })
-    }
-}
-
-extension PaneTitle where Marks == EmptyView {
-    init(crumb: Crumb? = nil, title: String, handle: WideNavigation.Pane? = nil, close: (() -> Void)? = nil, @ViewBuilder menu: () -> Items) {
-        self.init(crumb: crumb, title: title, handle: handle, close: close, menu: menu, marks: { EmptyView() })
-    }
-}
-
-extension PaneTitle.Crumb {
+extension PaneCrumb {
     /// 这样东西所在的项目：点它去那个项目的页。
     @MainActor init?(_ project: Project?, in workspace: Workspace) {
         guard let project else { return nil }
@@ -103,9 +15,103 @@ extension PaneTitle.Crumb {
     }
 }
 
-extension DraggedColumn {
-    @MainActor init(windowID: UUID, _ pane: WideNavigation.Pane) {
-        self.init(windowID: windowID, session: pane.session.map { Session(recordID: $0.id, sessionID: $0.sessionID) })
+/// 宽屏每一块顶上那颗胶囊，全 App 只此一种，都在这一块的左上角：上一级 / 名字 · 记号 · 这一块直接可点的钮 · 收起。
+/// 名字是这一块的把手（`handle`）：拖进主区换位、并排（`WideDrop`）。这样东西自己的操作点名字后面的箭头出，Mac 上右键名字也出；
+/// 名字自己不当菜单钮：Mac 的菜单按下就弹，按住拖不起来。iPad 的名字不挂长按菜单：长按是拎起，挂了就先弹菜单、挪了才拎得起。
+struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
+    private let crumb: PaneCrumb?
+    private let title: String
+    private let handle: WideNavigation.Pane?
+    private let close: (() -> Void)?
+    private let menu: Items
+    private let marks: Marks
+    private let tools: Tools
+    @Environment(\.wideWindowID) private var windowID
+    @Environment(\.palette) private var palette
+
+    init(
+        crumb: PaneCrumb? = nil, title: String, handle: WideNavigation.Pane? = nil, close: (() -> Void)? = nil,
+        @ViewBuilder menu: () -> Items = { EmptyView() }, @ViewBuilder marks: () -> Marks = { EmptyView() }, @ViewBuilder tools: () -> Tools = { EmptyView() }
+    ) {
+        self.crumb = crumb
+        self.title = title
+        self.handle = handle
+        self.close = close
+        self.menu = menu()
+        self.marks = marks()
+        self.tools = tools()
+    }
+
+    private var opens: Bool { Items.self != EmptyView.self }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: Spacing.glyph) {
+                if let crumb {
+                    Button(action: crumb.action) { Text(verbatim: crumb.title).lineLimit(1) }
+                        .buttonStyle(PressStyle(.inline))
+                        .foregroundStyle(palette.ink3)
+                    Text(verbatim: "/").foregroundStyle(palette.ink3).fixedSize().readerHidden(true)
+                }
+                name
+                if opens {
+                    Menu { menu.labelStyle(.titleAndIcon) } label: {
+                        Chevron(.expand).foregroundStyle(palette.ink3)
+                            .padding(.horizontal, Spacing.tight).frame(height: Chrome.control).contentShape(.rect)
+                    }
+                    #if os(macOS)
+                    .menuStyle(.button).menuIndicator(.hidden).fixedSize()
+                    #endif
+                    .buttonStyle(PressStyle(.inline))
+                    .padding(.horizontal, -Spacing.tight)
+                    .accessibilityLabel(Text("\(title) 的操作"))
+                }
+                marks
+            }
+            .padding(.trailing, Spacing.block - PaneClose.inset)
+            HStack(spacing: 0) { tools }.labelStyle(.iconOnly).buttonStyle(PaneToolStyle())
+            if let close { PaneClose(action: close) }
+        }
+        .font(Typography.toolbarTitle)
+        .padding(.leading, Spacing.block)
+        .padding(.trailing, PaneClose.inset)
+        .frame(height: Chrome.control)
+        .glass(in: .capsule)
+    }
+
+    @ViewBuilder private var name: some View {
+        if let handle, let windowID, let column = DraggedColumn(windowID: windowID, handle) {
+            #if os(iOS)
+            WideTitleDrag(title: title, column: column, pane: handle).layoutPriority(1)
+            #else
+            let grip = label.overlay { PaneGrip(title: title, column: column) }
+            if opens { grip.contextMenu { menu } } else { grip }
+            #endif
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
+        Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// 胶囊里的图标钮：钮、点开菜单的钮同一个大小，悬停底是一个圆、不出胶囊的边。
+struct PaneToolStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.modifier(PaneToolFace()).modifier(PressFeedback(pressed: configuration.isPressed, kind: .control))
+    }
+}
+
+private struct PaneToolFace: ViewModifier {
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content.font(Glyph.control).foregroundStyle(isEnabled ? palette.ink2 : palette.ink3)
+            .frame(width: PaneClose.side, height: PaneClose.side)
+            .contentShape(.circle)
     }
 }
 
@@ -146,7 +152,7 @@ struct PaneClose: View {
     @Environment(\.palette) private var palette
 
     static let inset = Spacing.tight
-    private static var side: CGFloat { Chrome.control - 2 * inset }
+    static var side: CGFloat { Chrome.control - 2 * inset }
 
     var body: some View {
         Button(action: action) {
@@ -164,6 +170,7 @@ struct PaneClose: View {
     }
 }
 
+/// 胶囊里一颗开关着的钮（活预览、并排）：开着时图标是签名色、垫一块选中底。
 struct HeadTool: View {
     let label: LocalizedStringResource
     let icon: Icon
@@ -173,7 +180,6 @@ struct HeadTool: View {
 
     var body: some View {
         Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink2) }
-            .buttonStyle(ControlButtonStyle(kind: .circular))
             .toggledOn(on)
             .help(Text(label))
             .accessibilityLabel(Text(label))
@@ -203,12 +209,13 @@ struct LibraryFileHead: View {
                 }
                 .font(Typography.toolbarSubtitle)
                 .foregroundStyle(draft?.state == .failed ? palette.failure : palette.ink3)
+            }, tools: {
+                #if os(iOS)
+                HeadTool(label: "发往 Mac", icon: .send) { if let draft { Task { await draft.send() } } }
+                    .disabled(!(draft?.dirty ?? false) || draft?.state == .saving || draft?.conflicted == true)
+                #endif
             })
             .help(library?.file(file).flatMap { library?.shown($0.textPath) } ?? "")
-            #if os(iOS)
-            HeadTool(label: "发往 Mac", icon: .send) { if let draft { Task { await draft.send() } } }
-                .disabled(!(draft?.dirty ?? false) || draft?.state == .saving || draft?.conflicted == true)
-            #endif
         }
     }
 

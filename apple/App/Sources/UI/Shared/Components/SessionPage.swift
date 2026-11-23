@@ -53,8 +53,8 @@ private struct SessionPageBody: View {
                                 PaneTitle(
                                     crumb: .init(digest?.project, in: workspace), title: digest?.title(at: services.speech) ?? session.title,
                                     handle: workspace.pane(in: column), close: workspace.isSplit ? { workspace.closeColumn(column) } : nil,
-                                    marks: { SessionMarks(ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }) })
-                                if let route = workspace.session(in: column) { LivePreviewTool(session: route) }
+                                    marks: { SessionMarks(ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }) },
+                                    tools: { if let route = workspace.session(in: column) { LivePreviewTool(session: route) } })
                             }
                             .contextMenu { if secondary { menu(session, digest) } }
                         } else if stored != nil, workspace.isSplit {

@@ -38,6 +38,16 @@
 				<string>public.data</string>
 			</array>
 		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>$(CUEPAD_APP_ID).column</string>
+			<key>UTTypeDescription</key>
+			<string>CuePad Column</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

@@ -81,8 +81,9 @@ struct IdeaPane: View {
                         .foregroundStyle(editing?.saveState == .failed ? palette.failure : palette.ink3)
                         .fixedSize()
                 }
+            } tools: {
+                if covers { BesideTool(cardID: cardID) }
             }
-            if covers { BesideTool(cardID: cardID) }
         }
     }
 }

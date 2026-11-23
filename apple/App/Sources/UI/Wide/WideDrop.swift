@@ -2,17 +2,27 @@ import CueStore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 拖一块的胶囊时带的东西。`session` 为 nil 时拖的是那个窗口这一排里的页：一排至多一页，不用说是哪一页，别的窗口不接。
-nonisolated struct DraggedColumn: Codable, Transferable {
-    struct Session: Codable {
-        let recordID: UUID
-        let sessionID: String?
+/// 拖一块的胶囊时带的东西：把这一排里的一块挪个位置。页不用说是哪一页（一排至多一页），别的窗口不接。
+nonisolated struct DraggedColumn: Codable, Sendable {
+    enum Piece: Codable {
+        case page
+        case session(recordID: UUID, sessionID: String?)
+        case card(UUID)
     }
 
     let windowID: UUID
-    var session: Session?
+    let piece: Piece
     static let type = UTType(exportedAs: "\(AppIdentity.id).column", conformingTo: .data)
-    static var transferRepresentation: some TransferRepresentation { CodableRepresentation(contentType: type) }
+
+    @MainActor init?(windowID: UUID, _ pane: WideNavigation.Pane) {
+        switch pane {
+        case .page: piece = .page
+        case .session(let route): piece = .session(recordID: route.id, sessionID: route.sessionID)
+        case .card(let id): piece = .card(id)
+        case .preview: return nil
+        }
+        self.windowID = windowID
+    }
 }
 
 extension EnvironmentValues {
@@ -37,8 +47,9 @@ final class WideDropState {
 }
 
 /// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：每一块的胶囊（`PaneTitle`）、会话条的行、带会话的看板卡、灵感卡。
-/// 落在一块的左右四分之一插在它旁边，正中换掉它；放满了只能换，已在这一排的是换位。独占的页（进展）只能换掉。
-/// 新拖来的灵感是拿来并排看的，不换掉别的块：落在正中也放到那一块右边，放满了才换。
+/// 落在一块的左右四分之一插在它旁边，正中换掉它；放满了只能换。独占的页（进展）只能换掉。
+/// 已在这一排的是挪位置：落在别的块上哪里都有结果，插过去位置没变（本来就挨着）就与那一块对调。
+/// 灵感卡（不是它的胶囊）是拿来并排看的，不换掉别的块：落在正中也放到那一块右边，放满了才换；页的正中留给页里自己的落点（灵感拖到任务上）。
 /// 拖着时只看得到类型、读不到内容，落点只按类型定：带会话的就当会话，只带卡的当灵感（不带会话的任务卡放下时不接）。
 enum WideDrop {
     static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
@@ -53,17 +64,20 @@ enum WideDrop {
         case .some(.none): return nil
         case .none: pane = session ? .session(standIn) : .card(standIn.id)
         }
+        guard over != pane else { return nil }
         let fresh = !state.panes.contains(pane)
         let full = fresh && workspace.wideShown >= workspace.wideRoom
         var zone: WideDropZone = over.standsAlone || full ? .replace : fraction < 0.25 ? .before : fraction > 0.75 ? .after : .replace
-        if zone == .replace, pane.card != nil {
-            // 页的正中留给页里自己的落点（灵感拖到任务上）：灵感落在那里不算换掉这一页
+        if zone == .replace, types.contains(.cuepadCard), pane.card != nil {
             if over.page != nil { return nil }
             if fresh, !full { zone = .after }
         }
-        guard let next = state.dropping(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace, room: workspace.wideRoom),
-              let index = next.panes.firstIndex(of: pane), index < workspace.wideRoom else { return nil }
-        return WideDropTarget(column: column, zone: zone, pane: pane, next: next)
+        func landing(_ zone: WideDropZone) -> WideDropTarget? {
+            guard let next = state.dropping(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace, room: workspace.wideRoom),
+                  let index = next.panes.firstIndex(of: pane), index < workspace.wideRoom else { return nil }
+            return WideDropTarget(column: column, zone: zone, pane: pane, next: next)
+        }
+        return landing(zone) ?? (fresh ? nil : landing(.replace))
     }
 
     private static let standIn = SessionRoute(id: UUID())
@@ -103,8 +117,11 @@ extension WideDrop {
         switch type {
         case DraggedColumn.type:
             let value = try decoder.decode(DraggedColumn.self, from: data)
-            if let session = value.session { return .session(SessionRoute(id: session.recordID, sessionID: session.sessionID)) }
-            return value.windowID == window ? workspace.pageRoute.map { .page($0) } : nil
+            switch value.piece {
+            case .session(let recordID, let sessionID): return .session(SessionRoute(id: recordID, sessionID: sessionID))
+            case .card(let id): return .card(id)
+            case .page: return value.windowID == window ? workspace.pageRoute.map { .page($0) } : nil
+            }
         case .cuepadSession:
             let value = try decoder.decode(DraggedSession.self, from: data)
             return .session(SessionRoute(id: SessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID))

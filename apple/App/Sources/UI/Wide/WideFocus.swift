@@ -206,7 +206,8 @@ final class WideColumnView: NSView {
             drop.drag = sender.draggingSequenceNumber
             drop.pane = try? pane(in: pasteboard)
         }
-        let types = Set((pasteboard.types ?? []).compactMap { UTType($0.rawValue) })
+        let carried = Set((pasteboard.types ?? []).map(\.rawValue))
+        let types = Set(WideDrop.types.filter { carried.contains($0.identifier) })
         let x = convert(sender.draggingLocation, from: nil).x
         let target = slot.column.flatMap { WideDrop.target(types, dragged: drop.pane, at: x / max(1, bounds.width - drop.under), in: $0, workspace: workspace) }
         if workspace.dropTarget != target { workspace.dropTarget = target }

@@ -7,12 +7,9 @@ struct LivePreviewTool: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let button = workspace.liveButton(session.id)
-        HeadTool(label: Self.label(button ?? .closed(nil)), icon: .livePreview, on: button?.isShowing == true) { workspace.toggleLivePreview(of: session) }
-            .opacity(button == nil ? 0 : 1)
-            .allowsHitTesting(button != nil)
-            .readerHidden(button == nil)
-            .animation(Motion.fade, value: button != nil)
+        if let button = workspace.liveButton(session.id) {
+            HeadTool(label: Self.label(button), icon: .livePreview, on: button.isShowing) { workspace.toggleLivePreview(of: session) }
+        }
     }
 
     static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {

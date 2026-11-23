@@ -20,28 +20,24 @@ struct WideColumnHead: View {
 
     private var close: (() -> Void)? { workspace.isSplit ? { workspace.closeColumn(column) } : nil }
 
-    private var shelf: PaneTitle<EmptyView, EmptyView>.Crumb { .init(title: String(localized: "项目")) { workspace.select(.shelf) } }
+    private var shelf: PaneCrumb { .init(title: String(localized: "项目")) { workspace.select(.shelf) } }
 
     @ViewBuilder private func title(_ page: Route) -> some View {
         switch page {
         case .project(let id):
             if let project = workspace.catalog?.project(id) {
-                PaneTitle(crumb: .init(title: shelf.title, action: shelf.action), title: project.shownName, handle: .page(page), close: close, menu: {
+                PaneTitle(crumb: shelf, title: project.shownName, handle: .page(page), close: close, menu: {
                     ProjectActions(project: project, folders: false)
-                })
-                tools { ProjectHeadTools(project: project) }
+                }, tools: { ProjectHeadTools(project: project) })
             }
         case .shelf:
-            PaneTitle(title: String(localized: "项目"), handle: .page(page), close: close)
-            tools {
+            PaneTitle(title: String(localized: "项目"), handle: .page(page), close: close, tools: {
                 NewProjectButton()
                 Button("归档", icon: .archive) { workspace.show(.archive) }.help("归档")
                 Button("回收站", icon: .trash) { workspace.show(.trash) }.help("回收站")
-            }
+            })
         case .archive: PaneTitle(crumb: shelf, title: String(localized: "归档"), handle: .page(page), close: close)
-        case .trash:
-            PaneTitle(crumb: shelf, title: String(localized: "回收站"), handle: .page(page), close: close)
-            tools { EmptyTrashButton() }
+        case .trash: PaneTitle(crumb: shelf, title: String(localized: "回收站"), handle: .page(page), close: close, tools: { EmptyTrashButton() })
         case .library:
             PaneTitle(title: String(localized: "技能与规则"), handle: .page(page), close: close)
             LibraryPanesSlot()
@@ -49,13 +45,6 @@ struct WideColumnHead: View {
         case .conflicts: PaneTitle(title: String(localized: "两个版本"), handle: .page(page), close: close)
         default: EmptyView()
         }
-    }
-
-    private func tools(@ViewBuilder _ buttons: () -> some View) -> some View {
-        HStack(spacing: 0) { buttons() }
-            .labelStyle(.iconOnly)
-            .imageScale(.large)
-            .buttonStyle(ControlButtonStyle(kind: .icon))
     }
 }
 
