@@ -51,7 +51,7 @@ extension DebugScene {
         }
         let title = args.session ?? "homepage"
         if args.demo { await seedCue(workspace.services) }
-        guard let session = try await demoSession(titled: title, store: store) else { return }
+        guard let session = try await demoSession(titled: title, store: store) else { throw Unmet("这个库里没有叫 \(title) 的会话") }
         if args.notify {
             workspace.open(DeepLink.session(session.id))
         } else {

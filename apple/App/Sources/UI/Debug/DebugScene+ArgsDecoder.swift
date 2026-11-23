@@ -7,6 +7,8 @@ nonisolated protocol DebugArgGroup: Decodable {
 
 extension DebugArgs {
     nonisolated static let launch: DebugArgs = {
+        // 标准输出接到文件（app-mac.log、app-sim.log）时整块缓冲，实例被结束时还没写出的就丢了：按行写出，`print` 的探针才看得到
+        setvbuf(stdout, nil, _IOLBF, 0)
         let domain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
         var values: [String: String] = [:]
         var spelled: [String: String] = [:]
