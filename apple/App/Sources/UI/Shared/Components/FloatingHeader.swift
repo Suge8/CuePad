@@ -27,11 +27,19 @@ extension View {
         _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder menu: () -> Items, @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(
+        let items = menu()
+        return modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            // 玻璃挂在菜单外面，标签只是两行字：系统给这颗菜单钮的框只有 36 高，44 高的玻璃若在标签里，
-            // 菜单收起的那段动画按钮框裁掉玻璃上下各一截、再整块淡回来；挂在外面时玻璃不动，收起只动字
-            center: Menu(content: menu) { TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block) }
+            // 菜单是盖在标题上的一层透明钮，不当标题的容器：`Menu` 只按标签想要的宽排，导航栏给的宽传不到标签里，
+            // 标题在它里面时这块玻璃不认两边的钮，长标题、长状态会伸到返回钮与右边的钮底下；标签的大小也得明着给。
+            // 玻璃也因此不在菜单钮里：系统给菜单钮的框只有 36 高，收起的那段动画会把 44 高的玻璃上下各裁掉一截。
+            center: TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block)
+                .frame(height: FloatingHeaderLayout.height)
+                .overlay {
+                    GeometryReader { box in
+                        Menu { items } label: { Color.clear.frame(width: box.size.width, height: box.size.height) }.accessibilityLabel(Text(title))
+                    }
+                }
                 .headerPiece()
                 .opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))

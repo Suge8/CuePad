@@ -64,15 +64,14 @@ private struct SessionPageBody: View {
             } else {
                 #if os(iOS)
                 reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
-                    if let session { menu(session, digest) }
+                    if let session { menu(session, digest, tier: digest?.tier) }
                 } detail: {
                     if ending(digest) {
                         Text("正在休眠…").font(Typography.caption).foregroundStyle(palette.ink3)
                     } else if let session {
-                        SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
+                        SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
                     }
                 } trailing: {
-                    if let session, let tier = digest?.tier { CueTierButton(sessionID: session.sessionID, tier: tier, compact: true) }
                     LivePhoneTool(session: id, zoom: zoom)
                 }
                 .livePhoneCover(id, zoom: zoom)
@@ -139,8 +138,8 @@ private struct SessionPageBody: View {
         MacDelivery.endProgress(digest?.deliveries ?? [], at: services.speech)?.inTransit == true
     }
 
-    private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionMenuItems {
-        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest))
+    private func menu(_ session: SessionState, _ digest: SessionDigest?, tier: CueTier? = nil) -> SessionMenuItems {
+        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest), tier: tier)
     }
 
     private func reply(_ session: SessionState?, _ digest: SessionDigest?) -> some View {

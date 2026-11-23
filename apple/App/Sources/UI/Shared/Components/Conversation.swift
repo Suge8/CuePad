@@ -222,12 +222,14 @@ extension Conversation {
 struct SessionSubtitle: View {
     let session: SessionState
     let delivery: DeliveryRequest?
+    var tier: CueTier?
     var undelivered: String?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     private var syncing: Bool { services.syncing.showsCatchingUp(on: session.hostID) }
+    private var handed: CueTier? { tier == .yours ? nil : tier }
 
     var body: some View {
         let shown = workspace.shownInHeader(session, delivery: delivery)
@@ -235,7 +237,7 @@ struct SessionSubtitle: View {
         let mark = session.agentMark
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
-            if speaks || undelivered != nil || mark != nil {
+            if speaks || undelivered != nil || mark != nil || handed != nil {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: Spacing.tight) { facts(shown: shown, speaks: speaks, mark: mark, compact: false) }
                         .fixedSize()
@@ -252,6 +254,10 @@ struct SessionSubtitle: View {
     @ViewBuilder private func facts(shown: SessionShown, speaks: Bool, mark: String?, compact: Bool) -> some View {
         if mark != nil {
             AgentMark(session: session, font: Self.font)
+            if !compact, handed != nil || speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
+        }
+        if let handed {
+            Text("\(Image(Icon.cue)) \(Text(handed.title(workspace.cue.name)))").foregroundStyle(palette.signature).lineLimit(1)
             if !compact, speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
         }
         if syncing { SyncingLabel() } else if speaks { SessionShownLabel(shown: shown) }

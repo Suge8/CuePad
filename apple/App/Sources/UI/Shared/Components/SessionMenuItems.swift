@@ -7,12 +7,15 @@ struct SessionMenuItems: View {
     let task: SessionTaskLink?
     let pin: SessionTask?
     let ending: Bool
+    /// 手机的页头没有换档的钮，档在这张菜单里换；宽屏在胶囊里（`CueTierButton`），不给。
+    var tier: CueTier?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let open = task?.tasks.filter { $0.task.status != .done } ?? []
         Group {
             if let place { Section { } header: { Text(place) } }
+            if let tier { Section { CueTierMenu(sessionID: session.sessionID, tier: tier) } }
             Section {
                 ForEach(open) { item in
                     Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }
