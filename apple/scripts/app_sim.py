@@ -75,7 +75,7 @@ class Sim:
             os.remove(ready)
         self.orient(args)
         env = dict(os.environ, SIMCTL_CHILD_CUEPAD_LIBRARY_DIR=os.path.abspath(library), SIMCTL_CHILD_CUEPAD_SHOT_READY=ready)
-        return int(self.run("launch", "--terminate-running-process", f"--stderr={self.log}", self.device, BUNDLE_ID, *args, env=env).rsplit(":", 1)[1])
+        return int(self.run("launch", "--terminate-running-process", f"--stdout={self.log}", f"--stderr={self.log}", self.device, BUNDLE_ID, *args, env=env).rsplit(":", 1)[1])
 
     def island(self, out):
         """拍系统的灵动岛：把设置切到前台，App 退到后台岛才出来；先拍收起的（<图>-compact.png），在岛上长按，再拍展开的（<图>）。
@@ -136,9 +136,10 @@ def stop_recording(proc):
 
 def sim(cmd, device, app, library, shots):
     """装一次包、设一次状态栏，逐张起实例拍（外观随 -theme 变时才切）。"""
-    # App 的标准错误（`DebugScene.abandon` 报的原因、崩溃前的输出），就绪前退出时 wait_ready 指向它。放在产物目录（同 app-mac.log）：
+    # App 的输出（`DebugScene.abandon` 报的原因、崩溃前的输出、`print` 的探针），就绪前退出时 wait_ready 指向它。放在产物目录（同 app-mac.log）：
     # simctl launch 把 /tmp 下的路径换到模拟器自己的数据目录里
     s = Sim(device, re.sub(r"/Build/Products/.*", "/app-sim.log", app))
+    open(s.log, "w").close()  # simctl 往里追加：一次调用清一次，读到的才只是这一次的
     ready = f"{RUNTIME}/ready-{device}"
     s.run("install", device, app)
     s.set_status_bar()

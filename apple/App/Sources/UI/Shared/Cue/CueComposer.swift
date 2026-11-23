@@ -12,7 +12,7 @@ struct CueComposer: View {
     let style: Style
     var takesFocusRequests = false
     var dismiss: () -> Void = {}
-    var sent: () -> Void = {}
+    var sent: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
