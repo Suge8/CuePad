@@ -11,7 +11,7 @@ import { carryOver, IS_HOSTED } from "./lifecycle.ts";
 import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 70;
+const EXTENSION_VERSION = 71;
 
 /** FireCode 的"在飞子代理数"（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算，与它判断"会话进行中"用同一个事实 */
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
@@ -92,6 +92,10 @@ export default function (pi: ExtensionAPI) {
 		live = serve(ctx, launchToken);
 		launchToken = null;
 	});
+	// Pi 没有"启动完成"的事件，最晚的是 resources_discover：全部扩展的 session_start 跑完后才发（它自己的输入再晚一步，等这个事件也处理完）。
+	// 更早开门，交进来的话会带着别的扩展还没备齐的系统提示词与工具开轮，下一轮备齐了前缀又变，缓存连丢两次。
+	// 排在本扩展后面的处理器在这个事件里等 I/O 时，它补的技能仍晚于开门：公开接口里没有更晚的信号。
+	pi.on("resources_discover", () => live?.open());
 	pi.on("session_shutdown", (event) => {
 		live?.close(event.reason);
 		live = undefined;
@@ -103,10 +107,13 @@ export default function (pi: ExtensionAPI) {
 		session.idleExit.follow(session.phase);
 		captureDialogs(ctx.ui, session);
 		let stop: ((reason: string) => void) | undefined;
-		try {
-			stop = listen(session, socketDirectory);
-		} catch (error) {
-			ctx.ui.notify(`CuePad bridge disabled: ${reason(error)}`, "warning");
+
+		function open() {
+			try {
+				stop = listen(session, socketDirectory);
+			} catch (error) {
+				ctx.ui.notify(`CuePad bridge disabled: ${reason(error)}`, "warning");
+			}
 		}
 
 		function close(why: string) {
@@ -122,6 +129,6 @@ export default function (pi: ExtensionAPI) {
 			stop?.(why);
 		}
 
-		return { session, close };
+		return { session, open, close };
 	}
 }
