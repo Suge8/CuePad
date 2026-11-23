@@ -18,6 +18,8 @@ mac 的命令同名，差别：
   tap 的 --type 是 bcu 的角色（button、textarea…），没有 #id；type、key 打进此刻有键盘焦点的元素
   focus                      有键盘焦点的元素：角色、名字、值、框（并排的几块回复框同名，按框的 x 认是哪一块）
   shot                       打印截图路径
+  活预览（网页视图）里的东西不用坐标 tap，用 cuepad live 的动词：tap 的按下与抬起之间没有间隔，网页偶尔先收到抬起（实测 8 次里 2 次），
+  预览那头就成了按住不放；drag 有间隔，没这回事
   tap、drag、key 认 --rec 片.mov（从动作前录 4 秒，打印动作在片里投出的时刻）与 --front
   每个动作印出 bcu 的结论行：worked 是有证据，unverified 是投了、读不到证据，看界面再定，别重做。
   默认在后台投，不动用户的键盘与指针。--front 占前台（apple/scripts/AGENTS.md「占前台」），只有这两样要它：
@@ -212,8 +214,10 @@ def mac(pid, cmd, args, opts, front):
         act(pid, [{"action": "click", "find": find}], None, front, rec)
     elif cmd == "drag":
         start, end = ([int(v) for v in a.split(",")] for a in args[:2])
+        points = int(args[2]) if len(args) > 2 else 6
+        path = [[round(start[i] + (end[i] - start[i]) * step / points) for i in (0, 1)] for step in range(points + 1)]
         hover = [{"action": "moveMouse", "x": start[0], "y": start[1]}, {"action": "wait", "ms": 300}] if front else []
-        act(pid, [*hover, {"action": "drag", "path": [start, end]}], observe(pid)[0], front, rec)
+        act(pid, [*hover, {"action": "drag", "path": path}], observe(pid)[0], front, rec)
     elif cmd in ("type", "key"):
         state, _, focused, window = observe(pid)
         if cmd == "type" and not focused:

@@ -4,7 +4,7 @@ import AppKit
 /// 点与键：在进程里造成 NSEvent 排进应用的事件队列，不经窗口服务器。不动真鼠标，应用在后台、窗口被挡着都照样收到。
 /// 排进队列、不直接交给窗口：之后是谁在取事件（平常的循环、按钮与滑块的跟踪循环、开着的菜单、模态面板），就由谁照常处理；
 /// 走到平常派发的先过 `dispatch`，补上后台应用缺的那两步。
-/// 收不到的是窗口服务器自己管的那几样：拖标题栏挪窗口、拖边缘改大小、指针悬停的效果；系统拖放不让起（`groundDrags`）。
+/// 收不到的是窗口服务器自己管的那几样：拖标题栏挪窗口、拖边缘改大小、指针悬停的效果；系统拖放起了也什么都不带（`emptyDrags`）。
 extension WindowScreen {
   struct Input {
     var pressed: NSWindow?
@@ -175,11 +175,12 @@ extension WindowScreen {
 
   @MainActor private static var welcomed: Set<ObjectIdentifier> = []
 
-  /// 这里造的事件起的系统拖放不让它起（`WindowScreen.init` 装一次）：应用照常调 `beginDraggingSession`，拿到的是没有，拖不起来。
-  /// 系统拖放归窗口服务器管、不认这里造的事件：拎起来的那张图画在这扇窗真正在屏上的位置，看的那一头看到的是
+  /// 这里造的事件起的系统拖放什么都不带（`WindowScreen.init` 装一次）：应用照常调 `beginDraggingSession`、照常收到开始与结束，
+  /// 交给系统的那一组东西换成空的，没有拎起的图、没有落得下的东西，预览里拖不动。
+  /// 系统拖放归窗口服务器管、不认这里造的事件：照原样起的话，拎起的图画在这扇窗真正在屏上的位置，看的那一头看到的是
   /// 预览里的东西浮到了预览外面（CuePad 的活预览里拖会话条的一行，那一行浮在外面的 CuePad 上，实测）。
-  /// SwiftUI 的 `.draggable` 走带 gesture 的那个，被拦过一次后这个进程里不再试（实测）。
-  @MainActor static func groundDrags() {
+  /// 不能直接答"起不来"：SwiftUI 的 `.draggable`（走带 gesture 的那个）被答过一次后这个进程里不再起拖，拖放源也等不到结束（实测）。
+  @MainActor static func emptyDrags() {
     typealias Begin = @convention(c) (AnyObject, Selector, NSArray, AnyObject?, AnyObject) -> NSDraggingSession?
     let begins: [(AnyClass, Selector)] = [
       (NSView.self, #selector(NSView.beginDraggingSession(with:event:source:))),
@@ -190,7 +191,7 @@ extension WindowScreen {
       guard let method = class_getInstanceMethod(owner, selector) else { continue }
       let original = unsafeBitCast(method_getImplementation(method), to: Begin.self)
       let ours: @convention(block) (AnyObject, NSArray, AnyObject?, AnyObject) -> NSDraggingSession? = { receiver, items, trigger, source in
-        NSApp.currentEvent?.cgEvent?.getIntegerValueField(.eventSourceUserData) == mark ? nil : original(receiver, selector, items, trigger, source)
+        original(receiver, selector, NSApp.currentEvent?.cgEvent?.getIntegerValueField(.eventSourceUserData) == mark ? [] : items, trigger, source)
       }
       method_setImplementation(method, imp_implementationWithBlock(ours))
     }
