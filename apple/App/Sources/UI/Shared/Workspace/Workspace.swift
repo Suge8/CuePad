@@ -82,14 +82,18 @@ final class Workspace {
         }
     }
 
-    /// 宽屏窗口里焦点在哪一块，只它答得出（问的是系统的第一响应者）。
-    @ObservationIgnored let wideFocus = WideFocus()
-    /// 这一排变了以后，哪个会话的回复框摆出来时接过焦点（`landReplyFocus` 定，那个回复框摆出来时取走）。
-    /// 不走 `replyFocus`：它一变，旧位置上还没拆掉的那个回复框先看到、先领走，新摆出来的那个就领不到了。
+    /// 新进这一排的会话，它的回复框摆出来时接过焦点（`settle` 定，那个回复框摆出来时取走）。只在 Mac：触屏上不替人弹键盘。
+    /// 页不自己一摆出来就拿：启动时几页一起摆出来、答完题输入框重新出来，都会从别处把焦点拿走。
     @ObservationIgnored private var replyLanding: UUID?
+    /// 刚从这一排右头走掉的块：滑出去之前照旧画着（`PaneRow`），滑完撤掉。别处走掉的当场就没了，旁边的块滑过来补上。
+    private(set) var leaving: [WideNavigation.Pane] = []
+    @ObservationIgnored private var leavingDone: Task<Void, Never>?
 
     private func settle(from was: WideNavigation, to now: WideNavigation) {
-        landReplyFocus(from: was, to: now)
+        #if os(macOS)
+        if let opened = now.sessions.first(where: { opened in !was.sessions.contains { $0.id == opened.id } }) { replyLanding = opened.id }
+        #endif
+        leave(was.panes.dropFirst(now.panes.count).filter { gone in gone.page == nil && !now.panes.contains { WideMetrics.Piece($0) == WideMetrics.Piece(gone) } })
         let moved = was.panes[was.host] != now.panes[now.host]
         if moved || openCard.map({ now.panes.contains(.card($0)) }) == true { overlay = nil }
         #if os(macOS)
@@ -99,20 +103,15 @@ final class Workspace {
         pages.visit(from: was.page, to: now.page)
         #endif
     }
-    /// 这一排变了以后回复框的焦点归谁，只在这里定。换了格的块是重新摆出来的，原来的输入框没了；
-    /// 页分不清自己是新开的还是被挪动的，各自一摆出来就拿焦点的话，几页一起摆出来时谁最后摆好就归了谁。
-    /// 重新摆出来的会话里：拿着焦点的那个换了格，还给它。Mac 上另有两条（触屏上不替人弹键盘）：
-    /// 新进这一排的先拿；都不是，归最左那个（点会话条把已并排的会话开到最左、关掉左边那块）。
-    private func landReplyFocus(from was: WideNavigation, to now: WideNavigation) {
-        func slot(_ session: UUID, in row: WideNavigation) -> Int? { row.panes.firstIndex { $0.session?.id == session } }
-        let remounted = now.sessions.map(\.id).filter { slot($0, in: was) != slot($0, in: now) }
-        let holder = wideFocus.current?.column.flatMap { was.panes.indices.contains($0.index) ? was.panes[$0.index].session?.id : nil }
-        #if os(macOS)
-        let lands = remounted.first { slot($0, in: was) == nil } ?? remounted.first { $0 == holder } ?? remounted.first
-        #else
-        let lands = remounted.first { $0 == holder }
-        #endif
-        if let lands { replyLanding = lands }
+
+    private func leave(_ panes: [WideNavigation.Pane]) {
+        guard !panes.isEmpty else { return }
+        leaving += panes
+        leavingDone?.cancel()
+        leavingDone = Task {
+            guard (try? await Task.sleep(for: WideSlide.duration)) != nil else { return }
+            leaving = []
+        }
     }
 
     func takeReplyLanding(_ session: UUID) -> Bool {

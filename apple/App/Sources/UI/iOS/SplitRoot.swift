@@ -6,27 +6,19 @@ struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(ModalHost.self) private var modals: ModalHost?
     @Environment(\.palette) private var palette
-    private var focus: WideFocus { workspace.wideFocus }
+    @State private var focus = WideFocus()
 
     var body: some View {
         let covered = modals?.modal?.inPage == true
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let under = sizes.split ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.fill, under: under, spans: sizes.spans) {
-                    PaneColumn(index: 0)
-                        .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
-                        .environment(\.underCue, under)
-                }
-                .frame(width: sizes.leading + under)
-                .reachesWindowBottom()
                 Spacer(minLength: 0)
             }
-            .overlay(alignment: .topLeading) {
-                ZStack(alignment: .topLeading) {
-                    ForEach(0..<WideNavigation.maxPanes - 1, id: \.self) { beside($0, sizes, window: geometry.size.width) }
+            .overlay {
+                PaneRow(sizes: sizes, window: geometry.size.width, focus: focus) { index in
+                    EdgeInsets(top: 0, leading: index == 0 ? Chrome.headLead(rail: sizes.rail) : Spacing.page, bottom: 0, trailing: Spacing.page)
                 }
             }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
@@ -42,17 +34,6 @@ struct SplitRoot: View {
         .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
         .environment(\.wideWindowID, focus.windowID)
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
-    }
-
-    private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat) -> some View {
-        let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
-        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
-            PaneColumn(index: index + 1)
-        }
-        .frame(width: width)
-        .padding(.leading, origin)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .reachesWindowBottom()
     }
 
     private func railChrome(_ sizes: WideMetrics) -> some View {

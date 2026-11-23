@@ -59,7 +59,7 @@ struct SideBySideTests {
         #expect(workspace.navigation.trail == "wide session | card | session")
         workspace.drop(.card(idea.id), at: 0, replacing: true)
         #expect(workspace.navigation.trail == "wide card | session | session" && workspace.session(in: .beside(0))?.sessionID == "a", "灵感与最左的会话对调")
-        #expect(workspace.moveColumn(.main, by: 1) != nil && workspace.navigation.trail == "wide session | card | session", "键盘挪回去")
+        #expect(workspace.moveColumn(.main, by: 1) && workspace.navigation.trail == "wide session | card | session", "键盘挪回去")
 
         open("c", in: .aside, workspace)
         #expect(workspace.navigation.trail == "wide session | card | session" && workspace.session(in: .beside(1))?.sessionID == "c", "放满了，开在旁边换掉最右那块")

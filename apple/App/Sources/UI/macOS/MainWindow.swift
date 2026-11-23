@@ -6,7 +6,7 @@ struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
 
-    private var focus: WideFocus { workspace.wideFocus }
+    @State private var focus = WideFocus()
 
     var body: some View {
         CatalogGate { columns }
@@ -30,20 +30,14 @@ struct MainWindow: View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
-            let under = sizes.split ? 0 : sizes.cue
             HStack(spacing: 0) {
                 WideRail(width: sizes.rail)
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.fill, under: under, spans: sizes.spans) {
-                    PaneColumn(index: 0).environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
-                        .environment(\.pageActive, !sizes.fill)
-                        .environment(\.underCue, under)
-                }
-                .frame(width: sizes.leading + under)
                 Spacer(minLength: 0)
             }
-            .overlay(alignment: .topLeading) {
-                ZStack(alignment: .topLeading) {
-                    ForEach(0..<WideNavigation.maxPanes - 1, id: \.self) { beside($0, sizes, window: geometry.size.width, trail: trail) }
+            .overlay {
+                PaneRow(sizes: sizes, window: geometry.size.width, focus: focus) { index in
+                    let leading = index == 0 ? Chrome.headLead(rail: sizes.rail) : sizes.fill ? Chrome.toggle : Spacing.page
+                    return Self.inset(leading: leading, trailing: index == sizes.widths.count - 1 || index > 0 && sizes.fill ? trail : Spacing.page)
                 }
             }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
@@ -55,18 +49,6 @@ struct MainWindow: View {
             }
             .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0) } }
         }
-    }
-
-    private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
-        let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
-        let last = index + 2 == sizes.widths.count
-        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
-            PaneColumn(index: index + 1)
-                .environment(\.headInset, Self.inset(leading: sizes.fill ? Chrome.toggle : Spacing.page, trailing: last || sizes.fill ? trail : Spacing.page))
-        }
-        .frame(width: width)
-        .padding(.leading, origin)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func railChrome(_ sizes: WideMetrics) -> some View {

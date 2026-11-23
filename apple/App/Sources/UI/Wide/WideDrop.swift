@@ -148,28 +148,28 @@ extension WideDrop {
 #if os(iOS)
 extension WideColumnController: UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        guard slot.column != nil else { return false }
+        guard pane else { return false }
         return session.hasItemsConforming(toTypeIdentifiers: WideDrop.types.map(\.identifier))
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
-        let target = slot.column.flatMap { target(session, in: $0) }
+        let target = slot?.column.flatMap { target(session, in: $0) }
         if workspace.dropTarget != target { workspace.dropTarget = target }
         return UIDropProposal(operation: target == nil ? .cancel : .copy)
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) {
-        if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+        if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) {
-        if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
+        if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
         let target = workspace.dropTarget
         workspace.dropTarget = nil
-        guard let target, target.column == slot.column, let provider = session.items.first?.itemProvider,
+        guard let target, target.column == slot?.column, let provider = session.items.first?.itemProvider,
               let type = WideDrop.types.first(where: { provider.hasItemConformingToTypeIdentifier($0.identifier) }) else { return }
         load(provider, type) { [workspace] result in
             do {

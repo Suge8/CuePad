@@ -2,7 +2,7 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 宽屏上的一条灵感，只此一份：并排的一块、点开盖在页上的那一层（Mac 的 `CardCover`、iPad 的 `PaneColumn`）都是它。
+/// 宽屏上的一条灵感，只此一份：并排的一块、点开盖在页上的那一层（Mac 的 `CardCover`、iPad 的 `CoverLayer`）都是它。
 /// 盖着时（`covers`）它还不是这一排里的一块：收起是合上这一层，胶囊旁多一颗钮把它放到旁边并排。
 struct IdeaPane: View {
     let cardID: UUID

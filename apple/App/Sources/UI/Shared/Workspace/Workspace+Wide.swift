@@ -85,6 +85,9 @@ extension Workspace {
         guard case .wide(var state) = navigation else { return }
         openTask = nil
         let pane = WideNavigation.Pane.session(session)
+        #if os(macOS)
+        if state.panes.contains(pane) { replyFocus = session.id }
+        #endif
         if column == .main || wideRoom < 2 || state.panes[0].standsAlone {
             state.open(pane)
         } else if !state.panes.contains(pane) {
@@ -102,14 +105,14 @@ extension Workspace {
         return true
     }
 
-    /// 把这一块往旁边挪一步，回它挪到了哪；挪不了回 nil。会话与它的活预览是一个整体，一步跨过自己那一对。
-    func moveColumn(_ column: Column, by step: Int) -> Column? {
-        guard case .wide(let state) = navigation, let pane = pane(in: column) else { return nil }
+    /// 把这一块往旁边挪一步。会话与它的活预览是一个整体，一步跨过自己那一对。
+    @discardableResult func moveColumn(_ column: Column, by step: Int) -> Bool {
+        guard case .wide(let state) = navigation, let pane = pane(in: column) else { return false }
         var target = column.index + step
         if target >= 0, target < wideShown, state.anchor(target) == state.anchor(column.index) { target += step }
-        guard target >= 0, target < wideShown, let next = state.dropping(pane, at: target, replacing: true, room: wideRoom) else { return nil }
+        guard target >= 0, target < wideShown, let next = state.dropping(pane, at: target, replacing: true, room: wideRoom) else { return false }
         presentWide(next)
-        return next.panes.firstIndex(of: pane).map(Column.init(index:))
+        return true
     }
 
     func pane(in column: Column) -> WideNavigation.Pane? {

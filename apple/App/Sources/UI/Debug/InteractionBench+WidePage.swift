@@ -7,13 +7,14 @@ import AppKit
 ///   跨阈值后每一条都还在它那个滚动视图的可视区里，且没被滚回顶或底。栏宽变了内容会重新折行，离两端的距离跟着变，所以认那一条、不比距离。
 ///   读屏树认不了：没有辅助功能客户端连着时 SwiftUI 不在进程里建它。
 struct WidePage {
-    private let views: [WideSlot: [ObjectIdentifier]]
+    private let views: [ObjectIdentifier: [ObjectIdentifier]]
     private let readings: [Reading]
     let untested: [String]
     let baseline: [[String: Any]]
 
     private struct Reading {
-        let column: WideSlot
+        let column: ObjectIdentifier
+        let name: String
         let scroll: ObjectIdentifier
         let anchor: (id: AnyHashable, offset: CGFloat)
         let top: CGFloat
@@ -68,11 +69,11 @@ struct WidePage {
     private static let settleFrames = 120
 
     init(_ columns: [WideColumnView]) {
-        views = Dictionary(uniqueKeysWithValues: columns.map { ($0.slot, Self.objects(in: $0)) })
+        views = Dictionary(uniqueKeysWithValues: columns.map { (ObjectIdentifier($0), Self.objects(in: $0)) })
         baseline = columns.map { column in
             let scrolls = Self.scrollables(in: column)
             return [
-                "column": "\(column.slot)", "scrolls": Self.scrolls(in: column).map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
+                "column": "\(Self.name(column))", "scrolls": Self.scrolls(in: column).map { Self.round(($0.documentView?.frame.height ?? 0) - $0.contentView.bounds.height) },
                 "spots": InteractionBench.rows.count, "shown": scrolls.map { Self.items(in: column, shownBy: $0).count },
                 "ends": scrolls.compactMap(Self.ends).map { [Self.round($0.top), Self.round($0.bottom)] },
                 "short": Self.scrolls(in: column).enumerated().filter { !Self.isScrollable($0.element) }.map { "#\($0.offset):\(Self.round(($0.element.documentView?.frame.height ?? 0) - $0.element.contentView.bounds.height))" },
@@ -81,17 +82,17 @@ struct WidePage {
         var readings: [Reading] = [], untested: [String] = []
         for column in columns {
             let all = Self.scrolls(in: column)
-            if !all.contains(where: Self.isScrollable) { untested.append("\(column.slot):没有能滚的") }
+            if !all.contains(where: Self.isScrollable) { untested.append("\(Self.name(column)):没有能滚的") }
             for (index, scroll) in all.enumerated() where Self.isScrollable(scroll) {
                 guard let (top, bottom) = Self.ends(of: scroll), top > 1, bottom > 1 else {
-                    untested.append("\(column.slot)#\(index):没到中段")
+                    untested.append("\(Self.name(column))#\(index):没到中段")
                     continue
                 }
                 guard let anchor = Self.items(in: column, shownBy: scroll).min(by: { abs($0.offset) < abs($1.offset) }) else {
-                    untested.append("\(column.slot)#\(index):中段没认出一条")
+                    untested.append("\(Self.name(column))#\(index):中段没认出一条")
                     continue
                 }
-                readings.append(Reading(column: column.slot, scroll: ObjectIdentifier(scroll), anchor: anchor, top: top, bottom: bottom,
+                readings.append(Reading(column: ObjectIdentifier(column), name: Self.name(column), scroll: ObjectIdentifier(scroll), anchor: anchor, top: top, bottom: bottom,
                                         frame: InteractionBench.rows[anchor.id], visible: Self.visible(scroll, in: column)))
             }
         }
@@ -100,12 +101,12 @@ struct WidePage {
     }
 
     func compare(_ columns: [WideColumnView]) -> (verdict: Verdict, detail: [[String: Any]]) {
-        let hidden = Set(columns.filter(\.isHidden).map(\.slot))
-        let swapped = columns.filter { column in !hidden.contains(column.slot) && !Set(views[column.slot] ?? []).isSubset(of: Self.objects(in: column)) }
+        let hidden = Set(columns.filter(\.isHidden).map(ObjectIdentifier.init))
+        let swapped = columns.filter { column in !hidden.contains(ObjectIdentifier(column)) && !Set(views[ObjectIdentifier(column)] ?? []).isSubset(of: Self.objects(in: column)) }
         let changed = !swapped.isEmpty
         let detail = readings.map { reading -> [String: Any] in
-            let column = columns.first { $0.slot == reading.column }
-            if hidden.contains(reading.column) { return ["column": "\(reading.column)", "verdict": Verdict.ok.rawValue, "reason": Reason.kept.rawValue] }
+            let column = columns.first { ObjectIdentifier($0) == reading.column }
+            if hidden.contains(reading.column) { return ["column": reading.name, "verdict": Verdict.ok.rawValue, "reason": Reason.kept.rawValue] }
             let scroll = column.flatMap { Self.scrolls(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
             let ends = scroll.flatMap(Self.ends)
             let shown = column.flatMap { column in scroll.flatMap { Self.items(in: column, shownBy: $0).first { $0.id == reading.anchor.id } } }
@@ -113,7 +114,7 @@ struct WidePage {
             let verdict: Verdict = reason == .kept ? .ok : .broken
             let frame = InteractionBench.rows[reading.anchor.id]
             return [
-                "column": "\(reading.column)", "anchor": "\(reading.anchor.id.base)", "verdict": verdict.rawValue, "reason": reason.rawValue,
+                "column": reading.name, "anchor": "\(reading.anchor.id.base)", "verdict": verdict.rawValue, "reason": reason.rawValue,
                 "ends": [[Self.round(reading.top), Self.round(reading.bottom)], ends.map { [Self.round($0.top), Self.round($0.bottom)] } ?? []],
                 "anchorOffset": [Self.round(reading.anchor.offset), shown.map { Self.round($0.offset) as Any } ?? NSNull()],
                 "anchorFrame": [Self.json(reading.frame), Self.json(frame)],
@@ -123,13 +124,15 @@ struct WidePage {
         let verdicts = detail.compactMap { $0["verdict"] as? String }.compactMap(Verdict.init)
         if changed || verdicts.contains(.broken) {
             let objects = swapped.map { column -> [String: Any] in
-                ["column": "\(column.slot)", "swapped": Self.scrolls(in: column).map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height)) \(views[column.slot]?.contains(ObjectIdentifier($0)) == true ? "same" : "new")" },
-                 "before": views[column.slot]?.count ?? 0]
+                ["column": "\(Self.name(column))", "swapped": Self.scrolls(in: column).map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height)) \(views[ObjectIdentifier(column)]?.contains(ObjectIdentifier($0)) == true ? "same" : "new")" },
+                 "before": views[ObjectIdentifier(column)]?.count ?? 0]
             }
             return (.broken, detail + objects)
         }
         return (untested.isEmpty ? .ok : .untested, detail)
     }
+
+    private static func name(_ column: WideColumnView) -> String { column.slot.map { "\($0)" } ?? "off" }
 
     private static func objects(in column: WideColumnView) -> [ObjectIdentifier] {
         [ObjectIdentifier(column)] + scrolls(in: column).map(ObjectIdentifier.init)
