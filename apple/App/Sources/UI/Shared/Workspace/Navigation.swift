@@ -4,7 +4,7 @@ enum NavigationPane: String, CaseIterable {
     case projects, progress
 }
 
-struct NarrowNavigation {
+struct NarrowNavigation: Equatable {
     var path: [Route] = [] { didSet { dock = dock?.following(path) } }
     var sidebarOpen = false { didSet { if sidebarOpen, dock?.session == nil { dock = nil } } }
     var dock: IdeaDock?
@@ -25,7 +25,7 @@ struct IdeaDock: Equatable {
 }
 
 /// 宽屏主区从左到右的几块（`panes`，不空，窗口放得下时最多 `maxPanes` 块）。块是平等的：页、会话、灵感、活预览，谁都可以在最左。
-/// 页至多一块；独占的页（进展）自己一排，不与别的并排。一个会话、一条灵感只在一处。活预览跟着它的会话，会话离开这一排它也走。
+/// 页至多一块；独占的页（进展）自己一排，不与别的并排。一个会话、一条灵感只在一处。活预览至多一块，紧挨在它的会话右边，会话离开这一排它也走。
 struct WideNavigation: Equatable {
     enum Pane: Hashable {
         case page(Route)
@@ -54,9 +54,13 @@ struct WideNavigation: Equatable {
 
     var panes: [Pane] = [empty] {
         didSet {
-            let open = Set(sessions.map(\.id))
-            if panes.contains(where: { $0.previewed.map { !open.contains($0) } ?? false }) { panes.removeAll { $0.previewed.map { !open.contains($0) } ?? false } }
-            if panes.isEmpty { panes = [Self.empty] }
+            var next = panes
+            if let at = next.firstIndex(where: { $0.previewed != nil }) {
+                let preview = next.remove(at: at)
+                if let owner = next.firstIndex(where: { $0.session?.id == preview.previewed }) { next.insert(preview, at: owner + 1) }
+            }
+            if next.isEmpty { next = [Self.empty] }
+            if next != panes { panes = next }
         }
     }
 
@@ -103,7 +107,7 @@ struct WideNavigation: Equatable {
             next[index] = pane
         } else {
             next.insert(pane, at: index)
-            if next.count > max(1, room), let spare = next.lastIndex(where: { $0 != pane && $0.session?.id != pane.previewed }) { next.remove(at: spare) }
+            if next.count > max(1, room), let spare = next.lastIndex(where: { $0 != pane && !($0.session.map { $0.id == pane.previewed } ?? false) }) { next.remove(at: spare) }
         }
         panes = next
         return true
@@ -266,9 +270,16 @@ extension Workspace {
                 if case .session(let top)? = narrow.path.last { narrow.dock = IdeaDock(card: card, session: top.id) } else { narrow.path.append(.card(card)) }
             }
             if let overlay { narrow.path.append(overlay.route) }
+            widened = (narrow, state, overlay)
             overlay = nil
             navigation = .narrow(narrow)
         case .narrow(var state):
+            defer { widened = nil }
+            if let widened, widened.narrow == state {
+                navigation = .wide(widened.wide)
+                overlay = widened.overlay
+                return
+            }
             let covering = state.path.last.flatMap(Overlay.init)
             if covering != nil { state.path.removeLast() }
             var wide = WideNavigation()

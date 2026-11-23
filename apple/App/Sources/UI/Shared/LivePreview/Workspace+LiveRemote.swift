@@ -7,8 +7,11 @@ extension Workspace {
     func livePages(_ session: UUID) -> [URL] { liveAnswer(session)?.pages ?? [] }
 
     private func liveAnswer(_ session: UUID) -> LiveRemote.Pages? {
-        guard let route = liveRoute, route.id == session else { return nil }
-        return route.sessionID.flatMap { services.liveRemote.answers[$0] }
+        let route: SessionRoute? = switch navigation {
+        case .wide(let state): state.sessions.first { $0.id == session }
+        case .narrow: liveRoute?.id == session ? liveRoute : nil
+        }
+        return route?.sessionID.flatMap { services.liveRemote.answers[$0] }
     }
 
     func showsLivePreview(_ session: UUID) -> Bool {
@@ -34,7 +37,7 @@ extension Workspace {
     var liveSession: SessionRoute? { liveRoute }
 
     func toggleLivePreview(of session: SessionRoute? = nil) {
-        guard let route = liveRoute, session == nil || session == route else { return }
+        guard let route = session ?? liveRoute else { return }
         let opening = !showsLivePreview(route.id)
         if opening {
             guard let answer = liveAnswer(route.id), !answer.pages.isEmpty else { return }

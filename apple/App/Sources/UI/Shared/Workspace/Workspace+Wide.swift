@@ -10,7 +10,7 @@ extension Workspace {
             state.select(route)
         }
         overlay = nil
-        presentWide(state)
+        presentWide(revealingHost(state))
     }
 
     func present(_ page: Overlay) {
@@ -18,7 +18,22 @@ extension Workspace {
         #if os(macOS)
         presses.clearSelection()
         #endif
+        revealHost()
         overlay = page
+    }
+
+    /// 页那一块排在看得见的几块之后（窗口窄，最右的藏起）时挪到最左：刚选的页、盖在页上的那一层要看得见。别的块顺次右移，不丢。
+    private func revealingHost(_ state: WideNavigation) -> WideNavigation {
+        guard let width = wideFits?.width, state.host >= WideMetrics(width: width, workspace: self, navigation: state).widths.count else { return state }
+        var state = state
+        state.panes.insert(state.panes.remove(at: state.host), at: 0)
+        return state
+    }
+
+    private func revealHost() {
+        guard case .wide(let state) = navigation else { return }
+        let shown = revealingHost(state)
+        if shown != state { navigation = .wide(shown) }
     }
 
     func toggleRail(_ sizes: WideMetrics) {
@@ -42,6 +57,7 @@ extension Workspace {
         wideFits = fits
         if railDrawer, fits.rail || previous.map({ $0.rail != fits.rail }) == true { railDrawer = false }
         if cueDrawer, fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
+        if overlay != nil { revealHost() }
     }
 
     var railExpanded: Bool {
@@ -87,10 +103,10 @@ extension Workspace {
     }
 
     func moveColumn(_ column: Column, by step: Int) -> Bool {
-        guard case .wide(var state) = navigation, let pane = pane(in: column) else { return false }
+        guard case .wide(let state) = navigation, let pane = pane(in: column) else { return false }
         let target = column.index + step
-        guard target >= 0, target < wideShown, state.place(pane, at: target, replacing: true, room: wideRoom) else { return false }
-        presentWide(state)
+        guard target >= 0, target < wideShown, let next = state.dropping(pane, at: target, replacing: true, room: wideRoom) else { return false }
+        presentWide(next)
         return true
     }
 

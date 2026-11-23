@@ -58,6 +58,8 @@ final class Workspace {
             if let liveFill, !showsLivePreview(liveFill.session) { endLiveFill() }
         }
     }
+    /// 宽屏变窄那一下的样子：窄屏装不下一排里的全部（页与会话同屏、几条灵感、活预览），原样变回宽屏时照它摆回去；窄屏上动过导航就不认了。
+    @ObservationIgnored var widened: (narrow: NarrowNavigation, wide: WideNavigation, overlay: Overlay?)?
     var projectForm: ProjectFormRequest?
     var cueFocusPending = false
     let cue: CueWatch

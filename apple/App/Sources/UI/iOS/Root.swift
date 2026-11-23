@@ -123,7 +123,7 @@ struct RootShortcuts: View {
             Button("搜索") { workspace.openSearch() }.keyboardShortcut("k")
             Button("搜索") { workspace.openSearch() }.keyboardShortcut("f")
             // 搜索框没有焦点时 Esc 退出搜索（有焦点时第一下 Esc 由系统收起输入）
-            if workspace.top == .search {
+            if workspace.searching {
                 Button("退出搜索") { workspace.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
             }
             Button("添加灵感") { workspace.newCard() }.keyboardShortcut("n")

@@ -42,7 +42,9 @@ struct WideColumnHead: View {
         case .trash:
             PaneTitle(crumb: shelf, title: String(localized: "回收站"), handle: .page(page), close: close)
             tools { EmptyTrashButton() }
-        case .library: LibraryPanesSlot()
+        case .library:
+            PaneTitle(title: String(localized: "技能与规则"), handle: .page(page), close: close)
+            LibraryPanesSlot()
         case .settings: PaneTitle(title: String(localized: "设置"), handle: .page(page), close: close)
         case .conflicts: PaneTitle(title: String(localized: "两个版本"), handle: .page(page), close: close)
         default: EmptyView()
