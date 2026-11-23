@@ -172,6 +172,8 @@ def bcu(*args):
 def observe(pid):
     """看一眼：(状态号, 截图路径, 有键盘焦点的元素或 None, 窗口的 ref)。"""
     state = json.loads(bcu("observe-ui", "--pid", str(pid), "--image", "always", "--json"))
+    if "image" not in state:
+        fail("bcu 截不到这扇窗（活预览托着的实例就是这样：从预览那一头操作）")
     focused = next((n for n in state["nodes"] if n.get("state", {}).get("focused")), None)
     return state["stateId"], state["image"]["path"], focused, state["nodes"][0]["ref"]
 
