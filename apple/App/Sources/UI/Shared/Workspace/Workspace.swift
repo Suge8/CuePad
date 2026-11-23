@@ -101,14 +101,18 @@ final class Workspace {
     }
     /// 这一排变了以后回复框的焦点归谁，只在这里定。换了格的块是重新摆出来的，原来的输入框没了；
     /// 页分不清自己是新开的还是被挪动的，各自一摆出来就拿焦点的话，几页一起摆出来时谁最后摆好就归了谁。
-    /// 新进来的会话拿（只在 Mac：触屏上不替人弹键盘）；没有新进来的，拿着焦点的会话换了格就还给它。
+    /// 重新摆出来的会话里：拿着焦点的那个换了格，还给它。Mac 上另有两条（触屏上不替人弹键盘）：
+    /// 新进这一排的先拿；都不是，归最左那个（点会话条把已并排的会话开到最左、关掉左边那块）。
     private func landReplyFocus(from was: WideNavigation, to now: WideNavigation) {
+        func slot(_ session: UUID, in row: WideNavigation) -> Int? { row.panes.firstIndex { $0.session?.id == session } }
+        let remounted = now.sessions.map(\.id).filter { slot($0, in: was) != slot($0, in: now) }
+        let holder = wideFocus.current?.column.flatMap { was.panes.indices.contains($0.index) ? was.panes[$0.index].session?.id : nil }
         #if os(macOS)
-        if let opened = now.sessions.first(where: { opened in !was.sessions.contains { $0.id == opened.id } }) { return replyLanding = opened.id }
+        let lands = remounted.first { slot($0, in: was) == nil } ?? remounted.first { $0 == holder } ?? remounted.first
+        #else
+        let lands = remounted.first { $0 == holder }
         #endif
-        guard let held = wideFocus.current?.column?.index, was.panes.indices.contains(held), let holder = was.panes[held].session,
-              let index = now.panes.firstIndex(where: { $0.session?.id == holder.id }), index != held else { return }
-        replyLanding = holder.id
+        if let lands { replyLanding = lands }
     }
 
     func takeReplyLanding(_ session: UUID) -> Bool {

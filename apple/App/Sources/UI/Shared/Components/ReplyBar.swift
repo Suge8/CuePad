@@ -66,14 +66,25 @@ struct ReplyBar: View {
     private var button: ReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
     var body: some View {
-        switch reply {
-        case .answerAbove: notice("先在上面作答", icon: .above)
-        case .unanswerable: notice(Self.unanswerable, icon: .mac)
-        case .message, .answer:
-            composer.composerNotice(commandProgress != nil || expanded && config?.failure != nil) {
-                if let commandProgress { progressLine(commandProgress) }
-                if expanded { MacInputNotice(failure: config?.failure) }
+        Group {
+            switch reply {
+            case .answerAbove: notice("先在上面作答", icon: .above)
+            case .unanswerable: notice(Self.unanswerable, icon: .mac)
+            case .message, .answer:
+                composer.composerNotice(commandProgress != nil || expanded && config?.failure != nil) {
+                    if let commandProgress { progressLine(commandProgress) }
+                    if expanded { MacInputNotice(failure: config?.failure) }
+                }
             }
+        }
+        .onAppear { focused = workspace.takeReplyLanding(session.id) && composes && active && !covered || DebugHooks.preset.modelMenu }
+    }
+
+    /// 落下来的焦点只在这一条摆出来那一下认：这时在等作答、没有输入框，就作废，不留到答完题、别处正打着字时再生效。
+    private var composes: Bool {
+        switch reply {
+        case .message, .answer: true
+        case .answerAbove, .unanswerable: false
         }
     }
 
@@ -102,7 +113,6 @@ struct ReplyBar: View {
                 workspace.replyFocus = nil
                 focused = true
             }
-            .onAppear { focused = workspace.takeReplyLanding(session.id) && active && !covered || DebugHooks.preset.modelMenu }
     }
 
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
