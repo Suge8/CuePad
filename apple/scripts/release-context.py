@@ -37,6 +37,7 @@ def hold(platform):
 def verified(commit, platform):
     """合并前的本机签核只跑真 Agent 的冒烟、不跑 iOS；全量只有合并进主干后云端那一遍（swift.yml），用户拿到的构建只从它全绿的提交出。
     只认主干上的运行：分支上手动触发的那一遍用的是分支自己的工作流定义。还在跑就在这里等到它出结果（合并后那一遍约一刻钟）。"""
+    waiting = False
     while True:
         runs = json.loads(subprocess.check_output(
             ["gh", "run", "list", "--workflow", "swift.yml", "--branch", "main", "--commit", commit, "--json", "status,conclusion,url,event"],
@@ -47,7 +48,9 @@ def verified(commit, platform):
         running = [run for run in runs if run["status"] != "completed"]
         if not running:
             break
-        print(f"{commit[:9]} 的主干检查还在跑，等它出结果：{running[0]['url']}", file=sys.stderr, flush=True)
+        if not waiting:
+            print(f"{commit[:9]} 的主干检查还在跑，等它出结果：{running[0]['url']}", file=sys.stderr, flush=True)
+        waiting = True
         time.sleep(60)
     seen = "；".join(f"{run['conclusion'] or run['status']} {run['url']}" for run in runs) or "这个提交在主干上没有跑过（不在主干上，或排队时被后来的合并顶掉）"
     green = [run for run in json.loads(subprocess.check_output(
