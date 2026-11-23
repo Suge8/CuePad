@@ -74,7 +74,7 @@ struct AgentDayTests {
         app.services.bridge.setDraft(ext.id, LiveDraft(text: "先看", since: .now))
         let row = try await item("atlas")
         #expect(workspace.shown(row).label == "输出中")
-        #expect(workspace.shownInHeader(row.state, delivery: row.delivery).label == "输出中")
+        #expect(workspace.shownOnPage(row.state, delivery: row.delivery).label == "输出中")
 
         app.services.bridge.setDraft(ext.id, nil)
         #expect(workspace.shown(row).label == "思考中")

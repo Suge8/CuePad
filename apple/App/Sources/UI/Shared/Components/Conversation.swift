@@ -219,24 +219,25 @@ extension Conversation {
 }
 
 
-/// 手机会话页头的第二行只写这一页归谁、是不是最新：哪个 Agent 在做、交给 Cue 到哪一档、睡没睡、还在不在同步。
+/// 手机会话页头的第二行只写这一页归谁、是不是最新：哪个 Agent 在做、交给 Cue 到哪一档、睡了还是正在睡、还在不在同步。
 /// Agent 此刻在做什么不写在这（发送中、运行工具、用了多久、几句没送到）：对话末尾的小人（`LiveRound`）、回复框、每句话旁的送达记号已经各说了一遍，
 /// 页头又只在滚到最新时才出现（`ChatFollow.showsHeader`），正是那几处都看得见的时候。一轮收尾的那一下震动仍从这里发。
 struct SessionSubtitle: View {
     let session: SessionState
     let delivery: DeliveryRequest?
     var tier: CueTier?
+    var ending = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    private enum Fact: Hashable { case agent, handed(CueTier), ended, syncing }
+    private enum Fact: Hashable { case agent, handed(CueTier), ending, ended, syncing }
 
     private var facts: [Fact] {
         var facts: [Fact] = []
         if session.agentMark != nil { facts.append(.agent) }
         if let tier, tier != .yours { facts.append(.handed(tier)) }
-        if session.staysEnded(by: delivery, at: services.speech) { facts.append(.ended) }
+        if ending { facts.append(.ending) } else if session.staysEnded(by: delivery, at: services.speech) { facts.append(.ended) }
         if services.syncing.showsCatchingUp(on: session.hostID) { facts.append(.syncing) }
         return facts
     }
@@ -249,6 +250,7 @@ struct SessionSubtitle: View {
                 switch fact {
                 case .agent: AgentMark(session: session, font: Self.font)
                 case .handed(let tier): Text("\(Image(Icon.cue)) \(Text(tier.title(workspace.cue.name)))").foregroundStyle(palette.signature)
+                case .ending: Text("正在休眠…").foregroundStyle(palette.ink3)
                 case .ended: Text("\(Image(.ended)) \(SessionShown(status: .ended).label)").foregroundStyle(palette.ink3)
                 case .syncing: SyncingLabel()
                 }
@@ -256,7 +258,7 @@ struct SessionSubtitle: View {
         }
         .font(Self.font).lineLimit(1)
         .relaySpot(session: session.sessionID)
-        .feelsTurnEnd(workspace.shownInHeader(session, delivery: delivery).status)
+        .feelsTurnEnd(workspace.shownOnPage(session, delivery: delivery).status)
         .animation(Motion.fade, value: facts)
     }
 

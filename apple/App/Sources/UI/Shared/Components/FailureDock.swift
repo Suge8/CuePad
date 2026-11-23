@@ -10,7 +10,7 @@ struct FailureDock: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let status = workspace.shownInHeader(session, delivery: delivery).status
+        let status = workspace.shownOnPage(session, delivery: delivery).status
         let failed: Failed? = if case .failed = status { Failed(session: session, status: status) } else { nil }
         DockedCard(failed) { callout($0) }
     }

@@ -53,7 +53,7 @@ private struct SessionPageBody: View {
                                 PaneTitle(
                                     crumb: .init(digest?.project, in: workspace), title: digest?.title(at: services.speech) ?? session.title,
                                     handle: workspace.pane(in: column), close: workspace.isSplit ? { workspace.closeColumn(column) } : nil,
-                                    marks: { SessionMarks(ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }) },
+                                    marks: { SessionPaneMarks(ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }) },
                                     tools: { if let route = workspace.session(in: column) { LivePreviewTool(session: route) } })
                             }
                             .contextMenu { if secondary { menu(session, digest) } }
@@ -66,11 +66,7 @@ private struct SessionPageBody: View {
                 reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
                     if let session { menu(session, digest, tier: digest?.tier) }
                 } detail: {
-                    if ending(digest) {
-                        Text("正在休眠…").font(Typography.caption).foregroundStyle(palette.ink3)
-                    } else if let session {
-                        SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier)
-                    }
+                    if let session { SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier, ending: ending(digest)) }
                 } trailing: {
                     LivePhoneTool(session: id, zoom: zoom)
                 }
@@ -222,7 +218,7 @@ private struct DigestKey: Equatable {
 }
 
 /// 会话胶囊里名字后面的记号：已休眠、交给 Cue 的那一档。
-private struct SessionMarks: View {
+private struct SessionPaneMarks: View {
     let ended: Bool
     let tier: CueTierButton?
     @Environment(\.palette) private var palette

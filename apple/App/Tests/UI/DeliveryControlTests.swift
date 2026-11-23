@@ -68,7 +68,7 @@ struct DeliveryControlTests {
         #expect(uncertain.status == .known(.unconfirmed))
         if mode == .retry {
             #expect(DeliveryShown.phase(of: uncertain, for: session, at: .always()) == nil)
-            #expect(workspace.shownInHeader(session, delivery: uncertain).status == .failed(.network))
+            #expect(workspace.shownOnPage(session, delivery: uncertain).status == .failed(.network))
             await workspace.retry(session).value
         } else {
             #expect(MacDelivery.endProgress([uncertain], at: .always())?.inTransit != true)
