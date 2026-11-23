@@ -101,10 +101,10 @@ final class WideFocus {
     }
 
     func move(by step: Int, in workspace: Workspace) {
-        guard let source = current?.column, workspace.moveColumn(source, by: step) else { return }
+        guard let source = current?.column, let moved = workspace.moveColumn(source, by: step) else { return }
         Task {
             await NextFrame.wait()
-            focus(WideSlot(Workspace.Column(index: source.index + step)))
+            if current != WideSlot(moved) { focus(WideSlot(moved)) }
         }
     }
 }

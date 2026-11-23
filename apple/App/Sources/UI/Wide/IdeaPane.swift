@@ -68,7 +68,7 @@ struct IdeaPane: View {
 
     private var head: some View {
         PaneHead {
-            PaneTitle(crumb: .init(data?.project, in: workspace), title: data?.card.heading ?? "", handle: .card(cardID), close: close) {
+            PaneTitle(crumb: .init(data?.project, in: workspace), title: editing?.title ?? "", handle: .card(cardID), close: close) {
                 if let card = data?.card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: sharing) }
             } tools: {
                 if covers { BesideTool(cardID: cardID) }

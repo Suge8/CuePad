@@ -6,7 +6,7 @@ struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(ModalHost.self) private var modals: ModalHost?
     @Environment(\.palette) private var palette
-    @State private var focus = WideFocus()
+    private var focus: WideFocus { workspace.wideFocus }
 
     var body: some View {
         let covered = modals?.modal?.inPage == true

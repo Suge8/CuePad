@@ -6,7 +6,7 @@ struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
 
-    @State private var focus = WideFocus()
+    private var focus: WideFocus { workspace.wideFocus }
 
     var body: some View {
         CatalogGate { columns }

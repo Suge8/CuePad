@@ -21,7 +21,13 @@ struct CardEditorScreen: View {
     var body: some View {
         page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
-            .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: { detail }, trailing: { actions })
+            .floatingHeader(.verbatim(editing?.title ?? "")) {
+                if let card = data?.card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing) }
+            } detail: {
+                detail
+            } trailing: {
+                ChatAlongsideButton(cardID: cardID, editing: editing)
+            }
             .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
                 if case CueStoreError.notFound = error { return }
                 workspace.fail(error)
@@ -57,17 +63,6 @@ struct CardEditorScreen: View {
             }
         }
         .font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
-    }
-
-    @ViewBuilder private var actions: some View {
-        ChatAlongsideButton(cardID: cardID, editing: editing)
-        Menu("更多", icon: .more) {
-            if let card = data?.card, let editing {
-                InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)
-            }
-        }
-        .disabled(editing == nil)
-        .accessibilityLabel("更多")
     }
 }
 #endif

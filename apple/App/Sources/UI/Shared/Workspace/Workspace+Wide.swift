@@ -102,12 +102,14 @@ extension Workspace {
         return true
     }
 
-    func moveColumn(_ column: Column, by step: Int) -> Bool {
-        guard case .wide(let state) = navigation, let pane = pane(in: column) else { return false }
-        let target = column.index + step
-        guard target >= 0, target < wideShown, let next = state.dropping(pane, at: target, replacing: true, room: wideRoom) else { return false }
+    /// 把这一块往旁边挪一步，回它挪到了哪；挪不了回 nil。会话与它的活预览是一个整体，一步跨过自己那一对。
+    func moveColumn(_ column: Column, by step: Int) -> Column? {
+        guard case .wide(let state) = navigation, let pane = pane(in: column) else { return nil }
+        var target = column.index + step
+        if target >= 0, target < wideShown, state.anchor(target) == state.anchor(column.index) { target += step }
+        guard target >= 0, target < wideShown, let next = state.dropping(pane, at: target, replacing: true, room: wideRoom) else { return nil }
         presentWide(next)
-        return true
+        return next.panes.firstIndex(of: pane).map(Column.init(index:))
     }
 
     func pane(in column: Column) -> WideNavigation.Pane? {
