@@ -211,18 +211,55 @@ final class WideColumnView: NSView {
         let x = convert(sender.draggingLocation, from: nil).x
         let target = slot.column.flatMap { WideDrop.target(types, dragged: drop.pane, at: x / max(1, bounds.width - drop.under), in: $0, workspace: workspace) }
         if workspace.dropTarget != target { workspace.dropTarget = target }
-        return target == nil ? [] : .copy
+        guard target == nil else {
+            pass(nil, sender)
+            return .copy
+        }
+        let onPage = slot.column.flatMap { workspace.pane(in: $0)?.page } != nil
+        return pass(onPage && types.contains(.cuepadCard) ? cardTarget(sender) : nil, sender)
+    }
+
+    /// 主区不接的那一下转给底下的页：看板换列、灵感拖到任务上、任务行排序都是页里自己的落点。
+    /// AppKit 按登记的类型认定最上面这层（`catcher`）是落点以后，它答"不接"也不会再去问底下的视图，得自己转。
+    private weak var passed: NSView?
+
+    /// 底下接卡的那一层：指针下最深的、登记了卡这种类型的视图（AppKit 自己也这么找）。SwiftUI 的每个落点是一层这样的视图，登记的是卡的上位类型。
+    /// 只认卡：拖放还带着系统附的文件承诺，照"带着的任何一种"去找，会转给回复框、对话里的文字视图，被它们当文件收下。
+    private func cardTarget(_ sender: any NSDraggingInfo) -> NSView? {
+        func find(_ view: NSView) -> NSView? {
+            guard !view.isHidden else { return nil }
+            // 容器不先量：SwiftUI 的容器视图不一定框得住里面的
+            for inner in view.subviews.reversed() { if let found = find(inner) { return found } }
+            let takes = view.registeredDraggedTypes.contains { Self.card.contains($0.rawValue) }
+            return takes && view.bounds.contains(view.convert(sender.draggingLocation, from: nil)) ? view : nil
+        }
+        return find(host)
+    }
+
+    private static let card = Set(([.cuepadCard] + UTType.cuepadCard.supertypes).map(\.identifier))
+
+    @discardableResult private func pass(_ view: NSView?, _ sender: any NSDraggingInfo) -> NSDragOperation {
+        if passed !== view { passed?.draggingExited(sender) }
+        defer { passed = view }
+        guard let view else { return [] }
+        return passed === view ? view.draggingUpdated(sender) : view.draggingEntered(sender)
     }
 
     override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        if let sender { pass(nil, sender) }
         if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
+        passed = nil
         if let column = slot.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let passed {
+            self.passed = nil
+            return passed.prepareForDragOperation(sender) && passed.performDragOperation(sender)
+        }
         let target = workspace.dropTarget
         workspace.dropTarget = nil
         guard let target, target.column == slot.column else { return false }
