@@ -135,7 +135,13 @@ private struct FlyingWords: View {
             .opacity(gone ? 0 : developed ? landing?.opacity ?? 1 : 1)
             .offset(x: spot.x - base.x, y: spot.y - base.y)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .onChange(of: landing, initial: true) { fly(to: landing) }
+            // 落点是气泡排出来的那一次更新里报的，那一次重（整段对话多排一条、让出高度）：弹簧从那一刻起算的话，等它画上屏已经走掉一大截，
+            // 看着是字停了一下再一跳到位。等那一帧提交了再起飞；一帧里接连报的几个落点（对话还在定最新处）只认最后一个
+            .task(id: landing) {
+                if landing != nil { await NextFrame.wait() }
+                guard !Task.isCancelled else { return }
+                fly(to: landing)
+            }
             .task {
                 try? await Task.sleep(for: Motion.Send.wait)
                 guard !Task.isCancelled, flight.landing == nil else { return }
@@ -161,6 +167,7 @@ private struct FlyingWords: View {
         let to = landing.frame.origin
         move(\.y, Motion.Send.lift, from: spot.y, to: to.y) { spot.y = to.y }
         move(\.x, Motion.Send.drift, from: spot.x, to: to.x) { spot.x = to.x }
+        if legs.moving.isEmpty { flight.land(trip) }
     }
 
     /// 终点没挪（同一处又报了一次，只差小数点后几位）就不开新的一段：值没变的动画当场回调完成，会在半路落地。
@@ -176,7 +183,9 @@ private struct FlyingWords: View {
         withAnimation(animation, completionCriteria: .logicallyComplete, change) {
             guard legs[keyPath: axis] == current else { return }
             legs.moving.remove(axis)
-            if legs.moving.isEmpty { flight.land(trip) }
+            // 落点刚挪、新的一段还在等那一帧（`task(id: landing)`）：不在旧终点落下，等它飞完
+            let retargeted = flight.landing.map { abs($0.frame.minX - spot.x) >= Self.still || abs($0.frame.minY - spot.y) >= Self.still } ?? false
+            if legs.moving.isEmpty, !retargeted { flight.land(trip) }
         }
     }
 

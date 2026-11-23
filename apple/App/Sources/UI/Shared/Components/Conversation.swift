@@ -32,7 +32,7 @@ struct Conversation: View {
                 Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3).frame(maxWidth: .infinity)
             }
             if all.allSatisfy(\.role.isOutgoing), let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, window: window, size: Self.segment) { items in
+            ChatSegments(items: all, window: window, size: Self.segment, arrivesLate: \.arrivesLate) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, newest: newest, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
@@ -76,7 +76,7 @@ struct Conversation: View {
 
     private var liveRound: some View {
         LiveRound(session: session, messages: messages, floating: floating) {
-            LiveFigure(live: FigureLive(session: session), handoff: FigureHandoff(reply: messages.last { $0.role == .known(.pi) }?.at))
+            LiveFigure(live: FigureLive(session: session), handoff: FigureHandoff(reply: Chat.answer(in: messages)?.at))
         }
     }
 }
@@ -84,7 +84,8 @@ struct Conversation: View {
 
 #if os(macOS)
 /// Mac 上开着的会话：正在说的那句逐字接在过程后面，说完（转去调工具）也留在原处，直到它落进过程或回答，没有一下空白。
-/// 说着的时候与回答已落进对话、这一轮还没收尾时，角色先让开
+/// 说着的时候与回答已落进对话、这一轮还没收尾时，角色先让开。被停下的那一轮落成的那条不是这一轮的回答（`Chat.answer`）：
+/// 那句已经在对话里、不再摆，角色留着
 struct SessionDraft: View {
     let slot: Bridge.Slot
     let session: SessionState
@@ -93,14 +94,16 @@ struct SessionDraft: View {
 
     var body: some View {
         let draft = slot.draft, newestReply = messages.last { $0.role == .known(.pi) }
-        let answered = draft?.landed(newestReply: newestReply?.at, record: newestReply?.id) ?? false
+        let landed = draft?.landed(newestReply: newestReply?.at, record: newestReply?.id) ?? false
+        let answer = Chat.answer(in: messages)
+        let answered = landed && answer?.id == newestReply?.id
         let said = session.pendingTools?.lastSaid
         let inProcess = draft.map { draft in said.map { draft.landed(newestReply: $0.at, record: $0.record) } ?? false } ?? false
         let running = session.runtimeState.known?.isTurnRunning == true
-        let shown = draft.flatMap { !answered && !inProcess && (slot.speaking || running) ? $0 : nil }
+        let shown = draft.flatMap { !landed && !inProcess && (slot.speaking || running) ? $0 : nil }
         let speaking = slot.speaking && shown != nil
         LiveRound(session: session, messages: messages, draft: shown?.text, speaking: speaking, swapsInPlace: true, floating: floating) {
-            LiveFigure(live: speaking || answered && running ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
+            LiveFigure(live: speaking || answered && running ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: answer?.at, speaking: speaking))
         }
     }
 }
@@ -148,7 +151,7 @@ private struct ChatSegment: View, Equatable {
     @ViewBuilder private func row(_ entry: ChatEntry, last: Bool) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue, fadesIn: entry.replaces == nil, said: entry.replaces) {
+            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue, fadesIn: entry.arrivesLate, said: entry.replaces) {
                 MessageActions(text: SkillCall.shown(entry.text), kind: .mine, session: session)
             }
                 .padding(.top, Self.turnGap)
@@ -199,7 +202,7 @@ private struct RoundEndNote: View {
         NoteLine(icon: notice == .declined ? .declined : .endSession) { Text(verbatim: notice.label) }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            .transition(.entry)
+            .transition(.arrival)
     }
 }
 

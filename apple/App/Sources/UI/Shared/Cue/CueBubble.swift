@@ -22,10 +22,6 @@ enum CueBubble {
         case .leading: UnevenRoundedRectangle(topLeadingRadius: top, bottomLeadingRadius: Radius.chip, bottomTrailingRadius: Radius.sheet, topTrailingRadius: Radius.sheet)
         }
     }
-
-    /// 新说出的一颗淡入。贴着最新时滚动区先把上面的对话撑上去、让出它的位置（`ChatScroll.rise`，渲染端平移），让开了它再在终位淡入：
-    /// 让的途中它还在回复框的玻璃后面，那时露出来会被折射成怪字。不缩放：有字的一块缩放时每帧重画字形（`Bubble.swift`）。
-    static let arrival = AnyTransition.opacity.animation(Motion.fade.delay(Motion.Glide.duration))
 }
 
 struct CueSays: View {

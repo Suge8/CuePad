@@ -132,12 +132,14 @@ final class GrowingTextView: UITextView {
         invalidateIntrinsicContentSize()
     }
 
+    /// 占位字只占一行，放不下截尾：框空着时的高只看字号，不随占位字长短变（"回复 <会话标题>"，标题长时不把框撑高）。
     func setPrompt(_ text: String) {
-        let content = NSAttributedString(string: text, attributes: [.font: font!, .paragraphStyle: paragraph])
+        let line = paragraph.mutableCopy() as! NSMutableParagraphStyle
+        line.lineBreakMode = .byTruncatingTail
+        let content = NSAttributedString(string: text, attributes: [.font: font!, .paragraphStyle: line])
         guard placeholder.attributedText != content else { return }
         placeholder.attributedText = content
         setNeedsLayout()
-        invalidateIntrinsicContentSize()
     }
 
     private var placeholderInset: CGFloat { caretRect(for: beginningOfDocument).maxX + 1 }
@@ -181,9 +183,7 @@ final class GrowingTextView: UITextView {
     }
 
     func fittingHeight(width: CGFloat) -> CGFloat {
-        if text.isEmpty {
-            return max(Self.rulerHeight(font: font!, paragraph: paragraph, lines: 1), promptSize(width: width).height)
-        }
+        if text.isEmpty { return Self.rulerHeight(font: font!, paragraph: paragraph, lines: 1) }
         return heights.height(of: textStorage.string as NSString, width: width, em: font?.pointSize ?? 0, limit: maxHeight) { prefix in
             return Self.measure(prefix, width: width, font: font!, paragraph: paragraph)
         }
@@ -223,7 +223,6 @@ final class GrowingTextView: UITextView {
         self.pasteboard = pasteboard
         super.init(frame: .zero, textContainer: nil)
         applyTypography(traitCollection)
-        placeholder.numberOfLines = 0
         placeholder.isAccessibilityElement = false
         addSubview(placeholder)
     }

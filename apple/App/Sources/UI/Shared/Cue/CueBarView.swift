@@ -9,7 +9,7 @@ struct CueBarView: View {
             CueStatusRow()
                 .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
                 .glass(in: .rect(cornerRadius: Radius.sheet))
-            CueComposer(style: .bar(opens: bar?.opens ?? 0), dismiss: { bar?.hide() }) { bar?.hide() }
+            CueComposer(style: .bar(opens: bar?.opens ?? 0), dismiss: { bar?.hide() }, sent: { bar?.hide() })
         }
         .frame(width: Self.width)
     }

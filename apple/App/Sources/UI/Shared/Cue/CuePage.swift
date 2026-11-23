@@ -77,7 +77,7 @@ struct CuePage: View {
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             ChatStack(spacing: 0) {
-                ChatSegments(items: rows, window: window, size: Self.segment, spare: Self.spare) { items in
+                ChatSegments(items: rows, window: window, size: Self.segment, spare: Self.spare, arrivesLate: { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) }) { items in
                     CueSegment(rows: items.map { item in
                         CueRow(
                             row: item, shots: thread.shots[item.id] ?? [],
@@ -117,7 +117,7 @@ struct CuePage: View {
             CueVoicePanel()
             #endif
             if !calling, cue.canHear || workspace.layout == .narrow {
-                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                CueComposer(style: .page, takesFocusRequests: true, sent: { follow.sent() })
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

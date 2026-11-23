@@ -74,6 +74,8 @@ nonisolated final class ChatAnchor: Sendable {
         }
     }
 
+    var laidRuns: Set<UUID> { state.withLock { Set($0.runs.lazy.map(\.id)) } }
+
     func height(of run: UUID, ids: [UUID]) -> CGFloat? {
         state.withLock { state in state.segments[run].flatMap { $0.ids == ids ? $0.height : nil } }
     }

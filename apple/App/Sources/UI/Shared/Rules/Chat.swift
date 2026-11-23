@@ -19,6 +19,15 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var fromCue = false
     /// 你说的这句在途时已经作为请求（`outgoing`）摆在对话里：落库后换成的这一条接在同一处，不再淡入一遍；还在飞的话按请求的编号接着认领（`SendFlight`）。
     var replaces: UUID?
+
+    /// 到的时候等上面让开、再在终位淡入（`AnyTransition.arrival`）：别处发来的一句、一轮被停下的那行字。
+    var arrivesLate: Bool {
+        switch role {
+        case .user: replaces == nil
+        case .notice(let notice): !notice.changesContext
+        default: false
+        }
+    }
 }
 
 private nonisolated extension ChatEntry {
@@ -163,6 +172,23 @@ nonisolated enum Chat {
 
     static func keys(_ tools: ChatMessage.Tools?) -> Set<String> {
         Set(tools?.items.compactMap { $0.record?.uuidString ?? $0.calls?.first } ?? [])
+    }
+
+    /// 最新那条做完的回答。被停下的那一轮说过的话也落成一条回答，后面跟着"已停止"，不算：在跑时再说一句是打断这一轮、以这句接着做，
+    /// 各家这时状态一路是在跑，把那条当成在跑的这一轮的回答，角色就交给它、让开，整段思考都不见了。
+    static func answer(in messages: [ChatMessage]) -> ChatMessage? {
+        var stopped = false
+        for message in messages.reversed() {
+            switch message.role.known {
+            case .system: if message.notice == .stopped || message.notice == .declined { stopped = true }
+            case .user, .machine: stopped = false
+            case .pi:
+                guard stopped else { return message }
+                stopped = false
+            case .answer, nil: break
+            }
+        }
+        return nil
     }
 
     static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {

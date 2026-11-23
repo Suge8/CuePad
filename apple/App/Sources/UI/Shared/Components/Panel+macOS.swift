@@ -71,9 +71,7 @@ final class PanelHost {
         entry.open = open
         entry.inPlace = inPlace
         if let index = shown.firstIndex(where: { $0.id == id }) {
-            let wasOpen = shown[index].open
-            shown[index] = entry
-            if wasOpen && !open { closed(id) } else if !wasOpen && open { opened(entry) }
+            if shown[index].open == open { shown[index] = entry } else if open { opened(entry) } else { closed(entry) }
             return
         }
         if open { opened(entry) } else { shown.append(entry) }
@@ -86,7 +84,7 @@ final class PanelHost {
             responders[id] = Weak(value: window.firstResponder)
             window.makeFirstResponder(nil)
         }
-        withAnimation(entry.style.motion) {
+        withAnimation(entry.style.arrival) {
             if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
         }
         if monitor == nil {
@@ -98,15 +96,15 @@ final class PanelHost {
 
     func hide(_ id: UUID) {
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
-        withAnimation(shown[index].style.motion) { _ = shown.remove(at: index) }
+        withAnimation(shown[index].style.departure) { _ = shown.remove(at: index) }
         areas[id] = nil
         released(id)
     }
 
-    private func closed(_ id: UUID) {
-        guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
-        shown[index].open = false
-        released(id)
+    private func closed(_ entry: Shown) {
+        guard let index = shown.firstIndex(where: { $0.id == entry.id }) else { return }
+        withAnimation(entry.style.departure) { shown[index] = entry }
+        released(entry.id)
     }
 
     private func released(_ id: UUID) {
@@ -167,11 +165,17 @@ private struct YieldsFocusWhenCovered: ViewModifier {
 }
 
 private extension PanelStyle {
-    var motion: Animation? {
+    /// 居中的浮窗与气泡同一种来法：升一小段、淡入（`BubblePlacement.rise`）；走是原路退回，只用淡出那么长：人已经去点下一处了。
+    var arrival: Animation {
         switch self {
-        case .fullScreen: Motion.fade
-        case .sheet: nil
-        case .bare: Motion.fade
+        case .fullScreen, .bare: Motion.fade
+        case .sheet, .bubble: Motion.nudge
+        }
+    }
+
+    var departure: Animation {
+        switch self {
+        case .fullScreen, .bare, .sheet: Motion.fade
         case .bubble: Motion.nudge
         }
     }
@@ -327,33 +331,34 @@ private struct PanelLayer: View {
         }
     }
 
-    private func modal(_ shown: PanelHost.Shown) -> some View {
-        ZStack {
-            if shown.open {
-                palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
-            }
-            Group {
-                if case .bare(let from) = shown.style {
-                    BareStage(from: from) { shown.content.background { area(shown.id) } }
-                } else {
-                    shown.content
-                        .background { area(shown.id) }
-                        .clipShape(.rect(cornerRadius: Radius.field))
-                        .rowContainer(.rect(cornerRadius: Radius.field))
-                        .glass(in: .rect(cornerRadius: Radius.field))
-                }
-            }
-                .accessibilityAddTraits(.isModal)
-                .padding(Self.margin)
-                .opacity(shown.open ? 1 : 0)
-                .allowsHitTesting(shown.open)
-                .disabled(!shown.open)
-                .accessibilityHidden(!shown.open)
-                .environment(\.pageActive, shown.open)
-                .environment(\.pagePrefetch, !shown.open)
-                .environment(\.panelCovered, host.covers(shown.id))
+    /// 幕与浮窗各自进出（并排放进 `ForEach`，不套一层）：留着不撤的那一份（搜索）开合只改 `open`，不留的整份插入、撤走，两种走同一段。
+    @ViewBuilder private func modal(_ shown: PanelHost.Shown) -> some View {
+        let risen = shown.open || shown.style != .sheet || reduceMotion
+        if shown.open {
+            palette.backdrop.ignoresSafeArea().accessibilityHidden(true).transition(.opacity)
         }
-        .transition(.opacity)
+        Group {
+            if case .bare(let from) = shown.style {
+                BareStage(from: from) { shown.content.background { area(shown.id) } }
+            } else {
+                shown.content
+                    .background { area(shown.id) }
+                    .clipShape(.rect(cornerRadius: Radius.field))
+                    .rowContainer(.rect(cornerRadius: Radius.field))
+                    .glass(in: .rect(cornerRadius: Radius.field))
+            }
+        }
+            .accessibilityAddTraits(.isModal)
+            .padding(Self.margin)
+            .opacity(shown.open ? 1 : 0)
+            .offset(y: risen ? 0 : BubblePlacement.rise)
+            .allowsHitTesting(shown.open)
+            .disabled(!shown.open)
+            .accessibilityHidden(!shown.open)
+            .environment(\.pageActive, shown.open)
+            .environment(\.pagePrefetch, !shown.open)
+            .environment(\.panelCovered, host.covers(shown.id))
+            .transition(shown.style == .sheet && !reduceMotion ? .offset(y: BubblePlacement.rise).combined(with: .opacity) : .opacity)
     }
 
     private var bubbles: some View {

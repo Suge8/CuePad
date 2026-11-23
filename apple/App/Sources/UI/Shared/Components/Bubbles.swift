@@ -4,6 +4,11 @@ import SwiftUI
 
 extension AnyTransition {
     static let entry = AnyTransition.opacity.animation(Motion.fade)
+
+    /// 对话末尾新到的一颗（气泡、提示）淡入。贴着最新时滚动区先把上面的对话撑上去、让出它的位置（`ChatScroll.rise`，渲染端平移），让开了它再在终位淡入：
+    /// 让的途中它在终位下方——压着留在原处的角色，Cue 页上还在回复框的玻璃后面（那时露出来会被折射成怪字）。不缩放：有字的一块缩放时每帧重画字形（`Bubble.swift`）。
+    /// 用它的那几种要报给分段（`ChatSegments.arrivesLate`）：新到的正好起了一段时，段里各条自己的进场不播。
+    static let arrival = AnyTransition.opacity.animation(Motion.fade.delay(Motion.Glide.duration))
 }
 
 enum BubbleLook: Equatable {
@@ -68,7 +73,7 @@ struct UserBubble<Menu: View>: View {
             #endif
             .contextMenu { menu }
         }
-        .transition(fadesIn ? .entry : .identity)
+        .transition(fadesIn ? .arrival : .identity)
     }
 }
 
@@ -124,14 +129,16 @@ struct BubbleText: View {
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 if let quote { QuoteLine(quote: quote) }
                 if truncated {
-                    Fold(open: $open, edge: .bottom) {
+                    RisingFold(open: $open, alignment: .trailing) {
                         DisclosureChevron(open: open)
-                            .frame(maxWidth: .infinity, minHeight: Self.toggle, alignment: .trailing).contentShape(.rect)
+                            .frame(maxWidth: Self.toggleWidth, minHeight: Self.toggle, alignment: .trailing).contentShape(.rect)
                             .padding(.bottom, -Spacing.item)
                             .accessibilityLabel(open ? Text("收起") : Text("展开"))
-                    } content: { words }
+                    } content: { unfolded in
+                        words(unfolded: unfolded)
+                    }
                 } else {
-                    words
+                    words(unfolded: false)
                 }
             }
         }
@@ -143,14 +150,19 @@ struct BubbleText: View {
             .animation(Motion.fade, value: trip)
     }
 
-    private var words: some View {
-        Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: open ? nil : foldedLines)
+    private func words(unfolded: Bool) -> some View {
+        Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: unfolded ? nil : foldedLines)
             .font(Typography.reading).foregroundStyle(palette.ink)
-            .background(alignment: .topLeading) { if let foldedLines, !open { truncationProbe(lineLimit: foldedLines) } }
+            .background(alignment: .topLeading) { if let foldedLines, !unfolded { truncationProbe(lineLimit: foldedLines) } }
             .fadesEdge(.bottom, when: truncated && !open)
     }
 
     private static let toggle: CGFloat = 20
+    #if os(macOS)
+    private static let toggleWidth: CGFloat? = nil
+    #else
+    private static let toggleWidth: CGFloat? = .infinity
+    #endif
 
     private func truncationProbe(lineLimit: Int) -> some View {
         GeometryReader { shown in
