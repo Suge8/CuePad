@@ -85,7 +85,7 @@ final class Workspace {
     /// 新进这一排的会话，它的回复框摆出来时接过焦点（`settle` 定，那个回复框摆出来时取走）。只在 Mac：触屏上不替人弹键盘。
     /// 页不自己一摆出来就拿：启动时几页一起摆出来、答完题输入框重新出来，都会从别处把焦点拿走。
     @ObservationIgnored private var replyLanding: UUID?
-    /// 刚从这一排右头走掉的块：滑出去之前照旧画着（`PaneRow`），滑完撤掉。别处走掉的当场就没了，旁边的块滑过来补上。
+    /// 刚从这一排右头走掉的块（它右边没有留下来的）：滑出去之前照旧画着（`PaneRow`），滑完撤掉。别处走掉的当场就没了，旁边的块滑过来补上。
     private(set) var leaving: [WideNavigation.Pane] = []
     @ObservationIgnored private var leavingDone: Task<Void, Never>?
 
@@ -93,7 +93,7 @@ final class Workspace {
         #if os(macOS)
         if let opened = now.sessions.first(where: { opened in !was.sessions.contains { $0.id == opened.id } }) { replyLanding = opened.id }
         #endif
-        leave(was.panes.dropFirst(now.panes.count).filter { gone in gone.page == nil && !now.panes.contains { WideMetrics.Piece($0) == WideMetrics.Piece(gone) } })
+        leave(was.panes.dropFirst(now.panes.count).reversed().prefix { $0.page == nil && !now.panes.contains($0) })
         let moved = was.panes[was.host] != now.panes[now.host]
         if moved || openCard.map({ now.panes.contains(.card($0)) }) == true { overlay = nil }
         #if os(macOS)
@@ -104,9 +104,9 @@ final class Workspace {
         #endif
     }
 
-    private func leave(_ panes: [WideNavigation.Pane]) {
+    private func leave(_ panes: some Collection<WideNavigation.Pane>) {
         guard !panes.isEmpty else { return }
-        leaving += panes
+        leaving = leaving.filter { !panes.contains($0) } + panes
         leavingDone?.cancel()
         leavingDone = Task {
             guard (try? await Task.sleep(for: WideSlide.duration)) != nil else { return }

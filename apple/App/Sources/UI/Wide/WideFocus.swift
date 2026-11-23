@@ -141,6 +141,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
 
     /// 撤掉的块当场不画、不留内容：嵌着的托管视图同外面断开时会把页从头再摆一遍，摆的是下一帧就扔的东西。
     static func dismantleNSView(_ view: WideColumnView, coordinator: ()) {
+        view.yieldsFocus = view.holdsFocus
         view.isHidden = true
         view.host.rootView = AnyView(EmptyView())
     }
@@ -151,6 +152,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WideColumnView, context: Context) {
+        if slot == nil, view.slot != nil, view.holdsFocus { Task { [focus] in focus.focus(.main) } }
         view.slot = slot
         if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape, leading: slot == .main, arrival: arrival) }
         view.drop.under = under
@@ -209,6 +211,17 @@ final class WideColumnView: NSView {
     }
 
     required init?(coder: NSCoder) { nil }
+
+    var holdsFocus: Bool { (window?.firstResponder as? NSView)?.isDescendant(of: self) == true }
+    /// 撤掉时焦点还在这一块里：等它离开窗口，交给最左那块。当场交的话，这块里的页随后拆掉时 SwiftUI 把窗口的焦点又清一次。
+    /// 滑走的块（`slot` 变成 nil）还留在窗口里，当场就交（`WideColumnHost.updateNSView`）。
+    var yieldsFocus = false
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil, yieldsFocus { Task { [focus] in focus.focus(.main) } }
+    }
+
     override func layout() {
         super.layout()
         host.frame = bounds

@@ -77,10 +77,21 @@ struct ReplyBar: View {
                 }
             }
         }
-        .onAppear { focused = workspace.takeReplyLanding(session.id) && composes && active && !covered || DebugHooks.preset.modelMenu }
+        .onAppear {
+            let landed = workspace.takeReplyLanding(session.id) && active && !covered
+            focused = (takesAsk() || landed) && composes || DebugHooks.preset.modelMenu
+        }
+        .onChange(of: workspace.replyFocus) { if takesAsk(), composes { focused = true } }
     }
 
-    /// 落下来的焦点只在这一条摆出来那一下认：这时在等作答、没有输入框，就作废，不留到答完题、别处正打着字时再生效。
+    /// 点名要这一条接焦点的请求（`Workspace.replyFocus`）。同落下来的焦点一样只在提出那一下认（这一条摆出来、摆着时被点名）：
+    /// 这时在等作答、没有输入框，就作废，不留到答完题、别处正打着字时再生效。
+    private func takesAsk() -> Bool {
+        guard workspace.replyFocus == session.id else { return false }
+        workspace.replyFocus = nil
+        return true
+    }
+
     private var composes: Bool {
         switch reply {
         case .message, .answer: true
@@ -108,11 +119,6 @@ struct ReplyBar: View {
             .onChange(of: canStop) { workspace.launching.settle(session) }
             .onDisappear { workspace.launching.settle(session) }
             .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
-            .onChange(of: workspace.replyFocus, initial: true) {
-                guard workspace.replyFocus == session.id else { return }
-                workspace.replyFocus = nil
-                focused = true
-            }
     }
 
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
