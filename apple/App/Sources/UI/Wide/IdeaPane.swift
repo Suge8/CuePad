@@ -54,10 +54,6 @@ struct IdeaPane: View {
             close()
             workspace.open(card)
         }
-        .task(id: editing?.saveState) {
-            guard let editing, editing.saveState == .saved, await SaveState.linger() else { return }
-            editing.settleSaved()
-        }
         .onDisappear { editing?.leave() }
     }
 
@@ -74,40 +70,11 @@ struct IdeaPane: View {
         PaneHead {
             PaneTitle(crumb: .init(data?.project, in: workspace), title: data?.card.heading ?? "", handle: .card(cardID), close: close) {
                 if let card = data?.card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: sharing) }
-            } marks: {
-                SaveMark(state: editing?.saveState ?? .idle)
             } tools: {
                 if covers { BesideTool(cardID: cardID) }
             }
         }
     }
-}
-
-/// 胶囊里只说存没存上：存着转圈、存完打一会儿勾、没存上写出来。那一格一直占着，来回换时胶囊不变宽。
-/// 改于哪天、置没置顶不进胶囊：墙上那张卡上有，挤在名字后面是一串大小不一的小字。
-private struct SaveMark: View {
-    let state: SaveState
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Group {
-            if state == .failed, let text = state.text {
-                Text(text).font(Typography.toolbarSubtitle).foregroundStyle(palette.failure).fixedSize()
-            } else {
-                Color.clear.frame(width: Self.side, height: Self.side).overlay {
-                    switch state {
-                    case .saving: Spinner(.mini).accessibilityLabel(Text(state.text ?? "")).transition(.opacity)
-                    case .saved: Image(.checked).imageScale(.small).accessibilityLabel(Text(state.text ?? "")).transition(.opacity)
-                    case .idle, .failed: EmptyView()
-                    }
-                }
-            }
-        }
-        .foregroundStyle(palette.ink3)
-        .animation(Motion.fade, value: state)
-    }
-
-    private static let side: CGFloat = 12
 }
 
 /// 把盖着的这条灵感放到底下那一块的右边并排：底下是会话就是边聊边看。也可以直接拖它的胶囊。

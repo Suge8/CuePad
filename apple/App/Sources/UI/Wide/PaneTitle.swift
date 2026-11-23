@@ -15,9 +15,18 @@ extension PaneCrumb {
     }
 }
 
-/// 宽屏每一块顶上那颗胶囊，全 App 只此一种，都在这一块的左上角：上一级 / 名字 · 记号 · 这一块直接可点的钮 · 收起。
-/// 名字是这一块的把手（`handle`）：拖进主区换位、并排（`WideDrop`）。这样东西自己的操作点名字后面的箭头出，Mac 上右键名字也出；
-/// 名字自己不当菜单钮：Mac 的菜单按下就弹，按住拖不起来。iPad 的名字不挂长按菜单：长按是拎起，挂了就先弹菜单、挪了才拎得起。
+/// 胶囊里的格：胶囊四周只留 `inset`，里面每样东西是一格，格与格紧挨着、自己带左右的空，胶囊不再另垫。
+/// 字是一颗药丸（左右各 `pad`）、图标是一个圆（`side`）；悬停底就是这一格，离胶囊的边一圈 `inset`，不会伸出去被圆角裁掉。
+/// 不可点的记号贴着前一格，自己只带右边那一截 `pad`。
+enum PaneCell {
+    static let inset = Spacing.tight
+    static let pad = Spacing.item
+    static var side: CGFloat { Chrome.control - 2 * inset }
+}
+
+/// 宽屏每一块顶上那颗胶囊，全 App 只此一种，都在这一块的左上角：上一级 / 名字 · 记号 · 这一块直接可点的钮 · 收起，每样是一格（`PaneCell`）。
+/// 名字是这一块的把手（`handle`）：按住拖进主区换位、并排（`WideDrop`）。这样东西自己的操作从名字出：Mac 上名字连箭头是一格，
+/// 点一下、右键都出，按住拖出去是挪（`PaneGrip`）；iPad 的长按留给拎起，点名字后面的箭头出（系统菜单按下就弹，名字当菜单钮就拖不起来）。
 struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
     private let crumb: PaneCrumb?
     private let title: String
@@ -28,6 +37,9 @@ struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
     private let tools: Tools
     @Environment(\.wideWindowID) private var windowID
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    @State private var hovered = false
+    #endif
 
     init(
         crumb: PaneCrumb? = nil, title: String, handle: WideNavigation.Pane? = nil, close: (() -> Void)? = nil,
@@ -44,60 +56,71 @@ struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
 
     private var opens: Bool { Items.self != EmptyView.self }
 
+    private var drag: PaneGrip.Drag? {
+        guard let handle, let windowID, let column = DraggedColumn(windowID: windowID, handle) else { return nil }
+        return (column, handle)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            HStack(spacing: Spacing.glyph) {
-                if let crumb {
-                    Button(action: crumb.action) { Text(verbatim: crumb.title).fontWeight(.regular).lineLimit(1) }
-                        .buttonStyle(PressStyle(.inline))
-                        .foregroundStyle(palette.ink3)
-                    Text(verbatim: "/").fontWeight(.regular).foregroundStyle(palette.ink3).opacity(0.5).fixedSize().readerHidden(true)
+            if let crumb {
+                Button(action: crumb.action) {
+                    Text(verbatim: crumb.title).fontWeight(.regular).lineLimit(1)
+                        .padding(.horizontal, PaneCell.pad).frame(height: PaneCell.side).contentShape(.capsule)
                 }
-                name
-                if opens {
-                    Menu { menu.labelStyle(.titleAndIcon) } label: {
-                        Chevron(.expand).foregroundStyle(palette.ink3)
-                            .padding(.horizontal, Spacing.tight).frame(height: Chrome.control).contentShape(.rect)
-                    }
-                    #if os(macOS)
-                    .menuStyle(.button).menuIndicator(.hidden).fixedSize()
-                    #endif
-                    .buttonStyle(PressStyle(.inline))
-                    .padding(.horizontal, -Spacing.tight)
-                    .accessibilityLabel(Text("\(title) 的操作"))
-                }
-                marks
+                .buttonStyle(PressStyle(.control))
+                .foregroundStyle(palette.ink3)
+                Text(verbatim: "/").fontWeight(.regular).foregroundStyle(palette.ink3).opacity(0.5).fixedSize().padding(.horizontal, Spacing.hair).readerHidden(true)
             }
-            .padding(.trailing, Spacing.block - PaneClose.inset)
+            name
+            marks
             HStack(spacing: 0) { tools }.labelStyle(.iconOnly).buttonStyle(PaneToolStyle())
             if let close { PaneClose(action: close) }
         }
         .font(Typography.toolbarTitle)
-        .padding(.leading, Spacing.block)
-        .padding(.trailing, PaneClose.inset)
+        .padding(.horizontal, PaneCell.inset)
         .frame(height: Chrome.control)
         .glass(in: .capsule)
     }
 
-    @ViewBuilder private var name: some View {
-        if let handle, let windowID, let column = DraggedColumn(windowID: windowID, handle) {
-            let grip = label.overlay { PaneGrip(title: title, column: column, pane: handle) }
-            #if os(macOS)
-            if opens { grip.contextMenu { menu } } else { grip }
-            #else
-            grip
-            #endif
-        } else {
+    #if os(macOS)
+    private var name: some View {
+        HStack(spacing: Spacing.tight) {
             label
+            if opens { Chevron(.expand).foregroundStyle(palette.ink3) }
+        }
+        .padding(.horizontal, PaneCell.pad).frame(height: PaneCell.side)
+        .background { if opens, hovered { Capsule().fill(palette.fill).transition(.opacity) } }
+        .overlay {
+            if opens || drag != nil {
+                PaneGrip(title: title, drag: drag, actions: opens ? AnyView(menu.labelStyle(.titleAndIcon)) : nil) { hovered = $0 }
+            }
+        }
+        .presetHover($hovered)
+        .animation(Motion.fade, value: hovered)
+    }
+    #else
+    private var name: some View {
+        HStack(spacing: 0) {
+            label.padding(.leading, PaneCell.pad).padding(.trailing, opens ? Spacing.tight : PaneCell.pad).frame(height: PaneCell.side)
+                .overlay { if let drag { PaneGrip(title: title, drag: drag) } }
+            if opens {
+                Menu { menu.labelStyle(.titleAndIcon) } label: {
+                    Chevron(.expand).foregroundStyle(palette.ink3).padding(.trailing, PaneCell.pad).frame(height: PaneCell.side).contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(.inline))
+                .accessibilityLabel(Text("\(title) 的操作"))
+            }
         }
     }
+    #endif
 
     private var label: some View {
         Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1).accessibilityAddTraits(.isHeader)
     }
 }
 
-/// 胶囊里的图标钮：钮、点开菜单的钮同一个大小，悬停底是一个圆、不出胶囊的边。
+/// 胶囊里的图标钮：钮、点开菜单的钮都是一格圆。
 struct PaneToolStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.modifier(PaneToolFace()).modifier(PressFeedback(pressed: configuration.isPressed, kind: .control))
@@ -110,7 +133,7 @@ private struct PaneToolFace: ViewModifier {
 
     func body(content: Content) -> some View {
         content.font(Glyph.control).foregroundStyle(isEnabled ? palette.ink2 : palette.ink3)
-            .frame(width: PaneClose.side, height: PaneClose.side)
+            .frame(width: PaneCell.side, height: PaneCell.side)
             .contentShape(.circle)
     }
 }
@@ -151,13 +174,10 @@ struct PaneClose: View {
     let action: () -> Void
     @Environment(\.palette) private var palette
 
-    static let inset = Spacing.tight
-    static var side: CGFloat { Chrome.control - 2 * inset }
-
     var body: some View {
         Button(action: action) {
             Image(.close).font(Glyph.small).foregroundStyle(palette.ink3)
-                .frame(width: Self.side, height: Self.side)
+                .frame(width: PaneCell.side, height: PaneCell.side)
                 .contentShape(.circle)
         }
         .buttonStyle(PressStyle(.control))
@@ -209,6 +229,7 @@ struct LibraryFileHead: View {
                 }
                 .font(Typography.toolbarSubtitle)
                 .foregroundStyle(draft?.state == .failed ? palette.failure : palette.ink3)
+                .padding(.trailing, PaneCell.pad)
             }, tools: {
                 #if os(iOS)
                 HeadTool(label: "发往 Mac", icon: .send) { if let draft { Task { await draft.send() } } }

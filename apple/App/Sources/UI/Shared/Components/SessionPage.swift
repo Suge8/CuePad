@@ -236,10 +236,10 @@ private struct SessionMarks: View {
                     Text(SessionShown(status: .ended).label)
                 }
                 .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
-                .padding(.leading, Spacing.tight)
+                .padding(.trailing, PaneCell.pad)
                 .transition(.opacity)
             }
-            if let tier { tier.padding(.leading, Spacing.tight) }
+            if let tier { tier.frame(minWidth: PaneCell.side, minHeight: PaneCell.side) }
         }
         .animation(Motion.fade, value: ended)
     }

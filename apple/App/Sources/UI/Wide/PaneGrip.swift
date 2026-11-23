@@ -1,18 +1,24 @@
 import SwiftUI
 
-/// 胶囊名字的把手：盖在名字上的一层平台视图，按住拖出去由它起系统拖放（落点见 `WideDrop`）。SwiftUI 的 `.draggable` 两端都不够用：
-/// Mac 上拖不到别的块（见 `PaneGripView`），拎起的样子两端都换不成 `PaneChip`。
+/// 胶囊名字那一格的把手：盖在上面的一层平台视图。按住拖出去由它起系统拖放（落点见 `WideDrop`），Mac 上点一下、右键还由它弹这样东西的操作。
+/// SwiftUI 自己的不够用：`.draggable` 在 Mac 上拖不到别的块（见 `PaneGripView`），拎起的样子两端都换不成 `PaneChip`；
+/// `Menu` 在 Mac 上按下就弹，同一格没法又点又拖。
 struct PaneGrip {
+    typealias Drag = (column: DraggedColumn, pane: WideNavigation.Pane)
+    typealias Lift = @MainActor (CGFloat) -> (data: Data, chip: ImageRenderer<PaneChip>)?
+
     let title: String
-    let column: DraggedColumn
-    let pane: WideNavigation.Pane
+    var drag: Drag?
+    #if os(macOS)
+    var actions: AnyView?
+    var hover: (Bool) -> Void = { _ in }
+    #endif
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    typealias Lift = @MainActor (CGFloat) -> (data: Data, chip: ImageRenderer<PaneChip>)?
-
-    private var lift: Lift {
-        { [workspace, column, title, palette] scale in
+    private var lift: Lift? {
+        guard let column = drag?.column else { return nil }
+        return { [workspace, title, palette] scale in
             do {
                 let chip = ImageRenderer(content: PaneChip(title: title, palette: palette))
                 chip.scale = scale
@@ -32,13 +38,17 @@ struct PaneChip: View {
 
     var body: some View {
         Text(verbatim: title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
-            .padding(.horizontal, Spacing.block)
+            .padding(.horizontal, Self.pad)
             .frame(height: Chrome.control)
             .frame(maxWidth: 320)
             .fixedSize()
             .background(palette.paper, in: .capsule)
             .overlay { Capsule().strokeBorder(palette.hair) }
     }
+
+    private static let pad = Spacing.block
+    /// 拎起那一刻它的左沿相对把手的左沿：两处的名字叠在同一个位置上，像是从胶囊里原地浮起来。
+    static let lead = PaneCell.pad - pad
 }
 
 #if os(iOS)
@@ -47,7 +57,7 @@ extension PaneGrip: UIViewRepresentable {
 
     func updateUIView(_ view: PaneGripView, context: Context) {
         view.lift = lift
-        view.dragging = { [workspace, pane] on in workspace.dragging = on ? .some(pane) : nil }
+        view.dragging = { [workspace, pane = drag?.pane] on in workspace.dragging = on ? pane.map { .some($0) } : nil }
     }
 }
 
@@ -81,7 +91,7 @@ final class PaneGripView: UIView, UIDragInteractionDelegate {
         let parameters = UIDragPreviewParameters()
         parameters.backgroundColor = .clear
         parameters.visiblePath = UIBezierPath(roundedRect: chip.bounds, cornerRadius: chip.bounds.height / 2)
-        let center = convert(CGPoint(x: chip.bounds.width / 2 - Spacing.block, y: bounds.midY), to: window)
+        let center = convert(CGPoint(x: PaneChip.lead + chip.bounds.width / 2, y: bounds.midY), to: window)
         return UITargetedDragPreview(view: chip, parameters: parameters, target: UIDragPreviewTarget(container: window, center: center))
     }
 
@@ -93,11 +103,21 @@ import AppKit
 
 extension PaneGrip: NSViewRepresentable {
     func makeNSView(context: Context) -> PaneGripView { PaneGripView() }
-    func updateNSView(_ view: PaneGripView, context: Context) { view.lift = lift }
+
+    func updateNSView(_ view: PaneGripView, context: Context) {
+        view.lift = lift
+        view.hover = hover
+        view.actions = actions.map { actions in { [environment = context.environment] in NSHostingMenu(rootView: actions.environment(\.self, environment)) } }
+        view.setAccessibilityElement(actions != nil)
+        view.setAccessibilityRole(.menuButton)
+        view.setAccessibilityLabel(String(localized: "\(title) 的操作"))
+    }
 }
 
 final class PaneGripView: NSView, NSDraggingSource {
     var lift: PaneGrip.Lift?
+    var actions: (() -> NSMenu)?
+    var hover: ((Bool) -> Void)?
     private var pressed: NSEvent?
     private static let slop: CGFloat = 3
 
@@ -111,8 +131,15 @@ final class PaneGripView: NSView, NSDraggingSource {
     // 胶囊在标题栏那一排，系统把那里的按住拖当成拖窗口，不看按下落在谁身上：名字用 `.draggable` 时拖放起来了、窗口却跟着指针走，
     // 指针相对窗口不动，拖不到别的块上；这层视图答了"不能"、按下也收到了，窗口照样走（macOS 27 实测）。
     // 只有窗口整个不可移动才拦得住，按下那一刻再改已经晚了，所以指针停在名字上时就先关掉、离开时放回。
-    override func mouseEntered(with event: NSEvent) { window?.isMovable = false }
-    override func mouseExited(with event: NSEvent) { window?.isMovable = true }
+    override func mouseEntered(with event: NSEvent) {
+        window?.isMovable = false
+        hover?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        window?.isMovable = true
+        hover?(false)
+    }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         if newWindow == nil { window?.isMovable = true }
@@ -122,18 +149,36 @@ final class PaneGripView: NSView, NSDraggingSource {
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) { pressed = event }
-    override func mouseUp(with event: NSEvent) { pressed = nil }
+
+    override func mouseUp(with event: NSEvent) {
+        guard pressed != nil else { return }
+        pressed = nil
+        showActions()
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        if actions == nil { super.rightMouseDown(with: event) } else { showActions() }
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        showActions()
+        return actions != nil
+    }
+
+    private func showActions() {
+        actions?().popUp(positioning: nil, at: NSPoint(x: 0, y: -Spacing.tight), in: self)
+    }
 
     override func mouseDragged(with event: NSEvent) {
         guard let pressed, hypot(event.locationInWindow.x - pressed.locationInWindow.x, event.locationInWindow.y - pressed.locationInWindow.y) > Self.slop else { return }
-        self.pressed = nil
         guard let lifted = lift?(window?.backingScaleFactor ?? 2) else { return }
+        self.pressed = nil
         let board = NSPasteboardItem()
         board.setData(lifted.data, forType: .init(DraggedColumn.type.identifier))
         let item = NSDraggingItem(pasteboardWriter: board)
         let chip = lifted.chip.nsImage
         let size = chip?.size ?? bounds.size
-        item.setDraggingFrame(NSRect(x: -Spacing.block, y: (bounds.height - size.height) / 2, width: size.width, height: size.height), contents: chip)
+        item.setDraggingFrame(NSRect(x: PaneChip.lead, y: (bounds.height - size.height) / 2, width: size.width, height: size.height), contents: chip)
         beginDraggingSession(with: [item], event: pressed, source: self)
     }
 

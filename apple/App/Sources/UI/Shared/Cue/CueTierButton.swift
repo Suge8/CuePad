@@ -18,7 +18,7 @@ struct CueTierButton: View {
                     workspace.perform { [sessionID] in try await $0.setTier(option, of: sessionID) }
                 }
             })],
-            press: .inline, accessibilityLabel: "交给 \(name)", value: String(localized: tier.title(name))
+            press: compact ? .inline : .control, accessibilityLabel: "交给 \(name)", value: String(localized: tier.title(name))
         ) {
             label(name)
         }

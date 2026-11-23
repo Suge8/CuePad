@@ -10,7 +10,6 @@ final class CardEditing {
     let initialText: String
     @ObservationIgnored let handle = Handle()
     private(set) var text: String
-    private(set) var saveState = SaveState.idle
     @ObservationIgnored let workspace: Workspace
     @ObservationIgnored private var autosave: Autosave?
     #if os(iOS)
@@ -36,15 +35,8 @@ final class CardEditing {
         self.workspace = workspace
         let store = workspace.services.store, id = card.id
         let autosave = Autosave(
-            save: { [weak self] text in
-                self?.saveState = .saving
-                do {
-                    try await store.updateCard(id) { $0.body = text }
-                } catch {
-                    self?.saveState = .failed
-                    throw error
-                }
-                self?.saveState = .saved
+            save: { text in
+                try await store.updateCard(id) { $0.body = text }
                 workspace.unsavedBodies[id] = nil
             },
             onError: { workspace.fail($0) })
@@ -67,8 +59,6 @@ final class CardEditing {
         text = next
         autosave?.changed(next)
     }
-
-    func settleSaved() { if saveState == .saved { saveState = .idle } }
 
     func flushed() async throws -> Card? {
         try await autosave?.flush()
