@@ -82,7 +82,14 @@ final class Workspace {
         }
     }
 
+    /// 宽屏窗口里焦点在哪一块，只它答得出（问的是系统的第一响应者）。
+    @ObservationIgnored let wideFocus = WideFocus()
+    /// 这一排变了以后，哪个会话的回复框摆出来时接过焦点（`landReplyFocus` 定，那个回复框摆出来时取走）。
+    /// 不走 `replyFocus`：它一变，旧位置上还没拆掉的那个回复框先看到、先领走，新摆出来的那个就领不到了。
+    @ObservationIgnored private var replyLanding: UUID?
+
     private func settle(from was: WideNavigation, to now: WideNavigation) {
+        landReplyFocus(from: was, to: now)
         let moved = was.panes[was.host] != now.panes[now.host]
         if moved || openCard.map({ now.panes.contains(.card($0)) }) == true { overlay = nil }
         #if os(macOS)
@@ -92,6 +99,24 @@ final class Workspace {
         pages.visit(from: was.page, to: now.page)
         #endif
     }
+    /// 这一排变了以后回复框的焦点归谁，只在这里定。换了格的块是重新摆出来的，原来的输入框没了；
+    /// 页分不清自己是新开的还是被挪动的，各自一摆出来就拿焦点的话，几页一起摆出来时谁最后摆好就归了谁。
+    /// 新进来的会话拿（只在 Mac：触屏上不替人弹键盘）；没有新进来的，拿着焦点的会话换了格就还给它。
+    private func landReplyFocus(from was: WideNavigation, to now: WideNavigation) {
+        #if os(macOS)
+        if let opened = now.sessions.first(where: { opened in !was.sessions.contains { $0.id == opened.id } }) { return replyLanding = opened.id }
+        #endif
+        guard let held = wideFocus.current?.column?.index, was.panes.indices.contains(held), let holder = was.panes[held].session,
+              let index = now.panes.firstIndex(where: { $0.session?.id == holder.id }), index != held else { return }
+        replyLanding = holder.id
+    }
+
+    func takeReplyLanding(_ session: UUID) -> Bool {
+        guard replyLanding == session else { return false }
+        replyLanding = nil
+        return true
+    }
+
     enum Overlay: Hashable {
         case card(UUID)
         case library(LibraryFile)

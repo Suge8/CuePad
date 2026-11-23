@@ -104,7 +104,7 @@ final class WideFocus {
         guard let source = current?.column, let moved = workspace.moveColumn(source, by: step) else { return }
         Task {
             await NextFrame.wait()
-            focus(WideSlot(moved))
+            if current != WideSlot(moved) { focus(WideSlot(moved)) }
         }
     }
 }

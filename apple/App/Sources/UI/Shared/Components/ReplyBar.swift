@@ -102,11 +102,7 @@ struct ReplyBar: View {
                 workspace.replyFocus = nil
                 focused = true
             }
-            #if os(macOS)
-            .onAppear { focused = active && !covered }
-            #else
-            .onAppear { if DebugHooks.preset.modelMenu { focused = true } }
-            #endif
+            .onAppear { focused = workspace.takeReplyLanding(session.id) && active && !covered || DebugHooks.preset.modelMenu }
     }
 
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
