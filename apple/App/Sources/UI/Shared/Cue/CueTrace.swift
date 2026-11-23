@@ -11,11 +11,11 @@ struct CueTrace: View {
 
     var body: some View {
         if touches.count > Self.rows {
-            Fold(open: $unfolded, edge: .bottom, press: .row) {
+            RisingFold(open: $unfolded, press: .row) {
                 CueNoteRow { DisclosureChevron(open: unfolded) } text: {
                     if unfolded { Text("收起") } else { Text("还有 \(touches.count - Self.rows + 1) 处") }
                 }
-            } content: {
+            } content: { unfolded in
                 lines(unfolded ? touches : Array(touches.prefix(Self.rows - 1)))
             }
         } else {
@@ -24,7 +24,7 @@ struct CueTrace: View {
     }
 
     private func lines(_ shown: [CueActivity.Touch]) -> some View {
-        ForEach(shown.indices, id: \.self) { index in line(shown[index]).transition(.opacity) }
+        ForEach(shown.indices, id: \.self) { index in line(shown[index]) }
     }
 
     static func words(_ touch: CueActivity.Touch, name: Color) -> Text {

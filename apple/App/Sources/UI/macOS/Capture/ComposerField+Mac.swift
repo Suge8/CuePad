@@ -249,7 +249,9 @@ final class GrowingTextView: NSTextView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard string.isEmpty, !hasMarkedText() else { return }
-        (placeholder as NSString).draw(at: NSPoint(x: Self.caretRoom, y: 0), withAttributes: [.font: Self.bodyFont, .foregroundColor: placeholderColor])
+        (placeholder as NSString).draw(
+            with: NSRect(x: Self.caretRoom, y: 0, width: bounds.width - 2 * Self.caretRoom, height: Self.lineHeight),
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: [.font: Self.bodyFont, .foregroundColor: placeholderColor])
     }
 
     override func didChangeText() {

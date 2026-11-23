@@ -165,6 +165,23 @@ nonisolated enum Chat {
         Set(tools?.items.compactMap { $0.record?.uuidString ?? $0.calls?.first } ?? [])
     }
 
+    /// 最新那条做完的回答。被停下的那一轮说过的话也落成一条回答，后面跟着"已停止"，不算：在跑时再说一句是打断这一轮、以这句接着做，
+    /// 各家这时状态一路是在跑，把那条当成在跑的这一轮的回答，角色就交给它、让开，整段思考都不见了。
+    static func answer(in messages: [ChatMessage]) -> ChatMessage? {
+        var stopped = false
+        for message in messages.reversed() {
+            switch message.role.known {
+            case .system: if message.notice == .stopped || message.notice == .declined { stopped = true }
+            case .user, .machine: stopped = false
+            case .pi:
+                guard stopped else { return message }
+                stopped = false
+            case .answer, nil: break
+            }
+        }
+        return nil
+    }
+
     static func landed(_ pending: ChatMessage.Tools, in reply: ChatMessage?) -> Bool {
         guard let reply else { return false }
         return !keys(pending).isDisjoint(with: keys(reply.tools).union([reply.id.uuidString]))

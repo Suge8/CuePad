@@ -8,6 +8,7 @@ import SwiftUI
 /// 对话只从这一叠上沿的圆角两侧露出来；手机上回复框是玻璃、卡是纸，对话在它们周围清楚可见。
 /// 键盘只经系统的安全区让，两页同一套：对话与这一块的底边是安全区底边，键盘弹出时就是键盘顶（第三方键盘长高、换键盘、下拖收起都由系统跟着键盘的动画走），
 /// 这一块离键盘或安全区底边（Mac 是栏底）`Spacing.replyBottom`，各页不另加。键盘高在排版里量，不经焦点状态：外接键盘有焦点也没有软键盘。
+/// 软键盘开着时点对话收起它（往下拖对话也收，`scrollDismissesKeyboard`）：系统键盘自己没有收起键。只看软键盘，外接键盘时点对话焦点留在输入框里，同 Mac。
 /// 对话顶上同一套：滑到页头的玻璃下面，只有状态栏那一条由窗口的模糊盖着（`StatusBarBlur`），不垫系统的顶部淡出（别的页由导航栏垫，`RouteView`）。
 struct FloatingReply<Chat: View, Reply: View>: View {
     @ViewBuilder let chat: Chat
@@ -16,6 +17,7 @@ struct FloatingReply<Chat: View, Reply: View>: View {
     /// 不先按 0 排一遍再挪——那样滚动区的读数在打开的那一帧里多变一次，赶上推入页面时导航栏那一遍，系统丢掉第三次（`ChatScroll`）。
     @State private var height: CGFloat?
     @State private var visible: CGFloat = .infinity
+    @State private var keyboardUp = false
     @State private var flight = SendFlight()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -25,6 +27,9 @@ struct FloatingReply<Chat: View, Reply: View>: View {
                 chat.environment(\.chatBottomInset, height).environment(\.chatHeight, visible)
                     #if os(iOS)
                     .scrollEdgeEffectHidden(true, for: .top)
+                    .simultaneousGesture(TapGesture().onEnded {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }, isEnabled: keyboardUp)
                     #endif
             }
             GeometryReader { room in
@@ -35,7 +40,10 @@ struct FloatingReply<Chat: View, Reply: View>: View {
                     .environment(\.chatHeight, visible)
                     .frame(maxWidth: .infinity)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
-                    .onChange(of: visible, initial: true) { self.visible = visible }
+                    .onChange(of: visible, initial: true) {
+                        self.visible = visible
+                        keyboardUp = keyboard > 0
+                    }
                     .padding(.bottom, keyboard)
                     .frame(width: room.size.width, height: room.size.height, alignment: .bottom)
             }

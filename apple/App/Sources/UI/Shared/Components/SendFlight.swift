@@ -135,7 +135,13 @@ private struct FlyingWords: View {
             .opacity(gone ? 0 : developed ? landing?.opacity ?? 1 : 1)
             .offset(x: spot.x - base.x, y: spot.y - base.y)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .onChange(of: landing, initial: true) { fly(to: landing) }
+            // 落点是气泡排出来的那一次更新里报的，那一次重（整段对话多排一条、让出高度）：弹簧从那一刻起算的话，等它画上屏已经走掉一大截，
+            // 看着是字停了一下再一跳到位。等那一帧提交了再起飞；一帧里接连报的几个落点（对话还在定最新处）只认最后一个
+            .task(id: landing) {
+                if landing != nil { await NextFrame.wait() }
+                guard !Task.isCancelled else { return }
+                fly(to: landing)
+            }
             .task {
                 try? await Task.sleep(for: Motion.Send.wait)
                 guard !Task.isCancelled, flight.landing == nil else { return }

@@ -68,6 +68,8 @@ extension EnvironmentValues {
     @Entry var headerHost = HeaderHost.navigationBar
     @Entry var headerGivesWay = false
     @Entry var headerGrown = false
+    /// 导航栏里标题那两行最宽到多少：系统给中间那一项的提议不带宽度（随它多宽，菜单的标签也是），`frame(maxWidth:)` 对这种提议不设限，只能在标题自己排版时封顶
+    @Entry var headerTitleLimit: CGFloat?
     /// 页头自己画时在内容顶上让出的高。UIKit 的滚动视图只认系统导航栏，看不到 SwiftUI 的安全区，铺到页头底下的 UIKit 正文按它垫顶
     @Entry var headerClearance: CGFloat = 0
 }
@@ -88,6 +90,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
     let center: Center
     let trailing: Trailing
     @State private var grown = false
+    @State private var pageWidth: CGFloat?
     @Environment(\.headerHost) private var host
     @Environment(Workspace.self) private var workspace
     @Environment(ModalHost.self) private var modals: ModalHost?
@@ -122,10 +125,14 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 }
             case .navigationBar:
                 content
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
-                        // 中间这一项一直在：不在时系统会把标题当普通文字摆回中间
-                        ToolbarItem(placement: .principal) { middle }
+                        // 中间这一项一直在：不在时系统会把标题当普通文字摆回中间。
+                        // 系统不给这一项限宽（内容多宽它多宽，长标题伸出屏外、压住两侧的钮）：按页宽让出两侧各一颗钮，放不下的标题截尾
+                        ToolbarItem(placement: .principal) {
+                            middle.environment(\.headerTitleLimit, pageWidth.map { max(0, $0 - 2 * (FloatingHeaderLayout.margin + FloatingHeaderLayout.slot + Spacing.block)) })
+                        }
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
                             // 成组：单个 ToolbarItem 里放几颗钮，系统只留第一颗
@@ -270,10 +277,11 @@ private struct TitleStack<Detail: View>: View {
     var opens = false
     let detail: Detail
     @Environment(\.palette) private var palette
+    @Environment(\.headerTitleLimit) private var limit
     @State private var widest = Widening.Widest()
 
     var body: some View {
-        Widening(widest: widest) {
+        Widening(widest: widest, limit: limit ?? .infinity) {
             VStack(spacing: Spacing.hair) {
                 HStack(spacing: Spacing.tight) {
                     Text(title).font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink).lineLimit(1)
@@ -290,6 +298,7 @@ private struct TitleStack<Detail: View>: View {
 /// 顶栏中间那块只长不缩：排过的最宽记在引用里，排版时直接取，不经几何读数、不写状态（那样多一遍排版，渲染服务静置时每帧多忙四成，#36）。
 private struct Widening: Layout {
     let widest: Widest
+    let limit: CGFloat
 
     /// Layout 要 Sendable；排版其实都在主线程，锁只为过编译器的隔离检查，不争用。
     nonisolated final class Widest: Sendable {
@@ -300,8 +309,8 @@ private struct Widening: Layout {
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
-        let size = child.sizeThatFits(proposal)
-        let width = min(widest.grow(size.width), proposal.width ?? .infinity)
+        let size = child.sizeThatFits(ProposedViewSize(width: min(proposal.width ?? limit, limit), height: proposal.height))
+        let width = min(widest.grow(size.width), proposal.width ?? .infinity, limit)
         return CGSize(width: width, height: size.height)
     }
 

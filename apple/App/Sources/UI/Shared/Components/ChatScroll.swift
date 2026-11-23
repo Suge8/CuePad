@@ -50,7 +50,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         GeometryReader { proxy in
             ScrollViewReader { reader in
                 let padding = bottomPadding
-                let keeping = !pinned && follow.wrappedValue.target == nil
+                let keeping = !pinned && !follow.wrappedValue.growsUp && follow.wrappedValue.target == nil
                 ScrollView {
                     // 显式竖排正文与末尾锚点：宿主的隐式布局可能把零高锚点放在正文中部。
                     VStack(spacing: 0) {
@@ -93,7 +93,11 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     } action: { previous, reading in
                         let delivered = offset.deliver(reading)
                         let last = delivered.reading ?? previous
-                        let grown = reading.height - last.height
+                        // 钮在底边的折叠在开合（`RisingFold`）：这一段的高不是在末尾长出来的，它底下的留在原处，不滑、不留白。
+                        // 贴着最新时底边锚定已经做到；没贴着时系统的底边锚定不管，每帧把偏移跟上变的那一截
+                        let unfolding = follow.wrappedValue.growsUp
+                        if unfolding, !pinned, reading.height != last.height { lift.scroll(by: reading.height - last.height) }
+                        let grown = unfolding ? 0 : reading.height - last.height
                         let glides = delivered.reading != nil && !delivered.widthChanged
                         if reading.anchor.onScreen != onScreen { onScreen = reading.anchor.onScreen }
                         if let chatReading, chatReading.id != reading.anchor.reading { chatReading.id = reading.anchor.reading }
