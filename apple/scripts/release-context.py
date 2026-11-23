@@ -36,19 +36,25 @@ def hold(platform):
 
 def verified(commit, platform):
     """合并前的本机签核只跑真 Agent 的冒烟、不跑 iOS；全量只有合并进主干后云端那一遍（swift.yml），用户拿到的构建只从它全绿的提交出。
-    只认主干上的运行：分支上手动触发的那一遍用的是分支自己的工作流定义。"""
-    runs = json.loads(subprocess.check_output(
-        ["gh", "run", "list", "--workflow", "swift.yml", "--branch", "main", "--commit", commit, "--json", "status,conclusion,url,event"],
-        cwd=CHECKOUT, text=True))
-    runs = [run for run in runs if run["event"] != "pull_request"]  # 别的仓库名叫 main 的分支提的 PR 也记成 main
-    if any(run["conclusion"] == "success" for run in runs):
-        return
+    只认主干上的运行：分支上手动触发的那一遍用的是分支自己的工作流定义。还在跑就在这里等到它出结果（合并后那一遍约一刻钟）。"""
+    while True:
+        runs = json.loads(subprocess.check_output(
+            ["gh", "run", "list", "--workflow", "swift.yml", "--branch", "main", "--commit", commit, "--json", "status,conclusion,url,event"],
+            cwd=CHECKOUT, text=True))
+        runs = [run for run in runs if run["event"] != "pull_request"]  # 别的仓库名叫 main 的分支提的 PR 也记成 main
+        if any(run["conclusion"] == "success" for run in runs):
+            return
+        running = [run for run in runs if run["status"] != "completed"]
+        if not running:
+            break
+        print(f"{commit[:9]} 的主干检查还在跑，等它出结果：{running[0]['url']}", file=sys.stderr, flush=True)
+        time.sleep(60)
     seen = "；".join(f"{run['conclusion'] or run['status']} {run['url']}" for run in runs) or "这个提交在主干上没有跑过（不在主干上，或排队时被后来的合并顶掉）"
     green = [run for run in json.loads(subprocess.check_output(
         ["gh", "run", "list", "--workflow", "swift.yml", "--branch", "main", "--status", "success", "--limit", "5", "--json", "headSha,displayTitle,event"],
         cwd=CHECKOUT, text=True)) if run["event"] != "pull_request"]
     hint = f"要发的改动已在全绿的提交里就指定它发（最近全绿：{green[0]['headSha'][:9]} {green[0]['displayTitle']}）：xc.sh release {platform} {green[0]['headSha'][:9]}；" if green else ""
-    fail(f"{commit[:9]} 的主干检查没有全绿，不发布：{seen}。{hint}在跑就等它跑完；红了先修主干（runner 自己崩的就 gh run rerun <id> --failed）；"
+    fail(f"{commit[:9]} 的主干检查没有全绿，不发布：{seen}。{hint}红了先修主干（runner 自己崩的就 gh run rerun <id> --failed）；"
          "没跑过就从主干最新的提交发，或 gh workflow run swift.yml --ref main 补跑")
 
 

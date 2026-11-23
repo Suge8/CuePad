@@ -26,6 +26,8 @@ forbid "iOS 上不进读屏用 readerHidden（ReaderHidden.swift），按条件�
   '\.accessibilityHidden\((?!false\))(?!.*//\s*合并)' '**/macOS/**' '**/*+macOS.swift' '**/*+Mac.swift'
 forbid "按名字取图用 Image(decorative:)，或经 Icon、BrandMark：Image(\"名字\") 拿资源名当读屏标签，旁白念出 cue.plus、cue.waiting（#67）；意思由所在控件的标签说" \
   '\bImage\(\s*"'
+forbid "查问题时加的 NSLog、print、_printChanges 提交前删：要留的日志写 Logger(category:)，调试专用的输出放 UI/Debug" \
+  '(?<![\w.])(NSLog|print)\(|\b_printChanges\(' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regular，降低透明度、增强对比度时退回实底" \
   '\.glassEffect\(' '**/Theme/Surfaces.swift'
 forbid "玻璃只挂在内容本身上（content.glass(in:)），不挂在空背景、空形状上（Color.clear、Rectangle() 这类再 .glass）：玻璃容器（GlassEffectContainer）把挂在空东西上的玻璃合成到同一层、画在旁边的字上面，名牌的字就这样被盖住过；字也要在玻璃里才随玻璃的明暗取色" \

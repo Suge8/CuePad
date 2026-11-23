@@ -33,12 +33,12 @@ release_tag() {
   git -C "$REPO_DIR" push -q origin "refs/tags/$tag"
 }
 
-# 发布前核对中转：check_relay [打出来的 Info.plist]。门铃 /health 回 ok，实时活动 /v1/activity/health 回 204；
+# 发布前核对中转：check_relay [打出来的 Info.plist]。门铃 /health 回 ok，实时活动 /v1/activity/health 回 204（连不上隔 10 秒再试，共 4 次：中转偶尔几十秒不应）；
 # 给了 Info.plist 就再核对包里的 CuePadRelayHost 就是 CUEPAD_RELAY_HOST（App 读不到会当场停下）。
 check_relay() {
-  [ "$(curl -fsS --max-time 10 "https://$CUEPAD_RELAY_HOST/health" 2>/dev/null)" = ok ] \
+  [ "$(curl -fsS --max-time 10 --retry 3 --retry-delay 10 --retry-all-errors "https://$CUEPAD_RELAY_HOST/health" 2>/dev/null)" = ok ] \
     || { echo "门铃中转 https://$CUEPAD_RELAY_HOST/health 没回 ok（部署见 relay/README.md）" >&2; exit 1; }
-  [ "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "https://$CUEPAD_RELAY_HOST/v1/activity/health" 2>/dev/null)" = 204 ] \
+  [ "$(curl -sS --max-time 10 --retry 3 --retry-delay 10 --retry-all-errors -o /dev/null -w '%{http_code}' "https://$CUEPAD_RELAY_HOST/v1/activity/health" 2>/dev/null)" = 204 ] \
     || { echo "实时活动中转尚未就绪（APNs 配置与部署见 relay/README.md）" >&2; exit 1; }
   [ -z "${1:-}" ] || [ "$(/usr/libexec/PlistBuddy -c 'Print :CuePadRelayHost' "$1" 2>/dev/null)" = "$CUEPAD_RELAY_HOST" ] \
     || { echo "$1 里的 CuePadRelayHost 不是 $CUEPAD_RELAY_HOST" >&2; exit 1; }

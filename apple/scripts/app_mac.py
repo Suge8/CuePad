@@ -166,7 +166,7 @@ def app_log(app):
 
 
 def run_mac(app, library, args):
-    """起着给 bcu 操作：看守进程脱离 xc.sh 在后台守到 App 退出、RUN_TTL 或 stop，这里等就绪后打印 PID 就返回。"""
+    """起着给 ui.py 操作：看守进程脱离 xc.sh 在后台守到 App 退出、RUN_TTL 或 stop，这里等就绪后打印 PID 就返回。"""
     report_r, report_w = os.pipe()
     if os.fork():
         os.close(report_w)

@@ -14,7 +14,7 @@ CUEPAD_SHOT_LIBRARY="$(apple/scripts/xc.sh real copy)" apple/scripts/xc.sh shot 
 
 ## 占前台
 
-占前台会抢用户的键盘、移指针，只用在两处：要和交互预算比的数字，一次量够、不连跑，新加的只经 `DebugForeground`；后台投递不动的交互验收（Mac 看板的系统拖放：bcu 的 `drag` 在后台报 unverified、卡不动），加 `--foreground` 拖一趟，不用等用户离开。
+占前台会抢用户的键盘、移指针，只用在两处：要和交互预算比的数字，一次量够、不连跑，新加的只经 `DebugForeground`；后台投递不动的交互验收（Mac 的拖放与菜单快捷键，后台投过去是 unverified、界面不动），那一步加 `ui.py mac … --front`，不用等用户离开。
 
 ## 共用的东西
 

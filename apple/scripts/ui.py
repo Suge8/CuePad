@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""模拟器里按元素操作界面：读、点、拖、输入、等文字、截图（AXe 的薄封装）。
-用法：ui.py <UDID|iphone|ipad|mac> <命令> …，iphone、ipad、mac 是 `xc.sh fleet up` 起的那一台（fleet.json）。
+"""按元素操作调试实例的界面：读、点、拖、输入、等文字、截图（模拟器经 AXe，Mac 经 bcu，都是薄封装）。
+用法：ui.py <mac|sim|UDID|iphone|ipad> <命令> …，mac、sim 是本检出起着的 Mac 实例与 `xc.sh run` 留着的那台模拟器，iphone、ipad 是 `xc.sh fleet up` 起的那一台。
   read [--all]               屏上的元素，每行 类型⇥标签⇥值⇥x,y,宽,高（点）；--all 连屏外的与没标签的一起列
   tap <标签|#id|x,y> [--type T] [--nth N]   按元素点它的中心：标签先全等后包含，只数屏上的；有几个就报错列出，--nth 从 0 起挑一个
   drag <x1,y1> <x2,y2> [中间点数=6] [--rec 片.mp4]
@@ -9,10 +9,20 @@
                              --rec 把这一趟录下来（抬手后再录 2 秒），打印抬手在片里的秒数；逐帧看用 xc.sh sheet -from
   type <文字>                 在有焦点的输入框里按键打字，屏上读回才算成。只打得出键盘上有的字符，拼音键盘下字母还停在候选里（数字直接上屏）。
                              模拟器的剪贴板与这台 Mac 共用，不经它粘贴；要中文内容用启动参数预置（-CuePadSpeech、-CuePadCueDraft，DebugScene+Args*.swift）
-  key <cmd+n|esc|…>           组合键：修饰键 cmd ctrl alt shift，键 a–z 0–9 return esc tab space delete
+  key <cmd+n|esc|…>           组合键：修饰键 cmd ctrl alt shift，键 a–z 0–9 return esc tab space delete left right up down
   wait <文字> [秒=20]          读到标签或值包含它为止，打印用时；超时以 1 退出
   shot [图.png]               截图
-mac 只有 read（bcu observe-ui，折叠）与 wait（bcu search-ui），都按 PID。不靠固定等待：点完用 wait 等结果。
+不靠固定等待：点完用 wait 等结果。
+mac 的命令同名，差别：
+  坐标是 shot 那张图的像素（bcu 把窗口缩到 1600 宽，不是点）；read 是 bcu 折叠过的树，没有框
+  tap 的 --type 是 bcu 的角色（button、textarea…），没有 #id；type、key 打进此刻有键盘焦点的元素
+  focus                      有键盘焦点的元素：角色、名字、值、框（并排的几块回复框同名，按框的 x 认是哪一块）
+  shot                       打印截图路径
+  tap、drag、key 认 --rec 片.mov（从动作前录 4 秒，打印动作在片里投出的时刻）与 --front
+  每个动作印出 bcu 的结论行：worked 是有证据，unverified 是投了、读不到证据，看界面再定，别重做。
+  默认在后台投，不动用户的键盘与指针。--front 占前台（apple/scripts/AGENTS.md「占前台」），只有这两样要它：
+  菜单快捷键（⌘⌥←：后台按下去是 unverified、块没挪）；实例不在前台时的拖放。带 --front 的 drag 先把指针停到起点再按下：
+  胶囊的把手靠指针进出事件锁住窗口，没悬停就按下，拖走的是整扇窗口。
 """
 import json
 import os
@@ -22,9 +32,13 @@ import subprocess
 import sys
 import time
 
+sys.dont_write_bytecode = True
+from _lock import holding, live  # noqa: E402
+from app_env import CHECKOUT, READY, SLOT_NAME  # noqa: E402
+
 FLEET = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".derived/fleet/fleet.json")
 KEYS = {**{c: 4 + i for i, c in enumerate("abcdefghijklmnopqrstuvwxyz")}, **{c: 30 + i for i, c in enumerate("1234567890")},
-        "return": 40, "esc": 41, "delete": 42, "tab": 43, "space": 44}
+        "return": 40, "esc": 41, "delete": 42, "tab": 43, "space": 44, "right": 79, "left": 80, "down": 81, "up": 82}
 MODS = {"ctrl": 224, "shift": 225, "alt": 226, "cmd": 227}
 
 
@@ -34,15 +48,25 @@ def fail(message):
 
 
 def resolve(target):
-    """UDID，或 fleet 角色（返回 (UDID 或 PID, 是不是 Mac)）。"""
+    """返回 (UDID 或 PID, 是不是 Mac)。mac、sim 问持有者登记（_lock.py），不用从 run 的输出里抄 PID。"""
     if re.fullmatch(r"[0-9A-F-]{36}", target):
         return target, False
+    if target == "mac":
+        held = holding(SLOT_NAME)
+        if not held or "app" not in held:
+            fail("本检出没有起着的 Mac 实例：xc.sh run mac …")
+        return held["app"], True
+    if target == "sim":
+        kept = [h for h, _ in live() if h["checkout"] == CHECKOUT and h.get("role") == ""]
+        if not kept:
+            fail("本检出没有 run 留着的模拟器实例：xc.sh run ios|ipad …")
+        return kept[0]["device"], False
     try:
         with open(FLEET) as f:
             role = json.load(f)[target]
     except (OSError, KeyError, ValueError):
         fail(f"{target} 不是 UDID，也不是 xc.sh fleet up 起的角色（{FLEET}）")
-    return (role["pid"], True) if role["platform"] == "mac" else (role["udid"], False)
+    return role["udid"], False
 
 
 def axe(*args):
@@ -121,6 +145,8 @@ def drag(udid, start, end, points=6, rec=None):
 
 def key(udid, combo):
     parts = combo.lower().split("+")
+    if parts[-1] not in KEYS or not set(parts[:-1]) <= set(MODS):
+        fail(f"不认得 {combo}：修饰键 {' '.join(MODS)}，键 {' '.join(KEYS)}")
     mods, code = [MODS[m] for m in parts[:-1]], KEYS[parts[-1]]
     if mods:
         axe("key-combo", "--modifiers", ",".join(map(str, mods)), "--key", str(code), "--udid", udid)
@@ -134,6 +160,74 @@ def type_in(udid, text):
         return wait(udid, text, 5)
     except SystemExit:
         fail(f"打了 {text}，屏上没读到：输入框没有焦点？先 tap 它")
+
+
+def bcu(*args):
+    p = subprocess.run(["bcu", *args], capture_output=True, text=True)
+    if p.returncode:
+        fail(p.stderr.strip())
+    return p.stdout
+
+
+def observe(pid):
+    """看一眼：(状态号, 截图路径, 有键盘焦点的元素或 None, 窗口的 ref)。"""
+    state = json.loads(bcu("observe-ui", "--pid", str(pid), "--image", "always", "--json"))
+    focused = next((n for n in state["nodes"] if n.get("state", {}).get("focused")), None)
+    return state["stateId"], state["image"]["path"], focused, state["nodes"][0]["ref"]
+
+
+def act(pid, step, state=None, front=False, rec=None):
+    """做一步并印出 bcu 的结论。带 ref 或坐标的要 state；用 find 的不给，bcu 现看现找。"""
+    args = ["act-ui", json.dumps(step), *(("--state", state) if state else ("--pid", str(pid))), "--foreground" if front else "--headless"]
+    if not rec:
+        return sys.stdout.write(bcu(*args))
+    from app_mac import wincap
+    receipt = f"{rec}.ready"  # 首帧入片后 wincap 写它：片里的时间从这里起算
+    if os.path.exists(receipt):
+        os.remove(receipt)
+    with open(READY) as f:
+        size = f.read().split()[:2]
+    recorder = subprocess.Popen([wincap(), "rec", str(pid), "4", *size, rec])
+    while not os.path.exists(receipt):
+        if recorder.poll() is not None:
+            fail(f"没开录（wincap 退出码 {recorder.returncode}）")
+        time.sleep(0.02)
+    began = time.time()
+    sys.stdout.write(bcu(*args))
+    done = time.time() - began
+    if recorder.wait():
+        fail(f"录屏失败（wincap 退出码 {recorder.returncode}）")
+    print(f"{rec}：动作在片里的前 {done:.2f} 秒内投出")
+
+
+def mac(pid, cmd, args, opts, front):
+    rec = opts.get("rec")
+    if cmd == "tap" and re.fullmatch(r"\d+,\d+", args[0]):
+        x, y = map(int, args[0].split(","))
+        act(pid, [{"action": "click", "x": x, "y": y}], observe(pid)[0], front, rec)
+    elif cmd == "tap":
+        find = {"name": args[0], **({"role": opts["type"]} if "type" in opts else {}), **({"nth": int(opts["nth"])} if "nth" in opts else {})}
+        act(pid, [{"action": "click", "find": find}], None, front, rec)
+    elif cmd == "drag":
+        start, end = ([int(v) for v in a.split(",")] for a in args[:2])
+        hover = [{"action": "moveMouse", "x": start[0], "y": start[1]}, {"action": "wait", "ms": 300}] if front else []
+        act(pid, [*hover, {"action": "drag", "path": [start, end]}], observe(pid)[0], front, rec)
+    elif cmd in ("type", "key"):
+        state, _, focused, window = observe(pid)
+        if cmd == "type" and not focused:
+            fail("没有元素拿着键盘焦点：先 tap 输入框")
+        ref = focused["ref"] if focused else window
+        act(pid, [{"action": "typeText", "ref": ref, "text": args[0]} if cmd == "type" else {"action": "keypress", "ref": ref, "keys": [args[0]]}], state, front, rec)
+    elif cmd == "focus":
+        state, _, focused, _ = observe(pid)
+        if not focused:
+            fail("没有元素拿着键盘焦点")
+        raw = json.loads(bcu("inspect-ui", focused["ref"], "--state", state, "--json"))["node"]
+        print("\t".join([focused["role"], focused.get("name") or "", str(raw.get("value") or ""), ",".join(str(round(raw["rect"][k])) for k in "xywh")]))
+    elif cmd == "shot":
+        print(observe(pid)[1])
+    else:
+        fail(__doc__)
 
 
 def seen(target, text):
@@ -163,14 +257,14 @@ def main(argv):
         fail(__doc__)
     target, cmd, rest = argv[0], argv[1], argv[2:]
     ident, is_mac = resolve(target)
-    if is_mac and cmd not in ("read", "wait"):
-        fail("mac 只有 read 与 wait")
     valued = ("--type", "--nth", "--rec")
     flags = {a for a in rest if a.startswith("--") and a not in valued}
     opts = {rest[i][2:]: rest[i + 1] for i in range(len(rest) - 1) if rest[i] in valued}
     args = [a for i, a in enumerate(rest) if not a.startswith("--") and not (i and rest[i - 1] in valued)]
     if cmd == "read" and is_mac:
-        sys.stdout.write(subprocess.run(["bcu", "observe-ui", "--pid", str(ident)], capture_output=True, text=True).stdout)
+        sys.stdout.write(bcu("observe-ui", "--pid", str(ident)))
+    elif is_mac and cmd != "wait":
+        mac(ident, cmd, args, opts, "--front" in flags)
     elif cmd == "read":
         for e in read(ident, "--all" in flags):
             print("\t".join([e["type"], e["label"] or "", "" if e["value"] is None else str(e["value"]), ",".join(str(round(e["f"][k])) for k in ("x", "y", "width", "height"))]))
