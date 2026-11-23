@@ -113,7 +113,7 @@ private struct UnfoldingHeight: Layout {
 
 extension View {
     /// 行的悬停底比字宽出一圈（`PressStyle`），裁的时候两侧给它留出来。
-    fileprivate func clipsFold() -> some View {
+    func clipsFold() -> some View {
         padding(.horizontal, Spacing.item).clipped().padding(.horizontal, -Spacing.item)
     }
 }

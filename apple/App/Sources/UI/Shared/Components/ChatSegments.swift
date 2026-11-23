@@ -17,6 +17,10 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
     let window: ChatWindow
     let size: Int
     var spare = 1
+    /// 到的时候等上面让开再淡入的那几种（`AnyTransition.arrival`）。新到的正好起了一段时这一段是整段插进来的，段里各条自己的进场不播，
+    /// 它实着从终位下方滑上来、压着留在原处的角色过：末尾新到的段（排在排过的段后面、自己还没排过）里有这种的，整段照它的进场来。
+    /// 往上翻排开的段在排过的段前面，不算。
+    var arrivesLate: (Item) -> Bool = { _ in false }
     @ViewBuilder let segment: (ArraySlice<Item>) -> Segment
     @Environment(\.chatTarget) private var target
     @Environment(\.chatAnchor) private var anchor
@@ -36,7 +40,12 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
             run.index == runs.count - 1 || onScreen.contains(run.id) || target.map(run.range.contains) == true
         }.map(\.index)
         if from > 0 { EarlierRow(count: window.earlier, action: window.showEarlier) }
-        ForEach(runs) { run in cell(run, real: shown.contains { abs($0 - run.index) <= spare }) }
+        let laid = anchor?.laidRuns ?? [], firstLaid = runs.firstIndex { laid.contains($0.id) } ?? runs.count
+        ForEach(runs) { run in
+            let arrives = run.index > firstLaid && !laid.contains(run.id) && items[run.range].contains(where: arrivesLate)
+            cell(run, real: shown.contains { abs($0 - run.index) <= spare })
+                .transition(.asymmetric(insertion: arrives ? .arrival : .identity, removal: .identity))
+        }
     }
 
     private static func runs(_ items: [Item], size: Int, from: Int) -> [Run] {

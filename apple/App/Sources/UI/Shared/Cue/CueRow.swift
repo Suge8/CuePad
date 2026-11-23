@@ -12,7 +12,7 @@ struct CueSegment: View, Equatable {
     var body: some View {
         ChatRows(ids: rows.map(\.row.id), spacing: 0) {
             ForEach(rows, id: \.row.id) { row in
-                row.equatable().benchSpot(row.row.id).transition(CueRow.arrives(row.row, swapsInPlace: services.cueOnDutyHere) ? CueBubble.arrival : .identity)
+                row.equatable().benchSpot(row.row.id).transition(CueRow.arrives(row.row, swapsInPlace: services.cueOnDutyHere) ? .arrival : .identity)
             }
         }
     }
@@ -117,7 +117,7 @@ struct CueEnding: View {
                     MarkdownText(source: draft.text, reveal: services.cue.keeper?.speech.speaking == true ? .speaking : .landed).equatable().cueBubble(joined: joined)
                 }
                 .padding(.top, CuePage.gap(before: .leading, joined: joined))
-                .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
+                .transition(.asymmetric(insertion: .arrival, removal: .identity))
             }
             ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: Typography.secondary, floating: 0) { figure(speaking: draft != nil) }
             #else
