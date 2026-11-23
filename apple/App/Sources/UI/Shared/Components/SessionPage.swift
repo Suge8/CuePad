@@ -69,7 +69,7 @@ private struct SessionPageBody: View {
                     if ending(digest) {
                         Text("正在休眠…").font(Typography.caption).foregroundStyle(palette.ink3)
                     } else if let session {
-                        SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
+                        SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier)
                     }
                 } trailing: {
                     LivePhoneTool(session: id, zoom: zoom)
