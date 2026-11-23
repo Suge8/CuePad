@@ -2,10 +2,15 @@ import CueStore
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// 拖一块的胶囊时带的东西。`session` 为 nil 时拖的是那个窗口这一排里的页：一排至多一页，不用说是哪一页，别的窗口不接。
 nonisolated struct DraggedColumn: Codable, Transferable {
+    struct Session: Codable {
+        let recordID: UUID
+        let sessionID: String?
+    }
+
     let windowID: UUID
-    let recordID: UUID
-    let sessionID: String?
+    var session: Session?
     static let type = UTType(exportedAs: "\(AppIdentity.id).column", conformingTo: .data)
     static var transferRepresentation: some TransferRepresentation { CodableRepresentation(contentType: type) }
 }
@@ -21,44 +26,42 @@ enum WideDropZone: Equatable {
 struct WideDropTarget: Equatable {
     let column: Workspace.Column
     let zone: WideDropZone
-    let pane: WideNavigation.Beside
+    let pane: WideNavigation.Pane
     let next: WideNavigation
 }
 
 final class WideDropState {
     var drag: Int?
-    var pane: WideNavigation.Beside??
+    var pane: WideNavigation.Pane??
     var under: CGFloat = 0
 }
 
-/// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：会话（栏头的名字、会话条的行、带会话的看板卡）与灵感（卡、灵感那一块的栏头）。
+/// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：每一块的胶囊（`PaneTitle`）、会话条的行、带会话的看板卡、灵感卡。
+/// 落在一块的左右四分之一插在它旁边，正中换掉它；放满了只能换，已在这一排的是换位。独占的页（进展）只能换掉。
+/// 新拖来的灵感是拿来并排看的，不换掉别的块：落在正中也放到那一块右边，放满了才换。
 /// 拖着时只看得到类型、读不到内容，落点只按类型定：带会话的就当会话，只带卡的当灵感（不带会话的任务卡放下时不接）。
 enum WideDrop {
     static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
 
-    static func target(_ types: Set<UTType>, dragged: WideNavigation.Beside??, at fraction: CGFloat, in column: Workspace.Column, workspace: Workspace) -> WideDropTarget? {
-        guard case .wide(let state) = workspace.navigation else { return nil }
+    static func target(_ types: Set<UTType>, dragged: WideNavigation.Pane??, at fraction: CGFloat, in column: Workspace.Column, workspace: Workspace) -> WideDropTarget? {
+        guard case .wide(let state) = workspace.navigation, let over = workspace.pane(in: column) else { return nil }
         let session = types.contains(DraggedColumn.type) || types.contains(.cuepadSession)
         guard session || types.contains(.cuepadCard) else { return nil }
-        let pane: WideNavigation.Beside
+        let pane: WideNavigation.Pane
         switch dragged {
         case .some(.some(let known)): pane = known
         case .some(.none): return nil
         case .none: pane = session ? .session(standIn) : .card(standIn.id)
         }
-        let isSession = if case .session = pane { true } else { false }
-        let full = 1 + workspace.wideShown >= workspace.wideRoom
-        let zone: WideDropZone
-        if state.mainSession == nil || column == .main && isSession && workspace.openCard != nil {
-            guard isSession, column == .main else { return nil }
-            zone = .replace
-        } else if column == .main && !isSession {
-            guard !full else { return nil }
-            zone = .after
-        } else {
-            zone = full ? .replace : fraction < 0.25 ? .before : fraction > 0.75 ? .after : .replace
+        let fresh = !state.panes.contains(pane)
+        let full = fresh && workspace.wideShown >= workspace.wideRoom
+        var zone: WideDropZone = over.standsAlone || full ? .replace : fraction < 0.25 ? .before : fraction > 0.75 ? .after : .replace
+        if zone == .replace, pane.card != nil {
+            // 页的正中留给页里自己的落点（灵感拖到任务上）：灵感落在那里不算换掉这一页
+            if over.page != nil { return nil }
+            if fresh, !full { zone = .after }
         }
-        guard let next = state.dropping(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace, room: workspace.wideRoom, covering: workspace.openCard),
+        guard let next = state.dropping(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace, room: workspace.wideRoom),
               let index = next.panes.firstIndex(of: pane), index < workspace.wideRoom else { return nil }
         return WideDropTarget(column: column, zone: zone, pane: pane, next: next)
     }
@@ -69,7 +72,7 @@ enum WideDrop {
 extension View {
     /// 拖起它时告诉宽屏主区拖的是哪一块（`Workspace.dragging`）：iPad 拖着时读不到拖的内容（UIKit 只在放下时给），落点按它预演放下后的样子。
     /// Mac 拖着时就读得出剪贴板（`WideColumnView`），不用报。`.some(nil)` 是主区不接的（任务卡）。
-    @ViewBuilder func reportsWideDrag(_ pane: WideNavigation.Beside??) -> some View {
+    @ViewBuilder func reportsWideDrag(_ pane: WideNavigation.Pane??) -> some View {
         #if os(iOS)
         modifier(WideDragReport(pane: pane))
         #else
@@ -80,7 +83,7 @@ extension View {
 
 #if os(iOS)
 private struct WideDragReport: ViewModifier {
-    let pane: WideNavigation.Beside??
+    let pane: WideNavigation.Pane??
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
@@ -95,12 +98,13 @@ private struct WideDragReport: ViewModifier {
 #endif
 
 extension WideDrop {
-    static func pane(_ type: UTType, _ data: Data) throws -> WideNavigation.Beside? {
+    static func pane(_ type: UTType, _ data: Data, window: UUID, workspace: Workspace) throws -> WideNavigation.Pane? {
         let decoder = JSONDecoder()
         switch type {
         case DraggedColumn.type:
             let value = try decoder.decode(DraggedColumn.self, from: data)
-            return .session(SessionRoute(id: value.recordID, sessionID: value.sessionID))
+            if let session = value.session { return .session(SessionRoute(id: session.recordID, sessionID: session.sessionID)) }
+            return value.windowID == window ? workspace.pageRoute.map { .page($0) } : nil
         case .cuepadSession:
             let value = try decoder.decode(DraggedSession.self, from: data)
             return .session(SessionRoute(id: SessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID))
@@ -113,7 +117,7 @@ extension WideDrop {
         }
     }
 
-    @discardableResult static func apply(_ pane: WideNavigation.Beside, _ target: WideDropTarget, workspace: Workspace) -> Bool {
+    @discardableResult static func apply(_ pane: WideNavigation.Pane, _ target: WideDropTarget, workspace: Workspace) -> Bool {
         workspace.drop(pane, at: target.column.index + (target.zone == .after ? 1 : 0), replacing: target.zone == .replace)
     }
 
@@ -126,7 +130,7 @@ extension WideDrop {
 #if os(iOS)
 extension WideColumnController: UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        guard slot.column != nil, workspace.session(in: .main) != nil || !session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) else { return false }
+        guard slot.column != nil else { return false }
         return session.hasItemsConforming(toTypeIdentifiers: WideDrop.types.map(\.identifier))
     }
 
@@ -158,12 +162,12 @@ extension WideColumnController: UIDropInteractionDelegate {
         }
     }
 
-    private func load(_ provider: NSItemProvider, _ type: UTType, _ done: @escaping @MainActor (Result<WideNavigation.Beside?, any Error>) -> Void) {
-        provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
+    private func load(_ provider: NSItemProvider, _ type: UTType, _ done: @escaping @MainActor (Result<WideNavigation.Pane?, any Error>) -> Void) {
+        provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { [workspace, window = focus.windowID] data, error in
             Task { @MainActor in
                 done(Result {
                     if let error { throw error }
-                    return try WideDrop.pane(type, data ?? Data())
+                    return try WideDrop.pane(type, data ?? Data(), window: window, workspace: workspace)
                 })
             }
         }
@@ -178,115 +182,6 @@ extension WideColumnController: UIDropInteractionDelegate {
 }
 #endif
 
-struct WideSessionTitle: View {
-    let title: String
-    let project: Project?
-    var ended = false
-    var tier: CueTierButton?
-    let column: Workspace.Column
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.wideWindowID) private var windowID
-    @Environment(\.headInset) private var inset
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: Spacing.item) {
-            name
-            if column == .main, let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
-            Spacer(minLength: Spacing.item)
-        }
-        .accessibilityElement(children: .contain)
-        .padding(inset).frame(height: Chrome.band)
-        .windowDragArea()
-    }
-
-    private var closes: Bool { column != .main || !workspace.besideSessions.isEmpty }
-
-    private var name: some View {
-        HStack(spacing: Spacing.glyph) {
-            if let project {
-                Button { workspace.select(.project(project.id)) } label: { Text(verbatim: project.shownName).lineLimit(1) }
-                    .buttonStyle(PressStyle(.inline))
-                    .foregroundStyle(palette.ink3)
-                Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
-            }
-            if let windowID, let session = workspace.session(in: column) {
-                #if os(iOS)
-                WideTitleDrag(title: title, type: DraggedColumn.type, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID), pane: .session(session))
-                    .layoutPriority(1)
-                #else
-                Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1)
-                    .contentShape(.rect)
-                    .draggable(DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
-                    .layoutPriority(1)
-                #endif
-            }
-            if ended {
-                HStack(spacing: Spacing.tight) {
-                    Image(.ended).readerHidden(true)
-                    Text(SessionShown(status: .ended).label)
-                }
-                    .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
-                    .padding(.leading, Spacing.tight)
-                    .transition(.opacity)
-            }
-            if let tier { tier.padding(.leading, Spacing.tight) }
-            if closes { PaneClose { workspace.closeColumn(column) } }
-        }
-        .font(Typography.toolbarTitle)
-        .animation(Motion.fade, value: ended)
-        .padding(.leading, Spacing.block)
-        .padding(.trailing, closes ? PaneClose.inset : Spacing.block)
-        .frame(height: Chrome.control)
-        .glass(in: .capsule)
-    }
-}
-
-struct PaneClose: View {
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    static let inset = Spacing.tight
-    private static var side: CGFloat { Chrome.control - 2 * inset }
-
-    var body: some View {
-        Button(action: action) {
-            Image(.close).font(Glyph.small).foregroundStyle(palette.ink3)
-                .frame(width: Self.side, height: Self.side)
-                .contentShape(.circle)
-        }
-        .buttonStyle(PressStyle(.control))
-        #if os(iOS)
-        .contentShape(.hoverEffect, .circle)
-        .hoverEffect(.highlight)
-        #endif
-        .help(Text("收起并排"))
-        .accessibilityLabel(Text("收起并排"))
-    }
-}
-
-struct HeadTool: View {
-    let label: LocalizedStringResource
-    let icon: Icon
-    var on = false
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink2) }
-            .buttonStyle(ControlButtonStyle(kind: .circular))
-            .toggledOn(on)
-            .help(Text(label))
-            .accessibilityLabel(Text(label))
-            .accessibilityAddTraits(on ? .isSelected : [])
-    }
-}
-
-extension EnvironmentValues {
-    @Entry var headInset = EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: Spacing.page)
-    @Entry var underCue: CGFloat = 0
-}
-
 struct WideDropFeedback: View {
     let window: CGFloat
     @Environment(Workspace.self) private var workspace
@@ -295,7 +190,7 @@ struct WideDropFeedback: View {
     @State private var last: WideMetrics.Span?
 
     var body: some View {
-        let span = workspace.dropTarget.flatMap { WideMetrics(width: window, workspace: workspace, navigation: $0.next).spans[$0.pane] }
+        let span = workspace.dropTarget.flatMap { WideMetrics(width: window, workspace: workspace, navigation: $0.next).spans[WideMetrics.Piece($0.pane)] }
         let shown = span ?? last
         RoundedRectangle(cornerRadius: Radius.sheet)
             .fill(palette.selection)

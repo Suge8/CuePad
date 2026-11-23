@@ -10,14 +10,14 @@ extension DebugScene {
 
     static func presetBeside(_ workspace: Workspace) async {
         if let share = args.layoutOpts.besideShare {
-            for kind in [WideMetrics.Kind.session, .preview] { workspace.paneShares.set([1 - share, share], for: [kind]) }
+            for kind in [WideMetrics.Kind.session, .preview] { workspace.paneShares.set([1 - share, share], for: [.session, kind]) }
         }
         if let beside = args.layoutOpts.beside {
             workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .aside)
         }
         if args.layoutOpts.besideCard {
             await running("并排一条灵感") {
-                if let card = try await card(in: Project.defaultID, store: workspace.services.store) { workspace.drop(.card(card), at: WideNavigation.maxPanes, replacing: false) }
+                if let card = try await card(in: workspace.currentProject ?? Project.defaultID, store: workspace.services.store) { workspace.drop(.card(card), at: WideNavigation.maxPanes, replacing: false) }
             }
         }
     }

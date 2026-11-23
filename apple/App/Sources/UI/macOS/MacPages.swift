@@ -14,11 +14,11 @@ final class MacPages {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
-    func visit(from left: Route, to page: Route) {
+    func visit(from left: Route?, to page: Route?) {
         current = page
-        keep(left)
-        keep(page)
-        guard left != page else { return }
+        if let left { keep(left) }
+        if let page { keep(page) }
+        guard let left, left != page else { return }
         leaving = left
         Task { [weak self] in
             await NextFrame.wait()
@@ -28,7 +28,6 @@ final class MacPages {
     }
 
     private func keep(_ page: Route) {
-        if case .session = page { return }
         visits += 1
         lastSeen[page] = visits
         guard !kept.contains(page) else { return }

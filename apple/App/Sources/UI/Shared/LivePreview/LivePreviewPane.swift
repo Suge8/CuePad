@@ -8,7 +8,7 @@ struct LivePreviewTool: View {
 
     var body: some View {
         let button = workspace.liveButton(session.id)
-        HeadTool(label: Self.label(button ?? .closed(nil)), icon: .livePreview, on: button?.isShowing == true) { workspace.toggleLivePreview() }
+        HeadTool(label: Self.label(button ?? .closed(nil)), icon: .livePreview, on: button?.isShowing == true) { workspace.toggleLivePreview(of: session) }
             .opacity(button == nil ? 0 : 1)
             .allowsHitTesting(button != nil)
             .readerHidden(button == nil)
@@ -66,7 +66,7 @@ struct LivePreviewPane: View {
         .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            guard workspace.beside.contains(.preview) else { return }
+            guard workspace.panes.contains(where: { $0.previewed != nil }) else { return }
             LivePreview.paneSize = size
         }
         .onDisappear {
@@ -187,7 +187,7 @@ extension Workspace {
 
     func toggleLiveFill() {
         guard liveFill == nil else { return endLiveFill() }
-        guard let session = session(in: .main), showsLivePreview(session.id) else { return }
+        guard let session = liveSession, showsLivePreview(session.id) else { return }
         liveFill = LiveFill(session: session.id)
     }
 

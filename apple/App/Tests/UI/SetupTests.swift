@@ -43,7 +43,7 @@ struct SetupTests {
 
         #expect(await first.setUp(connecting: services.connectableAgents, enablingCue: true).isEmpty)
         #expect(try await services.store.cueProfile()?.hostID == TestApp.hostID)
-        #expect(first.mainRoute == .progress && first.besideSessions.isEmpty)
+        #expect(first.mainRoute == .progress && !first.isSplit)
 
         app.relaunch()
         #expect(services.isConnected(.pi) && services.isConnected(.claudeCode), "接入记在设置里，重开还在")

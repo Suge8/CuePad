@@ -51,6 +51,7 @@ final class Workspace {
     var navigation: Navigation {
         didSet {
             MainThreadWatch.shared.page(navigation.trail)
+            if case .wide(let now) = navigation, case .wide(let was) = oldValue { settle(from: was, to: now) }
             #if os(iOS)
             keepLivePreviews()
             #endif
@@ -70,12 +71,24 @@ final class Workspace {
     let presses = CardPresses()
     let sendState: SendState
     #endif
+    /// 宽屏盖在页那一块上的（点开的灵感、规则文件；页不在这一排时盖在最左那块上）。底下那块换了、这条灵感自己成了一块，就收（`settle`）。
     var overlay: Overlay? {
         didSet {
             #if os(macOS)
             if case .card(let id)? = overlay { presses.present(id) }
             #endif
         }
+    }
+
+    private func settle(from was: WideNavigation, to now: WideNavigation) {
+        let moved = was.panes[was.host] != now.panes[now.host]
+        if moved || openCard.map({ now.panes.contains(.card($0)) }) == true { overlay = nil }
+        #if os(macOS)
+        guard moved else { return }
+        presses.clearSelection()
+        presses.dismiss()
+        pages.visit(from: was.page, to: now.page)
+        #endif
     }
     enum Overlay: Hashable {
         case card(UUID)
@@ -148,7 +161,7 @@ final class Workspace {
     }
     var preview: PreviewOpening?
     var dropTarget: WideDropTarget?
-    @ObservationIgnored var dragging: WideNavigation.Beside??
+    @ObservationIgnored var dragging: WideNavigation.Pane??
     var replyFocus: UUID?
     var folderPicker: Project?
 
@@ -176,8 +189,6 @@ final class Workspace {
     var liveCover: UUID?
     #endif
     #if os(macOS)
-    let overlayHeader = OverlayHeader()
-    weak var openCardEditing: CardEditing?
     var liveSent: [UUID: LivePreview.Target] = [:]
     var liveFound: [UUID: [URL]] = [:]
     @ObservationIgnored var liveScanner = LiveServers()
@@ -220,7 +231,10 @@ final class Workspace {
     }
 
     #if os(macOS)
-    var mountedPages: [Route] { pages.kept.contains(mainRoute) ? pages.kept : pages.kept + [mainRoute] }
+    var mountedPages: [Route] {
+        guard let page = pageRoute, !pages.kept.contains(page) else { return pages.kept }
+        return pages.kept + [page]
+    }
 
     func finishClosingCard() {
         guard openCard == nil else { return }
@@ -348,7 +362,7 @@ final class Workspace {
     private var shownRoutes: [Route] {
         let routes: [Route] = switch navigation {
         case .narrow(let state): state.path
-        case .wide: [mainRoute] + beside.compactMap { if case .card(let id) = $0 { .card(id) } else { nil } }
+        case .wide(let state): state.panes.compactMap(\.route)
         }
         return routes + [overlay?.route].compactMap(\.self)
     }

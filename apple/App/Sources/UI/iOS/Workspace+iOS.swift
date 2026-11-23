@@ -3,8 +3,6 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    func willSelect(_ route: Route, from previous: Route) { overlay = nil }
-
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) {

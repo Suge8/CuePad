@@ -101,7 +101,7 @@ final class WideFocus {
     }
 
     func move(by step: Int, in workspace: Workspace) {
-        guard let source = current?.column, source.index + step >= 0, workspace.moveColumn(source, by: step) else { return }
+        guard let source = current?.column, workspace.moveColumn(source, by: step) else { return }
         Task {
             await NextFrame.wait()
             focus(WideSlot(Workspace.Column(index: source.index + step)))
@@ -118,7 +118,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     let shape: WideMetrics.Shape
     var hidden = false
     var under: CGFloat = 0
-    var spans: [WideNavigation.Beside: WideMetrics.Span] = [:]
+    var spans: [WideMetrics.Piece: WideMetrics.Span] = [:]
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace
@@ -204,7 +204,7 @@ final class WideColumnView: NSView {
         let pasteboard = sender.draggingPasteboard
         if drop.drag != sender.draggingSequenceNumber {
             drop.drag = sender.draggingSequenceNumber
-            drop.pane = try? Self.pane(in: pasteboard)
+            drop.pane = try? pane(in: pasteboard)
         }
         let types = Set((pasteboard.types ?? []).compactMap { UTType($0.rawValue) })
         let x = convert(sender.draggingLocation, from: nil).x
@@ -226,7 +226,7 @@ final class WideColumnView: NSView {
         workspace.dropTarget = nil
         guard let target, target.column == slot.column else { return false }
         do {
-            guard let pane = try Self.pane(in: sender.draggingPasteboard) ?? nil else { return false }
+            guard let pane = try pane(in: sender.draggingPasteboard) ?? nil else { return false }
             return WideDrop.apply(pane, target, workspace: workspace)
         } catch {
             workspace.fail(error)
@@ -235,9 +235,9 @@ final class WideColumnView: NSView {
     }
 
     /// 拖的是哪一块：nil 是剪贴板上还读不出（按类型猜），`.some(nil)` 是读出来了但主区不接（任务卡）。同一个 App 里拖的，拖着时就读得出。
-    private static func pane(in pasteboard: NSPasteboard) throws -> WideNavigation.Beside?? {
+    private func pane(in pasteboard: NSPasteboard) throws -> WideNavigation.Pane?? {
         for type in WideDrop.types {
-            if let data = pasteboard.data(forType: .init(type.identifier)) { return .some(try WideDrop.pane(type, data)) }
+            if let data = pasteboard.data(forType: .init(type.identifier)) { return .some(try WideDrop.pane(type, data, window: focus.windowID, workspace: workspace)) }
         }
         return nil
     }
@@ -273,7 +273,7 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     let shape: WideMetrics.Shape
     var hidden = false
     var under: CGFloat = 0
-    var spans: [WideNavigation.Beside: WideMetrics.Span] = [:]
+    var spans: [WideMetrics.Piece: WideMetrics.Span] = [:]
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
     @Environment(Workspace.self) private var workspace

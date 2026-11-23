@@ -6,7 +6,7 @@ extension Workspace {
     var top: Route { mainRoute }
 
     var currentProject: UUID? {
-        let routes = layout == .narrow ? path : [mainRoute]
+        let routes = layout == .narrow ? path : [pageRoute].compactMap(\.self)
         return routes.reversed().compactMap { route in
             if case .project(let id) = route { id } else { nil }
         }.first
@@ -18,7 +18,7 @@ extension Workspace {
         case .narrow(let state):
             if case .session(let route)? = state.path.last { sessions = [route] } else { sessions = [] }
         case .wide(let state):
-            sessions = [state.mainSession].compactMap(\.self) + state.besideSessions
+            sessions = state.sessions
         }
         return sessions.map { ViewerKeeper.Page(id: $0.id, sessionID: $0.sessionID) }
     }
@@ -63,13 +63,12 @@ extension Workspace {
             if let index { state.path = Array(state.path[..<index]) }
             navigation = .narrow(state)
         case .wide(var state):
-            if case .card(let id) = route, state.beside.contains(.card(id)) {
-                state.beside.removeAll { $0 == .card(id) }
+            if let index = state.panes.firstIndex(where: { $0.card.map { .card($0) == route } ?? false }) {
+                state.close(at: index)
                 navigation = .wide(state)
-                return
+            } else if state.page == route {
+                selectWide(browseRoute)
             }
-            guard case .page(route) = state.main else { return }
-            selectWide(browseRoute)
         }
     }
 

@@ -21,7 +21,7 @@ struct CardEditorScreen: View {
     var body: some View {
         page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
-            .floatingHeader(.verbatim(data?.project?.shownName ?? ""), idea: workspace.layout == .wide ? cardID : nil, detail: { detail }, trailing: { actions })
+            .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: { detail }, trailing: { actions })
             .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
                 if case CueStoreError.notFound = error { return }
                 workspace.fail(error)

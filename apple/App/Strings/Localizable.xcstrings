@@ -561,6 +561,22 @@
         }
       }
     },
+    "%@ 的操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actions for %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的操作"
+          }
+        }
+      }
+    },
     "%@ 的文件夹" : {
       "localizations" : {
         "en" : {
@@ -14358,22 +14374,6 @@
         }
       }
     },
-    "收起并排" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close Side by Side"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起并排"
-          }
-        }
-      }
-    },
     "收起活预览" : {
       "localizations" : {
         "en" : {
@@ -14402,22 +14402,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收起活预览：%@"
-          }
-        }
-      }
-    },
-    "收起（Esc）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close (Esc)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起（Esc）"
           }
         }
       }
@@ -20410,22 +20394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "置顶"
-          }
-        }
-      }
-    },
-    "置顶、编辑名称与图标" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pin, edit name and icon"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "置顶、编辑名称与图标"
           }
         }
       }

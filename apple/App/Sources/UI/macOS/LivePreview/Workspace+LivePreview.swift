@@ -5,9 +5,15 @@ import SwiftUI
 import WebKit
 
 extension Workspace {
-    func toggleLivePreview() {
-        guard case .wide(var state) = navigation, case .session(let session) = state.main else { return }
-        if !state.beside.contains(.preview) {
+    /// 没点名时说的是开着预览的那个会话，没有就是这一排最左的会话。
+    var liveSession: SessionRoute? {
+        guard case .wide(let state) = navigation else { return nil }
+        return state.sessions.first { $0.id == state.preview } ?? state.sessions.first
+    }
+
+    func toggleLivePreview(of route: SessionRoute? = nil) {
+        guard case .wide(var state) = navigation, let session = route ?? liveSession else { return }
+        if state.preview != session.id {
             let preview = livePreviews[session.id] ?? LivePreview()
             preview.sessionID = preview.sessionID ?? session.sessionID
             livePreviews[session.id] = preview
@@ -17,7 +23,7 @@ extension Workspace {
                 preview.retarget(.init(url: first, source: .found))
             }
         }
-        state.togglePreview(room: wideRoom)
+        state.togglePreview(of: session.id, room: wideRoom)
         navigation = .wide(state)
     }
 
@@ -31,7 +37,7 @@ extension Workspace {
 
     func hasLivePage(_ session: UUID) -> Bool { !livePages(session).isEmpty }
 
-    func showsLivePreview(_ session: UUID) -> Bool { beside.contains(.preview) && self.session(in: .main)?.id == session }
+    func showsLivePreview(_ session: UUID) -> Bool { panes.contains(.preview(session)) }
 
     func liveButton(_ session: UUID) -> LiveButton? {
         if showsLivePreview(session) { return .open(livePreviews[session]?.address) }
@@ -40,8 +46,8 @@ extension Workspace {
     }
 
     func openLivePreview(_ session: SessionState) {
-        if self.session(in: .main)?.id != session.id { openSession(session.id, sessionID: session.sessionID, in: .main) }
-        if !beside.contains(.preview) { toggleLivePreview() }
+        if !shownSessions.contains(where: { $0.id == session.id }) { openSession(session.id, sessionID: session.sessionID, in: .main) }
+        if !showsLivePreview(session.id) { toggleLivePreview(of: SessionRoute(id: session.id, sessionID: session.sessionID)) }
     }
 
     func livesHere(_ session: SessionState) -> Bool { Self.liveHosts(services).contains(session.hostID) }
@@ -73,12 +79,12 @@ extension Workspace {
         preview.sessionID = address.sessionID
         livePreviews[id] = preview
         liveReleased.remove(id)
-        if !preview.yields(showing: here && beside.contains(.preview)) { return liveSent[id] = target }
+        if !preview.yields(showing: showsLivePreview(id)) { return liveSent[id] = target }
         liveSent[id] = nil
         preview.retarget(target)
         preview.start()
         preview.engage()
-        if here, beside.isEmpty { toggleLivePreview() }
+        if here, !isSplit { toggleLivePreview() }
     }
 
     func watchLiveServers() async {
@@ -133,7 +139,7 @@ extension Workspace {
     static let liveScan = Duration.seconds(2)
 
     func pickElement() {
-        guard let session = session(in: .main), let preview = livePreviews[session.id] else { return }
+        guard let session = liveSession, let preview = livePreviews[session.id] else { return }
         if preview.picking { return preview.cancelPick() }
         Task {
             guard let element = await preview.pick() else { return }

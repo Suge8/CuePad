@@ -7,7 +7,7 @@ struct PageStack: View {
     @Environment(\.underCue) private var under
 
     var body: some View {
-        let current = workspace.mainRoute
+        let current = workspace.pageRoute
         let pages = workspace.mountedPages
         let leaving = workspace.pages.leaving
         PageStackLayout(active: current) {
@@ -40,7 +40,6 @@ struct PageStack: View {
         case .library: LibraryPage()
         case .cue: CuePage()
         case .progress: TaskBoardPage()
-        case .session(let route): if route.sessionID != nil { SessionPage(route) }
         default: EmptyView()
         }
     }
@@ -49,7 +48,7 @@ struct PageStack: View {
 private extension Route {
     var fillsBand: Bool {
         switch self {
-        case .progress, .session: true
+        case .progress: true
         default: false
         }
     }
@@ -62,7 +61,7 @@ nonisolated private struct PageKey: LayoutValueKey {
 /// 叠放挂着的页：当前页铺满，其余的沿用它们离开时的尺寸（窗口、侧栏怎么变都不再向它们提新尺寸，也就不重排）；
 /// 回到前台时按当时的尺寸排一次。不回答对齐查询（默认实现会递归问遍整页子树）。
 private struct PageStackLayout: Layout {
-    let active: Route
+    let active: Route?
 
     final class Memo {
         var sizes: [Route: CGSize] = [:]

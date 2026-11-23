@@ -49,9 +49,16 @@ private struct SessionPageBody: View {
                     .safeAreaPadding(.top, Chrome.band)
                     .overlay(alignment: .top) {
                         if let session {
-                            WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
-                                             ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }, column: column)
-                                .contextMenu { if secondary { menu(session, digest) } }
+                            PaneHead {
+                                PaneTitle(
+                                    crumb: .init(digest?.project, in: workspace), title: digest?.title(at: services.speech) ?? session.title,
+                                    handle: workspace.pane(in: column), close: workspace.isSplit ? { workspace.closeColumn(column) } : nil,
+                                    marks: { SessionMarks(ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }) })
+                                if let route = workspace.session(in: column) { LivePreviewTool(session: route) }
+                            }
+                            .contextMenu { if secondary { menu(session, digest) } }
+                        } else if stored != nil, workspace.isSplit {
+                            PaneHead { PaneTitle(title: String(localized: "会话"), handle: workspace.pane(in: column), close: { workspace.closeColumn(column) }) }
                         }
                     }
             } else {
@@ -213,4 +220,27 @@ extension SessionPageBody {
 private struct DigestKey: Equatable {
     var id: UUID
     var sessionID: String?
+}
+
+/// 会话胶囊里名字后面的记号：已休眠、交给 Cue 的那一档。
+private struct SessionMarks: View {
+    let ended: Bool
+    let tier: CueTierButton?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            if ended {
+                HStack(spacing: Spacing.tight) {
+                    Image(.ended).readerHidden(true)
+                    Text(SessionShown(status: .ended).label)
+                }
+                .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
+                .padding(.leading, Spacing.tight)
+                .transition(.opacity)
+            }
+            if let tier { tier.padding(.leading, Spacing.tight) }
+        }
+        .animation(Motion.fade, value: ended)
+    }
 }

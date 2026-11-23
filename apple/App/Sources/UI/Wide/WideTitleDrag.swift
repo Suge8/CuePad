@@ -6,7 +6,7 @@ struct WideTitleDrag: UIViewRepresentable {
     let title: String
     let type: UTType
     let item: any Encodable & Sendable
-    let pane: WideNavigation.Beside
+    let pane: WideNavigation.Pane
     @Environment(Workspace.self) private var workspace
 
     func makeUIView(context: Context) -> WideTitleLabel {
@@ -29,10 +29,10 @@ struct WideTitleDrag: UIViewRepresentable {
 final class WideTitleLabel: UILabel, UIDragInteractionDelegate {
     var type: UTType
     var item: any Encodable & Sendable
-    var pane: WideNavigation.Beside
+    var pane: WideNavigation.Pane
     private let workspace: Workspace
 
-    init(type: UTType, item: any Encodable & Sendable, pane: WideNavigation.Beside, workspace: Workspace) {
+    init(type: UTType, item: any Encodable & Sendable, pane: WideNavigation.Pane, workspace: Workspace) {
         self.type = type
         self.item = item
         self.pane = pane

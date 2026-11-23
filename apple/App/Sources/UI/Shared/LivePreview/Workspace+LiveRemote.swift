@@ -13,7 +13,7 @@ extension Workspace {
 
     func showsLivePreview(_ session: UUID) -> Bool {
         switch layout {
-        case .wide: beside.contains(.preview) && self.session(in: .main)?.id == session
+        case .wide: panes.contains(.preview(session))
         case .narrow: liveCover == session && liveRoute?.id == session
         }
     }
@@ -26,13 +26,15 @@ extension Workspace {
 
     private var liveRoute: SessionRoute? {
         switch navigation {
-        case .wide: session(in: .main)
+        case .wide(let state): state.sessions.first { $0.id == state.preview } ?? state.sessions.first
         case .narrow(let state): if case .session(let route)? = state.path.last { route } else { nil }
         }
     }
 
-    func toggleLivePreview() {
-        guard let route = liveRoute else { return }
+    var liveSession: SessionRoute? { liveRoute }
+
+    func toggleLivePreview(of session: SessionRoute? = nil) {
+        guard let route = liveRoute, session == nil || session == route else { return }
         let opening = !showsLivePreview(route.id)
         if opening {
             guard let answer = liveAnswer(route.id), !answer.pages.isEmpty else { return }
@@ -44,7 +46,7 @@ extension Workspace {
         }
         switch navigation {
         case .wide(var state):
-            if opening != state.beside.contains(.preview) { state.togglePreview(room: wideRoom) }
+            if opening != (state.preview == route.id) { state.togglePreview(of: route.id, room: wideRoom) }
             navigation = .wide(state)
         case .narrow:
             liveCover = opening ? route.id : nil
@@ -65,7 +67,7 @@ extension Workspace {
 
     func keepLivePreviews() {
         let open: Set<UUID> = switch navigation {
-        case .wide: Set(([session(in: .main)].compactMap(\.self) + besideSessions).map(\.id))
+        case .wide(let state): Set(state.sessions.map(\.id))
         case .narrow(let state): Set(state.path.compactMap { if case .session(let route) = $0 { route.id } else { nil } })
         }
         let gone = livePreviews.filter { !open.contains($0.key) }.values

@@ -4,7 +4,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadBeside <会话>`（宽屏）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
     let beside: String?
-    /// `-CuePadBesideCard YES`（宽屏，配 `-CuePadSession`）：最左那个会话旁边再并排一条默认项目的灵感（`-CuePadCard` 挑哪条），在 `-CuePadBeside` 的会话右边
+    /// `-CuePadBesideCard YES`（宽屏）：这一排最右再并排一条灵感（`-CuePadCard` 挑哪条）：开着项目页就取这个项目的，否则取默认项目的
     let besideCard: Bool
     /// `-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类）；不给时 iPad 的调试实例起来先铺满屏
     let compact: Double?

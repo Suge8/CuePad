@@ -4,13 +4,6 @@ import CueStore
 import Foundation
 
 extension Workspace {
-    func willSelect(_ route: Route, from previous: Route) {
-        overlay = nil
-        presses.clearSelection()
-        presses.dismiss()
-        pages.visit(from: previous, to: route)
-    }
-
     func showEditor(_ card: UUID) { present(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) { present(.library(file)) }

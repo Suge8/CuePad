@@ -8,7 +8,9 @@ struct LibraryFileLayer: View {
     var body: some View {
         ZStack {
             if workspace.isLibraryReady, let file = workspace.openLibraryFile {
-                LibraryFilePage(file: file).id(file).transition(.opacity)
+                LibraryFilePage(file: file).safeAreaPadding(.top, Chrome.band)
+                    .overlay(alignment: .top) { LibraryFileHead(file: file) }
+                    .id(file).transition(.opacity)
             }
         }
         .animation(Motion.fade, value: workspace.openLibraryFile)
@@ -38,17 +40,7 @@ private struct LibraryFilePage: View {
             await NextFrame.wait()
             draft?.handle.focus()
         }
-        .overlayHeader(header(library, draft), in: workspace)
         .onDisappear { if let draft { Task { await draft.leave() } } }
-    }
-
-    private func header(_ library: AgentLibrary?, _ draft: FileDraft?) -> OverlayHeader.Content {
-        let entry = library?.file(file)
-        return OverlayHeader.Content(
-            page: .library(file), title: workspace.fileTitle(file, in: library),
-            detail: library?.detail(of: file, draft: draft) ?? Dotted(),
-            failed: draft?.state == .failed, help: entry.flatMap { library?.shown($0.textPath) },
-            widest: Dotted(library?.fileName(file), FileDraft.longestShownState))
     }
 }
 #endif

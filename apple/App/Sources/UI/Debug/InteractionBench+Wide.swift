@@ -151,7 +151,7 @@ extension InteractionBench {
         let settings = workspace.services.settings
         return Snapshot(
             rail: settings.railExpanded, cue: settings.cueOpen, pane: settings.navigationPane, project: settings.currentProject,
-            main: workspace.mainRoute, beside: workspace.besideSessions.first?.id,
+            main: workspace.mainRoute, beside: workspace.shownSessions.dropFirst().first?.id,
             drafts: ids.map { settings.replyDraft(for: $0).text } + [workspace.cue.draft.text])
     }
 
