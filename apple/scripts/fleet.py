@@ -5,7 +5,7 @@
                                             存活 CUEPAD_RUN_SECONDS 秒（缺省 30 分钟）；打印每一端的 PID 或 UDID，写进 .derived/fleet/fleet.json（ui.py 按角色名认）
   fleet status                              各端还在不在
   fleet down                                结束本检出 run 起的全部实例（同 xc.sh stop）
-  fleet accept [秒=60]                      验收：iPhone 上 ⌘N 建一条灵感、粘进一句话 → 在跑的其余端（Mac、iPad）的屏上读到它（ui.py 读界面，不查库）；打印各端看到的时刻，没读到以 1 退出
+  fleet accept [秒=60]                      验收：iPhone 上 ⌘N 建一条灵感、打进一句话 → 在跑的其余端（Mac、iPad）的屏上读到它（ui.py 读界面，不查库）；打印各端看到的时刻，没读到以 1 退出
   fleet cloud-sims                          建（已有就复用）两台专用模拟器 "CuePad Cloud iPhone"、"CuePad Cloud iPad"，打印 UDID：不在槽位池里，真云验收时在里面登测试账号
   fleet up --real [iphone] [ipad]           真云：两台专用模拟器连 CloudKit 开发环境（-CuePadCloudKit YES），用模拟器里登着的测试账号，两台登同一个账号才互相同步；
                                             库在 .derived/fleet-real（down 不删，免得每次从头拉）。没登账号时 App 照常起、不同步。Mac 的真云在虚拟机里跑，不在这里起
@@ -97,7 +97,7 @@ def accept(timeout):
     if "iphone" not in state or len(state) < 2:
         raise SystemExit("至少要 iphone 和另一端在跑：先 xc.sh fleet up")
     phone = state["iphone"]["udid"]
-    stamp = f"灵感{time.strftime('%H%M%S')}验收"
+    stamp = time.strftime("%Y%m%d%H%M%S")  # 只用数字：拼音键盘下字母停在候选里不上屏
     line = []
 
     def mark(who, what, at=None):
@@ -108,7 +108,7 @@ def accept(timeout):
     mark("iPhone", "⌘N 建一条灵感")
     ui.wait(phone, "正文", 20)
     mark("iPhone", "编辑页出现")
-    ui.tap(phone, "正文", "TextArea")  # 编辑页出现时输入框未必已拿到焦点：粘贴落空过一次
+    ui.tap(phone, "正文", "TextArea")  # 编辑页出现时输入框未必已拿到焦点
     windows, errors = {}, {}
 
     def watch(role):
@@ -117,23 +117,22 @@ def accept(timeout):
         except SystemExit:
             errors[role] = True
 
-    # 先开始轮询再粘贴：每一轮"读完时有没有"都记着，看到的时刻才不被手机这边的确认拖后
+    # 先开始轮询再打字：每一轮"读完时有没有"都记着，看到的时刻才不被手机这边的确认拖后
     threads = [threading.Thread(target=watch, args=(r,)) for r in state if r != "iphone"]
     [t.start() for t in threads]
-    t_paste = time.time()
-    ui.paste(phone, stamp)
-    mark("iPhone", f"粘进「{stamp}」", t_paste)
-    ui.wait(phone, stamp, 10)
+    t_typed = time.time()
+    ui.type_in(phone, stamp)
+    mark("iPhone", f"打进「{stamp}」", t_typed)
     mark("iPhone", "自己的正文里读回了它")
     [t.join() for t in threads]
     for role, (at, miss) in windows.items():
-        mark("Mac" if role == "mac" else "iPad", "屏上读到" + (f"（上一轮从 +{miss - t0:.1f} 秒开始读、那时还没有）" if miss and miss > t_paste else ""), at)
+        mark("Mac" if role == "mac" else "iPad", "屏上读到" + (f"（上一轮从 +{miss - t0:.1f} 秒开始读、那时还没有）" if miss and miss > t_typed else ""), at)
     for t, who, what in sorted(line):
         print(f"t+{t - t0:5.1f}s  {who:6} {what}")
     for role in errors:
         print(f"没读到：{role} 的屏上 {timeout:g} 秒内没出现「{stamp}」", file=sys.stderr)
     for role, (at, _) in windows.items():
-        print(f"{role}\t粘贴后 {at - t_paste:.1f} 秒读到")
+        print(f"{role}\t打字起 {at - t_typed:.1f} 秒读到")
     raise SystemExit(1 if errors else 0)
 
 
