@@ -124,14 +124,16 @@ struct BubbleText: View {
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 if let quote { QuoteLine(quote: quote) }
                 if truncated {
-                    Fold(open: $open, edge: .bottom) {
+                    RisingFold(open: $open, alignment: .trailing) {
                         DisclosureChevron(open: open)
-                            .frame(maxWidth: .infinity, minHeight: Self.toggle, alignment: .trailing).contentShape(.rect)
+                            .frame(maxWidth: Self.toggleWidth, minHeight: Self.toggle, alignment: .trailing).contentShape(.rect)
                             .padding(.bottom, -Spacing.item)
                             .accessibilityLabel(open ? Text("收起") : Text("展开"))
-                    } content: { words }
+                    } content: { unfolded in
+                        words(unfolded: unfolded)
+                    }
                 } else {
-                    words
+                    words(unfolded: false)
                 }
             }
         }
@@ -143,14 +145,19 @@ struct BubbleText: View {
             .animation(Motion.fade, value: trip)
     }
 
-    private var words: some View {
-        Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: open ? nil : foldedLines)
+    private func words(unfolded: Bool) -> some View {
+        Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: unfolded ? nil : foldedLines)
             .font(Typography.reading).foregroundStyle(palette.ink)
-            .background(alignment: .topLeading) { if let foldedLines, !open { truncationProbe(lineLimit: foldedLines) } }
+            .background(alignment: .topLeading) { if let foldedLines, !unfolded { truncationProbe(lineLimit: foldedLines) } }
             .fadesEdge(.bottom, when: truncated && !open)
     }
 
     private static let toggle: CGFloat = 20
+    #if os(macOS)
+    private static let toggleWidth: CGFloat? = nil
+    #else
+    private static let toggleWidth: CGFloat? = .infinity
+    #endif
 
     private func truncationProbe(lineLimit: Int) -> some View {
         GeometryReader { shown in

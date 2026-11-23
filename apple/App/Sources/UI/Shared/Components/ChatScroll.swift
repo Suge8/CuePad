@@ -50,7 +50,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         GeometryReader { proxy in
             ScrollViewReader { reader in
                 let padding = bottomPadding
-                let keeping = !pinned && follow.wrappedValue.target == nil
+                let keeping = !pinned && !follow.wrappedValue.growsUp && follow.wrappedValue.target == nil
                 ScrollView {
                     // 显式竖排正文与末尾锚点：宿主的隐式布局可能把零高锚点放在正文中部。
                     VStack(spacing: 0) {
@@ -93,13 +93,17 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     } action: { previous, reading in
                         let delivered = offset.deliver(reading)
                         let last = delivered.reading ?? previous
-                        let grown = reading.height - last.height
+                        // 钮在底边的折叠在开合（`RisingFold`）：这一段的高不是在末尾长出来的，它底下的留在原处，不滑、不留白。
+                        // 贴着最新时底边锚定已经做到；没贴着时系统的底边锚定不管，每帧把偏移跟上变的那一截
+                        let unfolding = follow.wrappedValue.growsUp, taller = reading.height - last.height
+                        if unfolding, !pinned, taller != 0 { lift.scroll(by: taller) }
+                        let grown = unfolding ? 0 : taller
                         let glides = delivered.reading != nil && !delivered.widthChanged
                         if reading.anchor.onScreen != onScreen { onScreen = reading.anchor.onScreen }
                         if let chatReading, chatReading.id != reading.anchor.reading { chatReading.id = reading.anchor.reading }
                         let shift = anchor.take()
                         if shift != 0 { lift.scroll(by: shift) }
-                        if follow.wrappedValue.prepending, grown > 0 {
+                        if follow.wrappedValue.prepending, taller > 0 {
                             // 上面排开的一批到了。离最早那头还近不近当场定，再排哪一批不看之后的读数来得早晚：没贴着最新时按跟过正在读的那一条之后的位置
                             // （读数已按它算）；贴着最新时正在读的就是最新处，停回新的最新处（打开时顶栏边距刚生效、系统把偏移放回了顶上，读数也不在最新处）
                             if follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
