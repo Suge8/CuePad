@@ -51,7 +51,7 @@ struct CardEditorScreen: View {
     @ViewBuilder private var detail: some View {
         Group {
             if let card = data?.card {
-                EditedLine(marks: EditedLine.Marks(edited: card.modifiedAt, pinned: card.isPinned))
+                EditedLine(edited: card.modifiedAt, pinned: card.isPinned)
             } else {
                 Text(verbatim: " ")
             }

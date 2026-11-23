@@ -48,10 +48,10 @@ struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
         HStack(spacing: 0) {
             HStack(spacing: Spacing.glyph) {
                 if let crumb {
-                    Button(action: crumb.action) { Text(verbatim: crumb.title).lineLimit(1) }
+                    Button(action: crumb.action) { Text(verbatim: crumb.title).fontWeight(.regular).lineLimit(1) }
                         .buttonStyle(PressStyle(.inline))
                         .foregroundStyle(palette.ink3)
-                    Text(verbatim: "/").foregroundStyle(palette.ink3).fixedSize().readerHidden(true)
+                    Text(verbatim: "/").fontWeight(.regular).foregroundStyle(palette.ink3).opacity(0.5).fixedSize().readerHidden(true)
                 }
                 name
                 if opens {
@@ -81,11 +81,11 @@ struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
 
     @ViewBuilder private var name: some View {
         if let handle, let windowID, let column = DraggedColumn(windowID: windowID, handle) {
-            #if os(iOS)
-            WideTitleDrag(title: title, column: column, pane: handle).layoutPriority(1)
-            #else
-            let grip = label.overlay { PaneGrip(title: title, column: column) }
+            let grip = label.overlay { PaneGrip(title: title, column: column, pane: handle) }
+            #if os(macOS)
             if opens { grip.contextMenu { menu } } else { grip }
+            #else
+            grip
             #endif
         } else {
             label
