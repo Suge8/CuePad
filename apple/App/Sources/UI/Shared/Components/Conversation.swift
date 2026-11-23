@@ -202,7 +202,7 @@ private struct RoundEndNote: View {
         NoteLine(icon: notice == .declined ? .declined : .endSession) { Text(verbatim: notice.label) }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            .transition(.entry)
+            .transition(.arrival)
     }
 }
 

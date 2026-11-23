@@ -1,28 +1,41 @@
 import QuartzCore
 import SwiftUI
 
-/// 叠加（`additive`）、每次各用各的键：上一段没走完又来一条时两段相加，屏上从当前位置连续接上。
+/// 贴着最新、内容在末尾长出来时整段从原处滑上去。叠加（`additive`）、每次各用各的键：上一段没走完又来一条时两段相加，屏上从当前位置连续接上。
 /// 否决的方案：SwiftUI 的偏移逐帧挪——每帧要主线程更新，Mac 上发出一句到回复与结果卡出来的那几秒主线程指令多近两成。
-/// 贴着最新、对话整段上滑了一次（`ContentLift.slide`）：第几次、滑了多高。末尾那一行（小人）按它反着挪回去，原地不动。
-struct ChatRise: Equatable {
-    var count = 0
-    var height: CGFloat = 0
-}
-
+/// 留在原处的那几块（`Unlifted`：在跑时的角色）在同一次提交里加一段反着的：两段都由渲染端按同一个时钟走，每一帧正好抵掉。
+/// 否决的方案：那一块用 SwiftUI 的动画反着挪——它按主线程这次更新开始的时刻起算，整段上滑按提交的时刻起算，新的一条到的那一拍主线程正忙，
+/// 两条曲线错开几十毫秒，那一块先被带下去一截再回来。
 @MainActor final class ContentLift {
     weak var probe: PlatformView?
+    private let still = NSHashTable<PlatformView>.weakObjects()
     private var slides = 0
 
     func slide(by height: CGFloat) {
-        guard let layer else { return }
+        guard let content else { return }
+        slides += 1
+        glide(content, from: height)
+        for view in still.allObjects { glide(view, from: -height) }
+    }
+
+    func hold(_ view: PlatformView, still holds: Bool) {
+        if holds { still.add(view) } else { still.remove(view) }
+    }
+
+    private func glide(_ view: PlatformView, from height: CGFloat) {
         let slide = CABasicAnimation(keyPath: "transform.translation.y")
-        slide.fromValue = downIsPositive ? height : -height
+        slide.fromValue = height
+        #if os(macOS)
+        // 平移在这一层的上一层里算（内容的上一层是滚动区的裁剪视图）：它跟着内容翻转（SwiftUI 的滚动区是），y 就朝下。
+        // 当成 Mac 的层一律 y 朝上的话方向反了：新到的一条插进来时整段先多窜上去一截、再往下落回终位。
+        if view.superview?.isFlipped == false { slide.fromValue = -height }
+        #endif
         slide.toValue = 0
         slide.isAdditive = true
         slide.duration = Motion.Glide.duration
         slide.timingFunction = Motion.Glide.timing
-        slides += 1
-        layer.add(slide, forKey: "lift.\(slides)")
+        let layer: CALayer? = view.layer
+        layer?.add(slide, forKey: "lift.\(slides)")
     }
 
     /// 直接改平台滚动视图的偏移，在内容变高的这次更新里生效、这一帧就画在原处，正滚着（触控板的惯性、滚轮、手指拖着）也接着从新的位置滚。
@@ -43,15 +56,9 @@ struct ChatRise: Equatable {
     }
 
     #if os(iOS)
-    private var downIsPositive: Bool { true }
-    private var layer: CALayer? {
-        sequence(first: probe, next: \.?.superview).first { $0?.superview is UIScrollView }??.layer
-    }
+    private var content: UIView? { sequence(first: probe, next: \.?.superview).first { $0?.superview is UIScrollView } ?? nil }
     #else
-    /// 平移在内容那一层的上一层（滚动区的裁剪视图）里算：它跟着内容翻转（SwiftUI 的滚动区是），y 就朝下。
-    /// 当成 Mac 的层一律 y 朝上的话方向反了：新到的一条插进来时整段先多窜上去一截、再往下落回终位。
-    private var downIsPositive: Bool { probe?.enclosingScrollView?.contentView.isFlipped ?? true }
-    private var layer: CALayer? { probe?.enclosingScrollView?.documentView?.layer }
+    private var content: NSView? { probe?.enclosingScrollView?.documentView }
     #endif
 
     struct Anchor {
@@ -87,5 +94,72 @@ extension ContentLift.Anchor: NSViewRepresentable {
     }
 
     func updateNSView(_ probe: ContentLift.Probe, context: Context) {}
+}
+#endif
+
+/// 整段上滑时留在原处的一块（`holds`：它排在末尾、屏上的位置不随这次长高变）。要自己的一层才能单独加动画，SwiftUI 的视图没有，
+/// 所以里面另起一棵树（宿主视图），外面的环境原样带进去。里面认不到外面的滚动区与命名坐标空间：按它们量的（在不在可见区、在内容里的位置）挂在这一块外面；
+/// 外面的动画事务也带不进去，里面要动的按值挂动画。不接点按、高由外面定。
+/// 只给不被新内容穿过的那一块用：新的一条是从终位下方滑上来的，途中经过的地方有留在原处的东西就叠在一起（末尾的子代理那一行就不能留：回答逐行显出来时一直在滑）。
+struct Unlifted<Content: View>: View {
+    let holds: Bool
+    @ViewBuilder let content: Content
+    @Environment(\.chatLift) private var lift
+
+    var body: some View { Host(lift: lift, holds: holds, content: content) }
+
+    fileprivate struct Host {
+        let lift: ContentLift?
+        let holds: Bool
+        let content: Content
+    }
+
+    fileprivate struct Rooted: View {
+        let content: Content
+        let environment: EnvironmentValues
+
+        var body: some View {
+            content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).environment(\.self, environment)
+        }
+    }
+}
+
+#if os(iOS)
+extension Unlifted.Host: UIViewRepresentable {
+    func makeCoordinator() -> UIHostingController<Unlifted.Rooted?> { UIHostingController(rootView: nil) }
+
+    func makeUIView(context: Context) -> UIView {
+        let host = context.coordinator
+        host.safeAreaRegions = []
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        host.view.autoresizingMask = []
+        return host.view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.rootView = Unlifted.Rooted(content: content, environment: context.environment)
+        lift?.hold(view, still: holds)
+    }
+}
+#else
+extension Unlifted.Host: NSViewRepresentable {
+    final class Surface: NSHostingView<Unlifted.Rooted?> {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
+    func makeNSView(context: Context) -> Surface {
+        let host = Surface(rootView: nil)
+        host.safeAreaRegions = []
+        host.sizingOptions = []
+        // 宿主视图默认跟着上一层改大小：滚动区的内容一变高矮 AppKit 就先挪它，它在 SwiftUI 里的位置没变、不会再放一次，停在错的地方
+        host.autoresizingMask = []
+        return host
+    }
+
+    func updateNSView(_ host: Surface, context: Context) {
+        host.rootView = Unlifted.Rooted(content: content, environment: context.environment)
+        lift?.hold(host, still: holds)
+    }
 }
 #endif

@@ -117,7 +117,7 @@ struct CuePage: View {
             CueVoicePanel()
             #endif
             if !calling, cue.canHear || workspace.layout == .narrow {
-                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                CueComposer(style: .page, takesFocusRequests: true, sent: { follow.sent() })
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

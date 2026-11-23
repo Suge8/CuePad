@@ -7,6 +7,7 @@ struct CueNoteLog: View {
     let settled: Bool
     @State private var unfolded = DebugHooks.preset.toolsOpen
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let folds = CueNoteFold.folds(rounds)
@@ -27,16 +28,25 @@ struct CueNoteLog: View {
                     } content: {
                         if unfolded { ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)).transition(.opacity) } }
                     }
+                    .transition(Self.swap)
                 } else {
-                    ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)) }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)) }
+                    }
+                    .transition(Self.swap)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .clipsFold()
             .onSky()
             .animation(Motion.fade, value: folds)
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: settled)
         }
         .transition(.entry)
     }
+
+    /// 最新的一批后面来了别的，摊着的几行收成一行：几行淡着被变矮的底收掉，那一行等它们淡了才出来（它就排在第一行的位置上，同时在的话字叠着字）。
+    private static let swap = AnyTransition.asymmetric(insertion: .opacity.animation(Motion.fade.delay(Motion.Fade.yield)), removal: .opacity.animation(Motion.fade))
 
     private func summary(_ folds: [CueNoteFold]) -> Text {
         var names: [String] = []

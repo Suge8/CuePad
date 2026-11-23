@@ -31,7 +31,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var held: CGFloat?
     @State var sliding: Task<Void, Never>?
     @State var lift = ContentLift()
-    @State var rose = ChatRise()
     @State var leftAt: Key?
 
     init(
@@ -57,7 +56,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         content.padding(.bottom, padding).background { ContentLift.Anchor(lift: lift) }
                             .coordinateSpace(.named(chatContentSpace))
                             .environment(\.chatAnchor, anchor)
-                            .environment(\.chatRise, rose)
+                            .environment(\.chatLift, lift)
                             .environment(\.chatOnScreen, onScreen)
                         Color.clear.frame(height: 0).id(Self.end)
                     }
