@@ -88,9 +88,10 @@ struct LiveFigure: View {
     /// 位置量在对话内容里（`chatContentSpace`）：对话整段上滑是渲染端的平移，它照样跟着走。此刻的位置在画的这一遍里读（`visualEffect`）：
     /// 经状态回报的话回复长出来的那一帧还按旧位置画，它先跳到字上、下一帧才回来。
     /// 它头上长出东西（工具、思考的字、再说的一句）时对话整段上滑，它留在原处、上面的让开（`Unlifted`）。
-    /// 发出的那句还没起飞（气泡没排出来，`SendFlight` 还没有落点）时先不来：字是从它那儿起飞的，先到的话字压着它过。落点一到它才占位、聚成形：
-    /// 字几帧就离开它那儿，它从零星几点聚起，碰不上。占位也等到这时，与那句的气泡同一拍排进对话：先占的话 Cue 页最新那批动静收成一行让出的高
-    /// 晚一拍才到，整段白往上窜一截、底下再空出一截。
+    /// 发出的那句还在飞（`SendFlight`）时先不来，落下了才占位、聚成形：字是从它那儿起飞的，先到的话字压着它过。占位排在那句的气泡之后：
+    /// 先占的话 Cue 页最新那批动静收成一行让出的高晚一拍才到，整段白往上窜一截、底下再空出一截。
+    /// 不按"有了落点"放行：落点是气泡排出来的那一遍排版里报的，这一块的高跟着在同一帧里再变一次，滚动区那一帧的第三次读数被系统丢掉
+    /// （`ChatScroll.Reading`），这一截高没记上，整段窜上去、底下的留白不收，停到下一条来（Mac 上三五次里一次）。
     var body: some View {
         let handed = stage.shown != nil && handoff != arrivedWith
         let holds = switch stage {
@@ -137,7 +138,7 @@ struct LiveFigure: View {
         }
     }
 
-    private var flying: Bool { flight.map { $0.trip != nil && $0.landing == nil } ?? false }
+    private var flying: Bool { flight?.trip != nil }
 
     private func row(_ shown: FigureLive, fading: Bool, holds: Bool) -> some View {
         let pose: FigurePose = if case .lingering = stage { .done } else { shown.pose }

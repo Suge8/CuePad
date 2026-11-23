@@ -32,7 +32,7 @@ struct Conversation: View {
                 Label("正在从 Mac 取对话…", icon: .fetching).font(Typography.meta).foregroundStyle(palette.ink3).frame(maxWidth: .infinity)
             }
             if all.allSatisfy(\.role.isOutgoing), let prompt = session.pendingPrompt ?? session.lastPrompt { RecapPreview(session: session, prompt: prompt) }
-            ChatSegments(items: all, window: window, size: Self.segment) { items in
+            ChatSegments(items: all, window: window, size: Self.segment, arrivesLate: \.arrivesLate) { items in
                 ChatSegment(items: Array(items), session: session, highlight: highlight, newest: newest, notes: notes, swapsInPlace: swapsInPlace, opened: $opened)
                     .equatable()
             }
@@ -151,7 +151,7 @@ private struct ChatSegment: View, Equatable {
     @ViewBuilder private func row(_ entry: ChatEntry, last: Bool) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue, fadesIn: entry.replaces == nil, said: entry.replaces) {
+            UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue, fadesIn: entry.arrivesLate, said: entry.replaces) {
                 MessageActions(text: SkillCall.shown(entry.text), kind: .mine, session: session)
             }
                 .padding(.top, Self.turnGap)

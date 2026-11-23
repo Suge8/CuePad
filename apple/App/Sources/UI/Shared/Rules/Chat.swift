@@ -19,6 +19,15 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var fromCue = false
     /// 你说的这句在途时已经作为请求（`outgoing`）摆在对话里：落库后换成的这一条接在同一处，不再淡入一遍；还在飞的话按请求的编号接着认领（`SendFlight`）。
     var replaces: UUID?
+
+    /// 到的时候等上面让开、再在终位淡入（`AnyTransition.arrival`）：别处发来的一句、一轮被停下的那行字。
+    var arrivesLate: Bool {
+        switch role {
+        case .user: replaces == nil
+        case .notice(let notice): !notice.changesContext
+        default: false
+        }
+    }
 }
 
 private nonisolated extension ChatEntry {

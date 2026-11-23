@@ -133,7 +133,6 @@ extension Unlifted.Host: UIViewRepresentable {
         host.safeAreaRegions = []
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
-        host.view.autoresizingMask = []
         return host.view
     }
 
@@ -152,8 +151,6 @@ extension Unlifted.Host: NSViewRepresentable {
         let host = Surface(rootView: nil)
         host.safeAreaRegions = []
         host.sizingOptions = []
-        // 宿主视图默认跟着上一层改大小：滚动区的内容一变高矮 AppKit 就先挪它，它在 SwiftUI 里的位置没变、不会再放一次，停在错的地方
-        host.autoresizingMask = []
         return host
     }
 
