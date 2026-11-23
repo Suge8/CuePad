@@ -222,50 +222,47 @@ extension Conversation {
 }
 
 
+/// 手机会话页头的第二行只写这一页归谁、是不是最新：哪个 Agent 在做、交给 Cue 到哪一档、睡了还是正在睡、还在不在同步。
+/// Agent 此刻在做什么不写在这（发送中、运行工具、用了多久、几句没送到）：对话末尾的小人（`LiveRound`）、回复框、每句话旁的送达记号已经各说了一遍，
+/// 页头又只在滚到最新时才出现（`ChatFollow.showsHeader`），正是那几处都看得见的时候。一轮收尾的那一下震动仍从这里发。
 struct SessionSubtitle: View {
     let session: SessionState
     let delivery: DeliveryRequest?
-    var undelivered: String?
+    var tier: CueTier?
+    var ending = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    private var syncing: Bool { services.syncing.showsCatchingUp(on: session.hostID) }
+    private enum Fact: Hashable { case agent, handed(CueTier), ending, ended, syncing }
 
-    var body: some View {
-        let shown = workspace.shownInHeader(session, delivery: delivery)
-        let speaks = syncing || shown.isRunning || shown.needsYou || [.ended, .cueAsking].contains(shown.status)
-        let mark = session.agentMark
-        // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
-        ZStack(alignment: .leading) {
-            if speaks || undelivered != nil || mark != nil {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: Spacing.tight) { facts(shown: shown, speaks: speaks, mark: mark, compact: false) }
-                        .fixedSize()
-                    HStack(spacing: Spacing.tight) { facts(shown: shown, speaks: speaks, mark: mark, compact: true) }
-                }
-                .font(Self.font)
-                .relaySpot(session: session.sessionID)
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .animation(Motion.fade, value: syncing)
+    private var facts: [Fact] {
+        var facts: [Fact] = []
+        if session.agentMark != nil { facts.append(.agent) }
+        if let tier, tier != .yours { facts.append(.handed(tier)) }
+        if ending { facts.append(.ending) } else if session.staysEnded(by: delivery, at: services.speech) { facts.append(.ended) }
+        if services.syncing.showsCatchingUp(on: session.hostID) { facts.append(.syncing) }
+        return facts
     }
 
-    @ViewBuilder private func facts(shown: SessionShown, speaks: Bool, mark: String?, compact: Bool) -> some View {
-        if mark != nil {
-            AgentMark(session: session, font: Self.font)
-            if !compact, speaks || undelivered != nil { Dot().foregroundStyle(palette.ink3) }
+    var body: some View {
+        let facts = facts
+        HStack(spacing: Spacing.tight) {
+            ForEach(Array(facts.enumerated()), id: \.element) { index, fact in
+                if index > 0 { Dot().foregroundStyle(palette.ink3) }
+                switch fact {
+                case .agent: AgentMark(session: session, font: Self.font)
+                case .handed(let tier): Text("\(Image(Icon.cue)) \(Text(tier.title(workspace.cue.name)))").foregroundStyle(palette.signature)
+                case .ending: Text("正在休眠…").foregroundStyle(palette.ink3)
+                case .ended: Text("\(Image(.ended)) \(SessionShown(status: .ended).label)").foregroundStyle(palette.ink3)
+                case .syncing: SyncingLabel()
+                }
+            }
         }
-        if syncing { SyncingLabel() } else if speaks { SessionShownLabel(shown: shown) }
-        if let undelivered {
-            if !compact, speaks { Dot().foregroundStyle(palette.failure) }
-            Text(undelivered).foregroundStyle(palette.failure)
-        }
-        if !syncing, shown.isRunning, shown.clock != nil {
-            if !compact { Dot().foregroundStyle(palette.ink3) }
-            SessionElapsed(shown: shown, font: Self.font, style: compact ? .span : .header)
-        }
+        .font(Self.font).lineLimit(1)
+        .relaySpot(session: session.sessionID)
+        .feelsTurnEnd(workspace.shownOnPage(session, delivery: delivery).status)
+        .animation(Motion.fade, value: facts)
     }
 
     private static let font = Typography.toolbarSubtitle
@@ -284,7 +281,14 @@ struct SessionShownLabel: View {
                 .contentTransition(.opacity)
                 .animation(Motion.fade, value: shown)
         }
-        .sensoryFeedback(trigger: shown.status) { old, new in
+        .feelsTurnEnd(shown.status)
+    }
+}
+
+extension View {
+    /// 一轮收尾的那一下震动：停下等你、出错、做完各一种。
+    func feelsTurnEnd(_ status: SessionShown.Status) -> some View {
+        sensoryFeedback(trigger: status) { old, new in
             guard case .working = old else { return nil }
             return switch new {
             case .asking, .cueAsking, .awaitsReply: .warning

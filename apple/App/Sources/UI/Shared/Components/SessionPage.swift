@@ -49,23 +49,25 @@ private struct SessionPageBody: View {
                     .safeAreaPadding(.top, Chrome.band)
                     .overlay(alignment: .top) {
                         if let session {
-                            WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
-                                             ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }, column: column)
-                                .contextMenu { if secondary { menu(session, digest) } }
+                            PaneHead {
+                                PaneTitle(
+                                    crumb: .init(digest?.project, in: workspace), title: digest?.title(at: services.speech) ?? session.title,
+                                    handle: workspace.pane(in: column), close: workspace.isSplit ? { workspace.closeColumn(column) } : nil,
+                                    marks: { SessionPaneMarks(ended: session.staysEnded(by: digest?.delivery, at: services.speech), tier: digest?.tier.map { CueTierButton(sessionID: session.sessionID, tier: $0) }) },
+                                    tools: { if let route = workspace.session(in: column) { LivePreviewTool(session: route) } })
+                            }
+                            .contextMenu { if secondary { menu(session, digest) } }
+                        } else if stored != nil, workspace.isSplit {
+                            PaneHead { PaneTitle(title: String(localized: "会话"), handle: workspace.pane(in: column), close: { workspace.closeColumn(column) }) }
                         }
                     }
             } else {
                 #if os(iOS)
                 reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
-                    if let session { menu(session, digest) }
+                    if let session { menu(session, digest, tier: digest?.tier) }
                 } detail: {
-                    if ending(digest) {
-                        Text("正在休眠…").font(Typography.caption).foregroundStyle(palette.ink3)
-                    } else if let session {
-                        SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
-                    }
+                    if let session { SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier, ending: ending(digest)) }
                 } trailing: {
-                    if let session, let tier = digest?.tier { CueTierButton(sessionID: session.sessionID, tier: tier, compact: true) }
                     LivePhoneTool(session: id, zoom: zoom)
                 }
                 .livePhoneCover(id, zoom: zoom)
@@ -132,8 +134,8 @@ private struct SessionPageBody: View {
         MacDelivery.endProgress(digest?.deliveries ?? [], at: services.speech)?.inTransit == true
     }
 
-    private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionMenuItems {
-        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest))
+    private func menu(_ session: SessionState, _ digest: SessionDigest?, tier: CueTier? = nil) -> SessionMenuItems {
+        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest), tier: tier)
     }
 
     private func reply(_ session: SessionState?, _ digest: SessionDigest?) -> some View {
@@ -213,4 +215,27 @@ extension SessionPageBody {
 private struct DigestKey: Equatable {
     var id: UUID
     var sessionID: String?
+}
+
+/// 会话胶囊里名字后面的记号：已休眠、交给 Cue 的那一档。
+private struct SessionPaneMarks: View {
+    let ended: Bool
+    let tier: CueTierButton?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            if ended {
+                HStack(spacing: Spacing.tight) {
+                    Image(.ended).readerHidden(true)
+                    Text(SessionShown(status: .ended).label)
+                }
+                .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
+                .padding(.trailing, PaneCell.pad)
+                .transition(.opacity)
+            }
+            if let tier { tier.frame(minWidth: PaneCell.side, minHeight: PaneCell.side) }
+        }
+        .animation(Motion.fade, value: ended)
+    }
 }

@@ -43,7 +43,7 @@ struct LiveBar: View {
             #endif
             if !narrow { PaneClose { workspace.toggleLivePreview() } }
         }
-        .padding(.horizontal, PaneClose.inset)
+        .padding(.horizontal, PaneCell.inset)
         .frame(height: Chrome.control)
         .overlay { LiveProgress(value: preview.progress, shown: loading) }
         .glass(in: .capsule)

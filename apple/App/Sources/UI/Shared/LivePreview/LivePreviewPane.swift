@@ -7,12 +7,9 @@ struct LivePreviewTool: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let button = workspace.liveButton(session.id)
-        HeadTool(label: Self.label(button ?? .closed(nil)), icon: .livePreview, on: button?.isShowing == true) { workspace.toggleLivePreview() }
-            .opacity(button == nil ? 0 : 1)
-            .allowsHitTesting(button != nil)
-            .readerHidden(button == nil)
-            .animation(Motion.fade, value: button != nil)
+        if let button = workspace.liveButton(session.id) {
+            HeadTool(label: Self.label(button), icon: .livePreview, on: button.isShowing) { workspace.toggleLivePreview(of: session) }
+        }
     }
 
     static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {
@@ -66,7 +63,7 @@ struct LivePreviewPane: View {
         .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            guard workspace.beside.contains(.preview) else { return }
+            guard workspace.panes.contains(where: { $0.previewed != nil }) else { return }
             LivePreview.paneSize = size
         }
         .onDisappear {
@@ -187,7 +184,7 @@ extension Workspace {
 
     func toggleLiveFill() {
         guard liveFill == nil else { return endLiveFill() }
-        guard let session = session(in: .main), showsLivePreview(session.id) else { return }
+        guard let session = liveSession, showsLivePreview(session.id) else { return }
         liveFill = LiveFill(session: session.id)
     }
 

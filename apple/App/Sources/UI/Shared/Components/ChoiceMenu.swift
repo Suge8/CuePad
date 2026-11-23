@@ -78,7 +78,6 @@ struct MenuButton<Label: View>: View {
     #endif
 }
 
-#if os(macOS)
 struct ChoiceMenuItems: View {
     let sections: [ChoiceMenu.Section]
 
@@ -110,7 +109,6 @@ struct ChoiceMenuItems: View {
         choice.image?.image
     }
 }
-#endif
 
 #if os(iOS)
 /// 菜单项在打开的那一刻按最新的内容现建（`UIDeferredMenuElement.uncached`），内容变了不用重设菜单。

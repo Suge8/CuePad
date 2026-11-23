@@ -3,8 +3,6 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    func willSelect(_ route: Route, from previous: Route) { overlay = nil }
-
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) {
@@ -27,13 +25,17 @@ extension Workspace {
         return handOff(card, fresh: true, draft: handOffDraft.retelling(card, as: opening))
     }
 
+    /// 宽屏上搜索是这一排里的那一页，不一定在最左。
+    var searching: Bool { (pageRoute ?? top) == .search }
+
     func openSearch() {
         searchFocusRequests += 1
-        if top != .search { push(.search) }
+        if !searching { push(.search) }
     }
 
     func closeSearch() {
-        if top == .search { back() }
+        guard searching else { return }
+        if layout == .wide { closeColumn(pageHost) } else { back() }
     }
 
     func showsAlert(about session: UUID) -> Bool { !shownSessions.contains { $0.id == session } }

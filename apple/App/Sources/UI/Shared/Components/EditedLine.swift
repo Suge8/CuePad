@@ -1,34 +1,19 @@
 import SwiftUI
 
+/// 手机上灵感页头名字下面那一行：改于哪天，置顶的前面带一颗图钉。两头各占一格：有没有图钉，日期都在正中。
 struct EditedLine: View {
-    struct Marks: Equatable {
-        var edited: Date
-        var pinned = false
-        var save = SaveState.idle
-    }
-
-    let marks: Marks
+    let edited: Date
+    var pinned = false
 
     var body: some View {
         HStack(spacing: Spacing.tight) {
-            slot { if marks.pinned { Image(.pin).font(Self.glyph).iconLabel("已置顶") } }
-            if marks.save == .failed, let text = marks.save.text {
-                Text(text)
-            } else {
-                Text(DateLabel.short(marks.edited)).monospacedDigit()
-                    .accessibilityLabel("改于 \(DateLabel.short(marks.edited))")
-            }
-            slot {
-                switch marks.save {
-                case .saving: Spinner(.mini).accessibilityLabel(Text(marks.save.text ?? ""))
-                case .saved: Image(.checked).font(Self.glyph).accessibilityLabel(Text(marks.save.text ?? ""))
-                case .idle, .failed: EmptyView()
-                }
-            }
+            slot { if pinned { Image(.pin).font(Self.glyph).iconLabel("已置顶") } }
+            Text(DateLabel.short(edited)).monospacedDigit()
+                .accessibilityLabel("改于 \(DateLabel.short(edited))")
+            slot { EmptyView() }
         }
         .lineLimit(1)
         .imageScale(.small)
-        .animation(Motion.fade, value: marks.save)
     }
 
     private func slot(@ViewBuilder _ mark: () -> some View) -> some View {
@@ -37,9 +22,5 @@ struct EditedLine: View {
 
     private static let slot: CGFloat = 12
     /// 图形比旁边的时间略矮：小号（`imageScale(.small)`）在手机的小字上缩得过头，垫大一档字号补回来。
-    #if os(macOS)
-    private static let glyph: Font? = nil
-    #else
-    private static let glyph: Font? = Typography.secondary
-    #endif
+    private static let glyph = Typography.secondary
 }

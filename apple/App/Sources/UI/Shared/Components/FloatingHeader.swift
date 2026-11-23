@@ -5,23 +5,21 @@ import SwiftUI
 extension View {
     /// 页顶那一排全 App 只此一种（手机与 iPad、根页与推入页同一个）。画在哪由所在的地方定（`HeaderHost`），调用处不分。
     /// 推入页在系统导航栏里：中间与右边是导航栏里的两项，两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间。
-    /// 页自己画的那一排（窄屏的 Cue 页、宽屏栏里的页）：从中间长出的面板（`GrowPanel`）只能在这里长，导航栏里的项按栏高摆、画不到栏外。
+    /// 页自己画的那一排（窄屏的 Cue 页、宽屏的搜索页）：从中间长出的面板（`GrowPanel`）只能在这里长，导航栏里的项按栏高摆、画不到栏外。
     /// `hidden` 时整排让开，占的高度不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；左缘右滑返回照常（`BarFade`）。给了 `reveal` 时让开的那一条仍接点按，点它整排一起回来。标题同时是读屏、返回菜单与多任务切换器里的名字。
-    /// 中间那块玻璃随内容定宽，这一页开着时只长不缩（`Widening`）：状态那一行来回换（发送中、思考中、歇着、正在同步）时玻璃与标题都不动，
-    /// 只在头一次出现更长的那一下当帧长宽（约 138 点）。否决过（#36，数据都与 main 交替 3 轮）：
+    /// 中间那块玻璃随内容定宽，这一页开着时只长不缩（`Widening`）：第二行的字来回换（规则文件存没存上、灵感改于多久前、会话在不在同步）时玻璃与标题都不动，
+    /// 只在头一次出现更长的那一下当帧长宽。否决过（#36，数据都与 main 交替 3 轮，量的时候会话页的第二行还轮着写 Agent 的状态）：
     /// 玻璃连同字连续换宽——玻璃里每有一段动画主线程就连着忙一两秒，状态轮播时唤醒约为改前的三倍；
     /// 只在刷新最宽那一下带动画——系统导航栏在 SwiftUI 动画之外先把中间那一项撑到新宽，玻璃照样当帧到位；
-    /// 状态行垫一行隐藏的最宽状态字、一打开就按终点宽排（同 Mac 的 `OverlayTitle`）——首次也不跳了，但玻璃常年顶到系统给的宽，状态轮播时渲染服务指令 +15%；
+    /// 状态行垫一行隐藏的最宽状态字、一打开就按终点宽排（同宽屏的 `LibraryFileHead`）——首次也不跳了，但玻璃常年顶到系统给的宽，状态轮播时渲染服务指令 +15%；
     /// 只长不缩但用几何读数写回下限——静置时渲染服务的指令多四成；玻璃铺满两侧圆钮之间；按最宽的样子固定占位。
-    /// 给了 `idea` 时中间那块是这条灵感的把手：宽屏拖到主区右边就并排到会话旁边（`WideDrop`）。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil, idea: UUID? = nil,
+        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            center: TitleStack(title: title, detail: detail()).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1)
-                .draggable(idea: idea),
+            center: TitleStack(title: title, detail: detail()).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }
 
@@ -29,11 +27,19 @@ extension View {
         _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder menu: () -> Items, @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(
+        let items = menu()
+        return modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            // 玻璃挂在菜单外面，标签只是两行字：系统给这颗菜单钮的框只有 36 高，44 高的玻璃若在标签里，
-            // 菜单收起的那段动画按钮框裁掉玻璃上下各一截、再整块淡回来；挂在外面时玻璃不动，收起只动字
-            center: Menu(content: menu) { TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block) }
+            // 菜单是盖在标题上的一层透明钮，不当标题的容器：`Menu` 只按标签想要的宽排，导航栏给的宽传不到标签里，
+            // 标题在它里面时这块玻璃不认两边的钮，长标题、长状态会伸到返回钮与右边的钮底下；标签的大小也得明着给。
+            // 玻璃也因此不在菜单钮里：系统给菜单钮的框只有 36 高，收起的那段动画会把 44 高的玻璃上下各裁掉一截。
+            center: TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block)
+                .frame(height: FloatingHeaderLayout.height)
+                .overlay {
+                    GeometryReader { box in
+                        Menu { items } label: { Color.clear.frame(width: box.size.width, height: box.size.height) }.accessibilityLabel(Text(title))
+                    }
+                }
                 .headerPiece()
                 .opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))

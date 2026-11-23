@@ -103,7 +103,7 @@ private struct CardDraggable<S: Shape>: ViewModifier {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    private var wide: WideNavigation.Beside?? {
+    private var wide: WideNavigation.Pane?? {
         if let session = session ?? card.session { return .session(SessionRoute(id: SessionState.recordID(sessionID: session), sessionID: session)) }
         return .some(card.idea.map { .card($0) })
     }

@@ -1,27 +1,39 @@
 extension Workspace {
     func selectWide(_ route: Route) {
         guard case .wide(var state) = navigation else { return }
-        let previous = mainRoute
         switch route {
         case .cue: return showCue()
         case .session(let session): return openWideSession(session, in: .main)
         case .card, .libraryFile: return present(Overlay(route)!)
         default:
             remember(route)
-            state.main = WideNavigation.Main(route)
+            state.select(route)
         }
-        cueDrawer = false
-        railDrawer = false
-        navigation = .wide(state)
-        willSelect(mainRoute, from: previous)
+        overlay = nil
+        presentWide(revealingHost(state))
     }
 
     func present(_ page: Overlay) {
-        if case .card(let id) = page, beside.contains(.card(id)) { return }
+        if case .card(let id) = page, panes.contains(.card(id)) { return }
         #if os(macOS)
         presses.clearSelection()
         #endif
+        revealHost()
         overlay = page
+    }
+
+    /// 页那一块排在看得见的几块之后（窗口窄，最右的藏起）时挪到最左：刚选的页、盖在页上的那一层要看得见。别的块顺次右移，不丢。
+    private func revealingHost(_ state: WideNavigation) -> WideNavigation {
+        guard let width = wideFits?.width, state.host >= WideMetrics(width: width, workspace: self, navigation: state).widths.count else { return state }
+        var state = state
+        state.panes.insert(state.panes.remove(at: state.host), at: 0)
+        return state
+    }
+
+    private func revealHost() {
+        guard case .wide(let state) = navigation else { return }
+        let shown = revealingHost(state)
+        if shown != state { navigation = .wide(shown) }
     }
 
     func toggleRail(_ sizes: WideMetrics) {
@@ -45,6 +57,7 @@ extension Workspace {
         wideFits = fits
         if railDrawer, fits.rail || previous.map({ $0.rail != fits.rail }) == true { railDrawer = false }
         if cueDrawer, fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
+        if overlay != nil { revealHost() }
     }
 
     var railExpanded: Bool {
@@ -67,76 +80,59 @@ extension Workspace {
         if cueShown(sizes) { hideCue(fits: sizes.cueFits) } else { showCue() }
     }
 
+    /// `.main`：在最左打开。旁边的块：开在第 `column` 块的位置，那里已有就换掉它，没有就添一块；放满了换掉最右那块。独占的页旁边不并排，照最左打开。
     func openWideSession(_ session: SessionRoute, in column: Column) {
         guard case .wide(var state) = navigation else { return }
         openTask = nil
-        if case .beside = column, state.mainSession == nil, let card = openCard {
-            overlay = nil
-            state.main = .session(session)
-            state.beside = [.card(card)]
-        } else if case .beside(let index) = column, let main = state.mainSession, wideRoom > 1 {
-            let shown = wideShown, full = 1 + shown >= wideRoom
-            if main.id != session.id, !state.beside.contains(.session(session)) {
-                let at = index < shown ? index + 1 : full ? shown : shown + 1
-                state.place(.session(session), at: at, replacing: index < shown || full, room: wideRoom)
-            }
-        } else {
-            state.beside.removeAll { $0 == .session(session) }
-            state.main = .session(session)
+        let pane = WideNavigation.Pane.session(session)
+        if column == .main || wideRoom < 2 || state.panes[0].standsAlone {
+            state.open(pane)
+        } else if !state.panes.contains(pane) {
+            let shown = wideShown, full = shown >= wideRoom
+            let at = column.index < shown ? column.index : full ? shown - 1 : shown
+            state.place(pane, at: at, replacing: column.index < shown || full, room: wideRoom)
         }
         presentWide(state)
     }
 
-    @discardableResult func drop(_ pane: WideNavigation.Beside, at index: Int, replacing: Bool) -> Bool {
-        guard case .wide(let state) = navigation,
-              let next = state.dropping(pane, at: index, replacing: replacing, room: wideRoom, covering: openCard) else { return false }
+    @discardableResult func drop(_ pane: WideNavigation.Pane, at index: Int, replacing: Bool) -> Bool {
+        guard case .wide(let state) = navigation, let next = state.dropping(pane, at: index, replacing: replacing, room: wideRoom) else { return false }
         openTask = nil
-        if let card = openCard, next.beside.contains(.card(card)) { overlay = nil }
         presentWide(next)
         return true
     }
 
     func moveColumn(_ column: Column, by step: Int) -> Bool {
-        guard case .wide(var state) = navigation, state.mainSession != nil, let pane = pane(in: column) else { return false }
+        guard case .wide(let state) = navigation, let pane = pane(in: column) else { return false }
         let target = column.index + step
-        guard target >= 0, target <= wideShown, state.place(pane, at: target, replacing: true, room: wideRoom) else { return false }
-        presentWide(state)
+        guard target >= 0, target < wideShown, let next = state.dropping(pane, at: target, replacing: true, room: wideRoom) else { return false }
+        presentWide(next)
         return true
     }
 
-    func pane(in column: Column) -> WideNavigation.Beside? {
-        guard case .wide(let state) = navigation, let main = state.mainSession else { return nil }
-        switch column {
-        case .main: return .session(main)
-        case .beside(let index): return state.beside.indices.contains(index) ? state.beside[index] : nil
-        }
+    func pane(in column: Column) -> WideNavigation.Pane? {
+        let panes = panes
+        return panes.indices.contains(column.index) ? panes[column.index] : nil
     }
 
-    func session(in column: Column) -> SessionRoute? {
-        if case .session(let route)? = pane(in: column) { route } else { nil }
-    }
+    func session(in column: Column) -> SessionRoute? { pane(in: column)?.session }
 
     private var wideSizes: WideMetrics? { wideFits.map { WideMetrics(width: $0.width, workspace: self) } }
 
     var wideRoom: Int { wideSizes?.room ?? 2 }
 
-    var wideShown: Int { wideSizes?.beside.count ?? beside.count }
+    /// 窗口里看得见几块（窗口窄时最右的藏起）。
+    var wideShown: Int { wideSizes?.widths.count ?? panes.count }
 
     private func presentWide(_ state: WideNavigation) {
-        let previous = mainRoute
         cueDrawer = false
         railDrawer = false
         navigation = .wide(state)
-        if mainRoute != previous { willSelect(mainRoute, from: previous) }
     }
 
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
-        if state.mainSession == nil, column == .main {
-            state.main = .empty
-        } else {
-            state.close(at: column.index)
-        }
+        state.close(at: column.index)
         presentWide(state)
     }
 }

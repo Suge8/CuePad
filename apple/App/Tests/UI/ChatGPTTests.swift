@@ -59,10 +59,10 @@ struct ChatGPTTests {
         let delivery = try await rig.store.outcome(of: request)
         let digest = try await SessionDigest.read(sessionID: live.sessionID, from: rig.store)
         let realtime = try #require(digest.live(rig.bridge.session(id: id), hostID: TestApp.hostID, project: nil).session)
-        #expect(workspace.shownInHeader(realtime, delivery: nil).label == workspace.shownInHeader(state, delivery: nil).label)
+        #expect(workspace.shownOnPage(realtime, delivery: nil).label == workspace.shownOnPage(state, delivery: nil).label)
         #expect(realtime.usageURL == state.usageURL)
-        #expect(workspace.shownInHeader(state, delivery: delivery).status == workspace.shownInHeader(state, delivery: nil).status)
-        #expect(workspace.shownInHeader(realtime, delivery: delivery).status == workspace.shownInHeader(state, delivery: nil).status)
+        #expect(workspace.shownOnPage(state, delivery: delivery).status == workspace.shownOnPage(state, delivery: nil).status)
+        #expect(workspace.shownOnPage(realtime, delivery: delivery).status == workspace.shownOnPage(state, delivery: nil).status)
         if prompt == "normal" {
             #expect(state.state == .known(.settled))
         } else {
@@ -70,7 +70,7 @@ struct ChatGPTTests {
         }
         if prompt == "[[length]]" {
             #expect(state.detail == "回答未完成：达到输出长度上限")
-            #expect(workspace.shownInHeader(state, delivery: nil).label == "回答未完成")
+            #expect(workspace.shownOnPage(state, delivery: nil).label == "回答未完成")
             #expect(messages.contains { $0.notice == .truncated })
             let indexed = try #require(try await rig.store.indexedSession(live.sessionID))
             let history = try History.index(file: URL(filePath: indexed.path), agent: .pi, from: nil, files: rig.store.files)
@@ -78,7 +78,7 @@ struct ChatGPTTests {
             #expect(history.messages.contains { $0.text == "PARTIAL_REPLY" })
         }
         if prompt == "[[quota]]" {
-            #expect(workspace.shownInHeader(state, delivery: nil).label == "达到用量限制")
+            #expect(workspace.shownOnPage(state, delivery: nil).label == "达到用量限制")
             #expect(state.usageURL?.absoluteString == "https://chatgpt.com/settings/usage")
         }
         if prompt == "[[403]]" {

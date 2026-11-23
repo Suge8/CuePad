@@ -2,15 +2,20 @@ import CueEditor
 import CueStore
 import SwiftUI
 
+/// 宽屏上的一条灵感，只此一份：并排的一块、点开盖在页上的那一层（Mac 的 `CardCover`、iPad 的 `PaneColumn`）都是它。
+/// 盖着时（`covers`）它还不是这一排里的一块：收起是合上这一层，胶囊旁多一颗钮把它放到旁边并排。
 struct IdeaPane: View {
     let cardID: UUID
-    let column: Workspace.Column
+    var covers = false
+    let close: () -> Void
+    /// 编辑器挂上后的下一帧报一次：盖上来的那一层等它再淡入。
+    var ready: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @Environment(\.headInset) private var inset
     @State private var data: Shown?
     @State private var editing: CardEditing?
+    @State private var sharing = InspirationSharing()
 
     nonisolated private struct Shown: Sendable, Equatable {
         var card: Card
@@ -22,10 +27,11 @@ struct IdeaPane: View {
             if let data, let editing {
                 editor(data.card, editing).padding(.top, Chrome.band + Spacing.item)
             }
-            head.padding(inset).frame(height: Chrome.band)
+            head
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.desk)
+        .modifier(InspirationSharePresentation(sharing: sharing, editing: editing))
         .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
             if case CueStoreError.notFound = error { return }
             workspace.fail(error)
@@ -35,7 +41,18 @@ struct IdeaPane: View {
         }
         .onChange(of: data?.card.id, initial: true) {
             guard editing == nil, let card = data?.card else { return }
-            editing = CardEditing(card, workspace: workspace)
+            let editing = CardEditing(card, workspace: workspace)
+            self.editing = editing
+            Task {
+                await NextFrame.wait()
+                if covers, editing.initialText.isEmpty { editing.handle.focus() }
+                ready?()
+            }
+        }
+        .onChange(of: data.map { $0.card.isTask || $0.card.parentID != nil }) { _, moved in
+            guard moved == true, let card = data?.card else { return }
+            close()
+            workspace.open(card)
         }
         .onDisappear { editing?.leave() }
     }
@@ -50,80 +67,47 @@ struct IdeaPane: View {
     }
 
     private var head: some View {
-        HStack(spacing: Spacing.item) {
-            name
-            Spacer(minLength: Spacing.item)
-        }
-        .accessibilityElement(children: .contain)
-        .windowDragArea()
-    }
-
-    private var name: some View {
-        HStack(spacing: Spacing.glyph) {
-            if let project = data?.project {
-                Button { workspace.select(.project(project.id)) } label: { Text(verbatim: project.shownName).lineLimit(1) }
-                    .buttonStyle(PressStyle(.inline))
-                    .foregroundStyle(palette.ink3)
-                Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
+        PaneHead {
+            PaneTitle(crumb: .init(data?.project, in: workspace), title: data?.card.heading ?? "", handle: .card(cardID), close: close) {
+                if let card = data?.card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: sharing) }
+            } tools: {
+                if covers { BesideTool(cardID: cardID) }
             }
-            let title = data?.card.heading ?? ""
-            #if os(iOS)
-            WideTitleDrag(title: title, type: .cuepadCard, item: DraggedCard.idea(cardID), pane: .card(cardID)).layoutPriority(1)
-            #else
-            Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1)
-                .contentShape(.rect)
-                .draggable(DraggedCard.idea(cardID))
-                .layoutPriority(1)
-            #endif
-            PaneClose { workspace.closeColumn(column) }
         }
-        .font(Typography.toolbarTitle)
-        .padding(.leading, Spacing.block)
-        .padding(.trailing, PaneClose.inset)
-        .frame(height: Chrome.control)
-        .glass(in: .capsule)
     }
 }
 
-extension View {
-    @ViewBuilder func draggable(idea: UUID?) -> some View {
-        if let idea { draggable(DraggedCard.idea(idea)).reportsWideDrag(.card(idea)) } else { self }
+/// 把盖着的这条灵感放到底下那一块的右边并排：底下是会话就是边聊边看。也可以直接拖它的胶囊。
+private struct BesideTool: View {
+    let cardID: UUID
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let under = workspace.pane(in: workspace.pageHost)
+        if under?.standsAlone == false {
+            HeadTool(label: under?.session == nil ? "并排打开" : "边聊边看", icon: .rightColumn) {
+                let fits = workspace.wideShown < workspace.wideRoom
+                if !fits || !workspace.drop(.card(cardID), at: workspace.pageHost.index + 1, replacing: false) { workspace.say("窗口太窄，放不下并排", tone: .failure) }
+            }
+        }
     }
 }
 
+#if os(iOS)
+/// 手机上的边聊边看：挑一个会话，灵感停在它的回复框上方。
 struct ChatAlongsideButton: View {
     let cardID: UUID
     var editing: CardEditing?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if let action {
-            #if os(macOS)
-            HeadTool(label: "边聊边看", icon: .rightColumn, action: action)
-            #else
-            Button("边聊边看", icon: .rightColumn, action: action)
-                .disabled(workspace.layout == .narrow && editing?.text.isEmpty != false)
-            #endif
+        Button("边聊边看", icon: .rightColumn) {
+            workspace.attempt { [workspace, editing, cardID] in
+                _ = try await editing?.flushed()
+                workspace.pickDock(cardID)
+            }
         }
-    }
-
-    private var action: (() -> Void)? {
-        switch workspace.layout {
-        case .wide:
-            guard workspace.session(in: .main) != nil, workspace.openCard == cardID else { return nil }
-            return beside
-        case .narrow: return pick
-        }
-    }
-
-    private func beside() {
-        if !workspace.drop(.card(cardID), at: WideNavigation.maxPanes, replacing: false) { workspace.say("窗口太窄，放不下并排", tone: .failure) }
-    }
-
-    private func pick() {
-        workspace.attempt { [workspace, editing, cardID] in
-            _ = try await editing?.flushed()
-            workspace.pickDock(cardID)
-        }
+        .disabled(editing?.text.isEmpty != false)
     }
 }
+#endif

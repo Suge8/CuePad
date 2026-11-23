@@ -199,7 +199,8 @@ extension Workspace {
             .speaking(speaking(session))
     }
 
-    func shownInHeader(_ session: SessionState, delivery: DeliveryRequest?) -> SessionShown {
+    /// 会话在它自己那一页上的状态：人正看着，没有"没读过"这回事。
+    func shownOnPage(_ session: SessionState, delivery: DeliveryRequest?) -> SessionShown {
         SessionShown(session, delivery: delivery, marks: SessionMarks(seen: .distantFuture), cue: cueDuty, at: services.speech).speaking(speaking(session))
     }
 

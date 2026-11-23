@@ -8,7 +8,7 @@ extension DebugScene {
     static func openLivePreviewIfAsked(_ workspace: Workspace) {
         guard let address = args.layoutOpts.livePreview else { return }
         workspace.toggleLivePreview()
-        guard let session = workspace.session(in: .main), let preview = workspace.livePreviews[session.id] else { return }
+        guard let session = workspace.liveSession, let preview = workspace.livePreviews[session.id] else { return }
         if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }
         if ["window", "remote"].contains(args.layoutOpts.liveViewport) { workspace.liveFill = .init(session: session.id, remote: args.layoutOpts.liveViewport == "remote") }
         guard address != "blank", let url = LiveAddress.url(from: address) else { return }

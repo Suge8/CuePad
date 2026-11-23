@@ -16,7 +16,7 @@ struct SplitRoot: View {
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
                 WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.fill, under: under, spans: sizes.spans) {
-                    destination(workspace.mainRoute, column: .main)
+                    PaneColumn(index: 0)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                         .environment(\.underCue, under)
                 }
@@ -47,7 +47,7 @@ struct SplitRoot: View {
     private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat) -> some View {
         let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
         return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
-            BesideColumn(index: index) { destination(.session($0), column: .beside(index)) } card: { IdeaPane(cardID: $0, column: .beside(index)) }
+            PaneColumn(index: index + 1)
         }
         .frame(width: width)
         .padding(.leading, origin)
@@ -74,46 +74,71 @@ struct SplitRoot: View {
             .cuePanel(fits: fits)
             .ignoresSafeArea(.container, edges: .bottom)
     }
-
-    @ViewBuilder private func destination(_ route: Route, column: Workspace.Column) -> some View {
-        DestinationColumn(route: route, column: column)
-    }
 }
 
-private struct DestinationColumn: View {
-    let route: Route
+/// 这一排里的那一页连同它的栏头。
+struct PageLayer: View {
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(\.headInset) private var inset
     @Environment(\.underCue) private var under
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        let overlay = column == .main ? workspace.overlay : nil
-        let board = route == .progress && overlay == nil
-        let headed = overlay != nil || !route.isSession && route != .search
-        ZStack(alignment: .top) {
-            NavigationStack(path: Binding<[Route]>(get: { [] }, set: { if let route = $0.last { workspace.show(route) } })) {
-                RouteView(route: route, column: column)
-                    .environment(\.headerHost, route == .search ? .panel : .column)
-                    .toolbarVisibility(.hidden, for: .navigationBar)
-                    .navigationDestination(for: Route.self) { RouteView(route: $0) }
+        if let page = workspace.pageRoute {
+            ZStack(alignment: .top) {
+                RouteStack(route: page, column: column)
+                if page != .search, workspace.overlay == nil { WideColumnHead(column: column).padding(inset).frame(height: Chrome.band) }
             }
-            if let overlay {
-                RouteView(route: overlay.route)
-                    .environment(\.headerHost, .panel)
-                    .background(palette.desk)
-                    .id(overlay)
-                    .transition(.opacity)
-            }
-            if headed { WideColumnHead().padding(inset).frame(height: Chrome.band) }
+            .padding(.trailing, page == .progress ? 0 : under)
         }
-        .animation(Motion.fade, value: overlay)
-        .padding(.trailing, board ? 0 : under)
     }
 }
 
-private extension Route {
-    var isSession: Bool { if case .session = self { true } else { false } }
+struct SessionLayer: View {
+    let route: SessionRoute
+    let column: Workspace.Column
+    @Environment(\.underCue) private var under
+
+    var body: some View {
+        RouteStack(route: .session(route), column: column).padding(.trailing, under)
+    }
+}
+
+/// 点开盖在页上的那一层：灵感、规则文件。
+struct CoverLayer: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.underCue) private var under
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let overlay = workspace.overlay
+        ZStack(alignment: .top) {
+            switch overlay {
+            case .card(let id)?:
+                IdeaPane(cardID: id, covers: true) { workspace.close(.card(id)) }.id(id).transition(.opacity)
+            case .library(let file)?:
+                RouteView(route: .libraryFile(file)).environment(\.headerHost, .column).background(palette.desk).id(file).transition(.opacity)
+                LibraryFileHead(file: file).transition(.opacity)
+            case nil: EmptyView()
+            }
+        }
+        .animation(Motion.fade, value: overlay)
+        .padding(.trailing, under)
+    }
+}
+
+private struct RouteStack: View {
+    let route: Route
+    let column: Workspace.Column
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        NavigationStack(path: Binding<[Route]>(get: { [] }, set: { if let route = $0.last { workspace.show(route) } })) {
+            RouteView(route: route, column: column)
+                .environment(\.headerHost, route == .search ? .panel : .column)
+                .toolbarVisibility(.hidden, for: .navigationBar)
+                .navigationDestination(for: Route.self) { RouteView(route: $0) }
+        }
+    }
 }
 #endif

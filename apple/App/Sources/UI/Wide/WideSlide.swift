@@ -117,7 +117,7 @@ enum WideSlide {
 final class WideColumnSlide {
     private let slot: WideSlot
     private let apply: (_ hidden: Bool) -> Void
-    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, pane: WideNavigation.Beside?, spans: [WideNavigation.Beside: WideMetrics.Span])?
+    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, pane: WideMetrics.Piece?, spans: [WideMetrics.Piece: WideMetrics.Span])?
     private var sequence = 0
     private var sliding: Int?
     private var hidden = false
@@ -137,7 +137,7 @@ final class WideColumnSlide {
         self.apply = apply
     }
 
-    func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, spans: [WideNavigation.Beside: WideMetrics.Span] = [:]) {
+    func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, spans: [WideMetrics.Piece: WideMetrics.Span] = [:]) {
         let pane = slot.column.flatMap { shape.order.indices.contains($0.index) ? shape.order[$0.index] : nil }
         defer { previous = (origin, width, shape, pane, spans) }
         guard let previous, previous.shape != shape else { return }
@@ -147,8 +147,9 @@ final class WideColumnSlide {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in self?.landed(turn) }
         defer { CATransaction.commit() }
-        let swapped = pane != nil && pane != previous.pane
-        let from = swapped ? pane.flatMap { previous.spans[$0] }.flatMap { $0.origin.isFinite ? $0 : nil } : nil
+        let from = pane != previous.pane ? pane.flatMap { previous.spans[$0] }.flatMap { $0.origin.isFinite ? $0 : nil } : nil
+        // 页原地换上来（看完会话回到页）照没换块算：挂着的页本来就排好了（`PageStack`），不等别的落定再淡入
+        let swapped = pane != nil && pane != previous.pane && (from != nil || pane != .page)
         let distance = (from?.origin ?? previous.origin) - origin
         let edge: CGFloat
         if let from {

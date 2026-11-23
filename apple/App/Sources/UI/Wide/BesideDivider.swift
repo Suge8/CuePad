@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 并排的第 `index` 块与它右边那块之间的分界上拖动改宽的把手（分界那条线是右边那块自己画的，`BesideColumn`）：拖动改这两块的宽（别的块不动），两边的页跟着实时重排、网页不重新载入。
+/// 并排的第 `index` 块与它右边那块之间的分界上拖动改宽的把手（分界那条线是右边那块自己画的，`PaneColumn`）：拖动改这两块的宽（别的块不动），两边的页跟着实时重排、网页不重新载入。
 /// 双击回到这一种摆法的默认比例（`WideMetrics.Shares`）。两块各不窄于自己的最窄。
 /// Mac：平时只有那条线，指针靠近时变成左右拖动、线上浮出一段很淡的把手；接指针的那一条大半落在左边那块的留白上：压在网页上的那一截，网页自己会抢着换光标。
 /// iPad：手指找不到看不见的东西，把手一直淡淡地叠在线上（拖着时深一点）；接触摸的那一条有手指宽，骑在分界上；指针移上去吸附成把手的样子（iPadOS 的指针效果）。
@@ -53,13 +53,13 @@ struct BesideDivider: View {
                         let pair = widths[index] + widths[index + 1]
                         widths[index] = min(max(from + value.translation.width, sizes.narrowest(index)), pair - sizes.narrowest(index + 1)).rounded()
                         widths[index + 1] = pair - widths[index]
-                        workspace.paneShares.set(widths.map { $0 / sizes.main }, for: sizes.beside)
+                        workspace.paneShares.set(widths.map { $0 / sizes.main }, for: sizes.kinds)
                     }
                     .onEnded { _ in start = nil }
             )
             .simultaneousGesture(TapGesture(count: 2).onEnded {
                 withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) {
-                    workspace.paneShares.set(nil, for: sizes.beside)
+                    workspace.paneShares.set(nil, for: sizes.kinds)
                 }
             })
             .padding(.leading, sizes.edge(after: index) - Self.reach + Self.overlap)
