@@ -4,6 +4,9 @@ import json
 import os
 import re
 import subprocess
+import tempfile
+
+from app_env import CHECKOUT
 
 ARCHIVES = os.path.expanduser("~/Library/Developer/Xcode/Archives")
 TOP_FRAMES, OWN_FRAMES, SHOWN_TIMES = 8, 4, 5  # 同 CrashReport.topFrames、ownFrames 与 DiagnosticSummary.shownTimes
@@ -41,12 +44,25 @@ def dsyms(platform, build):
     key = (platform, build)
     if key not in _dsyms:
         found = {}
-        for dwarf in glob.glob(f"{ARCHIVES}/*/CuePad {platform} {glob.escape(build)}*.xcarchive/dSYMs/*.dSYM/Contents/Resources/DWARF/*"):
+        pattern = f"{ARCHIVES}/*/CuePad {platform} {glob.escape(build)}*.xcarchive/dSYMs/*.dSYM/Contents/Resources/DWARF/*"
+        if platform == "mac" and not glob.glob(pattern):
+            fetch_dsyms(build)
+        for dwarf in glob.glob(pattern):
             listing = subprocess.run(["dwarfdump", "--uuid", dwarf], capture_output=True, text=True).stdout
             for uuid in re.findall(r"UUID: ([0-9A-F-]+)", listing):
                 found[uuid] = dwarf
         _dsyms[key] = found
     return _dsyms[key]
+
+def fetch_dsyms(build):
+    """在云端发的 Mac 版，归档不在本机：取 release-mac.sh 传进草稿发布 dsyms 的那份，解进归档目录同样的位置（没有就算了，由调用处报缺）。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        got = subprocess.run(["gh", "release", "download", "dsyms", "-p", f"CuePad-mac-{build}-dSYMs.zip", "-D", tmp], capture_output=True, cwd=CHECKOUT)
+        if got.returncode == 0:
+            archive = f"{ARCHIVES}/cloud/CuePad mac {build}.xcarchive"
+            os.makedirs(archive, exist_ok=True)
+            subprocess.run(["ditto", "-x", "-k", f"{tmp}/CuePad-mac-{build}-dSYMs.zip", archive], check=True)
+
 
 def summarize(reports):
     """同 DiagnosticSummary.text：同一种（类型、原因、前几帧）并成一条，计次数，最新的在前。"""

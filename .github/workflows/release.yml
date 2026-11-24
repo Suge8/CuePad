@@ -1,0 +1,46 @@
+name: Release
+
+# 主干上 Swift 那一遍全绿，接着发 Mac 版：与本机同一个入口 xc.sh release mac，发的就是那一遍查过的提交（release-context.py 的 verified）。
+# 凭据是发布环境 release 的机密 RELEASE_HOME（环境只放行 main），还原成本机同样的凭据目录（release-context.py unpack），之后的脚本不分本机云端。
+# 一次只发一个、在发的不打断，排着的只留最新一个：接连合并时中间几次并进一版。线上那一版已含这个提交、或它以来没动 apple/ 的不发（release-mac.sh 判）。
+# iOS 仍在本机发（xc.sh release ios）：这一版抬了同步下界而 TestFlight 上还没有，release-mac.sh 拒发、这里红，发完 iOS 重跑这一遍。
+on:
+  workflow_run:
+    workflows: [Swift]
+    types: [completed]
+    branches: [main]
+  # 重发主干上某个已全绿的提交：gh workflow run release.yml（dry_run 只打包、公证、验签，不上传）
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-mac
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  mac:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: xcode-27
+    timeout-minutes: 60
+    environment: release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: ./.github/actions/xcode
+      - env:
+          RELEASE_HOME: ${{ secrets.RELEASE_HOME }}
+        run: python3 apple/scripts/release-context.py unpack
+      - run: apple/scripts/xc.sh release mac "$SHA" ${{ inputs.dry_run && '--dry-run' || '' }}

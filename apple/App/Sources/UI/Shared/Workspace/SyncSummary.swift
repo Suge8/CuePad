@@ -39,10 +39,7 @@ nonisolated struct SyncSummary: Equatable {
     #endif
 
     static let updateToSync = String(localized: "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出")
-    #if os(macOS)
-    static let updateTitle = String(localized: "检查更新…")
-    #else
-    static let updateTitle = String(localized: "在 TestFlight 里更新")
+    #if os(iOS)
     static let update = URL(string: "itms-beta://")!
     #endif
 

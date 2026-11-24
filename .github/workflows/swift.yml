@@ -1,7 +1,7 @@
 name: Swift
 
 # 合并进主干后的兜底：与本机同一个入口 apple/scripts/xc.sh，各段各占一台干净的 runner 冷编译，真 Agent 用例跑全量。
-# PR 不在这里跑：合并前的门是本机的 xc.sh signoff（signoff.sh 头注释）。发布只认这里全绿的提交（release-context.py 的 verified）。
+# PR 不在这里跑：合并前的门是本机的 xc.sh signoff（signoff.sh 头注释）。发布只认这里全绿的提交（release-context.py 的 verified）；全绿后 release.yml 接着发 Mac 版。
 # runner 标签 xcode-27：actions/runner-images 的 macOS 27 镜像（Xcode 27.0 与 iOS 27.0 模拟器 iPhone 17 都在）。
 # CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
 on:
@@ -51,10 +51,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      # 镜像默认 27.1；本项目按 27.0（27A266a）开发。选中靠 xcode-select 而不是 DEVELOPER_DIR：测试里起的 cc、python3 走系统的选择，不认环境变量
-      - run: |
-          sudo xcode-select -s /Applications/Xcode_27.0.app
-          xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
+      - uses: ./.github/actions/xcode
       # 上一遍全绿之后没动 apple/ 与本文件的（文档、设计稿、落地页）只跑 lint，同本机签核的口径（signoff.sh）。
       # 比的是上一遍全绿的提交而不是上一次推送：排着的一遍会被后来的合并顶掉，被顶掉的那次改动要算进来
       - id: scope

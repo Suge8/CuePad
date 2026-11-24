@@ -11,9 +11,10 @@ CUEPAD_RELAY_HOST="$(sed -n 's/^CUEPAD_RELAY_HOST *= *//p' "$APPLE_DIR/App/Confi
 team_signing=()
 
 # TestFlight 与 Sparkle 按构建号比较新旧；同分钟的尝试可能同号，不能依靠归档或公证耗时保证递增。
+# 按北京时间取：本机与云端（runner 是 UTC）同一把尺，接得上历来的构建号
 release_versions() {
   local now; now="$(date +%s)"
-  echo "MARKETING_VERSION=$(date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(date -r "$now" +%y%m%d%H%M)"
+  echo "MARKETING_VERSION=$(TZ=Asia/Shanghai date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(TZ=Asia/Shanghai date -r "$now" +%y%m%d%H%M)"
 }
 
 # 发布归档按构建号与尝试名存进 Xcode 的归档目录，不随检出或尝试目录的清理删除：

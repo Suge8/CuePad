@@ -35,7 +35,7 @@ extension DebugScene {
             .library, .editor, .settings, .cue, .cueRows, .stateIcons, .tokens, .rail,
         ]
         #if os(macOS)
-        all += [.agentSetup, .connected, .updateWait, .menuBar, .wallGap, .select]
+        all += [.agentSetup, .connected, .update, .menuBar, .wallGap, .select]
         #else
         all += [.cuePanel, .sheets]
         #endif

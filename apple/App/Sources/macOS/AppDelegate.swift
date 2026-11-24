@@ -89,17 +89,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）。从 Xcode 编出来直接打开的也弹（克隆仓库自己编的人，开发库就是他的库）；
         // 脚本起的实例（截图、录屏、测量）不弹，免得盖住要拍的画面，验收这一次时给 -CuePadOfferSetup
         if !DebugHooks.scripted || DebugHooks.args.offerSetup { workspace.offerSetup() }
+        if let version = services.updates.updatedTo() { workspace.say("已更新到 CuePad \(version)") }
     }
 
+    /// 菜单里的检查更新：在后台查，结果走提示；下好了侧栏底下出现更新钮，不弹窗。
     @objc func checkForUpdates(_ sender: Any?) {
-        services?.updates.checkForUpdates()
+        guard let services, let workspace else { return }
+        Task {
+            switch await services.updates.check() {
+            case .found(let version) where services.updates.state != nil: workspace.say("CuePad \(version.name) 已下好，点侧栏底下的更新钮装")
+            case .found(let version) where services.updates.automaticallyChecks: workspace.say("正在下载 CuePad \(version.name)")
+            // 关了自动更新，Sparkle 不自己下（它的设置里自动下载跟着自动检查），这一版是要你点更新钮、在它的窗里装的
+            case .found(let version): workspace.say("有新版 CuePad \(version.name)，点侧栏底下的更新钮装")
+            case .latest: workspace.say("已是最新版本")
+            case .failed(let error): workspace.say(Dotted(String(localized: "检查更新没成功：\(error)")), tone: .failure)
+            case nil: workspace.say("正在检查更新")
+            }
+        }
     }
-
-    @objc func installUpdateNow(_ sender: Any?) {
-        services?.updates.installNow()
-    }
-
-    static let updateNoteTag = 1
 
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func showProgress(_ sender: Any?) {
@@ -118,21 +125,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
-        case #selector(installUpdateNow(_:)): showsUpdateWait(item)
+        case #selector(checkForUpdates(_:)): services?.updates.isAvailable == true
         case #selector(toggleSearch(_:)), #selector(showProgress(_:)), #selector(newCard(_:)), #selector(newSession(_:)):
             workspace?.isLibraryReady == true && NSApp.mainWindow === services?.windowShell
         case #selector(toggleCueSidebar(_:)), #selector(toggleCueColumn(_:)): NSApp.mainWindow === services?.windowShell
         default: true
         }
-    }
-
-    private func showsUpdateWait(_ item: NSMenuItem) -> Bool {
-        let note = services?.updates.waitingNote
-        item.isHidden = note == nil
-        guard item.tag == Self.updateNoteTag else { return note != nil }
-        item.title = note ?? ""
-        return false
     }
 
     @objc func showSettings(_ sender: Any?) {

@@ -159,7 +159,7 @@ final class AppServices {
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
         library = AgentLibraryFiles(store: store, host: mac.hostID, access: agents.integration.fileAccess, trash: trash)
         commandLineTool = mac.commandLineTool
-        updates = UpdateService(updater: mac.updater, bridge: mac.bridge, runtimes: runtimes)
+        updates = UpdateService(updater: mac.updater, bridge: mac.bridge, runtimes: runtimes, defaults: defaults)
         historyStore = HistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
             recorder: stateRecorder, sync: self.sync, library: location.directory,

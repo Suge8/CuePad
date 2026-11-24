@@ -3,18 +3,22 @@
 用法：release-context.py run <mac|ios> [提交] [--dry-run] [--resume <公证 id>]   拿锁、建或找回尝试目录（CUEPAD_RELEASE_OUT），再 exec 发布脚本；不给提交就发本检出的 HEAD
       release-context.py seal <尝试目录> <归档> <release_versions 的输出…>  归档与导出产物都要符合快照的 bundle id 与本次版本，打印构建号
       release-context.py id <尝试目录>                                     打印 submission.json 里的公证 ID
+      release-context.py run secrets                                      把发布凭据打成一包，存成 GitHub 发布环境 release 的机密 RELEASE_HOME（xc.sh release secrets；凭据或钥匙串换了就重跑）
+      release-context.py unpack                                           云端（release.yml）把 RELEASE_HOME 还原成本机同样的凭据目录
 会上传的发布（新发的与 --resume 找回的，不含 --dry-run）只认主干那一遍云端检查全绿的提交（verified）。
 发布凭据只在这台 Mac，锁不跨机器。恢复只认 submission.json 的公证 ID 唯一匹配：响应缺失或不完整就是结果未知，不猜、不重投。
 """
-import json, os, plistlib, re, subprocess, sys, tarfile, tempfile, time, zipfile
+import base64, io, json, os, plistlib, re, subprocess, sys, tarfile, tempfile, time, zipfile
 from pathlib import Path
 
 sys.dont_write_bytecode = True
 import _lock as lock  # noqa: E402
 from app_env import APPLE, CHECKOUT, RUNTIME  # noqa: E402
+import asc  # noqa: E402
+import provision  # noqa: E402
 
 RELEASES = Path(APPLE) / ".derived/release"
-USAGE = "用法：xc.sh release mac [提交] [--dry-run] [--resume <公证 id>] | xc.sh release ios [提交]"
+USAGE = "用法：xc.sh release mac [提交] [--dry-run] [--resume <公证 id>] | xc.sh release ios [提交] | xc.sh release secrets"
 
 
 def fail(message):
@@ -137,12 +141,48 @@ def seal(out, archive, versions):
     print(expected["CFBundleVersion"])
 
 
+# 发布凭据：asc.py 的凭据文件里发布用的几项（不带别的，如测试员邮箱）、它指向的 API 密钥、provision.py 的专用钥匙串
+# （Developer ID 与 Apple Distribution 证书、Sparkle 的私钥、CloudKit 管理令牌）与口令。路径都相对凭据目录，云端还原到同一处，脚本不分本机云端
+CREDENTIALS = ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH", "CUEPAD_TEAM_ID")
+HOME = Path(asc.ENV).parent
+
+
+def private(member):
+    member.mode = 0o600 if member.isfile() else 0o700
+    return member
+
+
+def secrets():
+    key = Path(asc.load_env()["ASC_KEY_PATH"]).relative_to(HOME)
+    # 密钥路径写成相对家目录的：云端的家目录不是这台的
+    lines = [f"ASC_KEY_PATH=$HOME/{HOME.name}/{key}" if line.startswith("ASC_KEY_PATH=") else line
+             for line in Path(asc.ENV).read_text().splitlines() if line.split("=", 1)[0] in CREDENTIALS]
+    packed = io.BytesIO()
+    with tarfile.open(fileobj=packed, mode="w:gz") as tar:
+        env = tarfile.TarInfo(Path(asc.ENV).name)
+        env.size, env.mode = len(body := ("\n".join(lines) + "\n").encode()), 0o600
+        tar.addfile(env, io.BytesIO(body))
+        for path in (HOME / key, Path(provision.KEYCHAIN), Path(provision.KEYCHAIN_PASS)):
+            tar.add(path, arcname=str(path.relative_to(HOME)), filter=private)
+    subprocess.run(["gh", "secret", "set", "RELEASE_HOME", "--env", "release"], input=base64.b64encode(packed.getvalue()), cwd=CHECKOUT, check=True)
+
+
+def unpack():
+    HOME.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(base64.b64decode(os.environ["RELEASE_HOME"]))) as tar:
+        tar.extractall(HOME, filter="data")
+
+
 def main():
     command, *args = sys.argv[1:] or [""]
     if command == "run" and args and args[0] in ("mac", "ios"):
         run(args[0], args[1:])
+    elif command == "run" and args == ["secrets"]:  # xc.sh release secrets
+        secrets()
     elif command == "seal":
         seal(Path(args[0]), Path(args[1]), args[2:])
+    elif command == "unpack":
+        unpack()
     elif command == "id":
         print(notary_id(Path(args[0])) or fail("公证结果未知：submission.json 缺失或不完整；保留这次尝试，核实苹果的提交记录，不猜 ID、不重新提交"))
     else:
