@@ -23,7 +23,7 @@ extension AgentLibraryTests {
         workspace.openLibrary(.instruction(.global))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
-        window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
+        window.contentView = NSHostingView(rootView: CoverLayer().environment(workspace).environment(services))
         // 本机关窗后约半秒放掉，GitHub 的 macOS runner 上关窗后再等 15 秒（其间转默认模式的主 run loop，perform 块照常执行）也不放：
         // 运行 42881986575、42884155676、42886191288 的 leaks --traceTree 里，正文的强引用根依次是主线程的自动释放池（关上的窗口）、
         // NSRunLoop 待执行的 perform 块攥着的 AppKit 视图观察闭包（`-[NSView _commonAwake]`）、窗口与视图图之间的引用，每次不同，都在 AppKit 与 SwiftUI 里

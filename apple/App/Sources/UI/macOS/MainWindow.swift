@@ -27,40 +27,21 @@ struct MainWindow: View {
     }
 
     private var columns: some View {
-        GeometryReader { geometry in
-            let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
-            HStack(spacing: 0) {
-                WideRail(width: sizes.rail)
-                Spacer(minLength: 0)
+        WideShell(focus: focus) { sizes, index in
+            let leading = index == 0 ? Chrome.headLead(rail: sizes.rail) : sizes.fill ? Chrome.toggle : Spacing.page
+            let besideCue = index == sizes.widths.count - 1 || index > 0 && sizes.fill
+            let trailing = besideCue && sizes.cue == 0 ? CueButton.reserve : Spacing.page
+            return EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
+        } rail: { _, width in
+            WideRail(width: width)
+        } tools: { sizes in
+            if !sizes.fill { SidebarToggle(sizes: sizes) }
+            if !workspace.cueShown(sizes) {
+                CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band).frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .overlay {
-                PaneRow(sizes: sizes, window: geometry.size.width, focus: focus) { index in
-                    let leading = index == 0 ? Chrome.headLead(rail: sizes.rail) : sizes.fill ? Chrome.toggle : Spacing.page
-                    return Self.inset(leading: leading, trailing: index == sizes.widths.count - 1 || index > 0 && sizes.fill ? trail : Spacing.page)
-                }
-            }
-            .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
-            .overlay { WideDropFeedback(window: geometry.size.width) }
-            .overlay { if !sizes.fill { railChrome(sizes) } }
-            .reportsWideFits(sizes, to: workspace)
-            .overlay(alignment: .topTrailing) {
-                if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
-            }
-            .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0) } }
+        } cue: { fits, _ in
+            CueColumn(fits: fits)
         }
-    }
-
-    private func railChrome(_ sizes: WideMetrics) -> some View {
-        ZStack(alignment: .topLeading) {
-            if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail) } }
-            SidebarToggle(sizes: sizes)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private static func inset(leading: CGFloat = Spacing.page, trailing: CGFloat) -> EdgeInsets {
-        EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
     }
 }
 
