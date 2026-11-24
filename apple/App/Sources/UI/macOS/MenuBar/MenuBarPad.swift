@@ -16,7 +16,7 @@ struct MenuBarPad: View {
         VStack(alignment: .leading, spacing: Spacing.item) {
             if workspace.isLibraryReady { cueRow }
             if quotaOpen { QuotaDetail().modifier(Block()) }
-            let rows = workspace.liveWork
+            let rows = workspace.openWork
             if !rows.isEmpty {
                 MenuBarLive(rows: rows, open: open)
                     .modifier(Block())

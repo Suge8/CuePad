@@ -55,7 +55,7 @@ struct ChatGPTTests {
         let request = try #require(try await rig.store.deliveryRequests(toSession: live.sessionID).last)
         let delivery = try await rig.store.outcome(of: request)
         let digest = try await SessionDigest.read(sessionID: live.sessionID, from: rig.store)
-        let realtime = try #require(digest.live(rig.bridge.session(id: id), hostID: TestApp.hostID, project: nil).session)
+        let realtime = try #require(digest.hosted(rig.bridge.session(id: id), hostID: TestApp.hostID, project: nil).session)
         #expect(workspace.shownOnPage(realtime, delivery: nil).label == workspace.shownOnPage(state, delivery: nil).label)
         #expect(realtime.usageURL == state.usageURL)
         #expect(workspace.shownOnPage(state, delivery: delivery).status == workspace.shownOnPage(state, delivery: nil).status)

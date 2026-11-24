@@ -129,7 +129,7 @@ private struct SessionPageBody: View {
         let live = sessionID.flatMap { services.bridge.slot(sessionID: $0)?.session }
         guard let live else { return stored }
         let project = workspace.catalog?.project(workspace.sendState.projects[live.id])
-        return (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
+        return (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).hosted(live, hostID: services.hostID, project: project)
         #else
         stored
         #endif

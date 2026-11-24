@@ -116,7 +116,7 @@ private struct CueNoteLine: View {
 
     private func tint(_ places: [CueWakeHeader.Place]) -> Color? {
         guard newest, places.count == 1, let kind = places[0].kind, case .session(_, let id?) = places[0].target,
-              let item = workspace.services.liveSessions.live.first(where: { $0.state.sessionID == id }),
+              let item = workspace.services.sessionFeed.live.first(where: { $0.state.sessionID == id }),
               kind.isUnresolved(workspace.shown(item).status, session: item.state, since: round.date) else { return nil }
         return kind.openTint(palette)
     }

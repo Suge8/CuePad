@@ -195,7 +195,7 @@ nonisolated extension SessionShown {
 
 extension Workspace {
     func shown(_ session: SessionState, delivery: DeliveryRequest?) -> SessionShown {
-        SessionShown(session, delivery: delivery, marks: services.liveSessions.marks[session.sessionID], cue: cueDuty, at: services.speech)
+        SessionShown(session, delivery: delivery, marks: services.sessionFeed.marks[session.sessionID], cue: cueDuty, at: services.speech)
             .speaking(speaking(session))
     }
 
@@ -212,7 +212,7 @@ extension Workspace {
         #endif
     }
 
-    var cueDuty: CueDuty? { services.liveSessions.cue }
+    var cueDuty: CueDuty? { services.sessionFeed.cue }
 
     func shown(_ item: SessionListItem) -> SessionShown { shown(item.state, delivery: item.delivery) }
 }

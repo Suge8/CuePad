@@ -173,7 +173,7 @@ final class TestApp {
 
     func see(_ session: SessionState, at moment: Date = .now.addingTimeInterval(1)) async throws {
         try await services.store.mark(.sessionSeen(session.sessionID), at: moment)
-        services.liveSessions.apply(try await LiveSessions.Page.read(from: services.store), at: .always())
+        services.sessionFeed.apply(try await SessionFeed.Page.read(from: services.store), at: .always())
     }
 
     @discardableResult

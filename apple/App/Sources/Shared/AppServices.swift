@@ -61,7 +61,7 @@ final class AppServices {
     #endif
     let speechClock: SpeechClock
     @ObservationIgnored let timing: Timing
-    let liveSessions: LiveSessions
+    let sessionFeed: SessionFeed
     let cueFeed: CueFeed
     let accountQuotas = AccountQuotas()
 
@@ -139,7 +139,7 @@ final class AppServices {
         let tasks = Followers()
         self.tasks = tasks
         syncStart = status
-        liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
+        sessionFeed = try SessionFeed(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
         hostID = mac.hostID
@@ -183,7 +183,7 @@ final class AppServices {
         let tasks = Followers()
         self.tasks = tasks
         syncStart = status
-        liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
+        sessionFeed = try SessionFeed(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard

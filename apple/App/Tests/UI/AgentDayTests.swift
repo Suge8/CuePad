@@ -96,8 +96,8 @@ struct AgentDayTests {
         try await (app.runtimeRecorder(on: "mac-c")).update(sessionID: "gone", state: .ended, title: "gone")
         try await say("接着做", to: "gone")
         #expect(try await label("gone") == "正在唤醒")
-        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
-        #expect(workspace.liveWork.contains { $0.sessionID == "gone" })
+        app.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
+        #expect(workspace.openWork.contains { $0.sessionID == "gone" })
         let list = try await SessionListData.read(text: "", project: Project.defaultID, historyLimit: SessionListData.pageSize, at: .always(), from: store)
         #expect(list.now.contains { $0.state.sessionID == "gone" } && !list.historyRuns.flatMap(\.items).contains { $0.state.sessionID == "gone" })
     }

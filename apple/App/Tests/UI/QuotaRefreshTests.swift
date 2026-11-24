@@ -25,9 +25,9 @@ struct QuotaRefreshTests {
             QuotaReport(provider: "anthropic", windows: [], complete: true, account: PiAccount(kind: .oauth, scope: "a")), host: "mac-x")
         try await app.runtimeRecorder(on: "mac-x").update(sessionID: "s-\(agent.rawValue)", state: .thinking, title: "atlas", agent: agent)
         await services.sync?.start()
-        services.startLiveSessions()
+        services.startSessionFeed()
         services.startAccountQuotas()
-        try await eventually("会话与额度到界面") { !services.liveSessions.live.isEmpty && !services.accountQuotas.items.isEmpty }
+        try await eventually("会话与额度到界面") { !services.sessionFeed.live.isEmpty && !services.accountQuotas.items.isEmpty }
     }
 
     @Test func 没查到保留原因_冷却内自动不再问_重试照问() async throws {

@@ -71,7 +71,7 @@ struct TaskFlowTests {
         try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .thinking, title: "atlas", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
+        rig.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
         try await store.bindSession("s1", to: second.id)
@@ -100,7 +100,7 @@ struct TaskFlowTests {
         try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .settled, title: "atlas", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
         try await store.deleteDelivery(opening.id)
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
+        rig.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 

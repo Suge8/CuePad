@@ -13,7 +13,7 @@ extension AppServices {
         startSync()
         startRelay()
         startSpeechClock()
-        startLiveSessions()
+        startSessionFeed()
         startAccountQuotas()
         startForeground()
         follow(reporting: { .syncUnavailable(String(localized: "这台手机开着的页没能写下：\(String(describing: $0))")) }) { [viewer] in try await viewer.keep() }
@@ -50,14 +50,14 @@ extension AppServices {
 
     private func refreshAlerts() async {
         await alerts?.refresh()
-        await alerts?.dismissSeen(liveSessions.marks)
+        await alerts?.dismissSeen(sessionFeed.marks)
     }
 
     private func startSessionAlerts(since active: ActiveSince) {
         follow {
             var tracker = SessionAlertTracker()
-            for await live in Observations({ self.liveSessions.live }) {
-                let alerts = tracker.alerts(for: live, cue: self.liveSessions.cue, since: active.date)
+            for await live in Observations({ self.sessionFeed.live }) {
+                let alerts = tracker.alerts(for: live, cue: self.sessionFeed.cue, since: active.date)
                 guard UIApplication.shared.applicationState == .active, !alerts.isEmpty else { continue }
                 var reaching: [SessionAlert] = []
                 for alert in alerts where await self.reaches(.session(alert.session, alert.kind)) { reaching.append(alert) }

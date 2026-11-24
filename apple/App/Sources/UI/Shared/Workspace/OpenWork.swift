@@ -2,11 +2,11 @@ import CueStore
 import Foundation
 
 extension Workspace {
-    var liveWork: [SessionState] {
-        let sessions = services.liveSessions
+    var openWork: [SessionState] {
+        let sessions = services.sessionFeed
         #if os(macOS)
         let live = services.bridge.sessions.compactMap {
-            SessionState.live($0, over: sessions.recorded[$0.sessionID], hostID: services.hostID, projectID: sendState.projects[$0.id])
+            SessionState.hosted($0, over: sessions.recorded[$0.sessionID], hostID: services.hostID, projectID: sendState.projects[$0.id])
         }
         #else
         let live: [SessionState] = []

@@ -36,8 +36,8 @@ struct MenuBarLive: View {
     private func row(_ session: SessionState) -> some View {
         SessionRow(
             session: session, project: workspace.catalog?.project(session.projectID),
-            delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
-            undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
+            delivery: services.sessionFeed.deliveries[session.sessionID], rename: services.sessionFeed.renames[session.sessionID],
+            undelivered: services.sessionFeed.undelivered[session.sessionID] ?? 0).equatable()
             .contentShape(.rect)
             .row()
             .onTapGesture { open(.session(session.sessionID)) }

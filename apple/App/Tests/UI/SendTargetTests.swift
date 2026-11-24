@@ -25,7 +25,7 @@ struct SendTargetTests {
         Task {
             do { try await services.consumeSessionChanges(changes) } catch { Issue.record(error) }
         }
-        rig.services.startLiveSessions()
+        rig.services.startSessionFeed()
     }
 
     private func open(_ sessionID: String, in directory: String, pid: Int32 = 100) async throws -> FakeExtension {
@@ -180,7 +180,7 @@ struct SendTargetTests {
     @Test func Mac开始与Cue开工_交到同一个地方_别的Mac上的会话正忙也不先问() async throws {
         try await remoteSession("r", title: "atlas", state: .thinking)
         let (forMac, forCue) = (try await leaf(in: project, session: "r"), try await leaf(in: project, session: "r"))
-        try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
+        try await eventually("sessionFeed.live == [r]") { rig.services.sessionFeed.live.map(\.state.sessionID) == ["r"] }
         workspace.handOff(forMac)
         let mac = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil })
         #expect(mac.hostID == "mac-b" && mac.mode == .known(.send) && mac.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))

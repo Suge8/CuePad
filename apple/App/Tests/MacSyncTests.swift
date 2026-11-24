@@ -163,7 +163,7 @@ struct MacSyncTests {
         #expect(live.stateSince == seen.stateSince)
         var stored = seen
         stored.lastReply = "做完了"
-        let row = try #require(SessionState.live(live, over: stored, hostID: TestApp.hostID, projectID: nil))
+        let row = try #require(SessionState.hosted(live, over: stored, hostID: TestApp.hostID, projectID: nil))
         #expect(!row.isUnread(try await services.store.sessionMarks()["s1"], at: .now))
         #expect(try #require(services.bridge.session(id: changed.id)).stateSince > past)
     }

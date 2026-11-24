@@ -37,7 +37,7 @@ struct WideRail: View {
             if let sizes { RailTopTools(sizes: sizes, floating: false) }
             #endif
             RailHome()
-            RailSessions(data: services.liveSessions.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
+            RailSessions(data: services.sessionFeed.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .aside : .main)
             }
             tools

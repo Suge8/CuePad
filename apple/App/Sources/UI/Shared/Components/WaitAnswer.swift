@@ -21,7 +21,7 @@ struct WaitAnswer: View {
         var error: String?
     }
 
-    private var request: DeliveryRequest? { services.liveSessions.answer(to: session) }
+    private var request: DeliveryRequest? { services.sessionFeed.answer(to: session) }
 
     private var unseen: Pending? {
         guard let pending, pending.promptID == question?.promptID, pending.requestID == nil || pending.requestID != request?.id else { return nil }

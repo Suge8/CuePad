@@ -27,7 +27,7 @@ struct CueRelayStage: ViewModifier {
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
-            let live = workspace.services.liveSessions
+            let live = workspace.services.sessionFeed
             Probe(stage: stage, color: palette.signature)
                 .onChange(of: live.flight?.at) {
                     guard let flight = live.flight, !workspace.services.syncing.isCatchingUp(on: workspace.cue.hostID) else { return }

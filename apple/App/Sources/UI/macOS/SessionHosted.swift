@@ -4,7 +4,7 @@ import CueStore
 import SwiftUI
 
 extension SessionState {
-    static func live(_ session: CueBridge.Session, over stored: SessionState?, hostID: String, projectID: UUID?) -> SessionState? {
+    static func hosted(_ session: CueBridge.Session, over stored: SessionState?, hostID: String, projectID: UUID?) -> SessionState? {
         guard !session.upgrading else { return nil }
         let report = session.snapshot(title: session.displayName, projectID: projectID)
         return SessionState(report, over: stored, hostID: hostID, bootID: SystemBoot.id, at: session.stateSince).connected()
@@ -16,9 +16,9 @@ extension SessionDigest {
         try read(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
     }
 
-    func live(_ session: CueBridge.Session?, hostID: String, project: Project?) -> SessionDigest {
+    func hosted(_ session: CueBridge.Session?, hostID: String, project: Project?) -> SessionDigest {
         guard let session,
-              let state = SessionState.live(
+              let state = SessionState.hosted(
                 session, over: self.session, hostID: hostID, projectID: project?.id ?? self.session?.projectID)
         else { return self }
         var digest = self
@@ -58,7 +58,7 @@ private struct SessionLink: ViewModifier {
 extension Workspace {
     func withLiveState(_ session: SessionState) -> SessionState {
         guard let live = services.bridge.session(sessionID: session.sessionID) else { return session }
-        return .live(live, over: session, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID) ?? session
+        return .hosted(live, over: session, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID) ?? session
     }
 
     func withLiveState(_ item: SessionListItem) -> SessionListItem {

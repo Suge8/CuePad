@@ -70,7 +70,7 @@ struct MarkUnreadButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if session.canMarkUnread(services.liveSessions.marks[session.sessionID], at: .now) {
+        if session.canMarkUnread(services.sessionFeed.marks[session.sessionID], at: .now) {
             Button("标为未读", icon: .markUnread) { [store = services.store, id = session.sessionID] in workspace.attempt { try await store.mark(.sessionUnread(id)) } }
         }
     }

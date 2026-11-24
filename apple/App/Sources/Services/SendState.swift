@@ -30,8 +30,8 @@ final class SendState {
 
     private func sessionName(_ sessionID: String) -> String {
         liveSession(sessionID)?.displayName
-            ?? services.liveSessions.items.first { $0.state.sessionID == sessionID }?.state.title
-            ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
+            ?? services.sessionFeed.items.first { $0.state.sessionID == sessionID }?.state.title
+            ?? services.sessionFeed.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
     private func liveSession(_ sessionID: String) -> CueBridge.Session? {
@@ -42,7 +42,7 @@ final class SendState {
         let name = sessionName(target.session)
         let (listener, wakes): (Listener, Bool) = if let live = liveSession(target.session) {
             (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), false)
-        } else if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == target.session && $0.state.hostID != services.hostID }) {
+        } else if let remote = services.sessionFeed.live.first(where: { $0.state.sessionID == target.session && $0.state.hostID != services.hostID }) {
             (.session(remote.state, mode: .send, card: card), false)
         } else {
             (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: target.host ?? services.hostID, mode: .send, card: card), true)

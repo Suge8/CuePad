@@ -17,9 +17,9 @@ extension AppServices {
         guard let alerts else { return }
         follow {
             var tracker = SessionAlertTracker()
-            for await live in Observations({ self.liveSessions.live }) {
+            for await live in Observations({ self.sessionFeed.live }) {
                 // 不等发完：第一次要征求权限时系统提示可能停很久，这期间的转换照样要认出来
-                for alert in tracker.alerts(for: live, cue: self.liveSessions.cue) { Task { await alerts.post(AlertMessage(alert)) } }
+                for alert in tracker.alerts(for: live, cue: self.sessionFeed.cue) { Task { await alerts.post(AlertMessage(alert)) } }
             }
         }
     }

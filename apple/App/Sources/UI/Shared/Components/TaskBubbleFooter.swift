@@ -202,7 +202,7 @@ private struct HandOffChoice: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let sessions = services.liveSessions.live.filter { ($0.state.projectID ?? Project.defaultID) == leaf.projectID }
+        let sessions = services.sessionFeed.live.filter { ($0.state.projectID ?? Project.defaultID) == leaf.projectID }
         let bound = sessions.first { $0.state.sessionID == leaf.piSessionID }
         MenuButton(sections: [
             ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话", image: .icon(.add), checked: leaf.piSessionID == nil) { unbind() }]),

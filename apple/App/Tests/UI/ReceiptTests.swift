@@ -105,7 +105,7 @@ struct ReceiptTests {
     }
 
     private func row(_ services: AppServices) -> SessionShown? {
-        services.liveSessions.live.first { $0.state.sessionID == "atlas" }.map(Workspace(services: services).shown)
+        services.sessionFeed.live.first { $0.state.sessionID == "atlas" }.map(Workspace(services: services).shown)
     }
 
     private func trip(of request: DeliveryRequest, _ services: AppServices) async throws -> Speech.Trip {
@@ -158,7 +158,7 @@ struct ReceiptTests {
         let target = try await session(in: store)
         services.startSync()
         services.startSpeechClock()
-        services.startLiveSessions()
+        services.startSessionFeed()
         try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let workspace = Workspace(services: services)
 
@@ -189,7 +189,7 @@ struct ReceiptTests {
         #expect(try await trip(of: second, services) == .sending)
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
-        #expect(row(services)?.undelivered == nil && services.liveSessions.undelivered["atlas"] == nil)
+        #expect(row(services)?.undelivered == nil && services.sessionFeed.undelivered["atlas"] == nil)
 
         await cloud.setDown(false)
         await services.syncing.syncNow()
@@ -197,7 +197,7 @@ struct ReceiptTests {
         try await cloud.macAnswers(first.id)
         await services.syncing.syncNow()
         try await eventually("回执回来") { try await trip(of: first, services) == .delivered }
-        try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
+        try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.sessionFeed.undelivered["atlas"] == nil }
 
         let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline).addingTimeInterval(Speech.receiptLimit)
         try await advance(to: expires.addingTimeInterval(-1))
@@ -225,7 +225,7 @@ struct ReceiptTests {
         let target = try await session(in: store)
         services.startSync()
         services.startSpeechClock()
-        services.startLiveSessions()
+        services.startSessionFeed()
         try await setSync(.idle)
         services.syncing.startPolling()
         let workspace = Workspace(services: services)
@@ -249,7 +249,7 @@ struct ReceiptTests {
         #endif
         #expect(try await trips() == [.sending, .sending])
         #expect(row(services)?.status == .delivery(.inTransit(.sending)))
-        #expect(services.liveSessions.undelivered["atlas"] == nil)
+        #expect(services.sessionFeed.undelivered["atlas"] == nil)
         #expect(try await presence(services) != .asleep)
         let syncs = app.sync.syncNows
 
@@ -259,7 +259,7 @@ struct ReceiptTests {
         try await eventually("恢复时立即同步，拉取重新开始") { app.sync.syncNows == syncs + 1 && clock.sleeperCount > 0 }
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行回到发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
-        #expect(services.liveSessions.undelivered["atlas"] == nil)
+        #expect(services.sessionFeed.undelivered["atlas"] == nil)
 
         clock.advance(.seconds(Speech.sendLimit - 1))
         #expect(try await trips() == [.sending, .sending])
@@ -285,7 +285,7 @@ struct ReceiptTests {
         let services = app.services!, workspace = Workspace(services: app.services)
         let target = try await session(in: services.store)
         services.startSync()
-        services.startLiveSessions()
+        services.startSessionFeed()
         try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let request = try await sayToSession(workspace, target, "继续一次检查")
         try await eventually("服务器收下请求") { await cloud.holds(request.id) }

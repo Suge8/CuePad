@@ -18,9 +18,9 @@ struct AnswerSurvivesTests {
         let request = try await app.services.answer(.option("另存"), to: session)
         try await store.requestDelivery("顺便把 Atom 也输出", to: session.target, on: "mac")
         #expect(try await store.deliveryRequests(toSession: "s").map(\.mode.known) == [.answer, .send])
-        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
+        app.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
 
-        #expect(app.services.liveSessions.answer(to: session)?.id == request.id)
+        #expect(app.services.sessionFeed.answer(to: session)?.id == request.id)
     }
 }
 

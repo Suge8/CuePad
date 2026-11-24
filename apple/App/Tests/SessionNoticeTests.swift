@@ -12,8 +12,8 @@ struct SessionNoticeTests {
     private func recorder() -> StateRecorder { StateRecorder(store: store, hostID: "mac") }
 
     private func live() async throws -> [SessionListItem] {
-        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
-        return app.services.liveSessions.live
+        app.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
+        return app.services.sessionFeed.live
     }
 
     @Test func 第一次读到只记基线_做完了等这一轮的回答读到才提示一次_提示里是这一轮说的话() async throws {
