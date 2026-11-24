@@ -40,10 +40,11 @@ struct WideDropTarget: Equatable {
     let next: WideNavigation
 }
 
-final class WideDropState {
-    var drag: Int?
-    var pane: WideNavigation.Pane??
-    var under: CGFloat = 0
+/// 拖着时主区认的拖的是哪一块，由拖起的那一头报（`reportsWideDrag`、胶囊的 `PaneGrip`）。别的窗口、别的 App 拖来的没人报，按类型猜；
+/// `refused` 是主区不接的（不带会话的任务卡）。
+enum WideDrag: Equatable {
+    case unknown, refused
+    case pane(WideNavigation.Pane)
 }
 
 /// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：每一块的胶囊（`PaneTitle`）、会话条的行、带会话的看板卡、灵感卡。
@@ -56,15 +57,15 @@ final class WideDropState {
 enum WideDrop {
     static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
 
-    static func target(_ types: Set<UTType>, dragged: WideNavigation.Pane??, at fraction: CGFloat, in column: Workspace.Column, workspace: Workspace) -> WideDropTarget? {
+    static func target(_ types: Set<UTType>, at fraction: CGFloat, in column: Workspace.Column, workspace: Workspace) -> WideDropTarget? {
         guard case .wide(let state) = workspace.navigation, let over = workspace.pane(in: column) else { return nil }
         let session = types.contains(DraggedColumn.type) || types.contains(.cuepadSession)
         guard session || types.contains(.cuepadCard) else { return nil }
         let pane: WideNavigation.Pane
-        switch dragged {
-        case .some(.some(let known)): pane = known
-        case .some(.none): return nil
-        case .none: pane = session ? .session(standIn) : .card(standIn.id)
+        switch workspace.dragging {
+        case .pane(let known): pane = known
+        case .refused: return nil
+        case .unknown: pane = session ? .session(standIn) : .card(standIn.id)
         }
         guard over != pane else { return nil }
         let fresh = !state.panes.contains(pane)
@@ -85,32 +86,29 @@ enum WideDrop {
 }
 
 extension View {
-    /// 拖起它时告诉宽屏主区拖的是哪一块（`Workspace.dragging`）：iPad 拖着时读不到拖的内容（UIKit 只在放下时给），落点按它预演放下后的样子。
-    /// Mac 拖着时就读得出剪贴板（`WideColumnView`），不用报。`.some(nil)` 是主区不接的（任务卡）。
-    @ViewBuilder func reportsWideDrag(_ pane: WideNavigation.Pane??) -> some View {
-        #if os(iOS)
-        modifier(WideDragReport(pane: pane))
-        #else
-        self
-        #endif
+    /// 拖起它时告诉宽屏主区拖的是哪一块（`Workspace.dragging`），落点按它预演放下后的样子：iPad 拖着时读不到拖的内容（UIKit 只在放下时给）。
+    /// 拖着时别的要跟着起止的经 `also` 一起报：一个视图上叠两个 `onDragSessionUpdated`，iOS 只调里面那个（iPadOS 27 实测）。
+    func reportsWideDrag(_ drag: WideDrag, also: @escaping (_ dragging: Bool) -> Void = { _ in }) -> some View {
+        modifier(WideDragReport(drag: drag, also: also))
     }
 }
 
-#if os(iOS)
 private struct WideDragReport: ViewModifier {
-    let pane: WideNavigation.Pane??
+    let drag: WideDrag
+    let also: (Bool) -> Void
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
         content.onDragSessionUpdated { session in
-            switch session.phase {
-            case .initial, .active: workspace.dragging = pane
-            default: workspace.dragging = nil
+            let dragging = switch session.phase {
+            case .initial, .active: true
+            default: false
             }
+            workspace.dragging = dragging ? drag : .unknown
+            also(dragging)
         }
     }
 }
-#endif
 
 extension WideDrop {
     static func pane(_ type: UTType, _ data: Data, window: UUID, workspace: Workspace) throws -> WideNavigation.Pane? {
@@ -193,9 +191,8 @@ extension WideColumnController: UIDropInteractionDelegate {
 
     private func target(_ session: any UIDropSession, in column: Workspace.Column) -> WideDropTarget? {
         let types = Set(WideDrop.types.filter { session.hasItemsConforming(toTypeIdentifiers: [$0.identifier]) })
-        let fraction = session.location(in: view).x / max(1, view.bounds.width - drop.under)
-        // UIKit 只在放下时给读拖的内容：拖着时按拖起它的那一头报的（`reportsWideDrag`），别的窗口、别的 App 拖来的按类型猜
-        return WideDrop.target(types, dragged: workspace.dragging, at: fraction, in: column, workspace: workspace)
+        let fraction = session.location(in: view).x / max(1, view.bounds.width - dropUnder)
+        return WideDrop.target(types, at: fraction, in: column, workspace: workspace)
     }
 }
 #endif

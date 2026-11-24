@@ -17,7 +17,7 @@ final class WideColumnController: UIHostingController<AnyView> {
     /// 主区的一块（否则是 Cue 那一栏）。
     let pane: Bool
     var slot: WideSlot?
-    let drop = WideDropState()
+    var dropUnder: CGFloat = 0
     let focus: WideFocus
     let workspace: Workspace
     private(set) lazy var slide = WideColumnSlide { [unowned self] in self.view.isHidden = $0 }

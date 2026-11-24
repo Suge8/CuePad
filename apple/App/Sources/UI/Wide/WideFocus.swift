@@ -155,7 +155,7 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
         if slot == nil, view.slot != nil, view.holdsFocus { Task { [focus] in focus.focus(.main) } }
         view.slot = slot
         if let layer = view.layer, let page = view.host.layer { view.slide.move(layer, page: page, origin: origin, width: width, shape: shape, leading: slot == .main, arrival: arrival) }
-        view.drop.under = under
+        view.dropUnder = under
         // 宽和内容一起给：等 SwiftUI 来摆这块的框要晚一步，页已经按旧的宽、新的内容（`underCue`）排过一遍——
         // 从并排的窄块换到最左、垫进 Cue 底下的那一下，对话被当成只有二十几点宽排了一次
         view.setFrameSize(NSSize(width: width, height: view.frame.height))
@@ -183,7 +183,7 @@ final class ColumnHostingView: NSHostingView<AnyView> {
 
 final class WideColumnView: NSView {
     let host = ColumnHostingView(rootView: AnyView(EmptyView()))
-    let drop = WideDropState()
+    var dropUnder: CGFloat = 0
     /// 主区的一块（否则是 Cue 那一栏）。
     let pane: Bool
     var slot: WideSlot?
@@ -235,15 +235,10 @@ final class WideColumnView: NSView {
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        let pasteboard = sender.draggingPasteboard
-        if drop.drag != sender.draggingSequenceNumber {
-            drop.drag = sender.draggingSequenceNumber
-            drop.pane = try? pane(in: pasteboard)
-        }
-        let carried = Set((pasteboard.types ?? []).map(\.rawValue))
+        let carried = Set((sender.draggingPasteboard.types ?? []).map(\.rawValue))
         let types = Set(WideDrop.types.filter { carried.contains($0.identifier) })
         let x = convert(sender.draggingLocation, from: nil).x
-        let target = slot?.column.flatMap { WideDrop.target(types, dragged: drop.pane, at: x / max(1, bounds.width - drop.under), in: $0, workspace: workspace) }
+        let target = slot?.column.flatMap { WideDrop.target(types, at: x / max(1, bounds.width - dropUnder), in: $0, workspace: workspace) }
         if workspace.dropTarget != target { workspace.dropTarget = target }
         guard target == nil else {
             pass(nil, sender)
@@ -303,7 +298,7 @@ final class WideColumnView: NSView {
         workspace.dropTarget = nil
         guard let target, target.column == slot?.column else { return false }
         do {
-            guard let pane = try pane(in: sender.draggingPasteboard) ?? nil else { return false }
+            guard let pane = try pane(in: sender.draggingPasteboard) else { return false }
             return WideDrop.apply(pane, target, workspace: workspace)
         } catch {
             workspace.fail(error)
@@ -311,10 +306,9 @@ final class WideColumnView: NSView {
         }
     }
 
-    /// 拖的是哪一块：nil 是剪贴板上还读不出（按类型猜），`.some(nil)` 是读出来了但主区不接（任务卡）。同一个 App 里拖的，拖着时就读得出。
-    private func pane(in pasteboard: NSPasteboard) throws -> WideNavigation.Pane?? {
+    private func pane(in pasteboard: NSPasteboard) throws -> WideNavigation.Pane? {
         for type in WideDrop.types {
-            if let data = pasteboard.data(forType: .init(type.identifier)) { return .some(try WideDrop.pane(type, data, window: focus.windowID, workspace: workspace)) }
+            if let data = pasteboard.data(forType: .init(type.identifier)) { return try WideDrop.pane(type, data, window: focus.windowID, workspace: workspace) }
         }
         return nil
     }
@@ -366,7 +360,7 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: WideColumnController, context: Context) {
         controller.slot = slot
         controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape, leading: slot == .main, arrival: arrival)
-        controller.drop.under = under
+        controller.dropUnder = under
         controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
         controller.slide.park(hidden)
         if controller.pane { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }

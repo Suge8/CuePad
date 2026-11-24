@@ -191,7 +191,7 @@ final class Workspace {
     }
     var preview: PreviewOpening?
     var dropTarget: WideDropTarget?
-    @ObservationIgnored var dragging: WideNavigation.Pane??
+    @ObservationIgnored var dragging = WideDrag.unknown
     var replyFocus: UUID?
     var folderPicker: Project?
 
