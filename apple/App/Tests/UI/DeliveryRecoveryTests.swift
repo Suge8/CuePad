@@ -61,7 +61,7 @@ struct DeliveryRecoveryTests {
     func 回执丢失或弱确认都不授权重发_晚到历史接替原气泡(reply: String) async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: reply)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("从中断的地方继续", to: target, app: app)
         try await app.services.executor.start()
         if reply == "timeout" {
@@ -93,7 +93,7 @@ struct DeliveryRecoveryTests {
     @Test func 重开App与更新的旧pending同步都不能再派发已领取的话() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("不要再上传一次", to: target, app: app)
         var old = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
         try RawDB(app.services.location.databaseURL).exec(
@@ -112,10 +112,7 @@ struct DeliveryRecoveryTests {
     @Test func 先同步到真实消息也能确认原请求_不等弱ACK再次回来() async throws {
         let mac = TestApp(timing: clock.timing), phone = TestApp(host: "phone"), store = mac.services.store
         let (target, ext) = try await session(mac, reply: "ack")
-        defer {
-            ext.close(bye: "quit"); mac.bridge.stop()
-            mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork()
-        }
+        defer { ext.close(bye: "quit") }
         let request = try await say("只上传一次结果", to: target, app: phone)
         let pending = try #require(try await phone.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
         #expect(try await store.applyRemote([.save(pending, systemFields: Data())]).isEmpty)
@@ -136,7 +133,7 @@ struct DeliveryRecoveryTests {
     @Test func 明确再说一次保留原来的未知_不伪装成安全重发() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let first = try await say("继续检查", to: target, app: app)
         try await app.services.executor.start()
         let uncertain = try await outcome(first, in: store)
@@ -152,7 +149,6 @@ struct DeliveryRecoveryTests {
 
     @Test func 其他接入仍保留各自的受理合同() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
-        defer { app.bridge.stop(); app.services.cancelBackgroundWork() }
         let runtime = PipedHostedAgent(bridge: app.bridge, agent: .claudeCode)
         runtime.host("other", state: .settled)
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: .claudeCode)
@@ -168,7 +164,7 @@ struct DeliveryRecoveryTests {
     @Test func Cue旧请求不能越过派发时新开始的人类轮() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let task = try await store.createTask("修复发布")
         try await store.bindSession(target.sessionID, to: task.id)
         let host = TestApp.hostID
@@ -203,7 +199,7 @@ struct DeliveryRecoveryTests {
     @Test func Cue超时后的历史补齐来源_清理请求后仍保留_不抢后来手动绑定() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "timeout")
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let task = try await store.createTask("修复发布")
         try await store.bindSession(target.sessionID, to: task.id)
         let host = TestApp.hostID

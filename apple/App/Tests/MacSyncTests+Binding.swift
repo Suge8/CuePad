@@ -21,7 +21,6 @@ extension MacSyncTests {
         let source = try await store.createProject(name: "源", color: "#000000")
         let project = try await store.createProject(name: "App", color: "#000000")
         try await store.setDirectory(second.path, for: source.id)
-        defer { services.cancelBackgroundWork() }
 
         #expect(try await bound(BindRequest(project: project.id, folder: .besideSession("s1"))).status == .known(.succeeded))
         #expect(try await store.directory(of: project.id) == app.path)
@@ -39,7 +38,6 @@ extension MacSyncTests {
         let app = try folder("app")
         _ = try await indexed("s1", cwd: app)
         let unseen = UUID()
-        defer { services.cancelBackgroundWork() }
 
         let done = try await bound(BindRequest(project: unseen, folder: .besideSession("s1")))
 
@@ -53,7 +51,6 @@ extension MacSyncTests {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         let bare = try await services.store.createProject(name: "无目录", color: "#000000")
         try await services.store.setDirectory(existing.path, for: project.id)
-        defer { services.cancelBackgroundWork() }
 
         let noSession = try await bound(BindRequest(project: project.id, folder: .besideSession("nope")))
         #expect(noSession.status == .known(.failed) && noSession.reason?.text.isEmpty == false)
@@ -69,7 +66,6 @@ extension MacSyncTests {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(rig.directory.appending(path: "work/moved").path, for: project.id)
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let send = try await services.store.requestDelivery(
             "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
@@ -84,7 +80,6 @@ extension MacSyncTests {
     func 目录绑定随绑定与解绑同步() async throws {
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.startDirectoryBindings()
-        defer { services.cancelBackgroundWork() }
 
         try await services.store.setDirectory("/Users/someone/work/app", for: project.id)
         let bound = try await eventually(services.store, { try $0.directoryBindings() }, until: { !$0.isEmpty })

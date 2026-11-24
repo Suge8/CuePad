@@ -7,7 +7,6 @@ import Testing
     #if os(iOS)
     @Test func relayDropKeepsTheCallUntilTheMacComesBack() async throws {
         let (app, voice, signal, media) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
         let session = try #require(voice.session), old = signal.peer
         await voice.receive(.peerClosed(endpoint: old, reason: .disconnected))
         #expect(!media.closing)
@@ -27,7 +26,6 @@ import Testing
 
     @Test func codexNotRespondingOnTheMacEndsWithItsOwnReason() async throws {
         let (app, voice, signal, media) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
         let session = try #require(voice.session), workspace = Workspace(services: app.services)
         await voice.receive(signal.event(.projection(value: .init(session: session, phase: .failed(.codexUnresponsive), requests: [], replies: [])), session: session))
         #expect(media.closed)
@@ -38,7 +36,7 @@ import Testing
 
     @Test func aStuckLookupCannotOutlastTheGrace() async throws {
         let (app, voice, signal, media) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
+        defer { withExtendedLifetime(app) {} }
         signal.resolveGate = VoiceGate()
         let began = ContinuousClock.now
         await voice.receive(.peerClosed(endpoint: signal.peer, reason: .disconnected))
@@ -51,7 +49,7 @@ import Testing
 
     @Test func aCommandWaitsAcrossTheRelinkForItsResult() async throws {
         let (app, voice, signal, _) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
+        defer { withExtendedLifetime(app) {} }
         let session = try #require(voice.session), message = UUID(), id = UUID()
         let task = Task { try await voice.command(.recover(request: .recorded(message: message)), id: id) }
         try await eventually("command sent") { !voice.pending.isEmpty }
@@ -69,7 +67,6 @@ import Testing
     #if os(macOS)
     @Test func aCommandBeforeResumeStillBringsProjectionsBack() async throws {
         let (app, signal, fixture) = try await answeredPhone()
-        defer { app.services.cancelBackgroundWork() }
         let store = app.services.store, voice = app.services.voice
         let first = try await store.addCueMessage(.cue, text: "first result", answeredRequests: nil)
         try await eventually("reply visible") { fixture.voiceRecord.replies.contains { $0.id == first.id } }
@@ -91,7 +88,6 @@ import Testing
 
     @Test func aResultMadeWhileThePhoneIsAwayFollowsItToTheNewLease() async throws {
         let (app, signal, fixture) = try await answeredPhone()
-        defer { app.services.cancelBackgroundWork() }
         let store = app.services.store, voice = app.services.voice
         let reply = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
         try await eventually("reply visible") { fixture.voiceRecord.replies.contains { $0.id == reply.id } }

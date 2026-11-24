@@ -24,7 +24,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("最后检查这句话", to: target, in: app)
         try await app.services.executor.start()
         let phase = try await settledDispatch(request, in: app)
@@ -36,7 +36,6 @@ extension DeliveryConfirmationTests {
         #expect(result.failure == nil)
         if !hasMessage {
             let phone = TestApp(host: "phone")
-            defer { phone.services.cancelBackgroundWork() }
             let row = try #require(try await app.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
             #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
             let received = try #require(try await phone.services.store.deliveryRequest(request.id))
@@ -52,7 +51,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("重开仍只有这个意图", to: target, in: app)
         try await app.services.executor.start()
         let before = try await settledDispatch(request, in: app)
@@ -88,7 +87,7 @@ extension DeliveryConfirmationTests {
         let phone = TestApp(timing: clock.timing, host: "phone")
         let (target, ext, _) = try await session(mac)
         ext.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }
-        defer { ext.close(bye: "quit"); mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("确认状态丢在路上", to: target, in: mac)
         try await mac.services.executor.start()
         try await eventually("外部 Agent 已收到但尚未回 ACK") { ext.messages.count == 1 }
@@ -128,7 +127,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let store = app.services.store
         let task = try await store.createTask("修复发布")
         try await store.bindSession(target.sessionID, to: task.id)

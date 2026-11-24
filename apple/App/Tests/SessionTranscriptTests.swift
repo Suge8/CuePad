@@ -91,7 +91,6 @@ struct SessionTranscriptTests {
         _ = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
         await backfill()
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let request = try await store.requestTranscript(of: try await record("old"))
         let finished = try await eventually(store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false })

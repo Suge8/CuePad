@@ -92,7 +92,6 @@ struct NewSessionFlowTests {
 
     @Test(arguments: Entry.all)
     func 首次开_没开成直接重试替换旧请求_认领后各回各处(entry: Entry) async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (_, launching, submit) = try await open(entry, in: workspace)
         await submit()?.value
@@ -126,7 +125,6 @@ struct NewSessionFlowTests {
 
     @Test(arguments: Entry.all)
     func 未确认先问_取消不动原请求与草稿_确认后另开(entry: Entry) async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (_, launching, submit) = try await open(entry, in: workspace)
         await submit()?.value
@@ -156,7 +154,6 @@ struct NewSessionFlowTests {
 
     #if os(macOS)
     @Test func 新会话的输入框空着不开会话() async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         workspace.openNewSession()
         let start = try #require(workspace.newSession)
@@ -171,7 +168,6 @@ struct NewSessionFlowTests {
 
     @Test(arguments: Entry.forCards)
     func 任务已有没收尾的请求_接上它不另开(entry: Entry) async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (task, launching, submit) = try await open(entry, in: workspace)
         let other = try await store.requestLaunch(LaunchRequest(project: Project.defaultID, prompt: nil, token: "elsewhere"), title: "修乱序", on: host, card: task.id)
@@ -182,7 +178,6 @@ struct NewSessionFlowTests {
 
     @Test(arguments: Entry.closable)
     func 未确认后关上_晚到的认领照样收尾(entry: Entry) async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (launching, first, _, _) = try await unconfirmedThenClosed(entry, in: workspace)
         #expect(launching.launch == first, "可能已开过：关上也接着等")
@@ -200,7 +195,6 @@ struct NewSessionFlowTests {
 
     @Test(arguments: Entry.closable)
     func 未确认后关上再开_再开照样先问(entry: Entry) async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (launching, first, reopen, submit) = try await unconfirmedThenClosed(entry, in: workspace)
         reopen()
@@ -213,7 +207,6 @@ struct NewSessionFlowTests {
 
     #if os(macOS)
     @Test func 开始用这个项目上次选的那家_没选过的项目用最近一次选的() async throws {
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services), settings = app.services.settings
         try await store.recordMacAgents(host: host, name: "测试 Mac", [.pi, .codex].map { MacAgent(kind: $0, model: nil, models: []) })
         let table = try await store.createProject(name: "圆桌", color: "#000000")

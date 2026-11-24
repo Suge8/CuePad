@@ -44,7 +44,6 @@ extension TaskFlowTests {
 
     @Test func 已完成任务_创建来源随云端会话晚到仍自动收尾() async throws {
         let workspace = Workspace(services: rig.services), peer = TestApp(host: "other-mac")
-        defer { peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         workspace.handOff(task.id, fresh: true)
@@ -69,7 +68,6 @@ extension TaskFlowTests {
     @Test(arguments: ["done", "archive", "trash"], [false, true])
     func 会话来源先到_手机的收尾状态分批晚到仍自动结束(action: String, delayedParent: Bool) async throws {
         let workspace = Workspace(services: rig.services), peer = TestApp(host: "other-mac")
-        defer { peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let parent = try await delayedParent ? workspace.createTask("发布", in: Project.defaultID) : nil
         let task = if let parent { try await store.createTask("准备发布", under: parent.id) }
@@ -107,7 +105,6 @@ extension TaskFlowTests {
 
     @Test func 手机还没同步到完成就对会话说话_Mac领取时任务回到进行中() async throws {
         let phone = TestApp(host: "phone")
-        defer { phone.services.cancelBackgroundWork() }
         let task = try await store.createTask("修登录")
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "s1", state: .settled, title: "修登录")
         try await store.bindSession("s1", to: task.id)

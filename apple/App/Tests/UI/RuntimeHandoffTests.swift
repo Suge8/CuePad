@@ -9,7 +9,6 @@ struct RuntimeHandoffTests {
     func 未确认交接仍在进行中但不算在跑(mode: DeliveryMode, status: String) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services), store = app.services.store
-        defer { app.services.cancelBackgroundWork() }
         let task = try await workspace.createTask("检查部署", in: Project.defaultID)
         let target = SendTarget(kind: .piSession, name: "部署", ref: mode == .start ? nil : "atlas")
         let text = mode == .start ? LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body

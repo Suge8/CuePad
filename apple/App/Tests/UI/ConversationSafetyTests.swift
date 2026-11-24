@@ -11,7 +11,6 @@ import Testing
 struct ConversationSafetyTests {
     @Test func Cue不打断来源未确认的运行轮次() async throws {
         let app = TestApp(), store = app.services.store
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let task = try await workspace.createTask("来源未确认", in: Project.defaultID)
         let session = UUID().uuidString.lowercased()

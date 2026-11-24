@@ -12,7 +12,6 @@ extension TaskFlowTests {
         let clock = ManualTiming(start: Date().addingTimeInterval(-60))
         let rig = TestApp(timing: clock.timing), store = rig.services.store, peer = TestApp(host: "phone")
         let services = try #require(rig.services), workspace = Workspace(services: services)
-        defer { rig.bridge.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("旧任务", in: Project.defaultID)
         let borrower = try await workspace.createTask("新任务", in: Project.defaultID)

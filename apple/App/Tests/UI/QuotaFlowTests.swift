@@ -14,7 +14,7 @@ struct QuotaFlowTests {
         let app = TestApp(), services = app.services!
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { await following.stop(); services.cancelBackgroundWork() }
+        defer { await following.stop() }
         let ext = try await app.host.connect("menu-quota", cwd: "/work/quota")
         try await eventually("菜单栏资料库就绪") { workspace.isLibraryReady }
         // leaks --traceTree（2026-11-12，本机输入法是微信输入法时 7/7 不放，云端 runner 上放）：面板成过键盘窗口后，系统输入法的 XPC 连接
@@ -39,7 +39,6 @@ struct QuotaFlowTests {
         let services = app.services!
         let changes = services.bridge.changes()
         services.follow(reporting: { .syncUnavailable(String(describing: $0)) }) { try await services.consumeSessionChanges(changes) }
-        defer { services.cancelBackgroundWork() }
         let ext = try await app.host.connect("quota", cwd: "/work/quota")
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "quota" {

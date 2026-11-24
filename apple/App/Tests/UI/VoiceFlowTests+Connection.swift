@@ -10,7 +10,7 @@ extension VoiceFlowTests {
     @Test(arguments: ["permission", "login", "quota", "codex"])
     func 连接失败提供原因与重连_修好条件后同一入口恢复(kind: String) async throws {
         let (app, fixture) = try await setup()
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         if kind == "permission" { fixture.media.denied = true }
         if kind == "login" { fixture.access = { throw CodexAccessError.signedOut } }
         if kind == "quota" { fixture.connectError = .notAllowed(429) }
@@ -32,7 +32,7 @@ extension VoiceFlowTests {
 
     @Test func 等凭证时挂断不等待网络_不会随后自己接通() async throws {
         let (app, fixture) = try await setup()
-        defer { app.services.cancelBackgroundWork() }
+        defer { withExtendedLifetime(app) {} }
         let gate = AsyncStream<Void>.makeStream()
         fixture.access = {
             for await _ in gate.stream { break }
@@ -50,7 +50,7 @@ extension VoiceFlowTests {
     func 关闭完成前不呈现终态_释放后可重连且忽略旧事件(kind: String) async throws {
         let (app, fixture) = try await setup()
         let gate = AsyncStream<Void>.makeStream(), accessGate = AsyncStream<Void>.makeStream()
-        defer { gate.continuation.finish(); accessGate.continuation.finish(); app.services.cancelBackgroundWork() }
+        defer { gate.continuation.finish(); accessGate.continuation.finish() }
         let access = fixture.access
         if kind == "connecting" {
             fixture.access = {

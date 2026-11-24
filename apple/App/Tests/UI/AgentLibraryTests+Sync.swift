@@ -20,7 +20,6 @@ extension AgentLibraryTests {
         try write("# Site\n", folder.appending(path: "AGENTS.md"))
         try write("# 旧的 Claude 说明\n", folder.appending(path: "CLAUDE.md"))
         for side in [macApp, phone] { side.services.startSync() }
-        defer { for side in [macApp, phone] { side.services.cancelBackgroundWork() } }
         let keeping = Task { try? await macApp.services.library.keep() }
         defer { await keeping.stop() }
         try await macApp.services.executor.start()

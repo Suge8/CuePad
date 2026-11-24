@@ -74,9 +74,7 @@ final class ClaudeRig {
     }
 
     func shutdown() async {
-        let followers = services.cancelBackgroundWork()
-        _ = await services.beginShutdown()()
-        await followers?.value
+        try? await services.close()()
         let stray = ((try? String(contentsOf: bin.appending(path: "pids"), encoding: .utf8)) ?? "").split(separator: "\n").compactMap { Int32($0) }
         for pid in stray where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
     }

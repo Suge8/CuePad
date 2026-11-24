@@ -43,7 +43,6 @@ struct IOSWorkflowTests {
     }
     @Test(arguments: ["offline", "sent", "unconfirmed"])
     func 同一任务关闭重开_恢复原请求且不能冒充首次提交(state: String) async throws {
-        defer { app.services.cancelBackgroundWork() }
         try await store.recordMacAgents(host: "mac-z", name: "Mac", [MacAgent(kind: .pi, model: nil, models: [])])
         let (task, first) = try await handOff(in: Project.defaultID)
         if state != "offline" {

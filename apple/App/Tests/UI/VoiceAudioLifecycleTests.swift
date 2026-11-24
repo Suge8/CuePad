@@ -45,7 +45,7 @@ import Testing
         let media = Media(), gate = VoiceGate(), closeGate = VoiceGate()
         var nextMedia: any VoiceMedia = media
         let fixture = try await Fixture(makeMedia: { nextMedia })
-        defer { gate.open(); closeGate.open(); fixture.app.services.cancelBackgroundWork() }
+        defer { gate.open(); closeGate.open() }
         media.closeGate = closeGate
         if whileStarting { media.offerGate = gate; media.failure = CancellationError() }
         let start = Task { try await fixture.workspace.startVoiceCall() }
@@ -87,7 +87,6 @@ import Testing
             if denied { media.failure = VoicePeerError.microphoneDenied }
             return media
         })
-        defer { fixture.app.services.cancelBackgroundWork() }
         for _ in 0..<2 {
             await #expect(throws: VoiceIssue.ended(.permissionDenied)) { try await fixture.workspace.startVoiceCall() }
             #expect(fixture.workspace.voiceViewState.phase == .failed(.ended(.permissionDenied)))
@@ -103,7 +102,6 @@ import Testing
 
     @Test func 另一版的Mac接听_挂断并说请更新() async throws {
         let media = Media(), fixture = try await Fixture(makeMedia: { media })
-        defer { fixture.app.services.cancelBackgroundWork() }
         try await fixture.workspace.startVoiceCall()
         let session = try #require(fixture.voice.session)
         await fixture.voice.receive(fixture.signal.event(.media(signal: .answer(value: .init(sdp: "answer", version: VoiceSignalFormat.callVersion + 1))), session: session))

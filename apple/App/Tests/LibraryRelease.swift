@@ -4,8 +4,9 @@ import Synchronization
 import Testing
 
 /// 用例结束前等它建过的资料库都释放：没释放的就是有任务、订阅或对象还攥着它（同一个测试宿主里只增不减，每个库占一组系统通知登记，
-/// 攒到几百个宿主就崩在建库上）。等完收尾后还活着的再给 1 秒才算泄漏：收尾时还在跑的一次性任务（上传、起名、立即同步的那一拉、读的一方停了还要走几步的订阅重读）
-/// 做完就放，这种短暂持有不算，只增不减才算；1 秒够它们收尾，真泄漏的用例约 1 秒报红，正常用例到这里已经放了、不多花时间。检查放在用例的作用域里而不在 `TestApp` 的 deinit 里：释放要等被取消的任务收尾，deinit 等不了，
+/// 攒到几百个宿主就崩在建库上）。等完收尾后还活着的一直等到这条用例的时限（`conditionBudget`，从用例开始算）才算泄漏：
+/// 收尾时还在跑的一次性任务（上传、起名、立即同步的那一拉、读的一方停了还要走几步的订阅重读）做完就放，负载高时它们走得慢，不能按墙钟定宽限；
+/// 正常用例到这里已经放了、不多花时间，只有真泄漏的用例等满。检查放在用例的作用域里而不在 `TestApp` 的 deinit 里：释放要等被取消的任务收尾，deinit 等不了，
 /// 用例结束后再记的问题测试框架不算到任何用例头上。`TestApp` 只在这个作用域里建（建在外面当场报错）。Swift Testing 没有进程级的作用域，只能逐个套件挂。
 nonisolated struct ReleasesLibraries: TestTrait, SuiteTrait, TestScoping {
     var isRecursive: Bool { true }
@@ -13,14 +14,14 @@ nonisolated struct ReleasesLibraries: TestTrait, SuiteTrait, TestScoping {
     func scopeProvider(for test: Test, testCase: Test.Case?) -> Self? { testCase == nil ? nil : self }
 
     func provideScope(for test: Test, testCase: Test.Case?, performing function: @Sendable @concurrent () async throws -> Void) async throws {
-        let ledger = LibraryLedger()
+        let ledger = LibraryLedger(), deadline = ContinuousClock.now + conditionBudget
         do {
             try await LibraryLedger.$current.withValue(ledger) { try await function() }
         } catch {
-            await ledger.expectReleased()
+            await ledger.expectReleased(by: deadline)
             throw error
         }
-        await ledger.expectReleased()
+        await ledger.expectReleased(by: deadline)
     }
 }
 
@@ -72,7 +73,7 @@ nonisolated final class LibraryLedger: Sendable {
     /// 同一用例里别的没放的照报泄漏；它放掉了，测试框架报"已知问题没出现"，提醒删掉这一行。先用 `leaks --traceTree <对象地址> <pid>` 查清引用链再指认：
     /// 曾以为 Mac 上 SwiftUI 视图图留着环境，实为文件草稿与工作区互相攥着。已知一种（iOS）：UIKit 攥着最后一个拿过键盘的文本视图，
     /// 键盘单例的标记文字浮层（`UIKeyboardImpl.m_markedTextOverlay`）缓存的特征集合带着 SwiftUI 环境（交出键盘、结束编辑、关窗、清根视图都不放）。
-    /// AppKit 文本视图进窗口时排的延迟合并块（`NSCreateMainQueueHysteresisBlock`）攥着它约半秒，在 1 秒宽限之内，不算。
+    /// AppKit 文本视图进窗口时排的延迟合并块（`NSCreateMainQueueHysteresisBlock`）攥着它约半秒，收尾时等得到它放掉，不算。
     /// `intermittent`：只在某些环境里放不掉（Mac 文件页那条：本机放掉、CI 的 runner 上不放），放掉了不报"已知问题没出现"。
     static func heldByFramework(_ store: CueStore, _ comment: Comment, intermittent: Bool = false, sourceLocation: SourceLocation = #_sourceLocation) {
         guard let ledger = current else {
@@ -94,9 +95,9 @@ nonisolated final class LibraryLedger: Sendable {
         }
     }
 
-    private var held: [SourceLocation] { state.withLock { $0.stores.filter { $0.store != nil }.map(\.createdAt) } }
+    private var waiting: Bool { state.withLock { state in state.stores.contains { $0.store != nil && $0.store !== state.excused?.store } } }
 
-    func expectReleased() async {
+    func expectReleased(by deadline: ContinuousClock.Instant) async {
         await MainActor.run {}
         let (apps, closings) = state.withLock { ($0.apps, $0.closings) }
         for location in apps {
@@ -105,7 +106,9 @@ nonisolated final class LibraryLedger: Sendable {
         for closing in closings {
             do { try await closing.value } catch { Issue.record("旧实例没停干净：\(error)") }
         }
-        await graceForOneShots()
+        while waiting, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
         let (live, excused) = state.withLock { state in
             (state.stores.compactMap { entry in entry.store.map { ($0, entry.createdAt) } }, state.excused)
         }
@@ -116,13 +119,6 @@ nonisolated final class LibraryLedger: Sendable {
             }
         }
         for (store, location) in live where store !== excused?.store { record(location) }
-    }
-
-    private func graceForOneShots() async {
-        let clock = ContinuousClock(), deadline = clock.now + .seconds(1)
-        while !held.isEmpty, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
     }
 
     private func record(_ location: SourceLocation) {
