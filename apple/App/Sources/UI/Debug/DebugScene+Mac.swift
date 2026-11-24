@@ -35,17 +35,26 @@ extension DebugScene {
         }
     }
 
+    /// 查一次就报下好了一版；装不真装，只记一笔 update-installed。
     final class DemoUpdater: AppUpdater {
+        weak var events: UpdaterEvents?
         var automaticallyChecksForUpdates = true
-        var canCheckForUpdates = true
-        var postponeRelaunch: ((@escaping () -> Void) -> Bool)?
+        var checking: Bool { false }
+        static let version = AppVersion(short: "2026.11.25", build: "2611250930")
 
-        func checkForUpdates() {
-            let install: () -> Void = { print("update-installed"); DebugHooks.mark("update-installed") }
-            if postponeRelaunch?(install) != true { install() }
+        func checkInBackground() {
+            events?.checked(.found(Self.version))
+            events?.ready(Self.version) { [weak self] in
+                if self?.events?.relaunching(Self.version, install: Self.installed) != true { Self.installed() }
+            }
         }
 
-        func checkForUpdatesInBackground() { checkForUpdates() }
+        func showUpdate() {}
+
+        private static func installed() {
+            print("update-installed")
+            DebugHooks.mark("update-installed")
+        }
     }
 
     /// 隔离实例里真跑 Cue 派活要有绑了文件夹的项目，而系统的选文件夹面板读写正式版的偏好域（同一个 bundle id），在后台也点不动。

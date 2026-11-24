@@ -39,15 +39,9 @@ extension DebugSceneEntry {
         workspace.show(.progress)
     }
 
-    static let updateWait = DebugSceneEntry("updatewait") { workspace, _ in
-        await DebugScene.connectAgents(workspace.services)
-        let bridge = workspace.services.bridge
-        let busy = { bridge.sessions.contains { $0.state.hasPendingWork } }
-        if !busy() { for await _ in bridge.changes() where busy() { break } }
-        workspace.services.updates.checkForUpdates()
-        SettingsPane.open(.general)
-        DebugScene.mainWindow?.animationBehavior = .none
-        DebugScene.mainWindow?.orderOut(nil)
+    /// update：下好一版，侧栏底下出现更新钮。
+    static let update = DebugSceneEntry("update") { workspace, _ in
+        workspace.services.updates.checkInBackground()
     }
     #endif
 }

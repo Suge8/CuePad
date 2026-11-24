@@ -174,18 +174,23 @@ extension FakeExtension {
     }
 }
 
+/// 查一次就下好一版（同 Sparkle 自动下载后的 `willInstallUpdateOnQuit`）；装了记一次数。
 final class FakeUpdater: AppUpdater {
+    weak var events: UpdaterEvents?
     var automaticallyChecksForUpdates = true
-    var canCheckForUpdates = true
-    var postponeRelaunch: ((@escaping () -> Void) -> Bool)?
+    var checking: Bool { false }
     private(set) var installs = 0
+    static let version = AppVersion(short: "2026.11.25", build: "2611250930")
 
-    func checkForUpdates() {
-        let install: () -> Void = { [weak self] in self?.installs += 1 }
-        if postponeRelaunch?(install) != true { install() }
+    func checkInBackground() {
+        events?.checked(.found(Self.version))
+        events?.ready(Self.version) { [weak self] in
+            let install: () -> Void = { self?.installs += 1 }
+            if self?.events?.relaunching(Self.version, install: install) != true { install() }
+        }
     }
 
-    func checkForUpdatesInBackground() { checkForUpdates() }
+    func showUpdate() {}
 }
 
 final class RecordingCueNotifier: CueNotifying {

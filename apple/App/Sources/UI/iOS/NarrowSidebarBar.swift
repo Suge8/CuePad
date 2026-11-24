@@ -11,6 +11,7 @@ struct NarrowSidebarBar: View {
         SidebarRow {
             HStack(spacing: SidebarRow.gap) {
                 PlacesMenu()
+                UpdateButton()
                 switch workspace.navigationPane {
                 case .projects: circle("新建项目", icon: .add) { workspace.projectForm = .init() }
                 case .progress: ScopeButton()

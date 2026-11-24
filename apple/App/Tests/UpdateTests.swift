@@ -6,7 +6,7 @@ import Testing
 
 @Suite(.releasesLibraries)
 struct UpdateTests {
-    @Test func 重启会断的托管会话在干活_等子代理或等你确认_更新等它们都空下来再装_托管的Pi在干活不等() async throws {
+    @Test func 点更新时重启会断的托管会话在干活_等子代理或等你确认_等它们都空下来再装_托管的Pi在干活不等() async throws {
         let updater = FakeUpdater()
         let rig = TestApp(updater: updater)
         let updates = rig.services.updates
@@ -17,33 +17,34 @@ struct UpdateTests {
         claude.host("resting", state: .settled)
         try await rig.host.connect("pi-hosted", cwd: "/work/p", busy: true)
 
-        updates.checkForUpdates()
+        #expect(await updates.check() == .found(FakeUpdater.version))
+        #expect(updates.state == .ready(FakeUpdater.version))
+        updates.act()
         #expect(updater.installs == 0)
-        #expect(updates.waitingFor == 3)
+        #expect(updates.state == .waiting(FakeUpdater.version, busy: 3))
 
         claude.set(working, .settled)
-        try await eventually("还等 2 个") { updates.waitingFor == 2 }
+        try await eventually("还等 2 个") { updates.state == .waiting(FakeUpdater.version, busy: 2) }
         claude.set(asking, .settled)
-        try await eventually("还等 1 个") { updates.waitingFor == 1 }
+        try await eventually("还等 1 个") { updates.state == .waiting(FakeUpdater.version, busy: 1) }
         #expect(updater.installs == 0)
 
         claude.set(delegating, .settled)
         try await eventually("会断的都空下来就装") { updater.installs == 1 }
-        #expect(updates.waitingFor == nil)
         #expect(rig.bridge.sessions.first { $0.sessionID == "pi-hosted" }?.state.hasPendingWork == true)
     }
 
-    @Test func 等着时点现在就装_立刻装_之后会话空下来不再装第二次() async throws {
+    @Test func 等着时再点更新_立刻装_之后会话空下来不再装第二次() async throws {
         let updater = FakeUpdater()
         let rig = TestApp(updater: updater)
         let updates = rig.services.updates
         let working = rig.claude.host("working", state: .thinking)
-        updates.checkForUpdates()
-        #expect(updates.waitingNote == "等 1 个 Agent 做完再装")
+        updates.checkInBackground()
+        updates.act()
+        #expect(updates.state == .waiting(FakeUpdater.version, busy: 1))
 
-        updates.installNow()
+        updates.act()
         #expect(updater.installs == 1)
-        #expect(updates.waitingNote == nil)
 
         rig.claude.set(working, .settled)
         try await eventually("会话空下来") { rig.bridge.sessions.first?.state == .settled }
@@ -56,6 +57,7 @@ struct UpdateTests {
         let key = try #require(info["SUPublicEDKey"] as? String, "缺少 SUPublicEDKey")
         #expect(Data(base64Encoded: key)?.count == 32, "EdDSA 公钥应是 32 字节的 base64")
         #expect(info["SUEnableAutomaticChecks"] as? Bool == true)
+        #expect(info["SUAutomaticallyUpdate"] as? Bool == true)
     }
 
 }

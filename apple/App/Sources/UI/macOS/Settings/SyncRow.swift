@@ -11,7 +11,7 @@ struct SyncRow: View {
     @State private var showsIssues = false
     @State private var confirmErase = false
 
-    private enum Fix { case decide, openSettings, update, issues }
+    private enum Fix { case decide, openSettings, issues }
 
     var body: some View {
         let shown = ShownSync(services), summary = shown.summary
@@ -33,8 +33,6 @@ struct SyncRow: View {
                     .popover(isPresented: $showsDecision, arrowEdge: .bottom) { decision(summary) }
             case .openSettings:
                 Button(SyncSummary.settingsTitle) { openURL(SyncSummary.settings) }.settingFix()
-            case .update:
-                Button(SyncSummary.updateTitle) { services.updates.checkForUpdates() }.settingFix()
             case .issues:
                 Button("查看") { showsIssues = true }
                     .settingFix()
@@ -52,7 +50,6 @@ struct SyncRow: View {
         switch services.syncing.state.status {
         case .needsDecision: .decide
         case .noAccount: .openSettings
-        case .outdated: .update
         default: services.syncing.state.issues.isEmpty ? nil : .issues
         }
     }

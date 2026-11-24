@@ -14,8 +14,6 @@ enum MainMenu {
         main.addItem(submenu(title: "CuePad", items: [
             .item("关于 CuePad", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
             .item("检查更新…", #selector(AppDelegate.checkForUpdates(_:)), ""),
-            .item("", #selector(AppDelegate.installUpdateNow(_:)), "", tag: AppDelegate.updateNoteTag),
-            .item("现在就装", #selector(AppDelegate.installUpdateNow(_:)), ""),
             .separator,
             .item("设置…", #selector(AppDelegate.showSettings(_:)), ","),
             .separator,

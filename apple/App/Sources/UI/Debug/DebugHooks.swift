@@ -222,10 +222,10 @@ enum DebugHooks {
         #endif
     }
 
-    /// 隔离模式下的更新器：`-CuePadScene updatewait` 给一个演示用的（找到更新、点了安装，不真装），其余没有。
+    /// 隔离模式下的更新器：`-CuePadScene update` 给一个演示用的（下好一版，点了不真装），其余没有。
     static var updater: (any AppUpdater)? {
         #if DEBUG
-        DebugScene.scene == "updatewait" ? DebugScene.DemoUpdater() : nil
+        DebugScene.scene == "update" ? DebugScene.DemoUpdater() : nil
         #else
         nil
         #endif

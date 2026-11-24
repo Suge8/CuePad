@@ -157,8 +157,6 @@ private struct SyncSection: View {
                 .disabled(choices.working)
             } else if services.syncing.state.status == .noAccount {
                 Button(SyncSummary.settingsTitle, icon: .settings) { openURL(SyncSummary.settings) }
-            } else if services.syncing.state.status == .outdated {
-                Button(SyncSummary.updateTitle, icon: .updates) { openURL(SyncSummary.update) }
             } else if services.syncing.canSyncNow {
                 Button("立即同步", icon: .syncNow) { Task { await services.syncing.syncNow() } }
                     .disabled(services.syncing.isSyncingNow)

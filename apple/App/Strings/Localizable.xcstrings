@@ -3228,6 +3228,22 @@
       },
       "shouldTranslate" : false
     },
+    "CuePad %@ 已下好，点侧栏底下的更新钮装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad %@ is ready. Install it from the update button at the bottom of the sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad %@ 已下好，点侧栏底下的更新钮装"
+          }
+        }
+      }
+    },
     "CuePad 备了一份起步规则" : {
       "localizations" : {
         "en" : {
@@ -7818,6 +7834,22 @@
         }
       }
     },
+    "别的设备已用新版，这台更新后接着同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another device is on a newer version. Syncing resumes after this one updates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别的设备已用新版，这台更新后接着同步"
+          }
+        }
+      }
+    },
     "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出" : {
       "localizations" : {
         "en" : {
@@ -10786,6 +10818,22 @@
         }
       }
     },
+    "它们空下来就自动重启更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad restarts to update once they’re idle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它们空下来就自动重启更新"
+          }
+        }
+      }
+    },
     "它此刻在做什么、手上几件活、几件等你，点一下和它说话。" : {
       "localizations" : {
         "en" : {
@@ -10830,6 +10878,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "安装"
+          }
+        }
+      }
+    },
+    "安装…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装…"
           }
         }
       }
@@ -11974,6 +12038,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已新建任务「%@」"
+          }
+        }
+      }
+    },
+    "已是最新版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’re up to date"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已是最新版本"
+          }
+        }
+      }
+    },
+    "已更新到 CuePad %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated to CuePad %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已更新到 CuePad %@"
           }
         }
       }
@@ -15070,6 +15166,38 @@
         }
       }
     },
+    "新版下好后在这里装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install it here once it’s downloaded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新版下好后在这里装"
+          }
+        }
+      }
+    },
+    "新版已就绪" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update ready"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新版已就绪"
+          }
+        }
+      }
+    },
     "方块" : {
       "localizations" : {
         "en" : {
@@ -15542,6 +15670,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更改后需重新打开 CuePad"
+          }
+        }
+      }
+    },
+    "更新后接着同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing resumes after the update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新后接着同步"
           }
         }
       }
@@ -16482,6 +16626,22 @@
         }
       }
     },
+    "检查更新没成功：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check for updates: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查更新没成功：%@"
+          }
+        }
+      }
+    },
     "检测中…" : {
       "localizations" : {
         "en" : {
@@ -16670,6 +16830,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在「%@」上运行，改过来要先确认"
+          }
+        }
+      }
+    },
+    "正在下载 CuePad %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading CuePad %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载 CuePad %@"
           }
         }
       }
@@ -17070,6 +17246,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在查询"
+          }
+        }
+      }
+    },
+    "正在检查更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking for updates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查更新"
           }
         }
       }
@@ -20414,18 +20606,18 @@
         }
       }
     },
-    "自动检查更新" : {
+    "自动更新" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Check for Updates Automatically"
+            "value" : "Automatic Updates"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "自动检查更新"
+            "value" : "自动更新"
           }
         }
       }
@@ -22490,6 +22682,22 @@
         }
       }
     },
+    "这一版要你确认后安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version needs your OK to install"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一版要你确认后安装"
+          }
+        }
+      }
+    },
     "这一轮 %lld 分钟没有动静，大脑像是卡住了" : {
       "localizations" : {
         "en" : {
@@ -24338,6 +24546,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重发"
+          }
+        }
+      }
+    },
+    "重启更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart to Update"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重启更新"
           }
         }
       }

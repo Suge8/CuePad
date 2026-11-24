@@ -55,10 +55,12 @@ struct WideRail: View {
             RailTool(icon: .search, help: "搜索（⌘K）") { workspace.searching.toggle() }.disabled(!workspace.isLibraryReady)
             RailTool(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
             RailTool(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
+            UpdateButton().railTool()
             #else
             RailTool(icon: .search, help: "搜索") { workspace.openSearch() }
             RailTool(icon: .instruction, help: "技能与规则") { workspace.push(.library) }
             RailTool(icon: .settings, help: "设置") { workspace.push(.settings) }
+            UpdateButton().railTool()
             RemoteMacButton().railTool()
             #endif
             Spacer(minLength: 0)
