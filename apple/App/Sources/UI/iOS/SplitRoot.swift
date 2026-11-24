@@ -16,6 +16,8 @@ struct SplitRoot: View {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
                 Spacer(minLength: 0)
             }
+            // 上面叠的几层都按这一排的大小摆：侧栏放不下时这里只剩 Spacer，高是 0，主区跟着塌成一条线
+            .frame(maxHeight: .infinity)
             .overlay {
                 PaneRow(sizes: sizes, window: geometry.size.width, focus: focus) { index in
                     EdgeInsets(top: 0, leading: index == 0 ? Chrome.headLead(rail: sizes.rail) : Spacing.page, bottom: 0, trailing: Spacing.page)
