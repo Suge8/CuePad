@@ -166,7 +166,7 @@ extension CueKeeper {
                 if finished.replay {
                     await replay(finished, failure: failure)
                 } else if retried {
-                    if let woke = finished.selfStarted { await setBack(failure, retrying: woke) }
+                    if let woke = finished.selfStarted { await setBack(failure, retrying: woke, stops: finished.stops) }
                     if !finished.delivered.isEmpty { await setBack(failure, retrying: .message, holding: finished.delivered) }
                     await giveBack(finished.delivered)
                 }
@@ -267,7 +267,7 @@ extension CueKeeper {
         save()
     }
 
-    private func setBack(_ failure: String, retrying wake: CueWake, now: Bool = false, holding: [UUID] = []) async {
+    private func setBack(_ failure: String, retrying wake: CueWake, now: Bool = false, holding: [UUID] = [], stops: [CueLeft] = []) async {
         let at = self.now
         var latest: Int?
         do {
@@ -290,7 +290,7 @@ extension CueKeeper {
             } else {
                 .awaitingChange
             }
-        let held = Setback(stage: stage, wake: wake, latest: latest, since: at, failure: failure, held: Set(holding))
+        let held = Setback(stage: stage, wake: wake, latest: latest, since: at, failure: failure, held: Set(holding), stops: stops)
         if let existing = setbacks.firstIndex(where: { $0.wake == wake }) { setbacks[existing] = held } else { setbacks.append(held) }
     }
 

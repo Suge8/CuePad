@@ -5,10 +5,12 @@ import Foundation
 
 extension CueKeeper {
     func leaveUnattended() async {
-        guard let turn, !turn.stops.isEmpty, turn.round.failure == nil || retriedInVain(turn) else { return }
+        guard let turn else { return }
+        let stops = turn.round.failure == nil ? turn.stops : failedBefore(turn).filter(turn.stops.contains)
+        guard !stops.isEmpty else { return }
         let given = Set(turn.round.calls.filter { !$0.failed && CueActivity.settlesStop(tool: $0.name, arguments: $0.arguments) }
             .flatMap { [$0.named.task, $0.named.session] }.compactMap(\.self))
-        for stop in turn.stops {
+        for stop in stops {
             do {
                 guard let session = try await store.leaveUnattended(stop, given: given) else { continue }
                 let arguments = String(decoding: try JSONSerialization.data(withJSONObject: ["action": "leave", "session": session.sessionID]), as: UTF8.self)
@@ -21,8 +23,9 @@ extension CueKeeper {
         }
     }
 
-    private func retriedInVain(_ turn: Turn) -> Bool {
-        turn.selfStarted.map { Setback.supersedable($0) && !firstError($0) } == true
+    private func failedBefore(_ turn: Turn) -> [CueLeft] {
+        guard let woke = turn.selfStarted, Setback.supersedable(woke) else { return [] }
+        return setbacks.first { $0.wake == woke }?.stops ?? []
     }
 }
 #endif
