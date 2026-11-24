@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、运行时编的着色器（shaders.swift）、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
+#   xc.sh check                                     提交前的门：lint.sh、运行时编的着色器（shaders.swift）、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）、Mac App 不带 DEBUG 的编译（#if DEBUG 的正式版那边只在这里编到）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh signoff                                   合并前的门：本机跑 check、test kit、test mac，全过才给 HEAD 这个提交记 GitHub 状态，主干规则认它（signoff.sh 头注释）
 #   xc.sh land [PR 号或分支] [--red]                  合并：主干最近一遍云端检查红着就停下、列出红的用例，合完把主检出快进（land.sh 头注释）
@@ -45,7 +45,7 @@
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugHooks+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限、任务时限、结束时的用时行见 _lock.sh；模拟器槽位见 _lock.sh 与 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如 xc.sh real copy 拷的真实库副本）。
-# 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，check 的 Mac 整模块编译在 apple/.derived-wmo，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
+# 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，check 的 Mac 整模块编译在 apple/.derived-wmo、不带 DEBUG 的在 apple/.derived-release，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（工程默认，见 Signing.xcconfig）；CUEPAD_SIGN=development 只给同步测量（sync-bench.py）。
 # 每个测试最多 TEST_TIME_LIMIT 秒（_lock.sh；CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用，任务时限随它变；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
 # Kit 的测试因此也走 xcodebuild：swift test（Swift 6.4）没有测试时限的参数，Swift Testing 的 .timeLimit 只取消测试任务、要等它自己结束，
@@ -155,17 +155,13 @@ case "$cmd" in
     "$shaders" "${shader_sources[@]}"
     # Kit 的 macOS 构建（CueBridge、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     kit_build & kit=$!
-    # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，
-    # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（不签名）。Mac 独有的代码也只在这里编到，连测试目标（iOS 那份编不到 #if os(macOS) 的测试，它们的警告只在这里报）。产物与 Debug 增量构建分开，免得交替时互相作废
-    (
-      platform=mac; DERIVED="$APPLE_DIR/.derived-wmo"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
-      build_settings=(SWIFT_COMPILATION_MODE=wholemodule CODE_SIGNING_ALLOWED=NO)
-      mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build-for-testing
-    ) & wmo=$!
+    wmo_build & wmo=$!
+    release_build & release=$!
     status=0
     if xcd all; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
     wait "$kit" || status=$?
     wait "$wmo" || status=$?
+    wait "$release" || status=$?
     # shellcheck disable=SC2031 # 读外层的 iOS 产物目录：整模块那一段在子 shell 里换了 DERIVED 与 platform
     no_warnings "$DERIVED/warnings-$platform" || status=1
     exit $status ;;

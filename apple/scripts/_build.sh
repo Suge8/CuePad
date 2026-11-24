@@ -62,11 +62,27 @@ kit_build() {
   return $status
 }
 
-# no_warnings <iOS 那份记录>：check 的最后一道，Kit、Mac 整模块与 iOS 三处构建记下的自己源文件的警告，有一条就列出来、失败。
+# check 的 Mac 整模块编译：归档是整模块编译，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报、与优化档位无关，所以用 Debug 加整模块编一遍（不签名）。
+# Mac 独有的代码也只在这里编到，连测试目标（iOS 那份编不到 #if os(macOS) 的测试，它们的警告只在这里报）。产物与 Debug 增量构建分开，免得交替时互相作废
+wmo_build() {
+  platform=mac; DERIVED="$APPLE_DIR/.derived-wmo"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
+  build_settings=(SWIFT_COMPILATION_MODE=wholemodule CODE_SIGNING_ALLOWED=NO)
+  mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build-for-testing
+}
+
+# check 的 Mac App 不带 DEBUG 的编译：别处（check、test、带 DEBUG 的 perf）都编 DEBUG 那边，#if DEBUG 的另一边只有正式版编，不在这里编就到发版才红。
+# 只编 App：测试用的造数据（Kit 的 Seed.swift）只在 DEBUG 里。按文件增量、不签名，产物目录自己一份
+release_build() {
+  platform=mac; DERIVED="$APPLE_DIR/.derived-release"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
+  build_settings=(SWIFT_ACTIVE_COMPILATION_CONDITIONS= CODE_SIGNING_ALLOWED=NO)
+  mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" app xcb -quiet build
+}
+
+# no_warnings <iOS 那份记录>：check 的最后一道，Kit、Mac 整模块、Mac 不带 DEBUG 与 iOS 四处构建记下的自己源文件的警告，有一条就列出来、失败。
 # 跳过了编译的那一处读的是上一次的记录：有警告的构建不记编过（`built`），跳得过的一定是没警告的那次
 no_warnings() {
   local warnings
-  warnings="$(cat "$APPLE_DIR/CuePadKit/.build/warnings" "$APPLE_DIR/.derived-wmo/warnings-mac" "$1" 2>/dev/null | sort -u || true)"
+  warnings="$(cat "$APPLE_DIR/CuePadKit/.build/warnings" "$APPLE_DIR/.derived-wmo/warnings-mac" "$APPLE_DIR/.derived-release/warnings-mac" "$1" 2>/dev/null | sort -u || true)"
   [ -n "$warnings" ] || return 0
   printf '%s\n' "$warnings"
   echo "check 不过：上面 $(grep -c . <<<"$warnings") 条编译警告在本检出自己的源文件里，修掉再提交" >&2

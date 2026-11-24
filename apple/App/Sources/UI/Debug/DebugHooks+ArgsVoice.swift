@@ -55,6 +55,7 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let wireLog: String?
 }
 
+#if DEBUG
 extension DebugScene {
     static func dropRelay(note: @escaping (String) -> Void) -> Task<Void, Never>? {
         window(args.voiceOpts.dropRelay, "-CuePadVoiceDropRelay") { seconds in
@@ -82,3 +83,4 @@ extension DebugScene {
         }
     }
 }
+#endif
