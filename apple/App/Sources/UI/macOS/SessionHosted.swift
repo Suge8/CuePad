@@ -56,14 +56,14 @@ private struct SessionLink: ViewModifier {
 }
 
 extension Workspace {
-    func withLiveState(_ session: SessionState) -> SessionState {
+    func withHostedState(_ session: SessionState) -> SessionState {
         guard let live = services.bridge.session(sessionID: session.sessionID) else { return session }
         return .hosted(live, over: session, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID) ?? session
     }
 
-    func withLiveState(_ item: SessionListItem) -> SessionListItem {
+    func withHostedState(_ item: SessionListItem) -> SessionListItem {
         var item = item
-        item.state = withLiveState(item.state)
+        item.state = withHostedState(item.state)
         return item
     }
 }

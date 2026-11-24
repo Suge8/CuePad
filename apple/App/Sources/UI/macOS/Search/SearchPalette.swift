@@ -131,7 +131,7 @@ struct SearchPalette: View {
 
     private var sessionRows: [SessionState] {
         guard query.listsSessions, let sessions else { return [] }
-        let live = SessionState.inListOrder(sessions.live.map(workspace.withLiveState), state: \.self, cue: services.sessionFeed.cue, at: services.speech)
+        let live = SessionState.inListOrder(sessions.live.map(workspace.withHostedState), state: \.self, cue: services.sessionFeed.cue, at: services.speech)
         let all = live + sessions.ended
         return query.kind == .sessions ? all : Array(all.prefix(PaletteQuery.sessionPeek))
     }

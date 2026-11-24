@@ -60,7 +60,7 @@ extension Workspace {
     func pulse(of agent: SessionListItem?) -> BoardPulse {
         guard let agent else { return BoardPulse() }
         #if os(macOS)
-        let live = withLiveState(agent)
+        let live = withHostedState(agent)
         #else
         let live = agent
         #endif

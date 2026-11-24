@@ -85,7 +85,7 @@ private struct AgentStrip: View {
     var body: some View {
         if let item = agents.items[leaf.id] {
             #if os(macOS)
-            let state = workspace.withLiveState(item.state)
+            let state = workspace.withHostedState(item.state)
             #else
             let state = item.state
             #endif

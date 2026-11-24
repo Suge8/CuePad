@@ -45,7 +45,7 @@ extension Workspace {
 
     func agent(of task: UUID, in agents: AgentLinks) -> (shown: SessionShown, session: SessionState)? {
         #if os(macOS)
-        guard let agent = agents.items[task].map(withLiveState) else { return nil }
+        guard let agent = agents.items[task].map(withHostedState) else { return nil }
         #else
         guard let agent = agents.items[task] else { return nil }
         #endif
