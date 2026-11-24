@@ -71,9 +71,11 @@ wmo_build() {
 }
 
 # check 的 Mac App 不带 DEBUG 的编译：别处（check、test、带 DEBUG 的 perf）都编 DEBUG 那边，#if DEBUG 的另一边只有正式版编，不在这里编就到发版才红。
-# 只编 App：测试用的造数据（Kit 的 Seed.swift）只在 DEBUG 里。按文件增量、不签名，产物目录自己一份
+# 只编 App：测试用的造数据（Kit 的 Seed.swift）只在 DEBUG 里。按文件增量、不签名，产物目录自己一份。
+# 本机用 Debug 配置去掉 DEBUG（改一个文件快约半分钟）；云端设 CUEPAD_RELEASE_CONFIGURATION=Release（swift.yml）编正式版那一档（整模块、-O），只开优化才报的合并后就露出
 release_build() {
-  platform=mac; DERIVED="$APPLE_DIR/.derived-release"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
+  configuration="${CUEPAD_RELEASE_CONFIGURATION:-Debug}"
+  platform=mac; DERIVED="$APPLE_DIR/.derived-release"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/$configuration/CuePad.app"
   build_settings=(SWIFT_ACTIVE_COMPILATION_CONDITIONS= CODE_SIGNING_ALLOWED=NO)
   mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" app xcb -quiet build
 }
