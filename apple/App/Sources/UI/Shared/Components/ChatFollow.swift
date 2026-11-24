@@ -66,7 +66,6 @@ nonisolated struct ChatFollow: Equatable {
         showsJump = beyondScreen
         self.nearOldest = nearOldest
         withinSlack = near
-        if !near, case .flying(let target) = jump { jump = .landed(target) }
         if near, !flying, opened.isEmpty {
             settle()
         } else if byUser {
