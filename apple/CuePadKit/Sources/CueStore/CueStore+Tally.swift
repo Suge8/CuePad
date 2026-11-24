@@ -26,7 +26,10 @@ public struct CueTally: Equatable, Sendable {
   }
 
   public var works: [CueWork]
-  public var advancing: [CueWork] { works.filter { held(of: $0) == 0 } }
+  /// 任务有会话在等你时，任务卡在等你；它别的会话还在跑的，各自以会话留在进行中。
+  public var advancing: [CueWork] {
+    works.flatMap { work in held(of: work) == 0 ? [work] : work.sessions.filter(\.state.isWorking).map(CueWork.session) }
+  }
 
   public func held(of work: CueWork) -> Int {
     waiting.count { Self.holds(work, task: $0.task, session: $0.session.sessionID) }

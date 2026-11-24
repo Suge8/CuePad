@@ -157,7 +157,7 @@ struct BoardColumn: View {
                     Color.clear.frame(height: 0)
                 case .work(let work, let moves):
                     if let item = work.item {
-                        card(item, moves: moves).boardDraggable(.task(item.id), flight: work.id, session: item.agent?.state.sessionID)
+                        card(item, flight: work.id, moves: moves).boardDraggable(.task(item.id), flight: work.id, session: item.agent?.state.sessionID)
                     } else if let agent = work.loose {
                         let session = agent.state.sessionID
                         sessionFace(agent, of: work, moves: moves).boardDraggable(.session(session), flight: work.id, session: session).boardFlight(work.id).benchSpot(work.id)
@@ -182,8 +182,8 @@ struct BoardColumn: View {
         }
     }
 
-    private func card(_ item: TaskBoard.Item, moves: Bool = false) -> some View {
-        taskFace(item, in: column, moves: moves).boardFlight(item.flight).benchSpot(item.id)
+    private func card(_ item: TaskBoard.Item, flight: TaskBoard.Flight? = nil, moves: Bool = false) -> some View {
+        taskFace(item, in: column, moves: moves).boardFlight(flight ?? item.flight).benchSpot(item.id)
     }
 
     private func taskFace(_ item: TaskBoard.Item, in column: TaskBoard.Column, moves: Bool) -> some View {

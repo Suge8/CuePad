@@ -58,7 +58,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var project: UUID {
             switch work {
             case .task(let board): board.task.projectID
-            case .session(let session): TaskBoard.home(session)
+            case .session(let session): item?.task.projectID ?? TaskBoard.home(session)
             }
         }
     }
@@ -234,6 +234,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let others = try store.boardItems(todo + finished + held)
         let boards = Dictionary((working + others).map { ($0.id, $0) }) { first, _ in first }
         let loose = tally.advancing.compactMap { if case .session(let state) = $0 { state } else { nil } }
+        let owners = Dictionary(tally.works.flatMap { work in work.task.map { task in work.sessions.map { ($0.sessionID, task) } } ?? [] }) { first, _ in first }
         let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))
         func item(_ task: Card) throws -> Item {
             let progress = steps[task.id]
@@ -257,8 +258,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             todo: try todo.map(item),
             advancing: try tally.advancing.map { work in
                 switch work {
-                case .task(let board): Work(work: work, item: try item(board.task))
-                case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? SessionListItem(state: state))
+                case .task(let board): return Work(work: work, item: try item(board.task))
+                case .session(let state):
+                    let agent = agents[state.sessionID] ?? SessionListItem(state: state)
+                    guard let task = owners[state.sessionID] else { return Work(work: work, loose: agent) }
+                    var running = try item(task)
+                    running.agent = agent
+                    return Work(work: work, item: running)
                 }
             },
             held: try heldCards(tally, from: store, item: item),
