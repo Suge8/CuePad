@@ -13,9 +13,7 @@ struct SkillSection: View {
             TidySlot(library: library, rules: false)
             ForEach(groups.global, id: \.name) { category in
                 if labeled {
-                    LibraryGroup(count: category.skills.count) {
-                        Text(verbatim: category.name.isEmpty ? String(localized: "不在分类里") : category.name)
-                    } content: {
+                    LibraryGroup(Dotted(category.name.isEmpty ? String(localized: "不在分类里") : category.name), count: category.skills.count) {
                         rows(category.skills)
                     }
                 } else {
@@ -23,9 +21,8 @@ struct SkillSection: View {
                 }
             }
             ForEach(groups.projects) { group in
-                LibraryGroup(count: group.skills.count) {
+                LibraryGroup(Dotted(workspace.projectName(group.project)), count: group.skills.count) {
                     ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
-                    Text(verbatim: workspace.projectName(group.project))
                 } content: {
                     rows(group.skills)
                 }

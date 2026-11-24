@@ -39,6 +39,9 @@ enum Elevation: CaseIterable {
         }
     }
 
+    /// 影子伸出底的最远处：裁剪、滑走时要让出的那一圈。
+    var reach: CGFloat { radius + offset }
+
     fileprivate func color(_ palette: Palette) -> Color { self == .panel ? palette.panelShadow : palette.shadow }
 }
 

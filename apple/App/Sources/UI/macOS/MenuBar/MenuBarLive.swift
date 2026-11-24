@@ -16,7 +16,7 @@ struct MenuBarLive: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("在做").font(Typography.label).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+            SectionHeader("在做", level: .group)
             HugHeight {
                 ScrollView { sessions }.scrollBounceBehavior(.basedOnSize)
             }

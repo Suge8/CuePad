@@ -37,6 +37,7 @@ private struct SessionRailContent: View {
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
     @State private var reveal = SessionRailReveal()
     @Namespace private var moves
 
@@ -78,8 +79,9 @@ private struct SessionRailContent: View {
 
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
         VStack(spacing: 0) {
-            SessionRailHeader(column: column, count: items.count)
-                .frame(height: Chrome.groupHeader)
+            SectionHeader(Dotted(column.title), level: .group, count: items.count, countInk: column.countInk(palette))
+                .railGroupHeader()
+                .padding(.horizontal, RowMetrics.bleed)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: cellGap) {
@@ -115,28 +117,9 @@ private struct SessionRailContent: View {
     }
 }
 
-private struct SessionRailHeader: View {
-    let column: TaskBoard.Column
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: Spacing.glyph) {
-            Text(column.title).foregroundStyle(palette.ink3).lineLimit(1)
-            tally
-        }
-        .font(Typography.label)
-        .padding(.horizontal, RowMetrics.bleed)
-        .padding(.bottom, Spacing.tight)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(column.title)
-        .accessibilityValue(Text(count, format: .number))
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    private var tally: some View {
-        Text(count, format: .number).foregroundStyle(column.countInk(palette)).monospacedDigit()
+extension View {
+    func railGroupHeader() -> some View {
+        padding(.bottom, Spacing.tight).frame(maxWidth: .infinity, alignment: .bottomLeading).frame(height: Chrome.groupHeader, alignment: .bottom)
     }
 }
 

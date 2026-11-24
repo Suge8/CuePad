@@ -141,11 +141,9 @@ struct DrawerSlide: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
-    private static let shadowRoom: CGFloat = 40
-
     func body(content: Content) -> some View {
         content
-            .visualEffect { [shown, room = Self.shadowRoom] effect, proxy in
+            .visualEffect { [shown, room = Elevation.panel.reach] effect, proxy in
                 effect.offset(x: shown ? 0 : -(proxy.size.width + room))
             }
             .allowsHitTesting(open)

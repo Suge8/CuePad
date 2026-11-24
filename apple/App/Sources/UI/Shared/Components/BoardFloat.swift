@@ -4,7 +4,7 @@ struct BoardWell: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
     }
 }
 
@@ -21,7 +21,7 @@ struct BoardFloat: View {
                     .environment(\.boardRow, float.row)
                     .frame(width: held.size.width, height: held.size.height)
                     .mask {
-                        RoundedRectangle(cornerRadius: TaskMetrics.cardRadius)
+                        RoundedRectangle(cornerRadius: Radius.card)
                             .frame(width: (held.home?.size ?? held.size).width, height: (held.home?.size ?? held.size).height)
                     }
                     .modifier(Floating(moves: moves, settling: held.phase == .settling, landing: held.phase == .landing, fading: held.home != nil || held.phase == .leaving))

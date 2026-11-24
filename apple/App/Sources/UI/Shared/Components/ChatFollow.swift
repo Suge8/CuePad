@@ -194,12 +194,8 @@ struct JumpToNewest: View {
     var body: some View {
         Button(action: action) {
             FloatingGlyph(icon: .toLatest)
-                .overlay(alignment: .topTrailing) {
-                    if unseen {
-                        StatusDot(color: palette.ink, rim: palette.desk)
-                            .offset(x: -5, y: 5)
-                            .transition(Motion.pop(reduceMotion: reduceMotion))
-                    }
+                .cornerDot(round: true) {
+                    if unseen { StatusDot(color: palette.ink, rim: palette.desk).transition(Motion.pop(reduceMotion: reduceMotion)) }
                 }
         }
         .buttonStyle(PressStyle(.button))

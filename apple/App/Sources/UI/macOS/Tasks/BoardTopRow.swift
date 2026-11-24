@@ -27,7 +27,7 @@ private struct BoardTopRow: ViewModifier {
     private var header: some View {
         BoardColumnHeader(column: column, count: count, archives: archives)
             .padding(.horizontal, TaskMetrics.cardPadding)
-            .glass(in: .rect(cornerRadius: TaskMetrics.cardRadius))
+            .glass(in: .capsule)
             .padding(.horizontal, BoardCardMetrics.inset)
     }
 }
