@@ -162,8 +162,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return board
     }
 
+    /// 进行中里任务自己的卡；等你任务在跑的会话（`siblingsRunning`）卡面也是任务，但任务在等你，不能从这里排回待办。
+    private var started: [Item] {
+        advancing.compactMap { if case .task = $0.work { $0.item } else { nil } }
+    }
+
     private func placeable(_ id: UUID) -> Card? {
-        let card = todo.first { $0.id == id }?.task ?? advancing.lazy.compactMap(\.item).first { $0.id == id }?.task
+        let card = todo.first { $0.id == id }?.task ?? started.first { $0.id == id }?.task
         return card?.parentID == nil ? card : nil
     }
 
@@ -200,7 +205,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         case (.waiting, _), (_, .idea), (.advancing, .session): return nil
         case (.todo, .task(let id)):
             let move = slot.flatMap { move(id, before: todo.indices.contains($0) ? todo[$0].id : nil) }
-            if advancing.contains(where: { $0.item?.id == id }) { return .backToTodo(id, move) }
+            if started.contains(where: { $0.id == id }) { return .backToTodo(id, move) }
             return slots(for: id).isEmpty ? nil : .place(id, move)
         case (.advancing, .task(let id)):
             return todo.first { $0.id == id }.map { .start($0.task) }
@@ -223,10 +228,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     }
 
     /// 任务有会话在等你时整件在等你（Cue 的计数也这么数）；看板另把它别的还在跑的会话各以会话留在进行中，卡面是这件任务。
+    /// 一条会话只出一张：同一条会话绑在两件都在等你的任务上时卡面取先到的那件，飞行身份（会话）不重。
     private static func siblingsRunning(_ tally: CueTally) -> [(session: SessionState, task: Card)] {
-        tally.works.filter { tally.held(of: $0) > 0 }.flatMap { work in
+        var seen = Set<String>()
+        return tally.works.filter { tally.held(of: $0) > 0 }.flatMap { work in
             work.task.map { task in work.sessions.filter(\.state.isWorking).map { (session: $0, task: task) } } ?? []
-        }
+        }.filter { seen.insert($0.session.sessionID).inserted }
     }
 
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
