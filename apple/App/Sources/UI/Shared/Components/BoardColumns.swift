@@ -5,7 +5,7 @@ struct BoardColumns: View {
     let board: TaskBoard
     let margin: CGFloat
     var tail: CGFloat = 0
-    @State private var showsEarlier = DebugHooks.preset.showsDone
+    @State private var showsEarlier = DebugHooks.args.layoutOpts.showsDone
 
     #if os(macOS)
     @Environment(\.boardBand) private var band

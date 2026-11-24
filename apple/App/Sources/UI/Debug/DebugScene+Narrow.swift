@@ -52,7 +52,7 @@ extension DebugScene {
         ]
         for (pause, step) in steps {
             await Task.wait(for: .seconds(pause))
-            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: DebugHooks.preset.reducesMotion)) { step() }
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: DebugHooks.args.layoutOpts.reduceMotion)) { step() }
         }
     }
 }

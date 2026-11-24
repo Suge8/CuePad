@@ -1,5 +1,3 @@
-#if DEBUG
-
 nonisolated struct QuotaArgs: Decodable, DebugArgGroup {
     static let prefix = "Quota"
     #if os(iOS)
@@ -11,4 +9,3 @@ nonisolated struct QuotaArgs: Decodable, DebugArgGroup {
     /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对明细在那一刻变成已重置）
     let resetIn: Double
 }
-#endif

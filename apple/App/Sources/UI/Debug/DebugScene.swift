@@ -4,7 +4,7 @@ import SwiftUI
 #if DEBUG
 
 enum DebugScene {
-    nonisolated static let args = DebugArgs.launch
+    nonisolated static var args: DebugArgs { DebugHooks.args }
     static var scene: String? { args.scene }
     static var windowSize: CGSize? {
         let parts = args.layoutOpts.windowSize?.split(separator: "x").compactMap { Double($0) } ?? []
@@ -34,42 +34,4 @@ enum DebugScene {
     }
 }
 
-extension DebugHooks.Preset {
-    init(_ args: DebugArgs) {
-        searchText = args.search ?? ""
-        if let parts = args.select?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 {
-            editorSelection = NSRange(location: parts[0], length: parts[1])
-        }
-        toolsOpen = args.layoutOpts.toolsOpen
-        stepOpen = args.layoutOpts.stepOpen
-        crashSheet = args.crashSheet
-        demoMac = args.demoMac
-        let inTransit = DebugScene.cueFlows || args.cueOpts.presence == "sending"
-        alwaysReachable = (demoMac || inTransit) && args.sync == nil
-        modelMenu = args.layoutOpts.modelMenu
-        cueFocus = args.cueOpts.focus
-        reducesMotion = args.layoutOpts.reduceMotion
-        reducesTransparency = args.layoutOpts.reduceTransparency
-        largestType = args.layoutOpts.largestType
-        highContrast = args.layoutOpts.highContrast
-        readerOn = args.layoutOpts.reader
-        if args.layoutOpts.tasksOpen { taskFold = TaskFold(showsAll: true, showsDone: true) }
-        showsDone = args.layoutOpts.showsDone
-        #if os(macOS)
-        hovered = DebugScene.hoverPoints
-        hoverSeconds = args.driveOpts.hoverSeconds
-        #endif
-        quotaOpen = args.layoutOpts.quotaOpen
-        scheduleOpen = args.layoutOpts.scheduleOpen
-        mergePreview = args.layoutOpts.mergePreview
-        cuePanelOpen = args.layoutOpts.cuePanel
-        cueSky = args.cueOpts.sky
-        indexOpen = args.indexOpen.flatMap { ["leading": .leading, "trailing": .trailing][$0] }
-        #if os(iOS)
-        alertStatus = DebugScene.alertStatus
-        searchListsSessions = args.searchScope == "sessions" || args.scene.map(["sessions", "cuerows"].contains) == true
-        quietAlerts = args.layoutOpts.quiet
-        #endif
-    }
-}
 #endif

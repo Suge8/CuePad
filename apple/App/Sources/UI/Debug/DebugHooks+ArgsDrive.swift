@@ -1,4 +1,4 @@
-#if DEBUG
+import Foundation
 
 nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     static let prefix = ""
@@ -18,7 +18,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     /// `-CuePadCommand YES`：从标准输入读命令（同步测量的实例用）
     let command: Bool
     /// `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用
-    let cueBrain: String?
+    let cueBrain: URL?
     /// `-CuePadCueFlow YES`：走一遍从发送到回话的流程（量法见 `-CuePadCueFlowLog`）
     let cueFlow: Bool
     /// `-CuePadCueFlowLog <路径>`：同 `measureFlight` 的量法，量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件
@@ -71,4 +71,12 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，一直循环）：每隔这么久 Cue 被在线会话叫醒一次（配 `-CuePadFlightLog` 量开销）
     let wake: Double
 }
-#endif
+
+extension DriveArgs {
+    var hoverPoints: [CGPoint] {
+        (hover ?? "").split(separator: ";").compactMap { spot in
+            let parts = spot.split(separator: ",").compactMap { Double($0) }
+            return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
+        }
+    }
+}

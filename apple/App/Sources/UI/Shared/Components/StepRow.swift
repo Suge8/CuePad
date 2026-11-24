@@ -27,7 +27,7 @@ struct StepRow: View {
                 }
             }
             .task {
-                guard message != nil, DebugHooks.preset.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                guard message != nil, DebugHooks.args.layoutOpts.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 open()
             }
             .onChange(of: item.detail) { if let detail = item.detail { land(.ready(detail), over: .missing(Self.late)) } }

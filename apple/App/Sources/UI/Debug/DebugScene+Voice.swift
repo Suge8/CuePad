@@ -4,7 +4,7 @@ import CueStore
 import Foundation
 
 /// 和 Cue 通话的验收（`xc.sh run mac` 起的实例没有菜单栏，菜单那一项点不到，这里调它的同一个动作 `Workspace.toggleVoiceCall`）：
-/// - 给了 `-CuePadVoiceToken <文件>`（令牌由 `scripts/voice-token.py` 经本机 Codex app-server 获取，`DebugHooks.voiceToken`）或 `-CuePadVoiceCodex <替身>` 就让 Cue 在这台启用。
+/// - 给了 `-CuePadVoiceToken <文件>`（令牌由 `scripts/voice-token.py` 经本机 Codex app-server 获取，`DebugHooks.args.voiceOpts.token`）或 `-CuePadVoiceCodex <替身>` 就让 Cue 在这台启用。
 ///   配了 `-CuePadCueBrain apple/scripts/cue-brain-stub.py` 时运行时是 Pi、大脑是替身（回 `CUE_STUB_REPLY` 那句）；没配时是真的 Claude Code，
 ///   `-CuePadVoiceRuntime <pi|codex|claude>`、`-CuePadVoiceModel <模型>` 可指定其他已在隔离目录登录的运行时。
 ///   登录在起实例前交给它：`CLAUDE_CODE_OAUTH_TOKEN` 设成 `ClaudeLogin.tokenCommand` 的输出、`ANTHROPIC_API_KEY` 置空（只读钥匙串里的令牌，不刷新）。
@@ -30,7 +30,7 @@ extension DebugScene {
     private static func voiceCall(_ workspace: Workspace) async throws {
         let host = workspace.services.hostID
         let runtime = args.voiceOpts.runtime.flatMap(AgentKind.init(rawValue:))
-            ?? (DebugHooks.cueBrain == nil ? .claudeCode : .pi)
+            ?? (DebugHooks.args.driveOpts.cueBrain == nil ? .claudeCode : .pi)
         let model = args.voiceOpts.model
         try await workspace.services.store.updateCueProfile {
             $0.hostID = host

@@ -9,7 +9,7 @@ extension LibraryLocation {
         case .release: true
         case .development: !Self.releaseInstalled
         case .override:
-            switch DebugHooks.actsAs {
+            switch DebugHooks.args.actsAs {
             case nil: false
             case .development?: !Self.releaseInstalled
             case .stranger?: true

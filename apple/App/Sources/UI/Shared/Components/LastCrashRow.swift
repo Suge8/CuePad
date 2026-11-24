@@ -20,7 +20,7 @@ struct LastCrashRow: View {
         }
     }
 
-    private static var opensAtStart: Bool { DebugHooks.preset.crashSheet }
+    private static var opensAtStart: Bool { DebugHooks.args.crashSheet }
 }
 #endif
 

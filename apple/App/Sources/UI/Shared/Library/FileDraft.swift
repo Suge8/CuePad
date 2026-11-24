@@ -13,7 +13,7 @@ final class FileDraft {
     private(set) var dirty = false
     private(set) var blank: Bool
     private(set) var state = State.idle
-    var previewing = DebugHooks.preset.mergePreview
+    var previewing = DebugHooks.args.layoutOpts.mergePreview
     var retire: Set<InstructionSource.Origin> = []
     @ObservationIgnored private weak var workspace: Workspace?
     @ObservationIgnored private var autosave: Autosave?

@@ -1,13 +1,13 @@
-#if DEBUG
+import SwiftUI
 
 /// 视觉验收与测量用的启动参数（只在 Debug 构建读取，配合 `CUEPAD_LIBRARY_DIR` 使用隔离资料库），从参数域（`-CuePadScene shelf` 这类）一次解出：
 /// 键 = `-CuePad` + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。字段注释就是登记表；加参数只在这里（或分组）加一个字段。
 /// 设置项可在参数域覆盖：`-theme dark`（不在这里）。
 nonisolated struct DebugArgs: Decodable {
     /// `-CuePadActsAs development|stranger`（仅 Mac）：隔离库当作本机构建的开发库来定碰不碰真实世界：development 照真的找这台装没装正式版
-    let actsAs: String?
+    let actsAs: ActsAs?
     /// `-CuePadAgentHome <目录>`（仅 Mac）：Agent 当作装在这个家目录里，给空目录是一家都没装，点安装真跑官方脚本装进它
-    let agentHome: String?
+    let agentHome: URL?
     /// `-CuePadAgentLibrary clean|agents-map`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）；agents-map 是 ~/.agents 当仓库用的样子（仅 Mac）：
     /// 它的 AGENTS.md 是一份目录地图，Pi 自己写了全局规则，Claude Code 没有，Codex 的是空文件
     let agentLibrary: String?
@@ -122,7 +122,7 @@ nonisolated struct DebugArgs: Decodable {
     let select: String?
     /// `-CuePadSharedCloud <目录>`（Mac、iPhone、iPad 模拟器都认）：几个隔离实例共用目录里的模拟云（`SharedCloud`：一个 SQLite 文件，延迟模型在 latency.json）当 iCloud，
     /// 同步代码照真的跑，不连 iCloud、不要 iCloud 权限；同步测量（`sync-bench.py`）与多设备验收（`xc.sh fleet`）用
-    let sharedCloud: String?
+    let sharedCloud: URL?
     /// `-CuePadSession <会话名>`：session 画面整页打开这个演示会话（演示会话的 sessionID 与会话名相同），send 画面与接力、叫醒等驱动也认
     let session: String?
     /// `-CuePadSettingsPane general|agents`（配 settings 画面）：设置窗口翻到那一页
@@ -155,4 +155,30 @@ nonisolated struct DebugArgs: Decodable {
     let layoutOpts: LayoutArgs
     let driveOpts: DriveArgs
 }
-#endif
+
+extension DebugArgs {
+    enum ActsAs: String, Decodable { case development, stranger }
+
+    var alwaysReachable: Bool { (demoMac || driveOpts.cueFlow || cueOpts.presence == "sending") && sync == nil }
+    var selection: NSRange? {
+        guard let parts = select?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 else { return nil }
+        return NSRange(location: parts[0], length: parts[1])
+    }
+    var indexEdge: HorizontalEdge? { indexOpen.flatMap { ["leading": .leading, "trailing": .trailing][$0] } }
+    var taskFold: TaskFold { layoutOpts.tasksOpen ? TaskFold(showsAll: true, showsDone: true) : TaskFold() }
+
+    #if os(iOS)
+    var searchListsSessions: Bool { searchScope == "sessions" || scene.map(["sessions", "cuerows"].contains) == true }
+    var pinnedAlerts: AlertStatus? {
+        switch alertStatus {
+        case "on": AlertStatus(authorization: .authorized, registration: .registered, subscription: .active)
+        case "pending": AlertStatus(authorization: .authorized, registration: .pending, subscription: .off)
+        case "denied": AlertStatus(authorization: .denied, registration: .pending, subscription: .off)
+        case "undetermined": AlertStatus(authorization: .notDetermined, registration: .pending, subscription: .off)
+        case "registerFailed": AlertStatus(authorization: .authorized, registration: .failed(String(localized: "没有连接到 Apple 推送服务", table: "Demo")), subscription: .off)
+        case "subscribeFailed": AlertStatus(authorization: .authorized, registration: .registered, subscription: .failed(String(localized: "iCloud 账号不可用", table: "Demo")))
+        default: nil
+        }
+    }
+    #endif
+}

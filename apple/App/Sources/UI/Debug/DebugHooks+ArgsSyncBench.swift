@@ -1,5 +1,3 @@
-#if DEBUG
-
 nonisolated struct SyncBenchArgs: Decodable, DebugArgGroup {
     static let prefix = "SyncBench"
     /// `-CuePadSyncBenchBudget <个>`：没给 `-CuePadSharedCloud` 时，这个进程的请求上限
@@ -9,4 +7,3 @@ nonisolated struct SyncBenchArgs: Decodable, DebugArgGroup {
     /// `-CuePadSyncBenchRounds <轮>`（默认 10）：测这么多轮后记 `done`
     let rounds: Int
 }
-#endif

@@ -9,7 +9,7 @@ struct CueSchedulePage: View {
     @State private var shown: ScheduleShown?
     @State private var text = ""
     @State private var draft = ScheduleDraft()
-    @State private var picking = DebugHooks.preset.scheduleOpen
+    @State private var picking = DebugHooks.args.layoutOpts.scheduleOpen
     @State private var ending: CueMemoryLine?
     @State private var rescheduling: Rescheduling?
     @FocusState private var adding: Bool

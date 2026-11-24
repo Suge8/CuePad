@@ -162,7 +162,7 @@ struct ScheduleStrip: View {
 
     init(scheduled: CueScheduled) {
         self.scheduled = scheduled
-        _draft = State(initialValue: DebugHooks.preset.scheduleOpen ? ScheduleDraft(scheduled.line) : nil)
+        _draft = State(initialValue: DebugHooks.args.layoutOpts.scheduleOpen ? ScheduleDraft(scheduled.line) : nil)
     }
 
     var body: some View {

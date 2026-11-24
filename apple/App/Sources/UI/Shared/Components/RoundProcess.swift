@@ -21,7 +21,7 @@ struct RoundProcess: View {
     @State private var flippedHere = false
 
     private var fold: Binding<Bool> {
-        let preset = DebugHooks.preset.toolsOpen, round = Chat.keys(tools)
+        let preset = DebugHooks.args.layoutOpts.toolsOpen, round = Chat.keys(tools)
         guard !round.isEmpty, let folds else { return Binding { preset != flippedHere } set: { flippedHere = $0 != preset } }
         return Binding { preset == folds.flipped.isDisjoint(with: round) } set: { open in
             if open != preset { folds.flipped.formUnion(round) } else { folds.flipped.subtract(round) }

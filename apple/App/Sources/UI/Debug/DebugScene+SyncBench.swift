@@ -24,7 +24,7 @@ extension DebugScene {
 /// `-CuePadSyncBench <host|remote>`（配 `-CuePadCloudKit YES` 与各自的 `-CuePadHost`）：同一台 Mac 上两个隔离实例经 CloudKit 开发环境同步，
 /// 由 `apple/scripts/sync-bench.py` 驱动与统计（场景与口径见它与 _sync_scenes.py）。
 /// - host：有在线会话的 Mac（会话由脚本的假扩展给），Cue 在这台值班（大脑是 `-CuePadCueBrain` 的替身，回"知道了。"）。
-/// - remote：代替手机，拉取节奏按手机开着 Agent 页那档（`DebugHooks.pollsLikePhone`）。
+/// - remote：代替手机，拉取节奏按手机开着 Agent 页那档（`DebugHooks.args.syncBench == "remote"`）。
 /// 两端都只做脚本经标准输入给的命令（`command`），自己不按时做任何事：节奏只在脚本一处。
 /// 打点是标准输出里的一行 `SYNCBENCH {json}`（`e` 事件、`t` 墙钟秒，同一台机器跨进程可直接相减），事件见 `SyncBench.Watch` 与 `command`。
 /// `-CuePadSyncBenchNoRelay YES`：不连门铃，只靠按节奏的拉取（门铃不通的那条路）。

@@ -49,7 +49,7 @@ struct SettingsScreen: View {
         .floatingHeader("设置")
     }
 
-    private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
+    private static var previewsAlerts: Bool { DebugHooks.args.pinnedAlerts != nil }
 }
 
 struct SettingsForm<Content: View>: View {
@@ -96,7 +96,7 @@ private struct AlertSection: View {
     var body: some View {
         let live = AlertStatus(
             authorization: alerts.authorization, registration: alerts.registration, subscription: services.syncing.state.alerts)
-        let status = DebugHooks.preset.alertStatus ?? live
+        let status = DebugHooks.args.pinnedAlerts ?? live
         Section {
             Label {
                 StatusText(title: status.title, detail: status.detail, reserve: AlertStatus.offline.detail)

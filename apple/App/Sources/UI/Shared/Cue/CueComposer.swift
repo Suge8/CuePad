@@ -51,7 +51,7 @@ struct CueComposer: View {
             #endif
             .onChange(of: opens, initial: true) {
                 if !hasDraft { target = .cue }
-                if !covered, opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true }
+                if !covered, opens != nil || style == .page && DebugHooks.args.cueOpts.focus { focused = true }
             }
             .onChange(of: takesFocusRequests && workspace.cueFocusPending, initial: true) { _, pending in
                 guard pending, !covered else { return }

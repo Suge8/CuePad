@@ -75,18 +75,6 @@ extension DebugScene {
         try await store.sessionPage(SessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
-    static var alertStatus: AlertStatus? {
-        switch args.alertStatus {
-        case "on": AlertStatus(authorization: .authorized, registration: .registered, subscription: .active)
-        case "pending": AlertStatus(authorization: .authorized, registration: .pending, subscription: .off)
-        case "denied": AlertStatus(authorization: .denied, registration: .pending, subscription: .off)
-        case "undetermined": AlertStatus(authorization: .notDetermined, registration: .pending, subscription: .off)
-        case "registerFailed": AlertStatus(authorization: .authorized, registration: .failed(String(localized: "没有连接到 Apple 推送服务", table: "Demo")), subscription: .off)
-        case "subscribeFailed": AlertStatus(authorization: .authorized, registration: .registered, subscription: .failed(String(localized: "iCloud 账号不可用", table: "Demo")))
-        default: nil
-        }
-    }
-
     static func cyclePanel() async {
         await Task.wait(for: .seconds(4))
         for _ in 0..<8 {

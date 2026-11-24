@@ -5,7 +5,7 @@ import SwiftUI
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
     let settled: Bool
-    @State private var unfolded = DebugHooks.preset.toolsOpen
+    @State private var unfolded = DebugHooks.args.layoutOpts.toolsOpen
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

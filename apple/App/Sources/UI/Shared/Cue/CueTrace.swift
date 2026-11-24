@@ -3,7 +3,7 @@ import SwiftUI
 
 struct CueTrace: View {
     let touches: [CueActivity.Touch]
-    @State private var unfolded = DebugHooks.preset.toolsOpen
+    @State private var unfolded = DebugHooks.args.layoutOpts.toolsOpen
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
