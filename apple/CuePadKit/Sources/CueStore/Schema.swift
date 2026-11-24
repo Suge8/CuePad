@@ -56,6 +56,7 @@ enum Schema {
     ALTER TABLE cueMessages DROP COLUMN setAsideBy;
     \(toDeliverIndex)
     """,
+    "DROP TABLE liveAddresses;",
   ]
 
   static let liveAddresses = "CREATE TABLE liveAddresses (sessionID TEXT PRIMARY KEY NOT NULL, url TEXT NOT NULL, found INTEGER NOT NULL, sentAt INTEGER NOT NULL) STRICT;"

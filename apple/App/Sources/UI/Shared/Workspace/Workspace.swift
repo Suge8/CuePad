@@ -223,7 +223,7 @@ final class Workspace {
     var liveFound: [UUID: [URL]] = [:]
     @ObservationIgnored var liveScanner = LiveServers()
     @ObservationIgnored var liveScanning: Task<Void, Never>?
-    @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
+    @ObservationIgnored var liveTaken: [String: LiveSignal.Sent] = [:]
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
     @ObservationIgnored var liveReleased: Set<UUID> = []
     var livePhones: [LivePhone.Key: LivePhone] = [:]
@@ -287,12 +287,11 @@ final class Workspace {
         #endif
         #if os(macOS)
         async let agents: Void = followLocalAgents()
-        async let live: Void = followLiveAddresses()
         async let liveAgent: Void = serveLiveAgent()
         async let liveScan: Void = watchLiveServers()
         async let livePhones: Void = followLivePhones()
         await followSessionPlacement()
-        _ = await (agents, live, liveAgent, liveScan, livePhones)
+        _ = await (agents, liveAgent, liveScan, livePhones)
         #endif
         #if os(iOS)
         await returns

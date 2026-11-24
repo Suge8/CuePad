@@ -208,7 +208,7 @@ struct LivePhoneFlowTests {
             await open.stop()
 
             let sent = url.appending(path: "pricing")
-            mac.sent = LiveAddress(sessionID: "live", url: sent, found: false, sentAt: .now)
+            mac.sent = .init(url: sent, found: false, at: .now)
             mac.found = [url]
             mac.pages = [sent, url]
             app.services.liveRemote.renew("live")

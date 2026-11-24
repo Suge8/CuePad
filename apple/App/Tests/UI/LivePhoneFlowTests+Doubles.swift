@@ -16,7 +16,7 @@ extension LivePhoneFlowTests {
         var ticket = Data()
         var pages: [URL] = []
         var found: [URL]?
-        var sent: LiveAddress?
+        var sent: LiveSignal.Sent?
         var door: (addresses: [LiveTunnel.Address], port: UInt16)?
         var opened = false
         var present = true

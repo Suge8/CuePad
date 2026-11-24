@@ -57,22 +57,27 @@ import Testing
     let sb = try Fixture()
     let result = await sb.run("live", "5173", environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
-    #expect(try await sb.store.liveAddresses().isEmpty)
   }
 
   @Test(arguments: ["https://example.com", "http://8.8.8.8:3000", "github.com/login"])
   func liveRefusesAnAddressOffThisMac(address: String) async throws {
     let sb = try Fixture()
+    let (server, received) = try listen(sb)
+    defer { withExtendedLifetime(server) {} }
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 2 && result.err.contains("不是本机地址"))
-    #expect(try await sb.store.liveAddresses().isEmpty)
+    #expect(received.all.isEmpty)
   }
 
   @Test(arguments: ["localhost:3000", "192.168.1.20:5173", "myapp.local:8080", "http://[::1]:3000", "devbox:8000"])
   func liveTakesTheLocalAddressesOfThisMac(address: String) async throws {
     let sb = try Fixture()
+    let (server, received) = try listen(sb, answer: .done("预览滑开了。"))
+    defer { withExtendedLifetime(server) {} }
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
-    #expect(result.code == 1 && result.err.contains("CuePad 没开"))
+    #expect(result.code == 0 && result.out.hasPrefix("预览滑开了。"), "\(result.err)")
+    let url = try #require(LiveAddress.url(from: address))
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: "open", args: .init(url: url.absoluteString, found: false))])
   }
 
   @Test func liveActionsWithoutCuePadOpenFailAndAskForIt() async throws {
@@ -164,7 +169,6 @@ import Testing
     let sb = try Fixture()
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 2 && result.err.contains("不是能打开的网页地址"))
-    #expect(try await sb.store.liveAddresses().isEmpty)
   }
 }
 #endif

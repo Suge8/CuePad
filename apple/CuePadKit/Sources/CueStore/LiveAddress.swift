@@ -1,18 +1,6 @@
 import Foundation
 
-public struct LiveAddress: Equatable, Codable, Sendable {
-  public var sessionID: String
-  public var url: URL
-  public var found: Bool
-  public var sentAt: Date
-
-  public init(sessionID: String, url: URL, found: Bool, sentAt: Date) {
-    self.sessionID = sessionID
-    self.url = url
-    self.found = found
-    self.sentAt = sentAt
-  }
-
+public enum LiveAddress {
   public static func url(from text: String) -> URL? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
     if let port = Int(text) { return (1...65_535).contains(port) ? URL(string: "http://localhost:\(port)") : nil }
@@ -64,22 +52,6 @@ public struct LiveAddress: Equatable, Codable, Sendable {
 
 #if os(macOS)
 extension CueStore {
-  public nonisolated var appIsOpen: Bool { LiveServers.appHolding(databasePath) }
-
-  public func sendLive(_ url: URL, to sessionID: String, found: Bool) throws {
-    try write {
-      let now = Date.stamp
-      try db.run("DELETE FROM liveAddresses WHERE sentAt < ?", [now.addingTimeInterval(-86_400)])
-      try db.run("INSERT OR REPLACE INTO liveAddresses (sessionID, url, found, sentAt) VALUES (?, ?, ?, ?)", [sessionID, url.absoluteString, found ? 1 : 0, now])
-    }
-  }
-
-  public func liveAddresses() throws -> [LiveAddress] {
-    try db.query("SELECT sessionID, url, found, sentAt FROM liveAddresses ORDER BY sessionID") { row in
-      URL(string: row.text(1)).map { LiveAddress(sessionID: row.text(0), url: $0, found: row.int(2) == 1, sentAt: row.date(3)) }
-    }.compactMap(\.self)
-  }
-
   public func liveOwner(_ sessionID: String) throws -> LiveServers.Owner {
     let process = try db.first("SELECT pid, startedAt FROM piProcesses WHERE sessionID = ?", [sessionID]) {
       SessionProcess(pid: Int32($0.int(0)), startedAt: $0.int(1))

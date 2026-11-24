@@ -3,9 +3,15 @@ import Foundation
 
 nonisolated enum LiveSignal: Equatable, Codable, Sendable {
     case watch(request: UUID, session: String, open: Bool)
-    case pages(request: UUID, session: String, pages: [URL], serving: [URL], sent: LiveAddress?, door: Door?, ports: [Int]?)
+    case pages(request: UUID, session: String, pages: [URL], serving: [URL], sent: Sent?, door: Door?, ports: [Int]?)
     case show(request: UUID, session: String)
     case back(request: UUID, session: String)
+
+    struct Sent: Equatable, Codable, Sendable {
+        let url: URL
+        let found: Bool
+        let at: Date
+    }
 
     struct Door: Equatable, Codable, Sendable {
         let addresses: [LiveTunnel.Address]

@@ -117,21 +117,7 @@ extension Command {
     Command(path: ["live", name], summary: summary, arguments: arguments, options: options, notes: notes) { call in
       let session = try agentSession(call, "live \(name) 只能在 Agent 执行的命令里运行，操作的是那个会话的活预览")
       let args = try build(call)
-      let timeout = Duration.seconds((args.timeout ?? 0) + 60)
-      let reply: LiveChannel.Reply
-      do throws(LiveChannel.Failure) {
-        reply = try LiveChannel.ask(
-          LiveChannel.Request(session: session, op: name, args: args), path: LiveChannel.socketPath(databasePath: call.store.databasePath), timeout: timeout)
-      } catch .notListening {
-        guard call.store.appIsOpen else { throw notOpen(call, "请用户打开 CuePad 后再运行") }
-        throw CLIError.invalid("开着资料库 \(UserHome.shown(call.store.databasePath)) 的 CuePad 不认 cuepad live \(name)：它比这个命令行旧，请用户更新 CuePad")
-      } catch .sandboxed {
-        throw CLIError.invalid("沙箱不让这条命令连 CuePad（connect: Operation not permitted）：申请在沙箱外运行这条命令再试")
-      } catch .timedOut {
-        throw CLIError.invalid("CuePad \(timeout.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
-      } catch .broken(let reason) {
-        throw CLIError.invalid("与 CuePad 的连接出错：\(reason)")
-      }
+      let reply = try askLive(call, LiveChannel.Request(session: session, op: name, args: args), name: "live \(name)")
       if reply.failed { throw CLIError.invalid(reply.text) }
       var text = reply.text, saved: String?
       if let file = reply.file, let saves {

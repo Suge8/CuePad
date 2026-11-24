@@ -30,10 +30,9 @@ extension Command {
       guard booted.count == 1 else { throw CLIError.invalid("开着 \(booted.count) 台模拟器，说要哪一台：cuepad live sim <UDID 或名字>。开着的：\(listed)") }
       device = only
     }
-    guard call.store.appIsOpen else { throw notOpen(call, "没有交出去。请用户打开 CuePad 后再运行 cuepad live sim") }
     let url = URL(string: "http://localhost:\(try await SimServe.ensure(device))")!
-    try await call.store.sendLive(url, to: session, found: false)
-    let text = "已把模拟器「\(device.name)」的屏交给这台 Mac 上的 CuePad：\(LiveAddress.shown(url))。会话开在主区、右半空着时预览直接滑开；否则会话栏头的预览钮亮起，等用户点开。重新构建、重装应用不用再发。"
+    let opened = try openLive(call, url, found: false, session: session, name: "live sim")
+    let text = "模拟器「\(device.name)」的屏：" + opened + "重新构建、重装应用不用再发。\n"
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: false)))
   }
 }

@@ -48,10 +48,8 @@ extension Command {
       url = first
     }
     let found = given.isEmpty
-    guard call.store.appIsOpen else { throw notOpen(call, "没有交出去。请用户打开 CuePad 后再运行 cuepad live") }
-    try await call.store.sendLive(url, to: session, found: found)
-    let shown = LiveAddress.shown(url)
-    let text = "已交给这台 Mac 上的 CuePad：\(shown)。会话开在主区、右半空着时预览直接滑开；否则会话栏头的预览钮亮起，等用户点开。CuePad 在后台载入这一页：要自己看、点它，用 cuepad live snapshot（cuepad live --help）。手机、iPad 与这台 Mac 在同一个网络时也看得到。\n"
+    let opened = try openLive(call, url, found: found, session: session, name: "live")
+    let text = opened + "要自己看、点它，用 cuepad live snapshot（cuepad live --help）。手机、iPad 与这台 Mac 在同一个网络时也看得到。\n"
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: found)))
   }
 
@@ -62,8 +60,26 @@ extension Command {
     return (["cuepad", command.name, command.arguments] + options).filter { !$0.isEmpty }.joined(separator: " ")
   }
 
-  static func notOpen(_ call: Call, _ then: String) -> CLIError {
-    .invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：\(then)")
+  /// 交给 App 打开：它照此刻的排布决定滑开还是只亮钮，在回执里说是哪一种。
+  static func openLive(_ call: Call, _ url: URL, found: Bool, session: String, name: String) throws -> String {
+    let reply = try askLive(call, LiveChannel.Request(session: session, op: "open", args: .init(url: url.absoluteString, found: found)), name: name)
+    if reply.failed { throw CLIError.invalid(reply.text) }
+    return reply.text
+  }
+
+  static func askLive(_ call: Call, _ request: LiveChannel.Request, name: String) throws -> LiveChannel.Reply {
+    let timeout = Duration.seconds((request.args.timeout ?? 0) + 60)
+    do throws(LiveChannel.Failure) {
+      return try LiveChannel.ask(request, path: LiveChannel.socketPath(databasePath: call.store.databasePath), timeout: timeout)
+    } catch .notListening {
+      throw CLIError.invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：请用户打开 CuePad 后再运行 cuepad \(name)")
+    } catch .sandboxed {
+      throw CLIError.invalid("沙箱不让这条命令连 CuePad（connect: Operation not permitted）：申请在沙箱外运行这条命令再试")
+    } catch .timedOut {
+      throw CLIError.invalid("CuePad \(timeout.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
+    } catch .broken(let reason) {
+      throw CLIError.invalid("与 CuePad 的连接出错：\(reason)")
+    }
   }
 }
 #endif

@@ -29,7 +29,7 @@ extension LivePreviewFlowTests {
         let (server, url) = try await serve(in: directory)
         defer { server.terminate() }
         workspace.openSession(id("b"), sessionID: "b", in: .main)
-        _ = try await live(url.absoluteString, for: "a")
+        _ = try await live(url.absoluteString, for: "a", in: workspace)
         try await eventually("后台建好了 a 的预览") { workspace.livePreviews[id("a")]?.web.title == "现问的页" }
 
         let page = await agent(workspace, "snapshot")

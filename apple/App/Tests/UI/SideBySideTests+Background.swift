@@ -32,7 +32,7 @@ extension LivePreviewFlowTests {
         let read = await agent(workspace, "eval", .init(code: "return Promise.all([...document.getElementById('f').files].map(async f => f.name + '=' + await f.text()))"))
         #expect(read.text == "[\"说明.txt=一\",\"说明.txt=二\"]", "\(read.text)")
 
-        _ = try await live(url.appending(path: "next.html").absoluteString, for: "a")
+        _ = try await live(url.appending(path: "next.html").absoluteString, for: "a", in: workspace)
         let moved = await agent(workspace, "snapshot")
         #expect(moved.text.contains("第二页"), "\(moved.text.prefix(200))")
 

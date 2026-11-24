@@ -224,10 +224,6 @@ public struct LiveServers: Sendable {
     return false
   }
 
-  public static func launched(_ pid: pid_t = getpid()) -> Date? {
-    bsd(pid).map { Date(timeIntervalSince1970: Double(started($0)) / 1_000_000) }
-  }
-
   private static func sockets(_ pid: pid_t) -> [Socket] {
     fds(pid).compactMap { fd in
       guard fd.proc_fdtype == PROX_FDTYPE_SOCKET else { return nil }
@@ -258,26 +254,6 @@ public struct LiveServers: Sendable {
     var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / MemoryLayout<proc_fdinfo>.size + 16)
     let got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, Int32(fds.count * MemoryLayout<proc_fdinfo>.size))
     return fds.prefix(Int(max(0, got)) / MemoryLayout<proc_fdinfo>.size)
-  }
-
-  static func appHolding(_ file: String) -> Bool {
-    guard let file = realPath(file) else { return false }
-    return processes().contains { pid in
-      guard pid != getpid(), executable(pid)?.hasSuffix(".app/Contents/MacOS/CuePad") == true else { return false }
-      return fds(pid).contains { fd in
-        guard fd.proc_fdtype == PROX_FDTYPE_VNODE else { return false }
-        var info = vnode_fdinfowithpath()
-        let size = Int32(MemoryLayout<vnode_fdinfowithpath>.size)
-        guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, &info, size) == size else { return false }
-        return withUnsafeBytes(of: info.pvip.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) } == file
-      }
-    }
-  }
-
-  private static func executable(_ pid: pid_t) -> String? {
-    var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)
-    let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
-    return length > 0 ? String(decoding: buffer.prefix(Int(length)), as: UTF8.self) : nil
   }
 }
 #endif

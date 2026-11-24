@@ -252,8 +252,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     }
 
     func follow(_ answer: LiveRemote.Pages, showing: Bool) {
-        if let sent = answer.sent, sent.sentAt != sentTaken, address == nil || yields(showing: showing) {
-            sentTaken = sent.sentAt
+        if let sent = answer.sent, sent.at != sentTaken, address == nil || yields(showing: showing) {
+            sentTaken = sent.at
             if address != nil { return retarget(.init(url: sent.url, source: sent.found ? .found : .sent)) }
         }
         guard !keeps(answer.serving), let first = answer.pages.first else { return }

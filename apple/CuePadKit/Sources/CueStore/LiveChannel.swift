@@ -41,13 +41,14 @@ public enum LiveChannel {
     public var interactive: Bool?
     public var find: String?
     public var code: String?
+    public var found: Bool?
 
     public init(
       ref: String? = nil, text: String? = nil, key: String? = nil, selector: String? = nil, url: String? = nil, timeout: Double? = nil,
-      files: [Upload]? = nil, all: Bool? = nil, interactive: Bool? = nil, find: String? = nil, code: String? = nil
+      files: [Upload]? = nil, all: Bool? = nil, interactive: Bool? = nil, find: String? = nil, code: String? = nil, found: Bool? = nil
     ) {
       (self.ref, self.text, self.key, self.selector, self.url, self.timeout) = (ref, text, key, selector, url, timeout)
-      (self.files, self.all, self.interactive, self.find, self.code) = (files, all, interactive, find, code)
+      (self.files, self.all, self.interactive, self.find, self.code, self.found) = (files, all, interactive, find, code, found)
     }
   }
 

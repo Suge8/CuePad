@@ -36,6 +36,10 @@ extension Workspace {
     private func performLive(_ request: LiveChannel.Request, _ id: UUID) async -> LiveChannel.Reply {
         guard !Task.isCancelled else { return .refused("取消了") }
         do {
+            if request.op == "open" {
+                guard let text = request.args.url, let url = URL(string: text) else { throw LiveRefusal("请求缺参数：命令行与开着的 CuePad 不是同一版") }
+                return try await openLive(request.session, url: url, found: request.args.found == true)
+            }
             let (preview, rebuilt) = try await livePreview(forAgent: request.session, id)
             await preview.touchedByAgent()
             defer { preview.agent.used = .now }
@@ -74,7 +78,6 @@ extension Workspace {
     }
 
     private func livePreview(forAgent sessionID: String, _ id: UUID) async throws -> (LivePreview, rebuilt: Bool) {
-        take(try await services.store.liveAddresses())
         if let preview = livePreviews[id] { return (preview, false) }
         guard let sent = liveSent.removeValue(forKey: id) else {
             throw LiveRefusal("这个会话还没有活预览：先 cuepad live（或 cuepad live <端口>）把页面开在 CuePad 里，再操作它")

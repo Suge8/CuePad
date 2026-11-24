@@ -9,7 +9,7 @@ final class LiveRemote {
     struct Pages: Equatable, Sendable {
         var pages: [URL]
         var serving: [URL]
-        var sent: LiveAddress?
+        var sent: LiveSignal.Sent?
         var door: LiveSignal.Door?
         var ports: [Int]
     }

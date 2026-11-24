@@ -292,8 +292,7 @@ struct LivePhoneTests {
         let (server, url) = try await flow.serve(in: elsewhere)
         defer { server.terminate() }
         try "页面".write(to: elsewhere.appending(path: "index.html"), atomically: true, encoding: .utf8)
-        let following = Task { await workspace.followLiveAddresses() }
-        _ = try await flow.live(url.absoluteString, for: "live")
+        _ = try await flow.live(url.absoluteString, for: "live", in: workspace)
 
         let watching = Task { await remote.watch("live", on: flow.services.hostID, open: true) }
         let door = try await awaited("Mac 给了隧道的入口") { remote.answers["live"]?.door }
@@ -304,11 +303,10 @@ struct LivePhoneTests {
         let held = try await Tab(proxy, port: port, to: url)
         #expect(workspace.liveServer?.server.connections == 1)
 
-        _ = try await flow.live("http://localhost:9", for: "live")
+        _ = try await flow.live("http://localhost:9", for: "live", in: workspace)
         try await eventually("Agent 换了地址，原来那个口上连着的断了") { workspace.liveServer?.server.connections == 0 }
         await #expect(throws: (any Error).self) { try await held.get("index.html") }
         await watching.stop()
-        await following.stop()
         }
     }
 

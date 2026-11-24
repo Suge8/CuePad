@@ -56,7 +56,7 @@ extension LivePreviewFlowTests {
         }
         try #require(server != nil, "试了 8 个口，服务都没起来")
         workspace.openSession(id("b"), sessionID: "b", in: .main)
-        _ = try await live("http://127.0.0.1:\(port)/", for: "a")
+        _ = try await live("http://127.0.0.1:\(port)/", for: "a", in: workspace)
         try await eventually("后台建好了 a 的预览") { workspace.livePreviews[id("a")]?.web.title == "替身" }
 
         let page = await agent(workspace, "snapshot")

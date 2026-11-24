@@ -22,9 +22,10 @@ struct LivePreviewFlowTests {
 
     func id(_ sessionID: String) -> UUID { SessionState.recordID(sessionID: sessionID) }
 
-    func live(_ address: String, for sessionID: String) async throws -> URL {
+    func live(_ address: String, for sessionID: String, in workspace: Workspace) async throws -> URL {
         let url = try #require(URL(string: address))
-        try await store.sendLive(url, to: sessionID, found: false)
+        let reply = await workspace.answerLive(.init(session: sessionID, op: "open", args: .init(url: address)))
+        #expect(!reply.failed, "\(reply.text)")
         return url
     }
 
@@ -150,17 +151,17 @@ struct LivePreviewFlowTests {
         defer { await following.stop() }
 
         open("a", workspace)
-        let first = try await live("http://localhost:5173", for: "a")
+        let first = try await live("http://localhost:5173", for: "a", in: workspace)
         try await eventually("预览打开在 Agent 给的地址") { workspace.panes.contains(where: { $0.previewed != nil }) && workspace.livePreviews[id("a")]?.address == first }
 
         workspace.toggleLivePreview()
         open("b", workspace)
-        let second = try await live("http://localhost:3000", for: "a")
+        let second = try await live("http://localhost:3000", for: "a", in: workspace)
         try await eventually("a 的钮亮起、指着新地址") { workspace.liveButton(id("a")) == .closed(second) }
         #expect(workspace.session(in: .main)?.id == id("b") && !workspace.isSplit)
 
         open("c", in: .aside, workspace)
-        let third = try await live("http://localhost:4000", for: "b")
+        let third = try await live("http://localhost:4000", for: "b", in: workspace)
         try await eventually("b 的钮亮起") { workspace.liveButton(id("b")) == .closed(third) }
         #expect(workspace.session(in: .beside(0))?.id == id("c"))
     }
@@ -193,7 +194,7 @@ struct LivePreviewFlowTests {
     func backgroundPage(_ workspace: Workspace) async throws -> (Process, URL) {
         let (server, url) = try await serve(in: try site())
         open("b", workspace)
-        _ = try await live(url.absoluteString, for: "a")
+        _ = try await live(url.absoluteString, for: "a", in: workspace)
         try await eventually("后台建好了 a 的预览、载入了这一页") {
             workspace.livePreviews[id("a")].map { $0.web.title == "登录" && !$0.web.isLoading } ?? false
         }
@@ -236,10 +237,10 @@ struct LivePreviewFlowTests {
         defer { await following.stop() }
         let (server, url) = try await backgroundPage(workspace)
         defer { server.terminate() }
-        _ = try await live(url.absoluteString, for: "b")
+        _ = try await live(url.absoluteString, for: "b", in: workspace)
         try await eventually("b 在主区、右半空着：预览直接开着") { workspace.panes.contains(where: { $0.previewed != nil }) && workspace.livePreviews[id("b")] != nil }
         _ = try await session("done", .ended, in: try folder())
-        _ = try await live(url.absoluteString, for: "done")
+        _ = try await live(url.absoluteString, for: "done", in: workspace)
         try await eventually("结束了的会话也收下了地址") { workspace.livePreviews[id("done")] != nil }
 
         await workspace.releaseLivePreviews(at: .now)
@@ -263,7 +264,7 @@ struct LivePreviewFlowTests {
         let (server, url) = try await serve(in: try site())
         defer { server.terminate() }
         open("a", workspace)
-        _ = try await live(url.absoluteString, for: "a")
+        _ = try await live(url.absoluteString, for: "a", in: workspace)
         try await eventually("预览开着、载完") { workspace.livePreviews[id("a")].map { $0.web.title == "登录" && !$0.web.isLoading } ?? false }
         let login = try ref("button \"登录\"", in: await agent(workspace, "snapshot").text)
 
@@ -309,7 +310,7 @@ struct LivePreviewFlowTests {
         let typed = try #require(URL(string: "http://localhost:8080"))
         preview.retarget(.init(url: typed, source: .typed))
 
-        let sent = try await live("http://localhost:5173", for: "a")
+        let sent = try await live("http://localhost:5173", for: "a", in: workspace)
         try await eventually("App 收到了这一条") { workspace.liveSent[id("a")] == .init(url: sent, source: .sent) }
         #expect(preview.address == typed)
 
