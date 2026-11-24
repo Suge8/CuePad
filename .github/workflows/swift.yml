@@ -32,8 +32,9 @@ jobs:
           - { name: check, args: check }
           - { name: test kit, args: test kit }
           - { name: test mac, args: test mac }
-          # 一次约 20 分钟里模拟器开机约 7 分钟、编译约 12 分钟，13 条用例只跑几秒；模拟器在高负载的 runner 上还会开不起来，红的多半不是代码
-          - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
+          # App 测试目标的全量：只在 iOS 编的用例（#if os(iOS)）签核的 test mac 跑不到，只有这里跑，点名几个套件会漏掉其余的（#321 就是这样没人看到）。
+          # 不带 CuePadKit：Kit 在 test kit 里跑过。模拟器开机约 7 分钟、编译约 12 分钟，用例本身约 4 分钟；模拟器在高负载的 runner 上会开不起来，红在开机那步的不是代码
+          - { name: test ios, args: test ios -only-testing:CuePadTests }
     env:
       # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：测试自己起的 node 脚本（MCP 替身等）要找得到 /opt/homebrew/bin 里的 node。
       # 真 Agent 不走这个 PATH：它们装在专用缓存里、旁边带着 node（PinnedAgent）

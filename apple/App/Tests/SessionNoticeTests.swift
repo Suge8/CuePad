@@ -1,4 +1,3 @@
-#if os(iOS)
 import CueStore
 import CueSync
 import Foundation
@@ -71,6 +70,7 @@ struct SessionNoticeTests {
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).map(\.kind) == [.settled])
     }
 
+    #if os(iOS)
     // MARK: 正看着
 
     @Test func 开着那个会话时不弹提示_别处照弹() {
@@ -98,6 +98,5 @@ struct SessionNoticeTests {
         workspace.show(.session(session))
         #expect(!workspace.keeps(banner) && workspace.keeps(other))
     }
-
+    #endif
 }
-#endif
