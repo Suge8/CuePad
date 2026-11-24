@@ -201,8 +201,6 @@ final class WideColumnView: NSView {
         return nil
     }
 
-    @objc func switchWideFocus(_ sender: Any?) { focus.cycle() }
-
     private final class DropCatcher: NSView {
         unowned let owner: WideColumnView
 
@@ -222,5 +220,14 @@ final class WideColumnView: NSView {
     }
     @objc func moveWideLeft(_ sender: Any?) { focus.move(by: -1, in: workspace) }
     @objc func moveWideRight(_ sender: Any?) { focus.move(by: 1, in: workspace) }
+}
+
+/// 换栏焦点由窗口接、不由块接：焦点不在哪一块里时（刚打开、点在空处）响应链里没有块，菜单项停用，⌃⇥ 落成系统的切换键盘焦点，进的是块的托管视图、不是回复框。
+extension MainShellWindow {
+    @objc func switchWideFocus(_ sender: Any?) { contentView.flatMap(Self.column(in:))?.focus.cycle() }
+
+    private static func column(in view: NSView) -> WideColumnView? {
+        (view as? WideColumnView) ?? view.subviews.lazy.compactMap(column(in:)).first
+    }
 }
 #endif
