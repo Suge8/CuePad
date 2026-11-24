@@ -50,6 +50,7 @@ struct PageLayer: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.headInset) private var inset
     @Environment(\.underCue) private var under
+    @State private var top = PageTop()
 
     var body: some View {
         let page = workspace.pageRoute
@@ -57,6 +58,7 @@ struct PageLayer: View {
             RouteBody(route: page, column: column)
             if let page, page != .search, workspace.overlay == nil { head(page).padding(.trailing, under) }
         }
+        .environment(top)
     }
 
     @ViewBuilder private func head(_ page: Route) -> some View {
