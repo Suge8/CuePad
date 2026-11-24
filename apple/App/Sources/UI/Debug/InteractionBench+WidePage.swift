@@ -96,6 +96,7 @@ struct WidePage {
                                         frame: InteractionBench.rows[anchor.id], visible: Self.visible(scroll, in: column)))
             }
         }
+        if readings.isEmpty && untested.isEmpty { untested.append("这一排没有看得见的块") }
         self.readings = readings
         self.untested = untested
     }
