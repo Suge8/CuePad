@@ -31,7 +31,7 @@ struct CaptureComposer: View {
     private var header: some View {
         HStack(spacing: Spacing.item) {
             DestinationMenu(project: project) { state.project = $0 }
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             if let notice = workspace.notice {
                 Text(notice.text).font(Typography.meta)
                     .foregroundStyle(notice.isError ? palette.failure : palette.ink3)

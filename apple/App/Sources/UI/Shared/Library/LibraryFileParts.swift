@@ -19,7 +19,7 @@ struct DuplicateBar: View {
                 .paneSlot(.compact)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("几份同名的")
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.item)
                 Button { keep() } label: { TidyLabel(title: "只留这份", working: working) }
                     .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
                     .disabled(working)
@@ -54,7 +54,7 @@ struct MergeBar: View {
                 Text(verbatim: String(localized: "\(tidy.writers.map(\.name).formatted(.list(type: .and))) 另写了一份"))
                     .font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(2)
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             if draft.previewing {
                 Button("取消") { draft.previewing = false }
                     .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
@@ -115,7 +115,7 @@ struct ConflictBar: View {
     var body: some View {
         LibraryFileBar {
             Text(Self.fact).font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(2)
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             if case .conflict(_?) = draft.state {
                 Button(Self.take) { draft.takeFile() }
                     .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))

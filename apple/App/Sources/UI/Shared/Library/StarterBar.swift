@@ -7,7 +7,7 @@ struct StarterBar: View {
     var body: some View {
         LibraryFileBar {
             Text("CuePad 备了一份起步规则").font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(2)
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             Button("填进来") { draft.fill(Self.text) }
                 .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
         }

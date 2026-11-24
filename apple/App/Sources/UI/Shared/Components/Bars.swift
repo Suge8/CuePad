@@ -2,7 +2,6 @@ import SwiftUI
 
 enum Bars {
     static let contentGap = Spacing.group
-    static let fade: CGFloat = 16
 }
 
 extension View {
@@ -26,7 +25,7 @@ private struct HeadFade: ViewModifier {
                 GeometryReader { proxy in
                     VStack(spacing: 0) {
                         palette.desk.frame(height: max(0, proxy.safeAreaInsets.top - Bars.contentGap))
-                        LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Bars.fade)
+                        LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Chrome.scrollFade)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .ignoresSafeArea(edges: .top)

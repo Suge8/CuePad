@@ -44,7 +44,7 @@ struct SlashPalette: View {
                         Text(summary).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
                     }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: Spacing.item)
                 Text(command.source.label).font(Typography.caption).foregroundStyle(palette.ink3)
             }
             .padding(.vertical, Spacing.item)

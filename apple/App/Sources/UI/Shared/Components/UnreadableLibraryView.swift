@@ -27,7 +27,7 @@ struct UnreadableLibraryView: View {
                         .multilineTextAlignment(.leading).frame(maxWidth: 420, alignment: .leading)
                 }
                 #if os(iOS)
-                Grid(verticalSpacing: 16) {
+                Grid(verticalSpacing: Spacing.block) {
                     GridRow { Button("重试", icon: .retry, action: retry).buttonStyle(EqualButtonStyle(kind: .primary)) }
                     GridRow { ExportDiagnosticsButton(text: failure.diagnostics).buttonStyle(EqualButtonStyle(kind: .secondary)) }
                 }

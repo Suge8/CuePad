@@ -131,7 +131,7 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
                 .frame(width: BubbleMetrics.markSlot)
                 .accessibilityLabel(markLabel ?? "")
             content
-            Spacer(minLength: 4)
+            Spacer(minLength: Spacing.tight)
             trailing.padding(.trailing, Spacing.item)
         }
         .contentShape(.rect)

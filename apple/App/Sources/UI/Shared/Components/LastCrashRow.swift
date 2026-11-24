@@ -47,7 +47,7 @@ struct CrashReportView: View {
     #else
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Spacing.group, verticalSpacing: 6) {
+            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Spacing.group, verticalSpacing: Spacing.glyph) {
                 ForEach(facts, id: \.0.key) { title, value in
                     GridRow {
                         Text(title).foregroundStyle(palette.ink3)
