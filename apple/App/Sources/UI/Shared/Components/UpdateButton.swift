@@ -65,6 +65,7 @@ enum UpdateOffer: Equatable {
         switch self {
         #if os(macOS)
         case .update(.waiting(_, let busy), _): "等 \(busy) 个 Agent 做完再装"
+        case .update(.confirm, _): "有新版"
         case .update: "新版已就绪"
         #endif
         case .behind: "这台的 CuePad 要更新"

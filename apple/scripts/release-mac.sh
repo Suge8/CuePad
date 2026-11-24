@@ -59,6 +59,23 @@ check_ios_floor() {
 }
 # 上传要 gh 能写这个 Release：打包要几分钟，先确认
 $dry_run || gh release view "$TAG" -R "$REPO" --json tagName >/dev/null
+# 要不要发，按线上更新源实际声明的那一版（它的 mac/<构建号> 标签指向的提交）定，不按本地最新的标签：标签推了、上传没成的那次不算发过。
+# 这个提交已在线上那一版里（重跑旧的全绿流程、迟到的那一遍），或从它以来没动 apple/（文档、落地页），就没有要发的。恢复的尝试不在这里判
+if ! $dry_run && [ ! -e "$OUT/submission.json" ]; then
+  feed_url="$(/usr/libexec/PlistBuddy -c "Print SUFeedURL" "$APPLE_DIR/App/Config/CuePad-macOS-Info.plist")"
+  live="$(curl -fsSL "$feed_url" | sed -nE 's/.*<sparkle:version>([0-9]+)<\/sparkle:version>.*/\1/p')"
+  [ -n "$live" ] || { echo "读不到线上更新源 $feed_url 声明的版本，不发布" >&2; exit 1; }
+  git -C "$REPO_DIR" fetch -q origin "refs/tags/mac/$live:refs/tags/mac/$live"
+  live_commit="$(git -C "$REPO_DIR" rev-parse "mac/$live^{commit}")"
+  if git -C "$REPO_DIR" merge-base --is-ancestor "$source_commit" "$live_commit"; then
+    echo "线上的 mac/$live 已含 ${source_commit:0:9}，不发"
+    exit 0
+  fi
+  if git -C "$REPO_DIR" diff --quiet "$live_commit" "$source_commit" -- apple; then
+    echo "线上的 mac/$live 以来没动 apple/，不发"
+    exit 0
+  fi
+fi
 $dry_run || check_ios_floor
 "$APPLE_DIR/scripts/ck-production.sh"
 check_relay
@@ -75,6 +92,7 @@ python3 "$APPLE_DIR/scripts/provision.py" developer-id
 
 read -ra versions <<<"$(release_versions)"
 archive="$(release_archive mac "${OUT##*/}" "${versions[@]}")"
+echo "$archive" >"$OUT/archive"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
   -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}" CUEPAD_RELEASE=YES
 
@@ -138,8 +156,8 @@ online="$( { echo "$declared"; sed -nE "s/^${ASSET%.zip}-([0-9]+)\.zip$/\1/p" <<
 release_tag mac "$build_version" "$source_commit"
 # 这一版的 dSYM 传进草稿发布 dsyms（只有仓库成员看得到）：在云端发的归档随 runner 消失，真机崩溃的栈靠它还原（diag_report.py 的 dsyms）
 dsyms="$OUT/${ASSET%-arm64.zip}-${build_version}-dSYMs.zip"
-[ -e "$dsyms" ] || ditto -c -k --keepParent "$(ls -d "$HOME/Library/Developer/Xcode/Archives"/*/"CuePad mac ${build_version}-"*.xcarchive/dSYMs | head -1)" "$dsyms"
-grep -qxF "${dsyms##*/}" <<<"$(gh release view dsyms -R "$REPO" --json assets --jq '.assets[].name')" || gh release upload dsyms "$dsyms" -R "$REPO"
+[ -e "$dsyms" ] || ditto -c -k --keepParent "$(cat "$OUT/archive")/dSYMs" "$dsyms"
+gh release upload dsyms "$dsyms" -R "$REPO" --clobber
 # 顺序：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包。GitHub 不能一次换多个资产，appcast 指向带构建号的包，
 # 才没有旧 appcast 配新包、落后的客户端验签失败的窗口
 # 线上摘要（GitHub 算的 sha256）已与本地一致的不重传

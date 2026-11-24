@@ -6,6 +6,8 @@ import re
 import subprocess
 import tempfile
 
+from app_env import CHECKOUT
+
 ARCHIVES = os.path.expanduser("~/Library/Developer/Xcode/Archives")
 TOP_FRAMES, OWN_FRAMES, SHOWN_TIMES = 8, 4, 5  # 同 CrashReport.topFrames、ownFrames 与 DiagnosticSummary.shownTimes
 # 人话照抄 CrashReport.swift 的 Termination（App 的导出诊断用它）：改一边就改另一边
@@ -55,7 +57,7 @@ def dsyms(platform, build):
 def fetch_dsyms(build):
     """在云端发的 Mac 版，归档不在本机：取 release-mac.sh 传进草稿发布 dsyms 的那份，解进归档目录同样的位置（没有就算了，由调用处报缺）。"""
     with tempfile.TemporaryDirectory() as tmp:
-        got = subprocess.run(["gh", "release", "download", "dsyms", "-p", f"CuePad-mac-{build}-dSYMs.zip", "-D", tmp], capture_output=True)
+        got = subprocess.run(["gh", "release", "download", "dsyms", "-p", f"CuePad-mac-{build}-dSYMs.zip", "-D", tmp], capture_output=True, cwd=CHECKOUT)
         if got.returncode == 0:
             archive = f"{ARCHIVES}/cloud/CuePad mac {build}.xcarchive"
             os.makedirs(archive, exist_ok=True)

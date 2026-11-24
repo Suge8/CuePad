@@ -147,15 +147,23 @@ CREDENTIALS = ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_PATH", "CUEPAD_TEAM_ID")
 HOME = Path(asc.ENV).parent
 
 
+def private(member):
+    member.mode = 0o600 if member.isfile() else 0o700
+    return member
+
+
 def secrets():
-    lines = [line for line in Path(asc.ENV).read_text().splitlines() if line.split("=", 1)[0] in CREDENTIALS]
+    key = Path(asc.load_env()["ASC_KEY_PATH"]).relative_to(HOME)
+    # 密钥路径写成相对家目录的：云端的家目录不是这台的
+    lines = [f"ASC_KEY_PATH=$HOME/{HOME.name}/{key}" if line.startswith("ASC_KEY_PATH=") else line
+             for line in Path(asc.ENV).read_text().splitlines() if line.split("=", 1)[0] in CREDENTIALS]
     packed = io.BytesIO()
     with tarfile.open(fileobj=packed, mode="w:gz") as tar:
         env = tarfile.TarInfo(Path(asc.ENV).name)
         env.size, env.mode = len(body := ("\n".join(lines) + "\n").encode()), 0o600
         tar.addfile(env, io.BytesIO(body))
-        for path in (Path(asc.load_env()["ASC_KEY_PATH"]), Path(provision.KEYCHAIN), Path(provision.KEYCHAIN_PASS)):
-            tar.add(path, arcname=str(path.relative_to(HOME)))
+        for path in (HOME / key, Path(provision.KEYCHAIN), Path(provision.KEYCHAIN_PASS)):
+            tar.add(path, arcname=str(path.relative_to(HOME)), filter=private)
     subprocess.run(["gh", "secret", "set", "RELEASE_HOME", "--env", "release"], input=base64.b64encode(packed.getvalue()), cwd=CHECKOUT, check=True)
 
 

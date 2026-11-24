@@ -94,7 +94,7 @@ final class UpdateService: UpdaterEvents {
         }
     }
 
-    /// 上次退出前下好、这次已经是它了：取一次就清掉。装没成（还是旧版）也清掉，Sparkle 会再报 `ready`。
+    /// 上次退出前下好或要你确认的那一版、这次已经是它了：取一次就清掉。装没成（还是旧版）也清掉，Sparkle 会再报。
     func updatedTo() -> String? {
         guard let build = defaults.string(forKey: Self.installingKey) else { return nil }
         defaults.removeObject(forKey: Self.installingKey)
@@ -152,6 +152,7 @@ final class UpdateService: UpdaterEvents {
     }
 
     func needsConfirm(_ version: AppVersion) {
+        defaults.set(version.build, forKey: Self.installingKey)
         state = .confirm(version)
     }
 

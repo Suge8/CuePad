@@ -98,7 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         Task {
             switch await services.updates.check() {
             case .found(let version) where services.updates.state != nil: workspace.say("CuePad \(version.name) 已下好，点侧栏底下的更新钮装")
-            case .found(let version): workspace.say("正在下载 CuePad \(version.name)")
+            case .found(let version) where services.updates.automaticallyChecks: workspace.say("正在下载 CuePad \(version.name)")
+            // 关了自动更新，Sparkle 不自己下（它的设置里自动下载跟着自动检查），这一版是要你点更新钮、在它的窗里装的
+            case .found(let version): workspace.say("有新版 CuePad \(version.name)，点侧栏底下的更新钮装")
             case .latest: workspace.say("已是最新版本")
             case .failed(let error): workspace.say(Dotted(String(localized: "检查更新没成功：\(error)")), tone: .failure)
             case nil: workspace.say("正在检查更新")
