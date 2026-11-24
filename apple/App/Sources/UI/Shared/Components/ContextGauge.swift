@@ -100,7 +100,6 @@ private struct ContextArc: View {
 
     private static let sweep = 0.75
     private static let least = 0.05
-    private static let notch: CGFloat = 2
 
     private var line: CGFloat { side * 0.2 }
 
@@ -116,13 +115,8 @@ private struct ContextArc: View {
         let round = StrokeStyle(lineWidth: line, lineCap: .round)
         ZStack {
             arc(0, 1).stroke(palette.track, style: round)
-            if let mark = meter.mark {
-                let half = Double(Self.notch / 2 / (.pi * (side - line) * Self.sweep))
-                arc(mark - half, mark + half).stroke(.black, lineWidth: line + 1).blendMode(.destinationOut)
-            }
             arc(0, max(meter.fraction, Self.least)).stroke(ink, style: round)
         }
-        .compositingGroup()
         .offset(y: side * 0.06)
         .frame(width: side, height: side)
     }
