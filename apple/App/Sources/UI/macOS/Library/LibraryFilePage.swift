@@ -11,13 +11,11 @@ struct LibraryFilePage: View {
     var body: some View {
         let library = workspace.library
         let draft = workspace.draft(of: file, in: library)
-        VStack(spacing: Spacing.block) {
+        ZStack {
             if let library, library.file(file) != nil, let draft {
-                LibraryFileTop(file: file, library: library, draft: draft, texts: texts)
                 LibraryFileBody(file: file, library: library, draft: draft, texts: texts)
             }
         }
-        .padding(.top, Spacing.pageTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.desk.ignoresSafeArea())
         .loadingFileDraft(of: file, in: library, texts: $texts)

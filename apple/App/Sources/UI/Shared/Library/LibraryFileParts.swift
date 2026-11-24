@@ -166,28 +166,27 @@ struct MergePreview: View {
         #endif
     }
 
+    /// 与提示条同在整页的滚动区里（`LibraryFileBody`），自己不套滚动区。
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.group) {
-                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                    HStack(alignment: .top, spacing: Self.gap) {
-                        Capsule().fill(block.incoming ? palette.ink2 : .clear).frame(width: Self.bar)
-                        text(block.text).foregroundStyle(palette.ink).lineSpacing(resolvedTheme.lineSpacing)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.vertical, Spacing.tight).padding(.trailing, Spacing.tight).padding(.leading, Self.mark)
-                    .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: Radius.chip))
-                    .padding(.leading, -(Self.mark + Self.bar + Self.gap))
-                    .accessibilityElement(children: .combine)
-                    .accessibilityHint(block.incoming ? String(localized: "会并进来") : "")
+        VStack(alignment: .leading, spacing: Spacing.group) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                HStack(alignment: .top, spacing: Self.gap) {
+                    Capsule().fill(block.incoming ? palette.ink2 : .clear).frame(width: Self.bar)
+                    text(block.text).foregroundStyle(palette.ink).lineSpacing(resolvedTheme.lineSpacing)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.vertical, Spacing.tight).padding(.trailing, Spacing.tight).padding(.leading, Self.mark)
+                .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: Radius.chip))
+                .padding(.leading, -(Self.mark + Self.bar + Self.gap))
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(block.incoming ? String(localized: "会并进来") : "")
             }
-            .padding(.vertical, Spacing.group)
-            .frame(maxWidth: theme.maxTextWidth, alignment: .leading)
-            .padding(.horizontal, theme.horizontalInset)
-            .frame(maxWidth: .infinity)
-            .textSelection(.enabled)
         }
+        .padding(.vertical, Spacing.group)
+        .frame(maxWidth: theme.maxTextWidth, alignment: .leading)
+        .padding(.horizontal, theme.horizontalInset)
+        .frame(maxWidth: .infinity)
+        .textSelection(.enabled)
     }
 
     private static let mark: CGFloat = 4

@@ -19,6 +19,11 @@ final class IOSEditorHandle {
         return view?.isFirstResponder == true
     }
     func focus() { view?.becomeFirstResponder() }
+    func focusAtEnd() {
+        guard let view else { return }
+        view.becomeFirstResponder()
+        view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
+    }
     func replace(_ text: String) {
         guard let view else { return }
         let location = view.selectedRange.location
