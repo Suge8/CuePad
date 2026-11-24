@@ -1,54 +1,65 @@
 import CueStore
 import SwiftUI
 
-struct ProjectWallSections<Tile: View>: View {
+struct ProjectWallSections: View {
     let data: ProjectPageData
-    let arrangement: WallArrangement
-    let older: [OlderGroup]
-    let metrics: Metrics
+    let board: WallBoard
     var showsOlder = true
-    @ViewBuilder let tile: (CardEntry) -> Tile
     @State private var olderOpen = true
     @State private var adding = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     #if os(iOS)
     @State private var born: UUID?
     @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @Environment(Workspace.self) private var workspace
     #if os(macOS)
     @Environment(AppServices.self) private var services
     #endif
 
-    struct Metrics {
+    private struct Metrics {
         let minColumnWidth: CGFloat
         let maxColumns: Int
         let wallSpacing: CGFloat
-        let sectionGap: CGFloat
         let olderGap: CGFloat
     }
 
+    private var metrics: Metrics {
+        let columns = typeSize.isAccessibilitySize ? 1 : nil
+        #if os(iOS)
+        if sizeClass == .compact { return Metrics(minColumnWidth: 150, maxColumns: columns ?? 4, wallSpacing: Spacing.group, olderGap: Spacing.item) }
+        #endif
+        return Metrics(minColumnWidth: 208, maxColumns: columns ?? 12, wallSpacing: Spacing.block, olderGap: Spacing.group)
+    }
+
     var body: some View {
+        if let arrangement = board.arrangement { wall(arrangement) }
+    }
+
+    private func wall(_ arrangement: WallArrangement) -> some View {
         #if os(iOS)
         let held = born
         #else
         let held = UUID?.none
         #endif
+        let older = board.older
         let shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil && $0 != held }
-        LazyVStack(alignment: .leading, spacing: 0) {
+        return LazyVStack(alignment: .leading, spacing: 0) {
             MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) {
                 AddIdea(data: data, action: add)
                     #if os(iOS)
                     .zoomSource(born ?? Project.defaultID, in: zoom)
                     #endif
                 // 一张卡是一整块挪过去的（`geometryGroup`）：不然卡的底在滑，里面的字已经按新的宽排好、先到了，看着像字从卡上掉下来
-                ForEach(shown.compactMap { data.entries[$0] }) { tile($0).geometryGroup().transition(.opacity) }
+                ForEach(shown.compactMap { data.entries[$0] }) { IdeaTile(entry: $0, floated: board.floated.contains($0.id)).geometryGroup().transition(.opacity) }
             }
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: shown)
-            .padding(.bottom, metrics.sectionGap)
+            .padding(.bottom, Spacing.section)
             #if os(macOS)
             if data.cards.isEmpty, services.syncing.showsCatchingUp {
-                SyncingLabel().font(Typography.secondary).padding(.bottom, metrics.sectionGap)
+                SyncingLabel().font(Typography.secondary).padding(.bottom, Spacing.section)
             }
             #endif
             if showsOlder, !older.isEmpty {
