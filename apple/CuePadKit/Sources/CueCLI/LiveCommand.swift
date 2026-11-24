@@ -40,7 +40,7 @@ extension Command {
       url = parsed
     }
     let (opened, shown) = try openLive(call, url, session: session, name: "live")
-    let text = opened + "要自己看、点它，用 cuepad live snapshot（cuepad live --help）。手机、iPad 与这台 Mac 在同一个网络时也看得到。\n"
+    let text = opened + "要自己看、点它，用 cuepad live snapshot（cuepad live --help）。\n"
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: shown.absoluteString, found: url == nil)))
   }
 

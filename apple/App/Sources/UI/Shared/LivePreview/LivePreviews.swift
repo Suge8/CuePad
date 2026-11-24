@@ -185,11 +185,13 @@ final class LivePreviews {
     }
 
     private func take(_ id: UUID, _ answer: LiveRemote.Pages, current: LivePreview.Target?, showing: Bool) -> LivePreview.Target? {
-        let sent = answer.sent.flatMap { $0.at == entries[id]?.sent?.at ? nil : $0 }
+        let unseen = answer.sent.flatMap { $0.at == entries[id]?.sent?.at ? nil : $0 }
+        if let unseen { entries[id, default: Entry()].sent = unseen }
+        // 头一回打开看 Mac 现在给的页面：发来过的可能已被 Mac 上填的顶掉，只记成见过
+        let sent = current == nil ? nil : unseen
         let move = LivePreview.Target.move(from: current, showing: showing, sent: sent.map { .init(url: $0.url, source: $0.found ? .found : .sent) },
                                            found: answer.serving, pages: answer.pages)
         guard case .go(let target) = move else { return nil }
-        if let sent { entries[id, default: Entry()].sent = sent }
         return target
     }
 

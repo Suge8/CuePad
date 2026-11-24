@@ -35,6 +35,8 @@ extension Workspace {
     private func openLive(_ sessionID: String, _ id: UUID, url: URL, found: Bool) async throws -> String {
         let here = try await services.store.sessionState(sessionID).map(livesHere) ?? false
         let shown = LiveAddress.shown(url)
+        let wasShowing = showsLivePreview(id)
+        let phones = "手机、iPad 与这台 Mac 在同一个网络时也看得到。"
         switch livePreviews.receive(.init(url: url, found: found, at: .now), for: id, sessionID: sessionID, showing: showsLivePreview(id)) {
         case .held(let typed):
             return "用户正开着这个会话的预览、看着他自己填的 \(LiveAddress.shown(typed))，没换掉：他收起再打开时换成 \(shown)。在那之前 cuepad live snapshot 等操作的是他那一页。"
@@ -43,9 +45,10 @@ extension Workspace {
             preview.engage()
         }
         if session(in: .main)?.id == id, !isSplit { toggleLivePreview() }
-        if showsLivePreview(id) { return "已在这台 Mac 的 CuePad 里打开 \(shown)：会话开在主区，预览滑开了。" }
+        if wasShowing { return "已在这台 Mac 的 CuePad 里换成 \(shown)：用户开着的预览就是它。\(phones)" }
+        if showsLivePreview(id) { return "已在这台 Mac 的 CuePad 里打开 \(shown)：会话开在主区，预览滑开了。\(phones)" }
         guard here else { return "已交给这台 Mac 上的 CuePad：\(shown)。这个会话不在这台 Mac 的 CuePad 里，用户看不到这一页；页面在后台载着，你照样能操作它。" }
-        return "已交给这台 Mac 上的 CuePad：\(shown)。会话没开在主区（或右半开着别的），会话栏头的预览钮亮起、等用户点开；页面在后台载着。"
+        return "已交给这台 Mac 上的 CuePad：\(shown)。会话没开在主区（或右半开着别的），会话栏头的预览钮亮起、等用户点开；页面在后台载着。\(phones)"
     }
 
     func watchLiveServers() async {

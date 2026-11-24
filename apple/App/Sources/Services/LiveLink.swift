@@ -105,9 +105,10 @@ final class LiveLink {
         proxy.mirror(Set((answer.door?.ports ?? []).compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
         previews.follow(preview, answer, showing: true)
         if state == .ready { preview.serve(served) }
-        guard let next = answer.door, next != door else { return }
+        guard let next = answer.door else { return }
+        let reconnect = !next.sameEntrance(as: door)
         door = next
-        connect(next, preview, key: key)
+        if reconnect { connect(next, preview, key: key) }
     }
 
     private func lose(_ trouble: LiveTrouble, _ preview: LivePreview) {

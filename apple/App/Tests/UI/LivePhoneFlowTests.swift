@@ -170,7 +170,7 @@ struct LivePhoneFlowTests {
         }
     }
 
-    @Test func 手机上自己填的地址_Mac的答复变了也不换() async throws {
+    @Test func 手机上自己填的地址_Mac的答复变了也不换_放行的端口变了不重载() async throws {
         try await phone { workspace, mac, url, route, _ in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
             workspace.toggleLivePreview()
@@ -181,6 +181,7 @@ struct LivePhoneFlowTests {
             let typed = url.appending(path: "pricing")
             preview.retarget(.init(url: typed, source: .typed))
             try await eventually("载出填的那一页") { preview.url?.path() == "/pricing" && preview.phase == .live && preview.revealed }
+            _ = try await preview.run("window.before = true")
 
             let other = try await vacant()
             mac.allow(other)
@@ -189,6 +190,22 @@ struct LivePhoneFlowTests {
             try await eventually("手机收到变了的答复") { app.services.liveRemote.answers["live"]?.pages.count == 2 }
             await quietPeriod(.milliseconds(500))
             #expect(preview.address == typed && preview.url?.path() == "/pricing")
+            #expect((try? await preview.run("return window.before ?? false")) as? Bool == true, "放行的端口变了不重连、不重载")
+            await open.stop()
+        }
+    }
+
+    @Test func 头一回点开_开的是Mac现在给的页面_不是Mac上已被顶掉的发来的() async throws {
+        try await phone { workspace, mac, url, route, _ in
+            mac.sent = .init(url: url.appending(path: "gone"), found: false, at: .now)
+            app.services.liveRemote.renew("live")
+            try await eventually("钮指着Mac现在给的") { workspace.liveButton(route.id) == .closed(url) }
+            workspace.toggleLivePreview()
+            let preview = try #require(workspace.livePreviews[route.id])
+            let open = shown(preview, in: workspace)
+            try await eventually("载出Mac现在给的") { preview.phase == .live && preview.revealed }
+            #expect(preview.address == url)
+            workspace.toggleLivePreview()
             await open.stop()
         }
     }
