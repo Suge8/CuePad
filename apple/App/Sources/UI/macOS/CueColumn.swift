@@ -10,9 +10,9 @@ struct CueColumn: View {
     var body: some View {
         CuePage()
             .safeAreaPadding(.top, CueTitle.band)
-            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits)))
+            .clipShape(.rect(cornerRadius: CuePanel.radius))
             .overlay(alignment: .top) { CueTitle(fits: fits) }
-            .cuePanel(fits: fits)
+            .cuePanel()
             .ignoresSafeArea(.container, edges: .top)
     }
 }
