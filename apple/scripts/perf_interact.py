@@ -39,10 +39,14 @@ def interact_mac(app, derived, runs, extra):
                 sys.exit(status)
             rows += [{"库": label, **json.loads(line[9:])} for line in lines if line.startswith("INTERACT ")]
     shutil.rmtree(f"{derived}/library-run", ignore_errors=True)
+    save(derived, rows)
+    sys.exit(mac_table(rows))
+
+
+def save(derived, rows):
     if not rows:
         fail("一项交互也没量到：-CuePadInteractOnly 列的项名对不上 InteractionBench 里的？")
     rows_file(derived, "interact", rows)
-    sys.exit(mac_table(rows))
 
 
 def mac_table(rows):
@@ -126,7 +130,7 @@ def interact_ios(app, derived, runs, extra, sim):
         if failed or "DONE" not in lines():
             fail(f"第 {run} 次没量完：{failed[0] if failed else 'App 中途退出'}")
         rows += [{"run": run, **json.loads(l[9:])} for l in lines() if l.startswith("INTERACT ")]
-    rows_file(derived, "interact", rows)
+    save(derived, rows)
     groups, seen = {}, {}
     for r in rows:
         seen[(r["run"], r["name"])] = seen.get((r["run"], r["name"]), 0) + 1
