@@ -6,24 +6,24 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var cards: [Card]
     var tasks: TaskTree
     var done: [Card]
-    var taskCounts: TaskCounts
+    var doneCount: Int
     var subtasks: [UUID: TaskProgress]
-    var stamps: [CardStamp]
     var entries: [UUID: CardEntry]
 
     static let doneLimit = 30
 
+    var stamps: [CardStamp] { cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, isPinned: $0.isPinned) } }
+
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
-        let all = try store.tasks(in: project, .inProgress, .todo, .done)
+        let tasks = try store.projectTasks(in: project, doneLimit: doneLimit)
         let cards = try store.cards(in: project)
         return ProjectPageData(
             project: try store.project(project),
             cards: cards,
-            tasks: TaskTree(all.filter { $0.status != .done }, all: all),
-            done: try store.tasksDone(in: project, limit: doneLimit),
-            taskCounts: try store.taskCounts(in: project),
-            subtasks: try store.subtaskProgress(in: project),
-            stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, isPinned: $0.isPinned) },
+            tasks: TaskTree(tasks.trees.filter { $0.completedAt == nil }, all: tasks.trees),
+            done: tasks.done,
+            doneCount: tasks.doneCount,
+            subtasks: tasks.progress,
             entries: Dictionary(uniqueKeysWithValues: cards.map { ($0.id, CardEntry($0)) }))
     }
 }
@@ -35,15 +35,16 @@ nonisolated struct WallBoard: Equatable, Sendable {
 
     @discardableResult
     mutating func refresh(with data: ProjectPageData, project: UUID, now: Date = .now, calendar: Calendar = .current) -> Bool {
+        let stamps = data.stamps
         defer {
-            let stamps = Dictionary(uniqueKeysWithValues: data.stamps.map { ($0.id, $0) })
+            let stamps = Dictionary(uniqueKeysWithValues: stamps.map { ($0.id, $0) })
             older = OlderGroup.group(arrangement?.older.compactMap { stamps[$0] } ?? [], now: now, calendar: calendar)
         }
         guard let previous = arrangement else {
-            arrangement = WallArrangement.arrange(data.stamps, project: project, now: now)
+            arrangement = WallArrangement.arrange(stamps, project: project, now: now)
             return true
         }
-        let next = previous.refreshed(with: data.stamps, project: project, now: now, calendar: calendar)
+        let next = previous.refreshed(with: stamps, project: project, now: now, calendar: calendar)
         floated = next.arrangedAt == previous.arrangedAt
             ? floated.union(Set(previous.older).intersection(next.wall + next.pinned))
             : []

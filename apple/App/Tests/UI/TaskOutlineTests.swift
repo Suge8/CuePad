@@ -65,8 +65,7 @@ struct TaskOutlineTests {
         _ = try await store.createTask("备份")
         let done = try await store.createTask("写说明", under: second.id)
         try await store.setStatus(done.id, .done)
-        let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
-        let tree = TaskTree(all.filter { $0.status != .done }, all: all)
+        let tree = try await ProjectPageData.read(Project.defaultID, from: store).tasks
         #expect(tree.indent(second.id) == nil)
         let rows = tree.rows()
         let frames = rowFrames(of: rows)

@@ -14,7 +14,7 @@ extension Workspace {
             #else
             handOff(task)
             #endif
-        case .finish(let item): answer { try await $0.finish(item) }
+        case .finish(let item): answer { try await $0.confirmComplete(item.id, anchored: false) }
         case .finishSession(let agent): answer { try await $0.finish(agent) }
         case .endSession(let session): sleep(session)
         }
@@ -38,10 +38,4 @@ extension Workspace {
         }
     }
 
-    func finish(_ item: TaskBoard.Item) async throws {
-        let id = item.task.id
-        try await confirmComplete(
-            id, subtasks: item.steps, busy: next(for: item, shown: pulse(of: item.agent).shown)?.busySession, anchored: false
-        ) { try await $0.complete(id) }
-    }
 }

@@ -9,7 +9,7 @@ extension Workspace {
 
     func finish(_ agent: SessionListItem) async throws {
         let session = agent.state
-        if let task = try await openTask(of: session) { return try await confirmComplete(task) }
+        if let task = try await openTask(of: session) { return try await confirmComplete(task.id) }
         try await confirmComplete(nil, subtasks: nil, busy: pulse(of: agent).shown?.agentBusy == true ? session : nil) {
             try await $0.complete(try await $0.adopt(session))
         }

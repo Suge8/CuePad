@@ -41,6 +41,15 @@ public struct TaskGroup: Equatable, Sendable {
   public internal(set) var tasks: [Card]
 }
 
+/// 项目页的任务：开着的任务连同它们所在整棵树里做完的（`trees`，先序；缩进与拖放要量做完的子任务有多深），
+/// 最近做完的顶层任务（`done`，至多取几件）与做完的总数，开着的任务的子任务进度。
+public struct ProjectTasks: Equatable, Sendable {
+  public let trees: [Card]
+  public let done: [Card]
+  public let doneCount: Int
+  public let progress: [UUID: TaskProgress]
+}
+
 public struct LeafTask: Identifiable, Equatable, Sendable {
   public let task: Card
   public let parent: Card?

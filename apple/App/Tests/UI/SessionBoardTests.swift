@@ -52,7 +52,7 @@ struct SessionBoardTests {
         let second = try await session("s2", title: "补测试")
         let workspace = Workspace(services: services)
         let before = try await TaskBoard.read(from: store)
-        #expect(Set(before.advancing.map(\.id)) == ["session/s1", "session/s2"])
+        #expect(Set(before.advancing.map(\.id)) == [.session("s1"), .session("s2")])
         #expect(try await tasks().isEmpty, "没当任务用过的会话不留卡")
 
         try await workspace.finish(SessionListItem(state: first))
@@ -79,7 +79,7 @@ struct SessionBoardTests {
         try await moves("s1", after: s1, by: 0)
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "同一毫秒分不出先后，按没动过算")
         try await moves("s1", after: s1)
-        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"], "歇下之后又醒来")
+        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == [.session("s1")], "歇下之后又醒来")
     }
 
     @Test func 完成后归档或项目进回收站_休眠在路上的不回进行中_没歇成才回来() async throws {
@@ -100,7 +100,7 @@ struct SessionBoardTests {
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "已经叫它歇了：卡离开看板也不回进行中，不等那台 Mac 做完")
 
         try await macAnswersEnds(slept: false)
-        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/s1", "session/s2"], "没歇成：活着又没有卡代表，回进行中")
+        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == [.session("s1"), .session("s2")], "没歇成：活着又没有卡代表，回进行中")
     }
 
     @Test func 等你里的无主会话点完成_先问一句_答应了才建卡完成() async throws {
@@ -131,7 +131,7 @@ struct SessionBoardTests {
         let task = try #require(made.first)
         #expect(task.isPinned && task.status == .inProgress && task.piSessionID == "s1" && task.parentID == nil)
         let board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.map(\.id) == ["task/\(task.id)"], "会话卡换成它的任务卡")
+        #expect(board.advancing.map(\.id) == [.task(task.id)], "会话卡换成它的任务卡")
     }
 
     @Test func 改名_看板与会话行同名_并让Agent跟着改() async throws {

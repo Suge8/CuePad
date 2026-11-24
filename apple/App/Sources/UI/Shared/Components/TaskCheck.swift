@@ -12,14 +12,14 @@ struct TaskCheck: Equatable {
 }
 
 extension Workspace {
-    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: SessionState?) {
+    func tap(_ check: Binding<TaskCheck>, task: Card) {
         if task.status == .done {
             let id = task.id
             return attempt { try await self.reopen(id) }
         }
         switch check.wrappedValue.phase {
         case .idle:
-            attempt { try await self.confirmComplete(task.id, subtasks: subtasks, busy: busy) { _ in check.wrappedValue.phase = .pending } }
+            attempt { try await self.confirmComplete(task.id) { _ in check.wrappedValue.phase = .pending } }
         case .pending: check.wrappedValue.phase = .idle
         case .committed: break
         }
@@ -58,7 +58,7 @@ struct TaskCheckButton: View {
     private var trigger: some View { Button(action: tap) { ring }.buttonStyle(PressStyle(.button)) }
     #endif
 
-    private func tap() { workspace.tap($check, task: task, subtasks: subtasks, busy: next?.busySession) }
+    private func tap() { workspace.tap($check, task: task) }
 }
 
 extension View {

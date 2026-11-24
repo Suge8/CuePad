@@ -14,7 +14,6 @@ struct PageLayer: View {
             PageStack().overlay(alignment: .bottom) { SelectionSlot().padding(.trailing, under) }
             if let page = workspace.pageRoute, workspace.overlay == nil { head(page).padding(.trailing, under) }
         }
-        .environment(\.topBand, Chrome.band)
     }
 
     @ViewBuilder private func head(_ page: Route) -> some View {
@@ -92,9 +91,5 @@ private struct CardCover: View {
             workspace.finishClosingCard()
         }
     }
-}
-
-extension EnvironmentValues {
-    @Entry var topBand: CGFloat = 0
 }
 #endif

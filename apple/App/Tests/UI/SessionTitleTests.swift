@@ -94,7 +94,7 @@ struct SessionTitleTests {
         await app.services.consumeHistory(AsyncStream { $0.yield(.updated(titled)); $0.finish() }, agent: .claudeCode)
         _ = try await eventually(store, shown) { $0 == "排查登录页白屏" }
         let board = try await TaskBoard.read(from: store)
-        #expect(board.advancing.first { $0.id == "session/c9" }?.loose?.name(at: app.services.speech) == "排查登录页白屏")
+        #expect(board.advancing.first { $0.id == .session("c9") }?.loose?.name(at: app.services.speech) == "排查登录页白屏")
 
         app.bridge.update(live.id) { $0.name = "登录白屏" }
         _ = try await eventually(store, shown) { $0 == "登录白屏" }

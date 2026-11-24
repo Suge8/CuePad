@@ -26,7 +26,7 @@ struct SessionTaskTests {
         try await bridge(.appeared(session))
 
         let empty = try await TaskBoard.read(from: store)
-        #expect(empty.todo.isEmpty && empty.advancing.map(\.id) == ["session/s1"])
+        #expect(empty.todo.isEmpty && empty.advancing.map(\.id) == [.session("s1")])
         let envelope = CueEnvelope.render(try await CueEnvelope.read(
             from: store, wake: .idle, changes: [], now: .now, host: TestApp.hostID, language: nil, retrying: nil, related: []))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 他自己来 · 空闲"))

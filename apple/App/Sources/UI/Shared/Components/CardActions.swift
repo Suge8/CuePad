@@ -92,7 +92,7 @@ extension CardMenu.Item {
     func run(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> (() -> Void)? {
         let id = card.id
         switch self {
-        case .complete: return { workspace.attempt { try await workspace.confirmComplete(card) } }
+        case .complete: return { workspace.attempt { try await workspace.confirmComplete(id) } }
         case .reopen: return { workspace.attempt { try await workspace.reopen(id) } }
         case .archive: return { workspace.attempt { try await workspace.archive(id) } }
         case .pin, .unpin:

@@ -3,9 +3,9 @@ import SwiftUI
 extension View {
     func boardStage() -> some View { modifier(BoardStage()) }
 
-    func boardDraggable(_ id: UUID, session: String? = nil) -> some View { cardDraggable(.task(id), session: session, shape: .rect(cornerRadius: Radius.card)) }
-
-    func boardDraggable(session: String) -> some View { cardDraggable(.session(session), session: session, shape: .rect(cornerRadius: Radius.card)) }
+    func boardDraggable(_ card: DraggedCard, flight: TaskBoard.Flight, session: String?) -> some View {
+        cardDraggable(card, flight: flight, session: session, shape: .rect(cornerRadius: Radius.card))
+    }
 }
 
 private struct BoardStage: ViewModifier {
