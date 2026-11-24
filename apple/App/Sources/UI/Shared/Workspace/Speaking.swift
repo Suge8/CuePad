@@ -101,14 +101,21 @@ extension Workspace {
     private func releaseWhenGone(_ id: UUID) {
         let store = services.store, launching = launching
         services.follow { [weak self] in
-            do {
-                for try await held in store.observe({ try $0.holdsSpeech(id) }) where !held || !launching.holds(id) {
-                    launching.release(id)
-                    return
-                }
-            } catch where !Task.isCancelled {
-                self?.fail(error)
-            } catch {}
+            let gone = Task { @MainActor in
+                do {
+                    for try await held in store.observe({ try $0.holdsSpeech(id) }) where !held { break }
+                } catch where !Task.isCancelled {
+                    self?.fail(error)
+                } catch {}
+                launching.release(id)
+            }
+            await withTaskCancellationHandler {
+                for await pending in Observations({ launching.holds(id) }) where !pending { break }
+            } onCancel: {
+                gone.cancel()
+            }
+            gone.cancel()
+            await gone.value
         }
     }
 }
