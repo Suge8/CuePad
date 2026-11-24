@@ -14,7 +14,7 @@ extension BoardMoves {
         enum Phase { case dragging, settling, pending, landing, leaving }
 
         let card: DraggedCard
-        var id: String
+        var id: TaskBoard.Flight
         let size: CGSize
         var phase = Phase.dragging
         var lane: TaskBoard.Column?
@@ -47,9 +47,8 @@ extension BoardMoves {
     private static let relayout = Duration.milliseconds(50)
     private static let patience = 6
     private static let reach: CGFloat = 36
-    static let well = "well"
 
-    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? {
+    private func laid(of id: TaskBoard.Flight) -> (lane: TaskBoard.Column, frame: CGRect)? {
         if shown[id] != nil { return frames[id] }
         for stack in stacks.values where !stack.frame.isNull {
             guard let cell = stack.ids.firstIndex(of: id) else { continue }
@@ -58,7 +57,7 @@ extension BoardMoves {
         return nil
     }
 
-    func frame(of id: String) -> CGRect? {
+    func frame(of id: TaskBoard.Flight) -> CGRect? {
         guard let card = laid(of: id), let lane = lanes[card.lane] else { return nil }
         return card.frame.offsetBy(dx: lane.minX, dy: lane.minY)
     }
@@ -67,19 +66,16 @@ extension BoardMoves {
         if let held, held.phase != .dragging { clear() }
     }
 
-    func card(at point: CGPoint, among cards: [(flight: String, card: DraggedCard)]) -> (flight: String, card: DraggedCard)? {
+    func card(at point: CGPoint, among cards: [(flight: TaskBoard.Flight, card: DraggedCard)]) -> (flight: TaskBoard.Flight, card: DraggedCard)? {
         cards.first { frame(of: $0.flight)?.contains(point) == true }
     }
 
     // MARK: 系统拖放
 
-    func hover(_ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool) {
+    func hover(_ card: DraggedCard, flight: TaskBoard.Flight, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool) {
         retire()
         guard float == nil, let area = areas[column] else { return }
-        if held == nil {
-            let id = board.flight(of: card) ?? ""
-            held = Held(card: card, id: id, size: laid(of: id)?.frame.size ?? .zero)
-        }
+        if held == nil { held = Held(card: card, id: flight, size: laid(of: flight)?.frame.size ?? .zero) }
         guard held?.card == card, held?.phase == .dragging else { return }
         let point = CGPoint(x: area.minX + local.x, y: area.minY + local.y)
         aim(card, at: point, in: column, on: board, row: row)
@@ -99,9 +95,10 @@ extension BoardMoves {
     }
 
     func drop(
-        _ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool, face: (String) -> AnyView?
+        _ card: DraggedCard, flight: TaskBoard.Flight, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool,
+        face: (TaskBoard.Flight) -> AnyView?
     ) -> TaskBoard.Drop? {
-        hover(card, at: local, in: column, on: board, row: row)
+        hover(card, flight: flight, at: local, in: column, on: board, row: row)
         guard let held, held.card == card, held.phase == .dragging, let area = areas[column] else { return nil }
         let drop = board.drop(card, into: column, at: slot)
         let spot = CGPoint(x: area.minX + local.x, y: area.minY + local.y)
@@ -121,7 +118,7 @@ extension BoardMoves {
 
     // MARK: 按住即拖
 
-    func lift(_ card: DraggedCard, id: String, at finger: CGPoint, face: AnyView, row: Bool) -> Bool {
+    func lift(_ card: DraggedCard, id: TaskBoard.Flight, at finger: CGPoint, face: AnyView, row: Bool) -> Bool {
         retire()
         guard held == nil, let frame = frame(of: id) else { return false }
         point = CGPoint(x: frame.midX, y: frame.midY)
@@ -197,7 +194,7 @@ extension BoardMoves {
         if !row {
             wanted = others.last { $0.frame.midY < pointer.y }.map { $0.index + 1 } ?? others.first?.index ?? 0
         } else if let near = others.min(by: { far($0.frame) < far($1.frame) }) {
-            let well = laid(of: home == nil ? Self.well : "task/\(id)")?.frame
+            let well = laid(of: home == nil ? .well : .task(id))?.frame
             if let current = slot ?? home {
                 if let well, far(well) <= far(near.frame) { return current }
                 wanted = current <= near.index ? near.index + 1 : near.index
@@ -281,7 +278,7 @@ extension BoardMoves {
         settle()
     }
 
-    func takeoff(_ moved: [String: TaskBoard.Column], lands: (String) -> TaskBoard.Column?) -> (id: String, frame: CGRect)? {
+    func takeoff(_ moved: [TaskBoard.Flight: TaskBoard.Column], lands: (TaskBoard.Flight) -> TaskBoard.Column?) -> (id: TaskBoard.Flight, frame: CGRect)? {
         guard let held, held.phase == .pending, moved[held.id] != nil else { return nil }
         guard float != nil, !reduceMotion, let column = lands(held.id) else {
             let frame = hand

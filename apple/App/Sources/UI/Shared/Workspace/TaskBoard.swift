@@ -27,6 +27,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
+    enum Flight: Hashable, Sendable {
+        case task(UUID), session(String), well
+    }
+
     struct Item: Identifiable, Sendable, Equatable {
         var task: Card
         var project: Project?
@@ -36,14 +40,19 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var reaching = false
         var shot: CueShown?
         var id: UUID { task.id }
-        var flight: String { "task/\(id)" }
+        var flight: Flight { .task(id) }
     }
 
     struct Work: Identifiable, Sendable, Equatable {
         var work: CueWork
         var item: Item?
         var loose: SessionListItem?
-        var id: String { work.id }
+        var id: Flight {
+            switch work {
+            case .task(let board): .task(board.id)
+            case .session(let session): .session(session.sessionID)
+            }
+        }
         var agent: SessionListItem? { item?.agent ?? loose }
 
         var project: UUID {
@@ -57,7 +66,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     static func home(_ session: SessionState) -> UUID { session.projectID ?? Project.defaultID }
 
     struct Held: Identifiable, Sendable, Equatable {
-        var id: String
+        var id: Flight
         var session: SessionState
         var item: Item?
         var deciding: Bool
@@ -84,41 +93,38 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var flown: Set<UUID> = []
         return try waiting.map { session, task, deciding in
             let item = try task.flatMap { try store.card($0) }.map(item)
-            let id = item.flatMap { flown.insert($0.id).inserted ? $0.flight : nil } ?? loose + session.sessionID
+            let id = item.flatMap { flown.insert($0.id).inserted ? $0.flight : nil } ?? .session(session.sessionID)
             return Held(id: id, session: session, item: item, deciding: deciding)
         }
     }
 
-    func moved(from before: TaskBoard) -> [String: Column] {
+    func moved(from before: TaskBoard) -> [Flight: Column] {
         let was = before.columns
         return columns.reduce(into: [:]) { moved, card in
             if let old = was[card.key], old != card.value { moved[card.key] = old }
         }
     }
 
-    func renamed(_ id: String, from before: TaskBoard) -> (id: String, from: Column, to: Column)? {
+    func renamed(_ id: Flight, from before: TaskBoard) -> (id: Flight, from: Column, to: Column)? {
         let now = columns, was = before.columns
-        guard now[id] == nil, let old = was[id], id.hasPrefix(Self.loose) else { return nil }
-        let session = String(id.dropFirst(Self.loose.count))
+        guard case .session(let session) = id, now[id] == nil, let old = was[id] else { return nil }
         let new = (todo + advancing.compactMap(\.item) + held.compactMap(\.item) + done + earlier).first {
             was[$0.flight] == nil && ($0.task.piSessionID == session || $0.task.formerSessionIDs.contains(session))
         }
         return new.flatMap { new in now[new.flight].map { (new.flight, old, $0) } }
     }
 
-    private static let loose = "session/"
+    func column(of flight: Flight) -> Column? { columns[flight] }
 
-    func column(of flight: String) -> Column? { columns[flight] }
-
-    func entered(from before: TaskBoard) -> Set<String> {
+    func entered(from before: TaskBoard) -> Set<Flight> {
         Set(columns.keys).symmetricDifference(before.columns.keys)
     }
 
-    private var columns: [String: Column] {
+    private var columns: [Flight: Column] {
         Dictionary(Column.allCases.flatMap { column in flights(column).map { ($0, column) } }) { first, _ in first }
     }
 
-    func flights(_ column: Column) -> [String] {
+    func flights(_ column: Column) -> [Flight] {
         switch column {
         case .todo: todo.map(\.flight)
         case .advancing: advancing.map(\.id)
@@ -127,17 +133,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
-    func draggables(_ column: Column) -> [(flight: String, card: DraggedCard)] {
+    func draggables(_ column: Column) -> [(flight: Flight, card: DraggedCard)] {
         switch column {
         case .todo: todo.map { ($0.flight, .task($0.id)) }
         case .advancing: advancing.map { ($0.id, $0.item.map { .task($0.id) } ?? .session($0.loose?.state.sessionID ?? "")) }
         case .waiting: held.map { ($0.id, $0.item.map { .task($0.id) } ?? .session($0.session.sessionID)) }
         case .done: []
         }
-    }
-
-    func flight(of card: DraggedCard) -> String? {
-        Column.allCases.lazy.flatMap(draggables).first { $0.card == card }?.flight
     }
 
     func count(_ column: Column) -> Int {

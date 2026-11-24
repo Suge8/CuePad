@@ -39,7 +39,7 @@ extension TaskFlowTests {
         try await store.bindSession("voice", to: id)
         #expect(try await store.card(id) == first)
         #expect(try await store.deliveryRequests().isEmpty)
-        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["task/\(id.uuidString)"])
+        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == [.task(id)])
         switch action {
         case "archive": try await workspace.archive(id)
         case "trash": try await workspace.trash(id)

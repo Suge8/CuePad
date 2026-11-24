@@ -29,10 +29,15 @@ struct BoardColumn: View {
             .background { Color.clear.onGeometryChange(for: CGRect.self) { $0.frame(in: .named(BoardMoves.space)) } action: { moves?.areas[column] = $0 } }
             // 一列只这一个落点：卡上不另挂（里外两层互相抢，底时有时无）。不接的卡（`accepts`）拖过来不亮，放下也不动
             .cardDrop(isEnabled: drags?.current.map(accepts) == true, hover: { point in
-                if let point, let card = drags?.current { moves?.hover(card, at: point, in: column, on: board, row: isRow) } else { moves?.leave(column) }
+                if let point, let card = drags?.current, let flight = drags?.flight {
+                    moves?.hover(card, flight: flight, at: point, in: column, on: board, row: isRow)
+                } else {
+                    moves?.leave(column)
+                }
             }) { card, point in
                 // 另一根手指正拎着一张时这一下不进拖动的状态，照样办：系统已经当它接下了，不能放下了没动静
-                if let drop = moves?.drop(card, at: point, in: column, on: board, row: isRow, face: face) ?? board.drop(card, into: column, at: nil) { workspace.drop(drop) }
+                let drop = drags?.flight.flatMap { moves?.drop(card, flight: $0, at: point, in: column, on: board, row: isRow, face: face) }
+                if let drop = drop ?? board.drop(card, into: column, at: nil) { workspace.drop(drop) }
             }
             #if os(iOS)
             .background { lift }
@@ -139,8 +144,8 @@ struct BoardColumn: View {
         case .todo:
             ForEach(todoCells) { cell in
                 switch cell {
-                case .card(let item): card(item).boardDraggable(item.id, session: item.agent?.state.sessionID)
-                case .well(let height): BoardWell().frame(height: isRow ? nil : height).boardFlight(BoardMoves.well)
+                case .card(let item): card(item).boardDraggable(.task(item.id), flight: item.flight, session: item.agent?.state.sessionID)
+                case .well(let height): BoardWell().frame(height: isRow ? nil : height).boardFlight(.well)
                 }
             }
             if board.todo.isEmpty { empty("没有待办") }
@@ -152,17 +157,19 @@ struct BoardColumn: View {
                     Color.clear.frame(height: 0)
                 case .work(let work, let moves):
                     if let item = work.item {
-                        card(item, moves: moves).boardDraggable(item.id, session: item.agent?.state.sessionID)
+                        card(item, moves: moves).boardDraggable(.task(item.id), flight: work.id, session: item.agent?.state.sessionID)
                     } else if let agent = work.loose {
-                        sessionFace(agent, of: work, moves: moves).boardDraggable(session: agent.state.sessionID).boardFlight(work.id).benchSpot(work.id)
+                        let session = agent.state.sessionID
+                        sessionFace(agent, of: work, moves: moves).boardDraggable(.session(session), flight: work.id, session: session).boardFlight(work.id).benchSpot(work.id)
                     }
                 }
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
             ForEach(board.held) { held in
-                let card = waitFace(held).boardFlight(held.id).benchSpot(held.id)
-                if let item = held.item { card.boardDraggable(item.id, session: held.session.sessionID) } else { card.boardDraggable(session: held.session.sessionID) }
+                let session = held.session.sessionID
+                waitFace(held).boardFlight(held.id).benchSpot(held.id)
+                    .boardDraggable(held.item.map { .task($0.id) } ?? .session(session), flight: held.id, session: session)
             }
             if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
@@ -191,7 +198,7 @@ struct BoardColumn: View {
         BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
     }
 
-    private func face(_ flight: String) -> AnyView? {
+    private func face(_ flight: TaskBoard.Flight) -> AnyView? {
         if let item = board.todo.first(where: { $0.flight == flight }) { return AnyView(taskFace(item, in: .todo, moves: false)) }
         if let work = board.advancing.first(where: { $0.id == flight }) {
             return work.item.map { AnyView(taskFace($0, in: .advancing, moves: false)) } ?? work.loose.map { AnyView(sessionFace($0, of: work, moves: false)) }
@@ -277,10 +284,15 @@ private enum AdvancingSlot: Identifiable {
     case gap(pinned: Bool, BoardPulse.Tier)
     case work(TaskBoard.Work, moves: Bool)
 
-    var id: String {
+    enum Key: Hashable {
+        case gap(pinned: Bool, BoardPulse.Tier)
+        case work(TaskBoard.Flight)
+    }
+
+    var id: Key {
         switch self {
-        case .gap(let pinned, let tier): "gap/\(pinned)/\(tier)"
-        case .work(let work, _): work.id
+        case .gap(let pinned, let tier): .gap(pinned: pinned, tier)
+        case .work(let work, _): .work(work.id)
         }
     }
 

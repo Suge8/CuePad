@@ -10,6 +10,14 @@ nonisolated enum DraggedCard: Hashable, Codable, Sendable, Transferable {
     var idea: UUID? { if case .idea(let id) = self { id } else { nil } }
     var session: String? { if case .session(let id) = self { id } else { nil } }
 
+    fileprivate var flight: TaskBoard.Flight? {
+        switch self {
+        case .task(let id): .task(id)
+        case .session(let id): .session(id)
+        case .idea: nil
+        }
+    }
+
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .cuepadCard)
     }
@@ -33,6 +41,8 @@ extension UTType {
 @Observable
 final class CardDrags {
     fileprivate(set) var current: DraggedCard?
+    /// 看板上拖的是哪一张：同一任务的几张等你卡拖起来是同一个 `current`。
+    fileprivate(set) var flight: TaskBoard.Flight?
 }
 
 extension EnvironmentValues {
@@ -45,8 +55,8 @@ extension View {
     /// 不给 `shape` 时预览是直角矩形，圆角的卡与行四角露出直角的底。
     /// `chip`：没有底的行（任务行、"更早"的行）给它的标题。手机拖起时系统把整行缩小、垫一块直角的白底，改拖一张写着标题的小纸（`DragChip`）；
     /// 自己有纸的卡不给，拖的就是它自己。Mac 拖的是行原样的影子，不用。
-    func cardDraggable(_ card: DraggedCard, session: String? = nil, chip: String? = nil, shape: some Shape) -> some View {
-        modifier(CardDraggable(card: card, session: session, chip: chip, shape: shape))
+    func cardDraggable(_ card: DraggedCard, flight: TaskBoard.Flight? = nil, session: String? = nil, chip: String? = nil, shape: some Shape) -> some View {
+        modifier(CardDraggable(card: card, flight: flight ?? card.flight, session: session, chip: chip, shape: shape))
     }
 
     func cardDrop(isEnabled: Bool = true, hover: @escaping (CGPoint?) -> Void = { _ in }, perform: @escaping (DraggedCard, CGPoint) -> Void) -> some View {
@@ -96,6 +106,7 @@ private struct CardDrop: ViewModifier {
 
 private struct CardDraggable<S: Shape>: ViewModifier {
     let card: DraggedCard
+    let flight: TaskBoard.Flight?
     let session: String?
     let chip: String?
     let shape: S
@@ -129,8 +140,8 @@ private struct CardDraggable<S: Shape>: ViewModifier {
             .onDragSessionUpdated { session in
                 guard let drags else { return }
                 switch session.phase {
-                case .initial, .active: if drags.current != card { drags.current = card }
-                default: if drags.current == card { drags.current = nil }
+                case .initial, .active: if drags.current != card || drags.flight != flight { (drags.current, drags.flight) = (card, flight) }
+                default: if drags.current == card, drags.flight == flight { (drags.current, drags.flight) = (nil, nil) }
                 }
             }
     }
