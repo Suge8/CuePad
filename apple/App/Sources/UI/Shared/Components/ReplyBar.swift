@@ -77,14 +77,11 @@ struct ReplyBar: View {
                 }
             }
         }
-        .onAppear {
-            let landed = workspace.takeReplyLanding(session.id) && active && !covered
-            focused = (takesAsk() || landed) && composes || DebugHooks.preset.modelMenu
-        }
+        .onAppear { focused = takesAsk() && composes && active && !covered || DebugHooks.preset.modelMenu }
         .onChange(of: workspace.replyFocus) { if takesAsk(), composes { focused = true } }
     }
 
-    /// 点名要这一条接焦点的请求（`Workspace.replyFocus`）。同落下来的焦点一样只在提出那一下认（这一条摆出来、摆着时被点名）：
+    /// 点名要这一条接焦点的请求（`Workspace.replyFocus`）。只在提出那一下认（这一条摆出来、摆着时被点名）：
     /// 这时在等作答、没有输入框，就作废，不留到答完题、别处正打着字时再生效。
     private func takesAsk() -> Bool {
         guard workspace.replyFocus == session.id else { return false }
