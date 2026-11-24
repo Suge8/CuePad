@@ -101,7 +101,7 @@ private struct ScopeButton: View {
 }
 
 private struct QuotaButton: View {
-    @State private var open = DebugHooks.preset.quotaOpen
+    @State private var open = DebugHooks.args.layoutOpts.quotaOpen
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 

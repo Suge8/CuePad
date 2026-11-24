@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """App Store Connect API 的最小客户端：用 ~/.appstoreconnect/cuepad.env 里的密钥签 JWT。
-用法：asc.py get <路径> | post <路径> <JSON> ；只输出响应，绝不输出密钥。asc.py env 打印凭据文件的路径（默认如下，CUEPAD_ASC_ENV 换）。
+用法：asc.py get <路径> | post <路径> <JSON> ；只输出响应，绝不输出密钥。asc.py env 打印凭据文件的路径。
 """
 import base64, json, os, subprocess, sys, time, urllib.error, urllib.request
 
 sys.dont_write_bytecode = True
 
-ENV = os.path.expanduser(os.environ.get("CUEPAD_ASC_ENV", "~/.appstoreconnect/cuepad.env"))
+ENV = os.path.expanduser("~/.appstoreconnect/cuepad.env")
 
 
 def load_env():

@@ -18,11 +18,7 @@ extension MacSyncTests {
         _ = try await mac.runtimeRecorder(on: TestApp.hostID)
         let recording = Task { try await mac.services.consumeSessionChanges(changes) }
         for side in [mac, phone] { side.services.startSync() }
-        defer {
-            recording.cancel()
-            mac.bridge.stop()
-            for side in [mac, phone] { side.services.cancelBackgroundWork() }
-        }
+        defer { recording.cancel() }
         try await mac.services.executor.start()
         let ext = try await mac.host.connect("fast", cwd: mac.directory.path, supportsFast: true)
         defer { ext.close(bye: "quit") }
@@ -74,7 +70,6 @@ extension MacSyncTests {
         let app = try folder("app")
         let indexed = try await indexed("s1", cwd: app)
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestConfig(
             SessionConfig(name: "登录重试"), to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
@@ -90,7 +85,6 @@ extension MacSyncTests {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
-        defer { services.cancelBackgroundWork() }
         let task = try await services.store.createTask("上线", in: project.id)
         let step = try await services.store.createTask("备份数据库\n先把库备份一份", under: task.id)
 
@@ -126,7 +120,6 @@ extension MacSyncTests {
         let directory = try folder("proj")
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(directory.path, for: project.id)
-        defer { services.cancelBackgroundWork() }
         let store = services.store
         try await services.executor.start()
         let request = try await store.requestLaunch(

@@ -48,7 +48,7 @@ struct EditorHost: NSViewRepresentable {
         context.coordinator.watching = AttachmentLooks.follow(services, in: view.textView)
         view.scrollerStyle = .overlay
         handle.textView = view.textView
-        if let range = DebugHooks.preset.editorSelection {
+        if let range = DebugHooks.args.selection {
             DebugHooks.later {
                 view.window?.makeFirstResponder(view.textView)
                 view.textView.setSelectedRange(range)

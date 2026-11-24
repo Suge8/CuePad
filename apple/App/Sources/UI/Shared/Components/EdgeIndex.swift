@@ -47,7 +47,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
         self.mark = mark
         self.words = words
         self.overflow = overflow
-        _phase = State(initialValue: DebugHooks.preset.indexOpen == edge ? .pinned : .shut)
+        _phase = State(initialValue: DebugHooks.args.indexEdge == edge ? .pinned : .shut)
     }
 
     private var expanded: Bool { phase != .shut }

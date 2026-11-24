@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）。从 Xcode 编出来直接打开的也弹（克隆仓库自己编的人，开发库就是他的库）；
         // 脚本起的实例（截图、录屏、测量）不弹，免得盖住要拍的画面，验收这一次时给 -CuePadOfferSetup
-        if !DebugHooks.scripted || DebugHooks.offersSetup { workspace.offerSetup() }
+        if !DebugHooks.scripted || DebugHooks.args.offerSetup { workspace.offerSetup() }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {

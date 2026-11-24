@@ -51,7 +51,6 @@ extension TaskFlowTests {
             id: "interleaved.1", sessionID: "interleaved", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory,
             state: .thinking, stateSince: .now)
         rig.bridge.attach(session, via: link)
-        defer { rig.bridge.stop(); services.cancelBackgroundWork() }
         try await services.executor.start()
         #expect(try await store.outcome(of: end).status == .known(.succeeded))
         #expect(link.handed)

@@ -7,7 +7,7 @@ import Foundation
 extension AppServices {
     func holdsSteps(of session: SessionState) -> Bool {
         #if os(macOS)
-        session.hostID == speech.localHost || DebugHooks.preset.demoMac
+        session.hostID == speech.localHost || DebugHooks.args.demoMac
         #else
         false
         #endif

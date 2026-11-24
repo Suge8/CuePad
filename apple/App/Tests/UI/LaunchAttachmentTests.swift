@@ -20,11 +20,7 @@ struct LaunchAttachmentTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try await mac.services.store.setDirectory(folder.path, for: Project.defaultID)
         for side in [mac, phone] { side.services.startSync() }
-        defer {
-            for ext in mac.host.extensions.values { ext.close(bye: "quit") }
-            mac.bridge.stop()
-            for side in [mac, phone] { side.services.cancelBackgroundWork() }
-        }
+        defer { for ext in mac.host.extensions.values { ext.close(bye: "quit") } }
         try await mac.services.executor.start()
         let changes = mac.bridge.changes()
         let recording = Task { try await mac.services.consumeSessionChanges(changes) }
@@ -74,11 +70,6 @@ struct LaunchAttachmentTests {
             }
         }
         try await mac.services.executor.start()
-        defer {
-            mac.bridge.stop()
-            mac.services.cancelBackgroundWork()
-            phone.services.cancelBackgroundWork()
-        }
         let missing = AttachmentKey.make(hash: String(repeating: "a", count: 64), format: "png")
         let draft = ComposerDraft(text: "看这张截图", files: [DraftFile(key: missing, name: "")])
         func launch(replacing previous: SessionLaunch?) async throws -> SessionLaunch {

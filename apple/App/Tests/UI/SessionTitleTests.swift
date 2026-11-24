@@ -36,7 +36,6 @@ struct SessionTitleTests {
     }
 
     @Test func ClaudeCode自己起的名字当会话名_你改过的名字为准() async throws {
-        defer { app.services.cancelBackgroundWork() }
         let auto: [String: Any] = ["type": "ai-title", "aiTitle": "排查登录页白屏", "sessionId": "c1"]
         #expect(try await indexed(try claude("c1", [auto]), .claudeCode, id: "c1") == "排查登录页白屏")
 
@@ -48,7 +47,6 @@ struct SessionTitleTests {
     }
 
     @Test func Codex与Grok的会话名在旁边的文件里_照样读到() async throws {
-        defer { app.services.cancelBackgroundWork() }
         let codexHome = app.directory.appending(path: "codex")
         let rollout = codexHome.appending(path: "sessions/2026/11/06/rollout-2026-11-06T10-00-00-019ceba8-70da-7553-bd8c-d582636e029d.jsonl")
         let at = Self.stamp.format(.now)
@@ -73,7 +71,6 @@ struct SessionTitleTests {
     }
 
     @Test func 在线会话的名字只在文件里_读到后补上_不倒回接入报来的改名() async throws {
-        defer { app.services.cancelBackgroundWork() }
         let events = app.bridge.changes()
         let consume = Task { try await app.services.consumeSessionChanges(events) }
         defer { await consume.stop() }
@@ -108,7 +105,6 @@ struct SessionTitleTests {
         _ = await consume.result
     }
     @Test func 只有旁边存名字的文件变了_名字照样跟上_重开后也是() async throws {
-        defer { app.services.cancelBackgroundWork() }
         let paths = AgentPaths(pi: app.piPaths, environment: app.agentHomes)
         let file = GrokRuntime.sessionFile(in: paths.home(of: .grok), cwd: app.directory.path, id: "g2")
         try Self.lines([["timestamp": Date.now.timeIntervalSince1970, "method": "session/update", "params": [

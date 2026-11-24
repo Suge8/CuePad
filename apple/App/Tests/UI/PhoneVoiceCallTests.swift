@@ -7,7 +7,6 @@ import Testing
 @Suite(.releasesLibraries, .serialized) @MainActor struct PhoneVoiceCallTests {
     @Test func cancelledCommandLateAckMustNotHangUp() async throws {
         let (app, voice, signal, media) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services), session = try #require(voice.session)
         let task = Task { try await workspace.performVoice(.recover(.recorded(message: UUID()))) }
         try await eventually("command submitted") { signal.sent.contains { if case .command = $0 { true } else { false } } }
@@ -21,7 +20,7 @@ import Testing
 
     @Test func commandRejectionSettlesOnlyItsCommandDuringCurrentMedia() async throws {
         let (app, voice, signal, media) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
+        defer { withExtendedLifetime(app) {} }
         let firstID = UUID(), secondID = UUID(), session = try #require(voice.session)
         let first = Task { try await voice.command(.recover(request: .recorded(message: UUID())), id: firstID) }
         let second = Task { try await voice.command(.recover(request: .recorded(message: UUID())), id: secondID) }
@@ -41,7 +40,6 @@ import Testing
 
     @Test func scopeOwnedConnectedFailureStillSendsHangup() async throws {
         let app = TestApp(), signal = FakeVoiceSignaling(), media = FakeVoiceMedia()
-        defer { app.services.cancelBackgroundWork() }
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
         let voice = VoiceService(services: app.services, signaling: signal, makeMedia: { media })
         app.services.voice = voice
@@ -58,7 +56,6 @@ import Testing
     @Test func oldSessionSignalsCannotTouchTheNewCall() async throws {
         var nextMedia = FakeVoiceMedia()
         let (app, voice, signal, media) = try await connectedPhone(makeMedia: { nextMedia })
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let old = try #require(voice.session), callback = media.onEvent
         let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: signal.local, recipient: signal.peer, session: old, sequence: 1, expiresAtMilliseconds: 1, purpose: .media)
@@ -76,7 +73,6 @@ import Testing
 
     @Test func connectionTimeoutMustNotifyPeerWithRealReason() async throws {
         let app = TestApp(), signal = FakeVoiceSignaling(), media = FakeVoiceMedia()
-        defer { app.services.cancelBackgroundWork() }
         try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = "mac-audit" }
         app.services.voice = VoiceService(services: app.services, signaling: signal, makeMedia: { media })
         let workspace = Workspace(services: app.services)
@@ -88,7 +84,6 @@ import Testing
 
     @Test func backgroundKeepsTheCall() async throws {
         let (app, _, signal, media) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         await app.services.prepareForBackground()
         #expect(!media.closing)
@@ -102,7 +97,6 @@ import Testing
 
     @Test func mediaEndDoesNotCancelPendingBusinessAndDisconnectDoesNotResend() async throws {
         let (app, voice, signal, _) = try await connectedPhone()
-        defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let session = try #require(voice.session), id = UUID(), message = UUID()
         let task = Task { try await voice.command(.recover(request: .recorded(message: message)), id: id) }

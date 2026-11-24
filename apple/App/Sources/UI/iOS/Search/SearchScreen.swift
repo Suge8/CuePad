@@ -47,8 +47,8 @@ struct SearchScreen: View {
             SearchCapsule(query: $query.text, focusRequests: workspace.searchFocusRequests).frame(width: fieldWidth)
         }) { SearchFilterMenu(query: $query) }
         .onAppear {
-            if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
-            if DebugHooks.preset.searchListsSessions { query.kind = .sessions }
+            if query.text.isEmpty { query.text = DebugHooks.args.search ?? "" }
+            if DebugHooks.args.searchListsSessions { query.kind = .sessions }
         }
     }
 

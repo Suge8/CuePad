@@ -18,7 +18,7 @@ struct VoiceStorageFlowTests {
         services.startSync()
         services.startSpeechClock()
         let voice = VoiceFlowFixture(services)
-        defer { voice.call.hangUp(); services.cancelBackgroundWork() }
+        defer { voice.call.hangUp() }
         try await voice.connect()
         let request = try await voice.handoff("离线先保存，接通后交给另一台 Mac")
         #expect(voice.trip(request) == .sending)

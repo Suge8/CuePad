@@ -18,7 +18,7 @@ struct CardPicker: View {
 
     var body: some View {
         content
-            .onAppear { if text.isEmpty { text = DebugHooks.preset.searchText } }
+            .onAppear { if text.isEmpty { text = DebugHooks.args.search ?? "" } }
             .onChange(of: text) { if !TextComposition.isComposing { settled = text } }
             .onChange(of: settled) { pages = 1 }
             .observing(services.store, id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {

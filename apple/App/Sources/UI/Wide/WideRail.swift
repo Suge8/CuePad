@@ -97,7 +97,7 @@ struct RailTopTools: View {
 
 private struct RailQuota: View {
     @Environment(AppServices.self) private var services
-    @State private var detail = BubbleSwitch(open: DebugHooks.preset.quotaOpen)
+    @State private var detail = BubbleSwitch(open: DebugHooks.args.layoutOpts.quotaOpen)
 
     var body: some View {
         QuotaRings(open: detail.open, height: Chrome.control, cell: true) { detail.toggle() }

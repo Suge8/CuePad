@@ -122,7 +122,6 @@ struct AgentIndexingTests {
         try await services.stateRecorder.update(sessionID: hosted, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
         try await services.stateRecorder.end(sessionID: hosted)
         services.start()
-        defer { services.cancelBackgroundWork() }
         func indexed(_ ids: Set<String>) async throws {
             _ = try await eventually(store, { Set(try $0.indexedSessions().filter { $0.agent == .claudeCode }.map(\.id)) }) { $0 == ids }
         }

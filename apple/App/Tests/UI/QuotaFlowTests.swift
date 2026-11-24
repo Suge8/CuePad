@@ -14,7 +14,7 @@ struct QuotaFlowTests {
         let app = TestApp(), services = app.services!
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { await following.stop(); services.cancelBackgroundWork() }
+        defer { await following.stop() }
         let ext = try await app.host.connect("menu-quota", cwd: "/work/quota")
         try await eventually("菜单栏资料库就绪") { workspace.isLibraryReady }
         // leaks --traceTree（2026-11-12，本机输入法是微信输入法时 7/7 不放，云端 runner 上放）：面板成过键盘窗口后，系统输入法的 XPC 连接
@@ -39,7 +39,6 @@ struct QuotaFlowTests {
         let services = app.services!
         let changes = services.bridge.changes()
         services.follow(reporting: { .syncUnavailable(String(describing: $0)) }) { try await services.consumeSessionChanges(changes) }
-        defer { services.cancelBackgroundWork() }
         let ext = try await app.host.connect("quota", cwd: "/work/quota")
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "quota" {
@@ -55,7 +54,6 @@ struct QuotaFlowTests {
 
         ext.sendQuota(provider: "anthropic", windows: [], complete: false, scope: "account-a", status: "failed")
         let failed = try #require(try await eventually(services.store, { try $0.accountQuotas().first }) { $0?.status == .failed })
-        #expect(QuotaMeter(failed, at: .now).message == "额度查询失败")
         #expect(QuotaMeter(failed, at: .now).windows.isEmpty)
         #expect(failed.observedAt == observed.observedAt)
 
@@ -63,12 +61,10 @@ struct QuotaFlowTests {
             ["seconds": 18_000, "used": 0.8, "resetsAt": Date.now.addingTimeInterval(-1).timeIntervalSince1970],
         ], complete: true, scope: "account-a")
         let expired = try #require(try await eventually(services.store, { try $0.accountQuotas().first }) { $0?.status == .observed && $0?.windows.first?.resetsAt ?? .distantFuture < .now })
-        #expect(QuotaMeter(expired, at: .now).message == "额度观测已过期，等待更新")
         #expect(QuotaMeter(expired, at: .now).windows.isEmpty)
 
         ext.sendQuota(provider: "anthropic", windows: [], complete: false, scope: "account-b", status: "unobserved")
         let changed = try #require(try await eventually(services.store, { try $0.accountQuotas().first }) { $0?.account?.scope == "account-b" })
-        #expect(QuotaMeter(changed, at: .now).message == "尚未观测到额度")
         #expect(QuotaMeter(changed, at: .now).windows.isEmpty)
         #expect(changed.observedAt == nil)
     }

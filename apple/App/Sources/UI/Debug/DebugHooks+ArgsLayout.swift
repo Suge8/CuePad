@@ -1,5 +1,3 @@
-#if DEBUG
-
 nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadBeside <会话>`（宽屏）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
@@ -98,4 +96,3 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     /// `-CuePadWindowSize 1280x800`：主窗口尺寸（Mac 内容铺满标题栏，即整窗尺寸）
     let windowSize: String?
 }
-#endif

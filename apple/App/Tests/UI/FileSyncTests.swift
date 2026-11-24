@@ -36,7 +36,6 @@ struct FileSyncTests {
         let services = app.services!
         let files = services.store.files
         services.startSync()
-        defer { services.cancelBackgroundWork() }
 
         try await eventually("记录到了") {
             let small = try await services.store.hasAttachment(smallKey)

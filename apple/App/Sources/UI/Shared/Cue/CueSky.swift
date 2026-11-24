@@ -74,7 +74,7 @@ extension CueSky {
         case dawn, day, dusk, night
 
         init(at moment: Date, dark: Bool, calendar: Calendar = .current) {
-            if let pinned = DebugHooks.preset.cueSky.flatMap(Period.init(rawValue:)) { self = pinned; return }
+            if let pinned = DebugHooks.args.cueOpts.sky.flatMap(Period.init(rawValue:)) { self = pinned; return }
             guard !dark else { self = .night; return }
             self = switch calendar.component(.hour, from: moment) {
             case 5..<9: .dawn

@@ -44,7 +44,7 @@ struct SearchPalette: View {
         panel
             .onChange(of: active, initial: true) {
                 focused = active
-                if active, query.text.isEmpty { query.text = DebugHooks.preset.searchText }
+                if active, query.text.isEmpty { query.text = DebugHooks.args.search ?? "" }
             }
             // 关上时原样淡出（浮窗的退场，`Motion.fade`），淡完才清回空白：当场清的话结果先没了，幕还在淡
             .task(id: active) {

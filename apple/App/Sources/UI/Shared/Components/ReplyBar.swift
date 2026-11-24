@@ -79,7 +79,7 @@ struct ReplyBar: View {
         }
         .onAppear {
             let landed = workspace.takeReplyLanding(session.id) && active && !covered
-            focused = (takesAsk() || landed) && composes || DebugHooks.preset.modelMenu
+            focused = (takesAsk() || landed) && composes || DebugHooks.args.layoutOpts.modelMenu
         }
         .onChange(of: workspace.replyFocus) { if takesAsk(), composes { focused = true } }
     }

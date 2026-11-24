@@ -60,7 +60,7 @@ extension TaskFlowTests {
         try await store.setDirectory(rig.directory.path, for: Project.defaultID)
         let changes = rig.bridge.changes()
         let recording = Task { try await rig.services.consumeSessionChanges(changes) }
-        defer { await recording.stop(); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        defer { await recording.stop() }
         try await rig.services.executor.start()
         let workspace = Workspace(services: rig.services)
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)

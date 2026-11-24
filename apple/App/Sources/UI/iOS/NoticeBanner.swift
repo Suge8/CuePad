@@ -25,7 +25,7 @@ struct NoticeBanner: View {
                 return notice.isError ? .error : .success
             }
             .onChange(of: workspace.services.sessionAlert) { _, alert in
-                guard !DebugHooks.preset.quietAlerts, let alert, workspace.showsAlert(about: alert.session) else { return }
+                guard !DebugHooks.args.layoutOpts.quiet, let alert, workspace.showsAlert(about: alert.session) else { return }
                 workspace.say(alert.text, status: alert.status, link: .session(alert.session), sound: Sound(alert.kind.tone))
             }
             .background { PhoneVoiceEndings() }

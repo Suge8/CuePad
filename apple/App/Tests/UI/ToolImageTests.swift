@@ -12,7 +12,6 @@ import Testing
 struct ToolImageTests {
     @Test func 工具结果带图的一轮_经过下有缩略图_点开全屏_同一张只存一份() async throws {
         let app = TestApp()
-        defer { app.services.cancelBackgroundWork() }
         let store = app.services.store, files = store.files
         let file = app.directory.appending(path: "shots.jsonl"), log = SessionFile(url: file, sessionID: "s", cwd: app.directory.path)
         try log.reset()
@@ -92,7 +91,6 @@ struct ToolImageTests {
     @Test(arguments: [AgentKind.codex, .grok])
     func 别家会话里工具结果的图_同样缩小后挂在那一轮经过下(agent: AgentKind) async throws {
         let app = TestApp()
-        defer { app.services.cancelBackgroundWork() }
         let store = app.services.store, files = store.files
         let shot = app.directory.appending(path: "shot.png")
         try pngData(width: 2400, height: 1200, shade: 0.4).write(to: shot)

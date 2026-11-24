@@ -231,7 +231,7 @@ enum ShortcutText {
 
 private struct CrashRow: View {
     let report: CrashReport
-    @State private var showing = DebugHooks.preset.crashSheet
+    @State private var showing = DebugHooks.args.crashSheet
 
     var body: some View {
         SettingRow(

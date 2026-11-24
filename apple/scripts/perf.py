@@ -24,7 +24,7 @@ interact（-CuePadBench interact）单次交互：逐项量点击回合（动作
   iOS（IOSInteractionBench）：演示库，按"第几次"分开取中位数；"落点"是量完时的根与推入的页。模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，
     掉帧只作参考。长按菜单与手势在进程内没有入口：App 写 AWAIT 名 x y（按）或 AWAIT 名 x y x2 y2 swipe|drag 秒，这里用 axe 真按（长按菜单按住 0.8 秒）、
     真滑、真拖（每秒 60 个移动点）。每次最多等 CUEPAD_INTERACT_SECONDS 秒（默认 300），某一次没写完整次失败、以 1 退出，不出部分结果的表。
-idle：空闲与常驻开销。等就绪后至少静置 CUEPAD_IDLE_SETTLE 秒（默认 5，iOS 演示库首启那条"做完了"的提示 5 秒后收起），再等启动后的收尾做完，
+idle：空闲与常驻开销。等就绪后至少静置 5 秒（iOS 演示库首启那条"做完了"的提示 5 秒后收起），再等启动后的收尾做完，
   量接下来 <秒> 内的唤醒、指令、CPU、能耗与内存（口径见 rusage.py），各次取中位数。等不到安静整次失败；CUEPAD_IDLE_ALLOW_NOISY=1 放行照量，表尾标出。
   CUEPAD_IDLE_BACKGROUND=1（仅 ios）：就绪后切到设置 App，量 CuePad 进后台之后的开销。
 launch：冷启动到首屏。从种子克隆的库（没给 CUEPAD_PERF_SEED 时先写一份演示库留在 library-launch-seed，之后不带演示参数），打开库里记着的那一页；
@@ -46,7 +46,7 @@ from perf_interact import interact_ios, interact_mac  # noqa: E402
 
 
 def idle(app, derived, platform, runs, seconds, extra, sim):
-    settle = float(os.environ.get("CUEPAD_IDLE_SETTLE", 5))
+    settle = 5
     library, ready = f"{derived}/library-idle", f"{derived}/idle-ready"
     rows = []
     for run in range(1, runs + 1):

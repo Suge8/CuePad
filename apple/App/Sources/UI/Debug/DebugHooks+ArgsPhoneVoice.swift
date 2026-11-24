@@ -1,5 +1,3 @@
-#if DEBUG
-
 /// 手机端通话面板的参数。
 /// 键 = `-CuePad` + 前缀「PhoneVoice」 + 字段名（大小写不论）；没给：Bool 为 false、数为 0、可选为 nil。
 nonisolated struct PhoneVoiceArgs: Decodable, DebugArgGroup {
@@ -13,4 +11,3 @@ nonisolated struct PhoneVoiceArgs: Decodable, DebugArgGroup {
     /// `-CuePadPhoneVoiceReplay interactive|normal|rapid|cycle|reverse`：隔离回放通话
     let replay: String?
 }
-#endif

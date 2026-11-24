@@ -130,7 +130,6 @@ struct ReceiptTests {
         let target = try await session(in: store)
         try await store.recordMacPresence(host: "mac-b") { false }
         services.startSync()
-        defer { services.cancelBackgroundWork() }
         try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let workspace = Workspace(services: services)
         let box = services.settings.replyDraftBinding(for: target.id)
@@ -160,7 +159,6 @@ struct ReceiptTests {
         services.startSync()
         services.startSpeechClock()
         services.startLiveSessions()
-        defer { services.cancelBackgroundWork() }
         try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let workspace = Workspace(services: services)
 
@@ -218,7 +216,6 @@ struct ReceiptTests {
         let app = TestApp(timing: clock.timing)
         let services = app.services!
         let store = services.store
-        defer { services.cancelBackgroundWork() }
         func setSync(_ status: SyncStatus) async throws {
             app.sync.emit(SyncState(status: status, issues: []))
             try await eventually("同步状态 \(status)") { services.syncing.state.status == status }
@@ -286,7 +283,6 @@ struct ReceiptTests {
         let cloud = WeakCloud { [clock] in clock.now }
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!, workspace = Workspace(services: app.services)
-        defer { services.cancelBackgroundWork() }
         let target = try await session(in: services.store)
         services.startSync()
         services.startLiveSessions()

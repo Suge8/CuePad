@@ -20,7 +20,6 @@ struct DiagnosticDeliveryTests {
         let services = phone.services!
         for side in [phone, mac] { side.services.startSync() }
         services.startDiagnostics()
-        defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
         let inbox = DiagnosticInbox(directory: mac.directory.appending(path: "DeviceLogs"), sync: try #require(mac.services.sync as? CloudSync))
         let landed = {
             let folders = try FileManager.default.contentsOfDirectory(at: inbox.directory, includingPropertiesForKeys: nil).filter { !$0.lastPathComponent.hasPrefix(".") }
@@ -77,7 +76,6 @@ struct DiagnosticDeliveryTests {
         let mac = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = phone.services!
         for side in [phone, mac] { side.services.startSync() }
-        defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
         let inbox = DiagnosticInbox(directory: mac.directory.appending(path: "DeviceLogs"), sync: try #require(mac.services.sync as? CloudSync))
         await cloud.setUploadsFail(true)
         services.startDiagnostics()
@@ -106,7 +104,6 @@ struct DiagnosticDeliveryTests {
         let mac = TestApp(sync: sync())
         let services = phone.services!
         for side in [phone, mac] { side.services.startSync() }
-        defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
         services.startDiagnostics()
 
         let limit = clock.now.addingTimeInterval(Diagnostics.sendLimit.seconds)

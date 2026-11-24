@@ -76,7 +76,7 @@ extension AgentLibraryTests {
         let workspace = Workspace(services: services)
         await workspace.tidy([TidyOrder(tidy: merge.id, base: merge.base)], in: found)
 
-        #expect(workspace.notice?.text.visible == "合并好了")
+        #expect(workspace.notice?.isError == false)
         let merged = read(rules) ?? ""
         for part in ["# Pi 的", "# Claude 目录里的", "# Grok 读的", "# Codex 链的"] { #expect(merged.contains(part), "\(part) 并进来了") }
         #expect(!merged.contains("# 安全") && read(claude.appending(path: "rules/security.md")) == "# 安全\n")

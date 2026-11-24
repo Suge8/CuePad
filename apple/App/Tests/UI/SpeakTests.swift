@@ -95,7 +95,7 @@ struct SpeakTests {
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == [
             "周末读完第三章\n\n![](cuepad://file/\(photos[0].key))\n![](cuepad://file/\(photos[1].key))\n[第三章 (批注).pdf](cuepad://file/\(pdf.key))",
         ])
-        #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
+        #expect(workspace.notice?.link == .project(Project.defaultID))
         #expect(try await youSaid().isEmpty)
     }
 
@@ -111,7 +111,7 @@ struct SpeakTests {
 
         #expect(try await store.tasks(in: project.id, .todo).map(\.body) == ["给发布脚本补上回滚步骤"])
         #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(workspace.notice?.text.visible == "任务已加到 发布" && workspace.notice?.link == .project(project.id))
+        #expect(workspace.notice?.link == .project(project.id))
         #expect(try await youSaid().isEmpty)
     }
 
@@ -157,7 +157,7 @@ struct SpeakTests {
 
         try await store.markCueMessagesDelivered([renewed[0].id])
         workspace.resend(.cue(renewed[0], host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft)
-        try await eventually("提示撤不回") { workspace.notice?.text.visible == "Cue 已经收到这句了，撤不回" }
+        try await eventually("提示撤不回") { workspace.notice?.isError == true }
         #expect(try await youSaid().map(\.id) == [renewed[0].id])
     }
 

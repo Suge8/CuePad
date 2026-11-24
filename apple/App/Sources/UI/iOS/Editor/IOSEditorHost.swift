@@ -79,7 +79,7 @@ struct IOSEditorHost: UIViewRepresentable {
                 }
             }
         }
-        if let range = DebugHooks.preset.editorSelection {
+        if let range = DebugHooks.args.selection {
             DebugHooks.later(.milliseconds(500)) {
                 view.becomeFirstResponder()
                 view.selectedRange = range

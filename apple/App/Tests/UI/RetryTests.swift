@@ -27,7 +27,6 @@ struct RetryTests {
         #expect(workspace.shown(item).status == .delivery(.inTransit(.sending)))
 
         try await app.services.executor.start()
-        defer { app.services.cancelBackgroundWork() }
         #expect(try await store.outcome(of: request).status == .known(.succeeded))
         #expect(ext.received == ["retry"])
         #expect(try await store.deliveryRequests(toSession: "atlas").count == 1)

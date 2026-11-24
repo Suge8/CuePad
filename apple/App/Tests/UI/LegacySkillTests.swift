@@ -56,7 +56,6 @@ struct LegacySkillTests {
         let notes = app.directory.appending(path: "claude/skills/notes.md")
         try "用户自己的".write(to: notes, atomically: true, encoding: .utf8)
         try await places.claudeSessions()
-        defer { app.services.cancelBackgroundWork() }
 
         _ = try await places.launch()
 
@@ -88,7 +87,6 @@ struct LegacySkillTests {
         }
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: places.skill.path) }
         try await places.claudeSessions()
-        defer { app.services.cancelBackgroundWork() }
 
         #expect(try await places.launch() == [Places.hosted], "终端里开的不读")
         #expect(app.services.settings.connectedAgents.isEmpty)

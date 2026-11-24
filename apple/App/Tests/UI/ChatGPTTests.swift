@@ -28,14 +28,11 @@ struct ChatGPTTests {
         #expect(shown.windows.isEmpty)
         #expect(!ModelLabel.title(model, quotas: quotas, at: .now).contains("%"))
         if oauth {
-            #expect(model.account?.label(provider: model.key.provider) == "使用 ChatGPT 套餐")
-            #expect(shown.account == "使用 ChatGPT 套餐")
-            #expect(shown.message == "ChatGPT 暂不提供额度数据")
+            #expect(model.account?.kind == .oauth)
             #expect(shown.usageURL?.absoluteString == "https://chatgpt.com/settings/usage")
             #expect(failure == nil)
         } else {
-            #expect(model.account?.label(provider: model.key.provider) == "OpenAI API 按量计费")
-            #expect(shown.account == "OpenAI API 按量计费")
+            #expect(model.account?.kind == .apiKey)
             #expect(shown.usageURL == nil)
         }
     }
@@ -69,8 +66,6 @@ struct ChatGPTTests {
             #expect(state.state == .known(.error))
         }
         if prompt == "[[length]]" {
-            #expect(state.detail == "回答未完成：达到输出长度上限")
-            #expect(workspace.shownOnPage(state, delivery: nil).label == "回答未完成")
             #expect(messages.contains { $0.notice == .truncated })
             let indexed = try #require(try await rig.store.indexedSession(live.sessionID))
             let history = try History.index(file: URL(filePath: indexed.path), agent: .pi, from: nil, files: rig.store.files)

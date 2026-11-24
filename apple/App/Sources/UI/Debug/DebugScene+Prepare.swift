@@ -3,6 +3,68 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
+    static func prepare(_ workspace: Workspace) async {
+        let services = workspace.services
+        #if os(macOS)
+        // 窗口在首帧之后才定下尺寸（窗口位置记忆、内容尺寸），这之后再改
+        await Task.wait(for: .milliseconds(100))
+        resizeWindow()
+        #else
+        if args.driveOpts.bench == "interact" { IOSInteractionBench.beginCold() }
+        dumpAccessibilityIfAsked()
+        logAccessibilityFocusIfAsked()
+        if args.layoutOpts.softKeyboard { showSoftwareKeyboard() }
+        fillScreenOnPad()
+        #endif
+        let project = await prepareLibrary(workspace)
+        if args.demoMac { Task { await runDemoMac(services) } }
+        #if os(macOS)
+        if args.sampleCue > 0 { Task { await cueSample(after: .seconds(args.sampleCue), services: services) } }
+        Task { await SyncBench.run(workspace) }
+        Task { await voiceCallIfAsked(workspace) }
+        #else
+        if args.demo {
+            await seedRemote(services)
+            if !["cue", "cuememory", "cueschedules"].contains(scene ?? "") { await seedCue(services) }
+        }
+        Task { await phoneVoiceCallIfAsked(workspace) }
+        if args.noAsks { await settleAsks(services.store) }
+        await IslandBench.run(services)
+        holdForLiveActivity()
+        if args.driveOpts.bench == "interact" {
+            Task { await IOSInteractionBench.run(workspace) }
+            return
+        }
+        #endif
+        presetColumns(services.settings)
+        if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, project) } }
+        await presetBeside(workspace)
+        presetDrawers(workspace)
+        await presetSpeech(workspace)
+        #if os(macOS)
+        openLivePreviewIfAsked(workspace)
+        await reverseWideIfAsked(workspace)
+        let toggleRail: @MainActor @Sendable () -> Void = { send(#selector(AppDelegate.toggleCueSidebar(_:))) }, toggleCue: @MainActor @Sendable () -> Void = { send(#selector(AppDelegate.toggleCueColumn(_:))) }
+        #else
+        await prepareNarrow(workspace)
+        await openLivePhoneIfAsked(workspace)
+        let toggleRail: @MainActor @Sendable () -> Void = { workspace.railExpanded.toggle() }, toggleCue: @MainActor @Sendable () -> Void = { services.settings.cueOpen.toggle() }
+        #endif
+        if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast", toggleRail) } }
+        if let pace = args.layoutOpts.rightCycle { Task { await cycleColumn(fast: pace == "fast", toggleCue) } }
+        #if os(macOS)
+        await voiceLayoutIfAsked(workspace)
+        switch args.driveOpts.bench {
+        case "churn": await benchChurn(workspace)
+        case "interact": await InteractionBench.run(workspace)
+        case "chatscroll": Task { await ChatScrollBench.run() }
+        default: break
+        }
+        await projectFormIfAsked(workspace)
+        #endif
+        await seedRailIfAsked(services)
+    }
+
     static func presetColumns(_ settings: AppSettings) {
         settings.railExpanded = args.layoutOpts.sidebar != "hidden"
         settings.cueOpen = args.cue != "shut"

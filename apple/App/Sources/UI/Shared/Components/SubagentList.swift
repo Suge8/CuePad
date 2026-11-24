@@ -4,7 +4,7 @@ import SwiftUI
 struct SubagentList: View {
     let agents: [SubagentState]
     @Environment(\.palette) private var palette
-    @State private var expanded = DebugHooks.preset.toolsOpen
+    @State private var expanded = DebugHooks.args.layoutOpts.toolsOpen
 
     var body: some View {
         if let summary = SubagentSummary(agents) {

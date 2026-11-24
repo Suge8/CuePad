@@ -29,7 +29,7 @@ struct MacDependencies {
         AppServices.log.notice("库：\(String(describing: location.origin), privacy: .public)，碰真实世界：\(!isolated, privacy: .public)")
         let sockets = PiPaths.socketDirectory(environment: environment, isolatedLibrary: isolated ? location.directory : nil)
         if isolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
-        let agentHome = isolated ? DebugHooks.agentHome : nil
+        let agentHome = isolated ? DebugHooks.args.agentHome : nil
         let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets), environment: agentHome.map { home in
             environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
         } ?? environment)
@@ -46,7 +46,7 @@ struct MacDependencies {
             },
             isolated: isolated))
         let brief = SessionBrief.text(cuepad: commandLineTool.helper)
-        let hostID = isolated ? DebugHooks.hostID ?? Self.isolatedHostID : HostIdentity.current()
+        let hostID = isolated ? DebugHooks.args.host.map { "mac-\($0)" } ?? Self.isolatedHostID : HostIdentity.current()
         if isolated { precondition(hostID != HostIdentity.current(), "隔离实例不能用这台 Mac 的标识（-CuePadHost 换个名字）") }
         return MacDependencies(
             bridge: bridge,
@@ -71,7 +71,7 @@ struct MacDependencies {
             ] },
             pasteboard: .general,
             cue: CueDependencies(
-                launch: { [brain = DebugHooks.cueBrain] runtime, store in
+                launch: { [brain = DebugHooks.args.driveOpts.cueBrain] runtime, store in
                     let executable = if let brain { brain } else { await agents.executable(runtime) }
                     return try await CueLaunch.local(executable: executable, store: store, host: hostID)
                 },

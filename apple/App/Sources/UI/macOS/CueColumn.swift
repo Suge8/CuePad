@@ -22,7 +22,7 @@ struct CueTitle: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pageActive) private var active
-    @State private var open = DebugHooks.preset.cuePanelOpen
+    @State private var open = DebugHooks.args.layoutOpts.cuePanel
     @State private var brain: AgentModelChoice?
 
     static let band: CGFloat = 64

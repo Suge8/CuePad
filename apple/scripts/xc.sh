@@ -42,7 +42,7 @@
 #   xc.sh release <mac|ios> [提交] | device | provision  从主干云端全绿的提交发（在跑就等），两端各发一次；签名见 App/Config/AGENTS.md，描述文件那段全机排队
 #   xc.sh diag [<设备> [all]] | ios crashes [all] | ips <文件…>
 #                                                   真机诊断，只读：读各台设备经 iCloud 送到 Mac 的诊断与日志、拉连着的手机的系统崩溃报告，按发布归档符号化（device_diag.py 头注释）
-# 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugScene+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。
+# 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugHooks+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限、任务时限、结束时的用时行见 _lock.sh；模拟器槽位见 _lock.sh 与 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如 xc.sh real copy 拷的真实库副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，check 的 Mac 整模块编译在 apple/.derived-wmo，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。

@@ -16,7 +16,7 @@ struct VoiceFlowTests {
 
     @Test func 保存请求与Cue接走分开_合批回复不能代替接走回执() async throws {
         let (app, fixture) = try await setup(), store = app.services.store
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         let first = try await fixture.handoff("保存但未接走 A")
         let second = try await fixture.handoff("保存但未接走 B")
@@ -35,7 +35,7 @@ struct VoiceFlowTests {
 
     @Test func 闲聊不派活_重复交接只写一次_乱序与合批回复各归原请求() async throws {
         let (app, fixture) = try await setup(), store = app.services.store
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         fixture.received?(.success(.turn(id: "chat", assistant: false, done: true, text: "今天阳光很好")))
         fixture.received?(.success(.turn(id: "chat-reply", assistant: true, done: true, text: "是啊")))
@@ -58,7 +58,7 @@ struct VoiceFlowTests {
 
     @Test func 未知来源后补为另一入口_撤下结果且不能再说_主动更新仍可播报() async throws {
         let (app, fixture) = try await setup(), store = app.services.store
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         _ = try await fixture.handoff("本次通话请求")
         let foreign = try await store.addCueMessage(.you, text: "另一入口的请求")
@@ -84,7 +84,7 @@ struct VoiceFlowTests {
 
     @Test func 挂断保留晚到结果_新的一通从空记录开始_再说不重新派活_静音等设备确认() async throws {
         let (app, fixture) = try await setup(), store = app.services.store
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         fixture.call.setMuted(true)
         try await eventually("设备与界面都已静音") { fixture.media.muted && fixture.call.isMuted }
@@ -113,7 +113,7 @@ struct VoiceFlowTests {
 
     @Test func 部分发送失败保留文字_重连不重复半条() async throws {
         let (app, fixture) = try await setup(), store = app.services.store
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         fixture.controls[0].failedAfterFirstFragment = true
         let request = try await fixture.handoff("给我长结果")
@@ -140,7 +140,7 @@ struct VoiceFlowTests {
         try await store.updateCueProfile { $0.enabledAt = clock.now; $0.hostID = host }
         app.services.startSpeechClock()
         let fixture = VoiceFlowFixture(app.services)
-        defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         let db = RawDB(app.databaseURL)
         if kind == "failed" {
@@ -215,7 +215,6 @@ struct VoiceFlowTests {
 
     @Test func 同一命令重发回原结果_关闭中不接再说_接走后不能恢复() async throws {
         let app = TestApp(), store = app.services.store, host = TestApp.hostID
-        defer { app.services.cancelBackgroundWork() }
         try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
         let fixture = VoiceFlowFixture(app.services)
         try await fixture.connect()

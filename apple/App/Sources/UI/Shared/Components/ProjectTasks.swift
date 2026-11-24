@@ -5,7 +5,7 @@ struct ProjectTasks: View {
     let data: ProjectPageData
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
-    @State private var fold = DebugHooks.preset.taskFold
+    @State private var fold = DebugHooks.args.taskFold
     @State private var collapses = 0
     @State private var lane: ClosedRange<CGFloat>?
     @State private var doneShown = donePage

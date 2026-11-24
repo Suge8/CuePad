@@ -161,11 +161,7 @@ extension View {
         #if DEBUG
         overlay { DebugScene.entry?.overlay?(workspace) }
         .task {
-            guard await DebugScene.signalReady(workspace.services, {
-                await DebugScene.prepare(workspace)
-                await DebugScene.seedRailIfAsked(workspace.services)
-                await DebugScene.projectFormIfAsked(workspace)
-            }) else { return }
+            guard await DebugScene.signalReady(workspace.services, { await DebugScene.prepare(workspace) }) else { return }
             for drive in DebugScene.drivers(workspace) { Task { await drive() } }
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
@@ -182,10 +178,7 @@ extension View {
             if let sheet = DebugScene.entry?.overlay?(workspace) { sheet.withPalette() }
         }
             .task {
-                guard await DebugScene.signalReady(workspace.services, {
-                    await DebugScene.prepare(workspace)
-                    await DebugScene.seedRailIfAsked(workspace.services)
-                }) else { return }
+                guard await DebugScene.signalReady(workspace.services, { await DebugScene.prepare(workspace) }) else { return }
                 await withTaskGroup { group in
                     for drive in DebugScene.drivers(workspace) { group.addTask { await drive() } }
                 }
@@ -227,18 +220,6 @@ struct DebugStage<Main: View>: View {
 #endif
 
 #if os(macOS) && DEBUG
-private extension DebugScene {
-    /// `projectform` 画面：项目表单经浮层弹出（同真用时，压暗的窗口上居中一块），给了 `-CuePadProject` 是编辑它（项目页垫在下面），否则新建。
-    static func projectFormIfAsked(_ workspace: Workspace) async {
-        guard scene == "projectform" else { return }
-        await running("项目表单") {
-            let asked = args.project == nil ? nil : workspace.currentProject
-            let existing = if let asked { try await workspace.services.store.project(asked) } else { Project?.none }
-            workspace.projectForm = .init(project: existing)
-        }
-    }
-}
-
 private struct BenchSpot<ID: Hashable>: ViewModifier {
     let id: ID
     @Environment(\.pageActive) private var active

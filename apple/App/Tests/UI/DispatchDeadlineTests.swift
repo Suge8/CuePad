@@ -20,11 +20,7 @@ struct DispatchDeadlineTests {
         let atlas = try await mac.host.connect("atlas", cwd: "/work/atlas")
         mac.services.startSync()
         try await mac.services.executor.start()
-        defer {
-            atlas.close(bye: "quit")
-            mac.bridge.stop()
-            for side in [mac, phone] { side.services.cancelBackgroundWork() }
-        }
+        defer { atlas.close(bye: "quit") }
 
         let workspace = Workspace(services: phone.services)
         var box = ComposerDraft(text: "离线时写下的")

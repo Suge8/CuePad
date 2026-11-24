@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// Cue 此刻的几份样例（`-CuePadCueNow <名字>`，`DebugHooks.Preset.cueNow`）：页头、侧栏、小组件与实时活动按同一份画，截各态、录切换用。
+/// Cue 此刻的几份样例（`-CuePadCueNow <名字>`，`DebugHooks.cueNow`）：页头、侧栏、小组件与实时活动按同一份画，截各态、录切换用。
 /// 时刻都从此刻往前推，计时与"x 分钟前"截出来是合理的数。
 enum CueNowSamples {
     private static func ago(_ minutes: Double) -> Date { .now.addingTimeInterval(-minutes * 60) }

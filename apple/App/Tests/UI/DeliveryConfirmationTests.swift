@@ -47,7 +47,7 @@ struct DeliveryConfirmationTests {
     func ACK前后真实用户消息都自动确认_不等回答_不闪未确认(beforeACK: Bool) async throws {
         let app = TestApp(), store = app.services.store
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         if beforeACK {
             let cwd = app.directory.path, session = target.sessionID
             ext.onCommand = { _, command in
@@ -81,7 +81,7 @@ struct DeliveryConfirmationTests {
         defer { gate.continuation.finish() }
         let (first, extA, _) = try await session(app)
         let (second, extB, fileB) = try await session(app)
-        defer { extA.close(bye: "quit"); extB.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { extA.close(bye: "quit"); extB.close(bye: "quit") }
         let cwd = app.directory.path, sessionB = second.sessionID
         extB.onCommand = { _, command in
             if command["t"] as? String == "send" {
@@ -111,7 +111,7 @@ struct DeliveryConfirmationTests {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing), phone = TestApp(timing: clock.timing, host: "phone")
         let (target, ext, _) = try await session(mac)
-        defer { ext.close(bye: "quit"); mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("不依赖接收端活着", to: target, in: mac)
         try await mac.services.executor.start()
         let confirming = try await settledDispatch(request, in: mac)

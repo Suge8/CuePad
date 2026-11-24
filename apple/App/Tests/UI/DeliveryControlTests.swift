@@ -17,7 +17,6 @@ struct DeliveryControlTests {
     func 交接未收尾时Cue再开工不能悄悄再发或再开(mode: DeliveryMode, outcome: (String, Bool)) async throws {
         let (status, fresh) = outcome
         let app = TestApp(), store = app.services.store
-        defer { app.services.cancelBackgroundWork() }
         let host = "mac-delivery"
         try await store.recordMacAgents(host: host, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: [])])
         let recorder = try await app.runtimeRecorder(on: host)
@@ -54,7 +53,7 @@ struct DeliveryControlTests {
             if kind == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .error, detail: "fetch failed", failure: .network)
         let session = try #require(try await store.allSessionStates().first)

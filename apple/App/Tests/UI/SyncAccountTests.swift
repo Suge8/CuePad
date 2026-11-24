@@ -15,7 +15,6 @@ struct SyncAccountTests {
         await cloud.setAccount(.noAccount)
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
-        defer { services.cancelBackgroundWork() }
         try await eventually("提示登录") { services.syncing.state.status == .noAccount }
 
         let card = try await workspace.createCard(body: "没登录时记的", in: Project.defaultID)
@@ -34,7 +33,6 @@ struct SyncAccountTests {
         await cloud.setAccount(.temporarilyUnavailable)
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
-        defer { services.cancelBackgroundWork() }
         try await eventually("提示暂不可用") { services.syncing.state.status == .accountUnavailable }
 
         let card = try await workspace.createCard(body: "认不了时记的", in: Project.defaultID)
@@ -50,7 +48,6 @@ struct SyncAccountTests {
     func 同步着时账号认不清_认清之前不传_还是原账号就放开() async throws {
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
-        defer { services.cancelBackgroundWork() }
         let before = try await workspace.createCard(body: "认不清之前记的", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(name(before)) }
 
@@ -79,7 +76,6 @@ struct SyncAccountTests {
         await cloud.signIn("另一个账号")
         let services = app.relaunch()
         services.startSync()
-        defer { services.cancelBackgroundWork() }
         try await eventually("要你决定") { services.syncing.state.status == .needsDecision(.accountSwitched) }
         let waiting = try await Workspace(services: services).createCard(body: "决定之前记的", in: Project.defaultID)
         await services.upload(waiting.id)
@@ -95,7 +91,6 @@ struct SyncAccountTests {
     func 挂起期间换了账号没收到通知_回到前台先认出来_旧数据不传() async throws {
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
-        defer { services.cancelBackgroundWork() }
         let synced = try await workspace.createCard(body: "同步过的", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(name(synced)) }
 
@@ -115,7 +110,6 @@ struct SyncAccountTests {
     func 挂起前的认账号还在路上_回到前台另认一次() async throws {
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
-        defer { services.cancelBackgroundWork() }
         let synced = try await workspace.createCard(body: "同步过的", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(name(synced)) }
 
