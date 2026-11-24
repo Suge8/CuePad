@@ -165,7 +165,6 @@ private struct YieldsFocusWhenCovered: ViewModifier {
 }
 
 private extension PanelStyle {
-    /// 居中的浮窗与气泡同一种来法：升一小段、淡入（`BubblePlacement.rise`）；走是原路退回，只用淡出那么长：人已经去点下一处了。
     var arrival: Animation {
         switch self {
         case .fullScreen, .bare: Motion.fade
@@ -351,14 +350,14 @@ private struct PanelLayer: View {
             .accessibilityAddTraits(.isModal)
             .padding(Self.margin)
             .opacity(shown.open ? 1 : 0)
-            .offset(y: risen ? 0 : BubblePlacement.rise)
+            .offset(y: risen ? 0 : Motion.Surface.shift)
             .allowsHitTesting(shown.open)
             .disabled(!shown.open)
             .accessibilityHidden(!shown.open)
             .environment(\.pageActive, shown.open)
             .environment(\.pagePrefetch, !shown.open)
             .environment(\.panelCovered, host.covers(shown.id))
-            .transition(shown.style == .sheet && !reduceMotion ? .offset(y: BubblePlacement.rise).combined(with: .opacity) : .opacity)
+            .transition(shown.style == .sheet ? Motion.surface(from: .bottom, reduceMotion: reduceMotion) : .opacity)
     }
 
     private var bubbles: some View {

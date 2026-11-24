@@ -26,7 +26,7 @@ struct GrowPanel<Head: View, Panel: View>: View {
                     .dynamicTypeSize(...FloatingHeaderLayout.largestType)
                     .opacity(givesWay ? 0 : 1)
                     .accessibilityFocused($headFocused)
-                if open { panel.transition(.opacity.combined(with: .offset(y: -6))) }
+                if open { panel.transition(Motion.surface(from: .top, reduceMotion: reduceMotion)) }
             }
             .frame(maxWidth: open ? .infinity : nil)
             .clipShape(shape)
