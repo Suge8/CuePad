@@ -13,12 +13,6 @@ struct AgentTarget: Equatable {
 
 @Observable
 final class SendState {
-    enum Route {
-        case local(CueBridge.Session)
-        case remote(SessionState)
-        case ended(host: String?)
-    }
-
     private(set) var projects: [String: UUID] = [:]
     @ObservationIgnored private let services: AppServices
 
@@ -34,14 +28,6 @@ final class SendState {
         projects = result
     }
 
-    func route(of sessionID: String, host: String? = nil) -> Route {
-        if let live = liveSession(sessionID) { return .local(live) }
-        if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
-            return .remote(remote.state)
-        }
-        return .ended(host: host)
-    }
-
     private func sessionName(_ sessionID: String) -> String {
         liveSession(sessionID)?.displayName
             ?? services.liveSessions.items.first { $0.state.sessionID == sessionID }?.state.title
@@ -54,11 +40,12 @@ final class SendState {
 
     func destination(to target: AgentTarget, card: UUID?) -> (listener: Listener, handed: Dotted) {
         let name = sessionName(target.session)
-        let (listener, wakes): (Listener, Bool) = switch route(of: target.session, host: target.host) {
-        case .local(let live): (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), false)
-        case .remote(let session): (.session(session, mode: .send, card: card), false)
-        case .ended(let host):
-            (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: host ?? services.hostID, mode: .send, card: card), true)
+        let (listener, wakes): (Listener, Bool) = if let live = liveSession(target.session) {
+            (.session(live.sendTarget, host: services.hostID, mode: .send, card: card), false)
+        } else if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == target.session && $0.state.hostID != services.hostID }) {
+            (.session(remote.state, mode: .send, card: card), false)
+        } else {
+            (.session(SendTarget(kind: .piSession, name: name, ref: target.session), host: target.host ?? services.hostID, mode: .send, card: card), true)
         }
         return (listener, Dotted(wakes ? String(localized: "已交给 Agent 会话「\(name)」，唤醒后送达") : String(localized: "已交给 Agent 会话「\(name)」")))
     }

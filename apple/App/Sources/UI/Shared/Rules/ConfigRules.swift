@@ -37,12 +37,6 @@ nonisolated struct ThinkingMeter: Equatable {
         self.current = current
     }
 
-    func pointing(at level: ThinkingLevel) -> ThinkingMeter {
-        var meter = self
-        meter.current = level
-        return meter
-    }
-
     var label: String { current?.label ?? String(localized: "默认") }
     var isMax: Bool { current != .off && current == ThinkingLevel.allCases.last(where: levels.contains) }
 
