@@ -84,9 +84,7 @@ struct RailTopTools: View {
 
     @ViewBuilder private func tool(_ icon: Icon, _ help: LocalizedStringResource, action: @escaping () -> Void) -> some View {
         if floating {
-            Button(help, icon: icon, action: action)
-                .labelStyle(.iconOnly)
-                .buttonStyle(ControlButtonStyle(kind: .circular))
+            Button(help, icon: icon, action: action).glassCircle()
         } else {
             RailTool(icon: icon, help: help, action: action)
         }
