@@ -111,14 +111,14 @@ struct SessionRow: View {
         MetaLine(spacing: Spacing.item, gap: 0) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 Text(Highlight.matches(task?.nonEmpty ?? SessionRename.title(of: session, request: rename, at: services.speech), highlight))
-                    .font(style.name).fontWeight(shown.isNewReply ? .bold : nil)
+                    .font(style.name).emphasis(shown.isNewReply ? .bold : nil)
                     .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
                 if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             }
         } meta: {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 if shown.undelivered == nil, let unsent = Chat.undeliveredNote(undelivered) {
-                    StateGlyph.undelivered.font(style.meta.weight(.semibold)).iconLabel(unsent)
+                    StateGlyph.undelivered.font(style.meta).emphasis(.bold).iconLabel(unsent)
                 }
                 if style.card, let project { ProjectGlyph(project: project, size: Self.placeIcon).iconLabel("在 \(project.shownName)") }
                 SessionElapsed(shown: shown, font: style.meta, style: .span)
@@ -173,7 +173,7 @@ private struct StateWord: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(shown.label).fontWeight(shown.isColored ? .semibold : .medium).foregroundStyle(shown.labelTint(palette))
+        Text(shown.label).emphasis(.bold).foregroundStyle(shown.labelTint(palette))
     }
 }
 
@@ -189,9 +189,9 @@ private struct SubagentCount: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.signature : palette.ink2).fontWeight(.semibold)
+        let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.signature : palette.ink2).emphasis(.bold)
         Text("\(Image(.branch))\u{2009}\(running)/\(summary.total)")
-            .monospacedDigit().foregroundStyle(palette.ink2)
+            .foregroundStyle(palette.ink2)
             .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure, summary.rejection).spoken)
     }
 }
@@ -219,8 +219,7 @@ struct ContextFact: View {
 
     var body: some View {
         let tint = meter.level == .critical ? palette.failure : palette.ink
-        Text("\(Text("上下文").foregroundStyle(palette.ink3)) \(Text(meter.percent).foregroundStyle(tint).fontWeight(.semibold))")
-            .monospacedDigit()
+        Text("\(Text("上下文").foregroundStyle(palette.ink3)) \(Text(meter.percent).foregroundStyle(tint).emphasis(.bold))")
             .accessibilityLabel(meter.help.spoken)
     }
 }

@@ -211,7 +211,7 @@ struct BoardColumn: View {
     @ViewBuilder private func empty(_ text: LocalizedStringResource) -> some View {
         if !isRow, let add = LaneAdd.of(column, in: workspace) {
             Button(action: add.action) {
-                vacancy(text) { Label(add.title, icon: .add).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink2) }
+                vacancy(text) { Label(add.title, icon: .add).font(Typography.secondaryBold).foregroundStyle(palette.ink2) }
                     .contentShape(.rect)
             }
             .buttonStyle(PressStyle(.card))
@@ -241,7 +241,7 @@ struct BoardColumn: View {
         HStack(spacing: Spacing.group) {
             Button(action: toggleEarlier) {
                 HStack(spacing: Spacing.tight) {
-                    Text("更早做完的 \(board.earlier.count)").monospacedDigit()
+                    Text("更早做完的 \(board.earlier.count)")
                     Chevron(.forward).rotationEffect(.degrees(earlier.wrappedValue ? 90 : 0))
                 }
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
@@ -258,7 +258,7 @@ struct BoardColumn: View {
     private var earlierList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) {
-                Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong).monospacedDigit()
+                Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong)
                     .padding(.vertical, Spacing.item)
                 ForEach(board.earlier) { card($0) }
             }
@@ -317,11 +317,11 @@ private struct BoardPile: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.item) {
-                Text("更早做完的 \(count)").monospacedDigit().lineLimit(1)
+                Text("更早做完的 \(count)").lineLimit(1)
                 Spacer(minLength: 0)
                 Chevron(.forward)
             }
-            .font(TaskMetrics.lineFont).fontWeight(TaskBoard.Column.done.titleWeight).foregroundStyle(TaskBoard.Column.done.titleInk(palette))
+            .font(TaskMetrics.lineFont).emphasis(TaskBoard.Column.done.titleWeight).foregroundStyle(TaskBoard.Column.done.titleInk(palette))
             .padding(.vertical, BoardCardMetrics.compactPad)
             .boardCard(.done)
             .background {

@@ -65,12 +65,12 @@ struct PaneTitle<Items: View, Marks: View, Tools: View>: View {
         HStack(spacing: 0) {
             if let crumb {
                 Button(action: crumb.action) {
-                    Text(verbatim: crumb.title).fontWeight(.regular).lineLimit(1)
+                    Text(verbatim: crumb.title).emphasis(.regular).lineLimit(1)
                         .padding(.horizontal, PaneCell.pad).frame(height: PaneCell.side).contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle(.control))
                 .foregroundStyle(palette.ink3)
-                Text(verbatim: "/").fontWeight(.regular).foregroundStyle(palette.ink3).opacity(0.5).fixedSize().padding(.horizontal, Spacing.hair).readerHidden(true)
+                Text(verbatim: "/").emphasis(.regular).foregroundStyle(palette.ink3).opacity(0.5).fixedSize().padding(.horizontal, Spacing.hair).readerHidden(true)
             }
             name
             marks

@@ -44,6 +44,9 @@ forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类�
 forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（图标，Theme/Glyph.swift）的几档，Theme 以外不写 .system(size: 数) 与 ofSize:、pointSize: 的数：各处自写的字号是又一套层级，新东西先问它是正文、说明还是哪一档图标；确要新档就在那两处按用途加一个" \
   '(?:\.system\(size:\s*[\d.]|\b(?:ofSize|pointSize):\s*[\d.])' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
+FORBID_IN=App/Sources forbid "字重与等宽数字只在 Typography（文字）与 Glyph（图标）：界面字只有常规与粗两档（Typography.Weight，圆体-简只有这两档），要粗的用角色的粗体（Typography.bodyBold…），字体由外面给的一段用 .emphasis；调用处写的中、半粗在中文里落到同一个粗、英文里又各是一档。圆体-简没有等宽数字，界面字的等宽数字在 Typography.ui 里一次给，调用处不写 .monospacedDigit()" \
+  '(?:\.weight\(|\.fontWeight\(|\.system\([^)]*\bweight:|\.monospacedDigit\(\)|\.bold\()' \
+  '**/Theme/Typography*.swift' '**/Theme/Glyph.swift' 'App/Sources/UI/Debug/**'
 forbid "字体名称只在 Typography 选择：界面与编辑器复用同一角色，让系统按文字选择中英文字形，不在单个组件强制中文字体" \
   '(?:\b(?:CueFont|NSFont|UIFont)\(name:|\bFont\.custom\(|\.font\(\s*\.custom\()' \
   'App/Sources/UI/Debug/**' '**/Tests/**'

@@ -62,7 +62,7 @@ struct SpeechBubble<Menu: View>: View {
             HStack(spacing: 0) {
                 Text("未送达，")
                 Button(MessageMenu.Item.resend.title, action: undelivered.resend)
-                    .fontWeight(.semibold)
+                    .emphasis(.bold)
                     .buttonStyle(PressStyle(.inline))
                     .contentShape(.rect.inset(by: -14))
             }

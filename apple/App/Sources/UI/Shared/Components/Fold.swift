@@ -137,7 +137,7 @@ struct DisclosureChevron: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Image(.expand).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+        Image(.expand).font(Typography.caption2Bold).foregroundStyle(palette.ink3)
             .rotationEffect(.degrees(open ? 180 : 0))
             .readerHidden(true)
     }

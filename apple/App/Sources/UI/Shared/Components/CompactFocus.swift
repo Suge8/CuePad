@@ -48,7 +48,7 @@ private struct CompactFocus: View {
             HStack(spacing: Spacing.item) {
                 Image(.above)
                 if open > 0 {
-                    Label { Text(open, format: .number).monospacedDigit() } icon: { Image(.task) }
+                    Label { Text(open, format: .number) } icon: { Image(.task) }
                         .foregroundStyle(palette.ink2)
                 }
             }

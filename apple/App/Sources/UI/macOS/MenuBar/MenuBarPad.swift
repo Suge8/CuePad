@@ -26,7 +26,7 @@ struct MenuBarPad: View {
                 CaptureComposer(state: $capture, defaultProject: services.settings.currentProject)
             } else if let failure = workspace.catalogFailure {
                 VStack(alignment: .leading, spacing: Spacing.item) {
-                    Label { Text("读不出资料库") } icon: { FailureMark() }.font(Typography.secondary.weight(.medium))
+                    Label { Text("读不出资料库") } icon: { FailureMark() }.font(Typography.secondaryBold)
                     Text(failure).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(4)
                     Button("重试") { workspace.retryCatalog() }
                 }

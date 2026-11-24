@@ -89,7 +89,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
                 }
                 if !plan.hidden.isEmpty {
                     Text(verbatim: "+\(plan.hidden.count)")
-                        .font(Typography.caption2.weight(.semibold)).monospacedDigit()
+                        .font(Typography.caption2Bold)
                         .foregroundStyle(palette.ink2)
                         .frame(width: metrics.column, height: plan.rowHeight)
                         .background { overflow(plan.hidden) }

@@ -20,7 +20,7 @@ struct CueTierButton: View {
         HStack(spacing: Spacing.tight) {
             CueAvatar(.resting, size: .inline, plate: false).saturation(tier == .yours ? 0 : 1)
             if tier != .yours {
-                Text(tier.title(name)).font(Typography.caption.weight(.semibold)).lineLimit(1).fixedSize()
+                Text(tier.title(name)).font(Typography.captionBold).lineLimit(1).fixedSize()
                     .transition(.opacity)
             }
         }

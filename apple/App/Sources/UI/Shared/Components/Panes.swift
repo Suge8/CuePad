@@ -45,7 +45,7 @@ struct PaneSegment<Value: Hashable>: View {
                             HStack(alignment: .top, spacing: Spacing.hair) {
                                 item.title.font(PaneMetrics.font).lineLimit(1)
                                 if item.badge > 0 {
-                                    Text(item.badge, format: .number).font(Typography.caption2.weight(.semibold)).monospacedDigit()
+                                    Text(item.badge, format: .number).font(Typography.caption2Bold)
                                         .foregroundStyle(palette.ink3).fixedSize().readerHidden(true)
                                 }
                             }

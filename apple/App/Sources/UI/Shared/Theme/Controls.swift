@@ -103,7 +103,7 @@ private struct GlassCircle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(Typography.body.weight(.medium))
+            .font(Typography.bodyBold)
             .foregroundStyle(palette.ink)
             .labelStyle(GlassIconLabel())
             .buttonStyle(.glass)
@@ -148,7 +148,7 @@ struct ControlSurface: ViewModifier {
         #if os(macOS)
         case .circular:
             content
-                .font(Typography.body.weight(.medium))
+                .font(Typography.bodyBold)
                 .foregroundStyle(ink)
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
@@ -156,7 +156,7 @@ struct ControlSurface: ViewModifier {
         #endif
         case .icon:
             content
-                .font(Typography.body.weight(.medium))
+                .font(Typography.bodyBold)
                 .foregroundStyle(ink)
                 .frame(width: size.height, height: size.height)
                 .contentShape(.circle)
@@ -170,7 +170,7 @@ struct ControlSurface: ViewModifier {
                 .contentShape(.rect)
         case .glass:
             content
-                .font(Typography.secondary.weight(.medium))
+                .font(Typography.secondaryBold)
                 .foregroundStyle(ink)
                 .padding(.horizontal, ControlSize.compact.padding)
                 .frame(height: ControlMetrics.height)
@@ -178,7 +178,7 @@ struct ControlSurface: ViewModifier {
                 .glass(in: .capsule, interactive: true)
         default:
             content
-                .font(size.font.weight(selected ? .semibold : .medium))
+                .font(size.font).emphasis(.bold)
                 .foregroundStyle(kind == .primary ? palette.onAction : ink)
                 .padding(.horizontal, size.padding)
                 .padding(.vertical, size.verticalPadding)

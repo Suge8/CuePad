@@ -13,12 +13,12 @@ struct QuotaValueRow: View {
                 name
             }
         } meta: {
-            reading.foregroundStyle(palette.ink).monospacedDigit()
+            reading.foregroundStyle(palette.ink)
         }
         .font(Typography.meta)
     }
 
-    private var name: Text { Text(verbatim: value.name).fontWeight(.medium).foregroundStyle(palette.ink) }
+    private var name: Text { Text(verbatim: value.name).emphasis(.bold).foregroundStyle(palette.ink) }
 
     private var reading: Text {
         if let display = value.display { return Text(verbatim: display) }

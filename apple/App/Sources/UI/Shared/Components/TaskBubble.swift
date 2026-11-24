@@ -126,7 +126,7 @@ enum BubbleMetrics {
     static let textTrailing = Spacing.block
     static let sheetBottom = Spacing.group
     #if os(macOS)
-    static let strong = Typography.secondary.weight(.semibold)
+    static let strong = Typography.secondaryBold
     static let meta = Typography.meta
     static let editorInset = Spacing.glyph
     static let ringTop: CGFloat = 2
@@ -139,7 +139,7 @@ enum BubbleMetrics {
     static let width: CGFloat = 480
     static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #else
-    static let strong = Typography.secondary.weight(.semibold)
+    static let strong = Typography.secondaryBold
     static let meta = Typography.meta
     static let editorInset = Spacing.item
     static let ringTop: CGFloat = 3

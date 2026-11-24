@@ -33,7 +33,7 @@ struct LinkRow<Leading: View, Trailing: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: Spacing.item) {
                     if let alert { StatusDot(color: alert) }
-                    if let value { value.foregroundStyle(palette.ink3).monospacedDigit().lineLimit(1) }
+                    if let value { value.foregroundStyle(palette.ink3).lineLimit(1) }
                 }
                 .fixedSize()
             }

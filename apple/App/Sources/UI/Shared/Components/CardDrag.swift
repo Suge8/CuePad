@@ -155,7 +155,7 @@ private struct DragChip: View {
         let shape = RoundedRectangle(cornerRadius: Radius.card)
         HStack(spacing: Spacing.item) {
             Image(task ? .task : .idea).foregroundStyle(palette.ink3)
-            Text(title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+            Text(title).font(Typography.bodyBold).foregroundStyle(palette.ink).lineLimit(1)
         }
         .padding(.horizontal, Spacing.block).padding(.vertical, Spacing.item)
         .frame(maxWidth: Self.width, alignment: .leading).fixedSize(horizontal: false, vertical: true)

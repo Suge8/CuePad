@@ -105,7 +105,7 @@ private struct SkillRow: View {
         #endif
     }
 
-    private static let nameFont = Typography.body.weight(.medium)
+    private static let nameFont = Typography.bodyBold
     private static let descriptionFont = Typography.meta
     #if os(macOS)
     private static let markFont = Glyph.small

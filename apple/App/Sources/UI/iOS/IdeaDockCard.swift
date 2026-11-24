@@ -43,7 +43,7 @@ struct IdeaDockCard: View {
                 HStack(spacing: Spacing.glyph) {
                     Image(.idea).foregroundStyle(palette.ink3)
                     Text(verbatim: CueSummary.title(of: editing?.text ?? card?.body ?? ""))
-                        .font(Typography.secondary.weight(.medium))
+                        .font(Typography.secondaryBold)
                         .foregroundStyle(palette.ink)
                         .lineLimit(1)
                     Spacer(minLength: 0)

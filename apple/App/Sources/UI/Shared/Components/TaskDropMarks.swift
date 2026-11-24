@@ -44,7 +44,7 @@ struct OutlineTargets: View {
 
     private var badge: some View {
         Label("接到正文后面", icon: .add).labelStyle(.titleAndIcon)
-            .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
+            .font(TaskMetrics.captionBold).foregroundStyle(palette.signature)
             .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
             .background(palette.selection, in: .capsule)
             .background(surface ?? palette.paper, in: .capsule)
@@ -126,8 +126,8 @@ private struct NewTaskSlot: View {
 
     var body: some View {
         HStack(spacing: TaskMetrics.columnGap) {
-            Image(.add).font(TaskMetrics.caption.weight(.semibold)).frame(width: TaskMetrics.ringColumn).readerHidden(true)
-            Text("新建任务").font(Typography.body.weight(.medium))
+            Image(.add).font(TaskMetrics.captionBold).frame(width: TaskMetrics.ringColumn).readerHidden(true)
+            Text("新建任务").font(Typography.bodyBold)
             Spacer(minLength: 0)
         }
         .foregroundStyle(palette.signature)

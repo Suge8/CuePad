@@ -27,19 +27,19 @@ struct SubagentList: View {
             }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-                Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)
-                    .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).monospacedDigit().rollingCount(summary.running > 0 ? summary.running : summary.total)
+                Text(summary.lead).emphasis(summary.running > 0 ? .bold : .regular)
+                    .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).rollingCount(summary.running > 0 ? summary.running : summary.total)
                 if let tail = summary.tail {
                     Dot()
-                    Text(tail).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.total)
+                    Text(tail).foregroundStyle(palette.ink3).rollingCount(summary.total)
                 }
                 if let failure = summary.failure {
                     Dot().foregroundStyle(palette.failure)
-                    Text(failure).foregroundStyle(palette.failure).monospacedDigit().rollingCount(summary.failed)
+                    Text(failure).foregroundStyle(palette.failure).rollingCount(summary.failed)
                 }
                 if let rejection = summary.rejection {
                     Dot()
-                    Text(rejection).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.rejected)
+                    Text(rejection).foregroundStyle(palette.ink3).rollingCount(summary.rejected)
                 }
                 DisclosureChevron(open: expanded)
             }
@@ -82,7 +82,7 @@ struct SubagentList: View {
                 case .took: Text(clock.text(now: .now))
                 }
             }
-            .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+            .font(Typography.caption).foregroundStyle(palette.ink3)
         }
     }
 }

@@ -303,7 +303,7 @@ private struct LiveStopped<Action: View>: View {
             Spinner(.small)
             Text(text)
         }
-        .font(Typography.secondary.weight(.medium))
+        .font(Typography.secondaryBold)
         .foregroundStyle(palette.ink)
     }
 }

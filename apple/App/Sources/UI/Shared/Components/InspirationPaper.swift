@@ -34,7 +34,7 @@ struct InspirationPaper: View {
         switch block.content {
         case .heading(let level, let text):
             MarkdownMediaView(source: text, images: images, exporting: true)
-                .font(level == 1 ? Typography.heading : level == 2 ? Typography.readingHeading : Typography.reading.weight(.semibold))
+                .font(level == 1 ? Typography.heading : level == 2 ? Typography.readingHeading : Typography.readingBold)
                 .padding(.top, Spacing.item)
         case .code(let code):
             Text(verbatim: code).font(Typography.code)

@@ -70,7 +70,7 @@ struct DiffRow: View {
     }
 
     private func number(_ value: Int?) -> some View {
-        Text(verbatim: value.map(String.init) ?? "").foregroundStyle(palette.ink3).monospacedDigit()
+        Text(verbatim: value.map(String.init) ?? "").foregroundStyle(palette.ink3)
             .padding(.trailing, Spacing.item)
             .frame(width: layout.number, alignment: .trailing)
             .readerHidden(true)

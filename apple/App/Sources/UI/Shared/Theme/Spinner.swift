@@ -46,7 +46,7 @@ struct OnTheWay: View {
             if flies && !landed {
                 LoopLayer(kind: .flight, color: color)
             } else {
-                Image(.onTheWay).font(.system(size: size * 0.86, weight: .semibold)).foregroundStyle(color)
+                Image(.onTheWay).font(Glyph.at(size * 0.86)).foregroundStyle(color)
             }
         }
         .frame(width: size, height: size)

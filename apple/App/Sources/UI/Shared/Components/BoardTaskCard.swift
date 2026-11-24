@@ -28,8 +28,8 @@ struct BoardTaskCard: View {
                 if task.isPinned { BoardPin() }
                 title(resting: pulse.tier == .resting && advancing)
             } facts: {
-                if let steps = item.steps { Text(verbatim: "\(steps.done)/\(steps.total)").monospacedDigit().foregroundStyle(palette.ink3) }
-                if let finished { Text(verbatim: finished).monospacedDigit().foregroundStyle(palette.ink3) }
+                if let steps = item.steps { Text(verbatim: "\(steps.done)/\(steps.total)").foregroundStyle(palette.ink3) }
+                if let finished { Text(verbatim: finished).foregroundStyle(palette.ink3) }
                 #if os(iOS)
                 if column == .todo, let start = next.flatMap({ $0.starts ? $0 : nil }) { TaskNextMark(next: start) }
                 #endif
@@ -47,7 +47,7 @@ struct BoardTaskCard: View {
 
     private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
-        return BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
+        return BoardCardTitle(title.textGlyphs).emphasis(column.titleWeight)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
             .relaySpot(task: task.id)
     }

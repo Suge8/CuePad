@@ -4,6 +4,7 @@ enum TaskMetrics {
     #if os(iOS)
     nonisolated static let rowHeight: CGFloat = 44
     static let caption = Typography.meta
+    static let captionBold = Typography.metaBold
     static let chipTarget: CGFloat = 44
     static let titleRing: CGFloat = 24
     static let lineFont = Typography.body
@@ -19,9 +20,10 @@ enum TaskMetrics {
     #else
     nonisolated static let rowHeight: CGFloat = 30
     static let caption = Typography.meta
+    static let captionBold = Typography.metaBold
     static let chipTarget: CGFloat = 24
     static let titleRing: CGFloat = 20
-    static let lineFont = Typography.body.weight(.medium)
+    static let lineFont = Typography.bodyBold
     static let stepFont = Typography.secondary
     static let ring: CGFloat = 17
     static let stepRing: CGFloat = 13

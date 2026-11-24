@@ -71,7 +71,7 @@ struct ArchiveList: View {
                     Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
                 } meta: {
                     if let archivedAt = card.archivedAt {
-                        Text(DateLabel.short(archivedAt)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                        Text(DateLabel.short(archivedAt)).font(Typography.meta).foregroundStyle(palette.ink3)
                     }
                 }
             }

@@ -247,7 +247,7 @@ private struct OlderRowLine: View {
                 #endif
             }
             .font(Look.marks)
-            Text(DateLabel.short(card.modifiedAt)).font(Look.date.monospacedDigit()).frame(minWidth: Look.dateWidth, alignment: .trailing)
+            Text(DateLabel.short(card.modifiedAt)).font(Look.date).frame(minWidth: Look.dateWidth, alignment: .trailing)
                 #if os(macOS)
                 .yieldsToReveal(when: !workspace.presses.isSelecting)
                 #endif
@@ -261,7 +261,7 @@ private struct OlderRowLine: View {
         static let base: Font? = Typography.meta
         static let alignment = VerticalAlignment.center
         static let titles = AnyLayout(HStackLayout(spacing: Spacing.item))
-        static let label = Typography.body.weight(.medium)
+        static let label = Typography.bodyBold
         static let preview = Typography.secondary
         static let marks = Typography.meta
         static let date = Typography.meta
@@ -272,7 +272,7 @@ private struct OlderRowLine: View {
         static let base: Font? = nil
         static let alignment = VerticalAlignment.firstTextBaseline
         static let titles = AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.hair))
-        static let label = Typography.secondary.weight(.medium)
+        static let label = Typography.secondaryBold
         static let preview = Typography.meta
         static let marks = Typography.caption2
         static let date = Typography.caption

@@ -57,7 +57,7 @@ struct SectionHeader<Trailing: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
             if let icon { Image(icon).readerHidden(true) }
             Text(title).lineLimit(1)
-            if let count { Text("\(count)").font(countFont).monospacedDigit().foregroundStyle(countInk ?? palette.ink3).counting(count) }
+            if let count { Text("\(count)").font(countFont).foregroundStyle(countInk ?? palette.ink3).counting(count) }
         }
         .font(titleFont)
         .foregroundStyle(level == .page ? palette.ink : palette.ink3)

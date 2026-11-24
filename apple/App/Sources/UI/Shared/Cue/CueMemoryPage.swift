@@ -123,7 +123,7 @@ private struct PinnedUsage: View {
             .formatted(.measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(1))))
         HStack(spacing: Spacing.item) {
             MarkedBar(fill: fraction, mark: nil, level: level).frame(width: Self.width)
-            Text(verbatim: used).monospacedDigit().foregroundStyle(level == .critical ? palette.failure : palette.ink3)
+            Text(verbatim: used).foregroundStyle(level == .critical ? palette.failure : palette.ink3)
                 .contentTransition(.numericText(value: fraction))
         }
         .font(Typography.meta)

@@ -9,7 +9,7 @@ struct Chevron: View {
     init(_ direction: Direction) { self.direction = direction }
 
     var body: some View {
-        Image(icon).font(Glyph.chevron(size)).readerHidden(true)
+        Image(icon).font(Glyph.at(size)).readerHidden(true)
     }
 
     private var icon: Icon {

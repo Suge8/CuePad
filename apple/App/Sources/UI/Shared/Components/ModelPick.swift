@@ -113,12 +113,12 @@ private struct ModelPickBubble: View {
             HStack(spacing: Spacing.item) {
                 ModelBadge(mark: mark, binding: binding).readerHidden(true)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(verbatim: model.displayName).font(Typography.secondary.weight(chosen ? .semibold : .regular)).foregroundStyle(palette.ink)
+                    Text(verbatim: model.displayName).font(chosen ? Typography.secondaryBold : Typography.secondary).foregroundStyle(palette.ink)
                     if !note.isEmpty { Text(note).font(Typography.caption).foregroundStyle(palette.ink3) }
                 }
                 .lineLimit(1)
                 Spacer(minLength: Spacing.item)
-                if chosen { Image(.checked).font(Glyph.small.weight(.semibold)).foregroundStyle(palette.ink).readerHidden(true) }
+                if chosen { Image(.checked).font(Glyph.small).foregroundStyle(palette.ink).readerHidden(true) }
             }
             .padding(.horizontal, Spacing.item)
             .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
@@ -156,7 +156,7 @@ private struct ThinkingTrack: View {
             HStack(spacing: Spacing.tight) {
                 Text("思考强度").foregroundStyle(palette.ink3)
                 Spacer(minLength: Spacing.item)
-                Text(verbatim: level?.label ?? meter.label).fontWeight(.semibold).foregroundStyle(palette.ink)
+                Text(verbatim: level?.label ?? meter.label).emphasis(.bold).foregroundStyle(palette.ink)
                     .contentTransition(.numericText(value: Double(index ?? 0)))
                     .modifier(LevelPop(level: level))
                     .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: level)
@@ -252,7 +252,7 @@ struct ThinkingWord: View {
                     .contentTransition(.numericText(value: Double(meter.levels.firstIndex(of: level) ?? 0)))
                     .modifier(LevelPop(level: level))
             }
-            .font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
+            .font(Typography.metaBold).fontDesign(.rounded)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: level)
         }
     }

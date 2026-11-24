@@ -39,7 +39,7 @@ struct ContextGauge: View {
             if let meter {
                 HStack(spacing: Spacing.tight) {
                     ContextArc(meter: meter)
-                    Text(verbatim: meter.percent).monospacedDigit()
+                    Text(verbatim: meter.percent)
                         .foregroundStyle(meter.level == .roomy ? palette.ink2 : palette.ink)
                         .contentTransition(.numericText(value: meter.fraction))
                 }
@@ -70,20 +70,20 @@ private struct ContextDetail: View {
             let note = CacheNote(cache, working: working, at: now)
             VStack(alignment: .leading, spacing: Spacing.item) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+                    Text("上下文").font(Typography.secondaryBold).foregroundStyle(palette.ink)
                     Spacer(minLength: Spacing.block)
-                    if let meter { Text(meter.percent).font(Typography.secondary.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink) }
+                    if let meter { Text(meter.percent).font(Typography.secondaryBold).foregroundStyle(palette.ink) }
                 }
                 if let meter {
                     HStack(spacing: Spacing.group) {
                         MarkedBar(fill: meter.fraction, mark: meter.mark, level: meter.level)
                         if meter.suggestsCompact { RescueDisc(icon: .compacting, title: "现在压缩", action: compact) }
                     }
-                    Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                    Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 if let note {
                     Label { Text(note.line) } icon: { Image(note.icon) }
-                        .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                        .font(Typography.meta).foregroundStyle(palette.ink2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -147,7 +147,6 @@ private struct CacheMark: View {
                 }
             }
         }
-        .monospacedDigit()
         .foregroundStyle(palette.ink3)
     }
 }

@@ -334,7 +334,7 @@ private struct HeaderDetail: View {
     var body: some View {
         Group {
             if let text {
-                (text.isEmpty ? Text(" ") : Text(text)).font(Typography.toolbarSubtitle.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1).rollingCount(text)
+                (text.isEmpty ? Text(" ") : Text(text)).font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3).lineLimit(1).rollingCount(text)
             }
         }
     }
