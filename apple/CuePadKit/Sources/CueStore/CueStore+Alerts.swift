@@ -45,9 +45,9 @@ extension CueStore {
   @discardableResult
   public func flagLeftToYou(_ left: CueLeft, host: String) throws -> UUID? {
     try write {
-      guard let state = try sessionState(left.sessionID), state.hostID == host, left.holds(for: state),
-        let push = try push(state.leftAlert, state)
-      else { return nil }
+      guard var state = try sessionState(left.sessionID), state.hostID == host, left.holds(for: state) else { return nil }
+      state.runtimeUntil = Date.stamp
+      guard let push = try push(state.leftAlert, state) else { return nil }
       try db.run(
         "UPDATE piSessionStates SET notify = ?1, modifiedAt = ?2 WHERE id = ?3 AND notify IS NULL",
         [push.rawValue, Date.stamp, state.id])

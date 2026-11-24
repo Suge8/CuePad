@@ -112,7 +112,7 @@ extension CueStore {
 
   public func sessionsAwaitingReply() throws -> [SessionState] {
     guard let cue = try cueDuty() else { return [] }
-    let resting: [WorkState] = [.settled, .error]
+    let resting = SessionState.leftStops
     let handed = cue.tiers.filter { $0.value != .yours }.keys
     let candidates = "state IN (\(sqlList(resting))) AND (sessionID IN (SELECT value FROM json_each(?)) OR sessionID NOT IN (SELECT value FROM json_each(?)))"
     let left = try narrow(
