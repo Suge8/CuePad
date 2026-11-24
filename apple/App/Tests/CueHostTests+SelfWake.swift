@@ -49,10 +49,9 @@ extension CueHostTests {
         #expect(try await rig.store.card(task.id)?.status == .done)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
-        let keeper = try #require(rig.services.cue.keeper)
-        let hello = try #require(keeper.snapshot.rounds.last { $0.wake == .message })
+        let hello = try #require(rig.rounds.last { $0.wake == .message })
         #expect(hello.sent.joined().contains("变化（上次醒来之后）：无"), "\(hello.sent)")
-        #expect(!keeper.snapshot.rounds.contains { $0.sent.joined().contains("[完成]") })
+        #expect(!rig.rounds.contains { $0.sent.joined().contains("[完成]") })
         await rig.stop()
     }
 }

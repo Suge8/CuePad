@@ -128,7 +128,7 @@ extension CueHostTests {
         #expect(done.text.contains("一次"))
         #expect(rig.model.errors == 1)
         try await eventually("承接原定时的一轮完成") {
-            keeper.snapshot.rounds.contains { round in
+            rig.rounds.contains { round in
                 guard case .schedule(let fires) = round.wake else { return false }
                 return fires.contains { $0.line == reminder.id } && round.finishedAt != nil && round.failure == nil
             }
@@ -161,7 +161,7 @@ extension CueHostTests {
         try await rig.message(.cue, containing: "定时到点：\(second.id.uuidString.lowercased()) 核对发布结果 B", skippingBackoff: true)
         try await eventually("两个定时各自完成") {
             [first.id, second.id].allSatisfy { id in
-                keeper.snapshot.rounds.contains { round in
+                rig.rounds.contains { round in
                     guard case .schedule(let fires) = round.wake else { return false }
                     return fires.contains { $0.line == id } && round.finishedAt != nil && round.failure == nil
                 }

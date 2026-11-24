@@ -11,6 +11,8 @@ struct CueDependencies {
     var helper: URL
     var notifier: any CueNotifying
     var timing = CueTiming()
+    /// 每一轮做完交给谁看：只有测试与评测要（它们从这里攒下每一轮的信封与工具调用），正式版不留。
+    var finished: (CueRound) -> Void = { _ in }
 }
 
 nonisolated struct CueLaunch: Equatable, Sendable {
@@ -44,7 +46,7 @@ final class CueService {
         setup = CueKeeper.Setup(
             recorder: recorder, launch: { [launch = dependencies.launch] in try await launch($0, store) }, helper: dependencies.helper,
             library: library, piAgentDirectory: piAgentDirectory, timing: dependencies.timing,
-            fetchFile: { [sync] key in try await sync.fetchFile(key) })
+            fetchFile: { [sync] key in try await sync.fetchFile(key) }, finished: dependencies.finished)
         hostID = recorder.hostID
         notifier = dependencies.notifier
     }

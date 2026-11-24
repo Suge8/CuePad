@@ -66,7 +66,7 @@ extension CueKeeper {
             if let turn = shift.turn {
                 var round = turn.round
                 round.failure = round.failure ?? reason.text
-                archive(round)
+                close(round)
                 retrying = round.failure
                 if let woke = turn.selfStarted, !Setback.supersedable(woke) { await setBack(reason.text, retrying: woke) }
             }
@@ -157,7 +157,7 @@ extension CueKeeper {
                 Self.log.error("Cue 这一轮的收尾没能写进资料库：\(error.localizedDescription, privacy: .public)")
                 await giveBack(finished.delivered)
             }
-            archive(finished.round)
+            close(finished.round)
             updateShift {
                 $0.turn = nil
                 $0.failures = 0
