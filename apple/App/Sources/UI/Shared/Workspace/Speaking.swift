@@ -86,14 +86,31 @@ extension Workspace {
             let (sent, body) = await taking()
             do {
                 try await services.recordSpeech(body, to: listener, as: id)
+                if listener.says { releaseWhenGone(id) }
             } catch {
                 restore(sent)
-                launching.failed(id)
+                launching.release(id)
                 fail(error)
             }
         }
     }
 
+}
+
+extension Workspace {
+    private func releaseWhenGone(_ id: UUID) {
+        let store = services.store, launching = launching
+        services.follow { [weak self] in
+            do {
+                for try await held in store.observe({ try $0.holdsSpeech(id) }) where !held || !launching.holds(id) {
+                    launching.release(id)
+                    return
+                }
+            } catch where !Task.isCancelled {
+                self?.fail(error)
+            } catch {}
+        }
+    }
 }
 
 extension Listener {

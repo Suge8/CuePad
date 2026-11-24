@@ -15,7 +15,9 @@ final class Launching {
 
     func begin(_ id: UUID, to target: SendingTarget) { pressed.append(Pressed(id: id, target: target)) }
 
-    func failed(_ id: UUID) { pressed.removeAll { $0.id == id } }
+    func holds(_ id: UUID) -> Bool { pressed.contains { $0.id == id } }
+
+    func release(_ id: UUID) { pressed.removeAll { $0.id == id } }
 
     func observed(_ target: SendingTarget, seen: (UUID) -> Bool) {
         guard let last = pressed.lastIndex(where: { $0.target == target && seen($0.id) }) else { return }

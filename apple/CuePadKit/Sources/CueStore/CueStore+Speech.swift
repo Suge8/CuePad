@@ -25,6 +25,10 @@ extension CueMessage: AwaitsServer {
 }
 
 extension CueStore {
+  public func holdsSpeech(_ id: UUID) throws -> Bool {
+    try find(DeliveryRequest.self, id) != nil || find(CueMessage.self, id) != nil
+  }
+
   public func cueLastYou() throws -> (id: UUID?, said: Date, delivered: Date?, reachedServer: Bool)? {
     let last = try db.untracked(.syncRecords) {
       try db.first(

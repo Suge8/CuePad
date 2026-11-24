@@ -213,6 +213,26 @@ struct SpeakTests {
         #expect(Said.request(try #require(done)).trip(at: .always(at: .now)) == .delivered)
     }
 
+    @Test(arguments: [true, false])
+    func 发出后还没读到就被别处撤回_发送中照样收起(toCue: Bool) async throws {
+        try await enableCue()
+        let target = try await session()
+        let workspace = Workspace(services: app.services)
+        let box = toCue ? Bindable(workspace.cue).draft : app.services.settings.replyDraftBinding(for: target.id)
+        box.wrappedValue = ComposerDraft(text: "先别动生产库")
+        let key: SendingTarget = toCue ? .cue : SendingTarget(target)
+
+        await workspace.speak(to: toCue ? .cue : .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(workspace.launching.contains(key))
+
+        if toCue {
+            #expect(try await store.withdrawCueMessage(try #require(try await youSaid().first).id))
+        } else {
+            try await store.deleteDelivery(try #require(try await store.deliveryRequests().first).id)
+        }
+        try await eventually("撤回后发送中收起") { !workspace.launching.contains(key) }
+    }
+
     @Test func 发给会话_Mac明确拒绝才失败_失败重发撤回旧的() async throws {
         let target = try await session()
         let workspace = Workspace(services: app.services)
