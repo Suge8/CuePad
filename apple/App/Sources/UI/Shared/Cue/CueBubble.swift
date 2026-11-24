@@ -55,7 +55,7 @@ struct CueSays: View {
         let parts: (title: String?, body: String) = card ? Self.headline(message.text) : (nil, message.text)
         if let title = parts.title {
             VStack(alignment: .leading, spacing: Spacing.tight) {
-                Text(Self.inline(title)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
+                Text(Self.inline(title)).font(Typography.readingBold).foregroundStyle(palette.ink)
                     .lineSpacing(readingSpacing)
                     .fixedSize(horizontal: false, vertical: true)
                 if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }

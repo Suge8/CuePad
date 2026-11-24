@@ -23,7 +23,7 @@ struct IdeaTileFace: View {
             VStack(alignment: .leading, spacing: small ? Spacing.tight : Spacing.item) {
                 HStack(alignment: .firstTextBaseline, spacing: small ? Spacing.tight : Spacing.glyph) {
                     Text(text.label)
-                        .font(small ? Typography.secondary.weight(.semibold) : Typography.bodyStrong)
+                        .font(small ? Typography.secondaryBold : Typography.bodyStrong)
                         .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                         .lineLimit(image == nil ? NoteTile.titleLines : 1)
                     Spacer(minLength: 0)

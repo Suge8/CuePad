@@ -47,7 +47,7 @@ struct RescueDisc: View {
     #if os(macOS)
     private static let font = Glyph.small
     #else
-    private static let font = Typography.caption.weight(.semibold)
+    private static let font = Typography.captionBold
     #endif
 }
 

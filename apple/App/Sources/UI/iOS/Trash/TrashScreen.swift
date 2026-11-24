@@ -52,7 +52,7 @@ struct TrashScreen: View {
                 }
             } meta: {
                 if let deletedAt = item.deletedAt {
-                    Text(DateLabel.short(deletedAt)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                    Text(DateLabel.short(deletedAt)).font(Typography.meta).foregroundStyle(palette.ink3)
                 }
             }
         }

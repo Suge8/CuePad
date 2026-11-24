@@ -23,7 +23,7 @@ struct PlusGlyph: View {
 
     var body: some View {
         CircleGlyph(fill: on ? palette.selection : palette.fill) {
-            Image(icon).font(Glyph.control.weight(.semibold))
+            Image(icon).font(Glyph.controlBold)
                 .foregroundStyle(enabled ? palette.ink : palette.ink3)
                 .contentTransition(.symbolEffect(.replace))
         }
@@ -40,7 +40,7 @@ struct FloatingGlyph: View {
     static var clearance: CGFloat { size + 2 * inset }
 
     var body: some View {
-        Image(icon).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink)
+        Image(icon).font(Glyph.controlBold).foregroundStyle(palette.ink)
             .frame(width: Self.face, height: Self.face)
             .glass(in: .circle, interactive: true, ink: .clear)
             .frame(width: Self.size, height: Self.size)
@@ -104,7 +104,7 @@ struct SendGlyph: View {
         default: (.send, palette.ink3, Self.sendSide)
         }
         return Image(icon)
-            .font(.system(size: size, weight: .semibold))
+            .font(Glyph.at(size))
             .foregroundStyle(ink)
             // 减弱动态效果时系统把符号的替换换成淡入淡出
             .contentTransition(.symbolEffect(.replace.offUp))

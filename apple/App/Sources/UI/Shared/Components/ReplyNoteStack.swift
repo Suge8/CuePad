@@ -124,7 +124,7 @@ private struct NoteRemove: View {
 
     var body: some View {
         Button(action: action) {
-            Image(.remove).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+            Image(.remove).font(Typography.caption2Bold).foregroundStyle(palette.ink3)
                 .frame(width: Self.side.width, height: Self.side.height).contentShape(.rect)
         }
         .buttonStyle(PressStyle())

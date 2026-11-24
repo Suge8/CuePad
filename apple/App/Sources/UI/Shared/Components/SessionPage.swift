@@ -48,7 +48,7 @@ private struct SessionPageBody: View {
         Group {
             if workspace.layout == .wide {
                 reply(session, digest, chat)
-                    .safeAreaPadding(.top, Chrome.band)
+                    .underHead(Chrome.band)
                     .overlay(alignment: .top) {
                         if let session {
                             PaneHead {

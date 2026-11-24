@@ -5,19 +5,21 @@ import SwiftUI
 
 /// 界面字（栏头、侧栏、卡片、列表、按钮、看板、设置、提示）用圆体-简，中西文都是它的字形；Agent 的回答、输入框、代码与改动仍是系统字体
 /// （`Typography` 里不经 `ui` 的那几档）：长文用圆体读着累。界面不是中文、或圆体-简还没取到时用系统圆体（SF Rounded），英文配圆体-简的西文字形显得糙。
-/// 圆体-简只有常规与粗两档：中、半粗、粗都落到它的粗（调用处的 `.weight()` 同样就近取），层级靠字号与墨色分；它也没有等宽数字，`.monospacedDigit()` 对它不起作用。
+/// 圆体-简只有常规与粗两档（`Typography.Weight`），层级靠字号与墨色分。它也没有等宽数字：界面字一律带上等宽数字，系统圆体（英文界面）下数字跳动时不晃，圆体-简下照旧。
 /// 否决过：西文与数字配 SF Rounded、中文垫圆体-简——SwiftUI 的 `Font` 没有回退表，要从平台字体建（`Font(CTFont)`），
 /// 调用处的 `.weight()` 对它不起作用（约 120 处），iOS 也丢了动态字体。
 extension Typography {
     #if os(macOS)
-    static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        RoundedFace.ready ? .custom(RoundedFace.name, size: size).weight(weight) : .system(size: size, weight: weight, design: .rounded)
+    static func ui(_ size: CGFloat, _ weight: Weight = .regular) -> Font {
+        let face: Font = RoundedFace.ready ? .custom(RoundedFace.name, size: size).weight(weight.font) : .system(size: size, weight: weight.font, design: .rounded)
+        return face.monospacedDigit()
     }
     #else
-    static func ui(_ style: Font.TextStyle, _ weight: Font.Weight = .regular) -> Font {
-        RoundedFace.ready
-            ? .custom(RoundedFace.name, size: RoundedFace.size(style), relativeTo: style).weight(weight)
-            : .system(style, design: .rounded, weight: weight)
+    static func ui(_ style: Font.TextStyle, _ weight: Weight = .regular) -> Font {
+        let face: Font = RoundedFace.ready
+            ? .custom(RoundedFace.name, size: RoundedFace.size(style), relativeTo: style).weight(weight.font)
+            : .system(style, design: .rounded, weight: weight.font)
+        return face.monospacedDigit()
     }
     #endif
 }

@@ -128,7 +128,7 @@ private struct CueListHoverActions: View {
             ForEach(actions.keyed, id: \.key) { item in
                 Button(item.action.title, icon: item.action.icon, action: item.action.run)
                     .labelStyle(.iconOnly)
-                    .font(Typography.meta.weight(.medium))
+                    .font(Typography.metaBold)
                     .foregroundStyle(item.action.tone == .destructive ? palette.failure : palette.ink2)
                     .frame(width: ControlSize.target, height: ControlSize.target)
                     .contentShape(.rect)

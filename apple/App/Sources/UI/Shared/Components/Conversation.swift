@@ -279,7 +279,7 @@ struct SessionShownLabel: View {
             #if os(iOS)
             StateDot(shown: shown, size: 6)
             #endif
-            Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+            Text(shown.label).emphasis(shown.needsYou ? .bold : nil).foregroundStyle(shown.labelTint(palette))
                 .contentTransition(.opacity)
                 .animation(Motion.fade, value: shown)
         }

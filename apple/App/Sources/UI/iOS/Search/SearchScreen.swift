@@ -179,7 +179,7 @@ private struct ActiveFilters: View {
                 }
             }
             if let total {
-                Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text(CountCopy.hits(total)).font(Typography.meta).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText()).animation(Motion.fade, value: total).fixedSize()
             }
         }

@@ -38,6 +38,7 @@ struct CuePage: View {
                 .padding(.horizontal, Self.inset)
                 .frame(maxWidth: Self.readingWidth)
         }
+        .fades(.top)
     }
     #else
     private var page: some View {

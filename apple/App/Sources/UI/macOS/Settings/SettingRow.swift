@@ -71,7 +71,7 @@ private struct SettingFixStyle: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.buttonStyle(.plain).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink).underline().pointerStyle(.link)
+        content.buttonStyle(.plain).font(Typography.metaBold).foregroundStyle(palette.ink).underline().pointerStyle(.link)
     }
 }
 

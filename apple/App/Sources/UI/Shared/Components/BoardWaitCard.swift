@@ -69,7 +69,7 @@ private struct BoardWaitFace: View {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                     if held.item?.task.isPinned == true { BoardPin() }
                     BoardCardTitle(held.title).foregroundStyle(palette.ink)
-                    Text(held.shown.label).font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.waiting).fixedSize()
+                    Text(held.shown.label).font(TaskMetrics.captionBold).foregroundStyle(palette.waiting).fixedSize()
                         .padding(.leading, Spacing.hair)
                 }
                 .font(Typography.bodyStrong).frame(maxWidth: .infinity, alignment: .leading)

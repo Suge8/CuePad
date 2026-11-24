@@ -155,7 +155,7 @@ private struct Figure: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: edge, spacing: Spacing.hair) {
-                (value ?? Text(verbatim: "—")).font(Typography.heading).monospacedDigit().foregroundStyle(value == nil ? palette.ink3 : palette.ink)
+                (value ?? Text(verbatim: "—")).font(Typography.heading).foregroundStyle(value == nil ? palette.ink3 : palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 HStack(spacing: Spacing.tight) {
                     if let alert { StatusDot(color: alert) }
@@ -227,7 +227,7 @@ private struct RecallLine: View {
                     if line.pinned { Image(.pin).font(Glyph.mark).foregroundStyle(palette.signature) }
                     Text(DateLabel.short(line.createdAt))
                 }
-                .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
+                .font(Typography.meta).foregroundStyle(palette.ink3).fixedSize()
             }
         }
     }

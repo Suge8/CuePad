@@ -18,7 +18,7 @@ struct NoteLine<Glyph: View, Label: View>: View {
             label
             if let open { DisclosureChevron(open: open) }
         }
-        .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2)
+        .font(Typography.caption).foregroundStyle(palette.ink2)
         .frame(minHeight: Note.lineHeight)
         .contentShape(.rect)
     }
@@ -111,7 +111,7 @@ struct ChatMarker<Label: View>: View {
 
     @ViewBuilder private var marker: some View {
         let text = label
-            .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
+            .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
             .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
             .background { if highlighted { Capsule().fill(palette.selection).transition(.opacity) } }
             .glass(in: .capsule, shown: glassed)
@@ -143,7 +143,7 @@ struct ChatTimeMarker: View {
     var body: some View {
         ChatMarker(glassed: true) {
             if let day = ChatTime.day(date) {
-                Text("\(Text(day).fontWeight(.medium).foregroundStyle(palette.ink2)) \(ChatTime.time(date))")
+                Text("\(Text(day).emphasis(.bold).foregroundStyle(palette.ink2)) \(ChatTime.time(date))")
             } else {
                 Text(ChatTime.time(date))
             }

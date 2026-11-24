@@ -186,7 +186,7 @@ struct CardRow: View {
                 } meta: {
                     HStack(spacing: Spacing.item) {
                         if text.files > 0 { AttachmentMark(count: text.files) }
-                        Text(DateLabel.short(card.modifiedAt)).monospacedDigit()
+                        Text(DateLabel.short(card.modifiedAt))
                     }
                     .font(Typography.caption).foregroundStyle(palette.ink3)
                 }

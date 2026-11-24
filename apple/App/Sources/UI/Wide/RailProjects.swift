@@ -39,12 +39,12 @@ struct RailProjectRow: View {
             RailLine {
                 ProjectGlyph(project: project).opacity(Self.touch || !hovering ? 1 : 0)
             } rest: {
-                Text(verbatim: project.shownName).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+                Text(verbatim: project.shownName).font(selected ? Typography.bodyBold : Typography.body).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: Spacing.item)
                 if running > 0 {
                     HStack(spacing: Spacing.glyph) {
                         BoardLaneMark(column: .advancing, size: 12)
-                        Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
+                        Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3)
                     }
                     .opacity(Self.touch || !hovering ? 1 : 0)
                 }
@@ -159,7 +159,7 @@ struct RailProjectSessions: View {
             } rest: {
                 title.lineLimit(1)
                 Spacer(minLength: Spacing.item)
-                if let count { Text(count, format: .number).monospacedDigit() }
+                if let count { Text(count, format: .number) }
             }
             .font(Typography.caption).foregroundStyle(palette.ink3)
         }

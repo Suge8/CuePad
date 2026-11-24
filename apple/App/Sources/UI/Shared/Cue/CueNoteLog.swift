@@ -21,7 +21,7 @@ struct CueNoteLog: View {
                                 summary(folds)
                                 if let time = folds.last?.last.date {
                                     Dot()
-                                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " ")).monospacedDigit()
+                                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
                                 }
                             }
                         }
@@ -97,7 +97,7 @@ private struct CueNoteLine: View {
             line
             if fold.rounds.count > 1 {
                 Dot()
-                Text("\(fold.rounds.count) 次").monospacedDigit().fixedSize().contentTransition(.numericText())
+                Text("\(fold.rounds.count) 次").fixedSize().contentTransition(.numericText())
             }
         }
     }
@@ -193,7 +193,7 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
                     words
                 } meta: {
                     Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
-                        .monospacedDigit().foregroundStyle(palette.ink3)
+                        .foregroundStyle(palette.ink3)
                         .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing)
                         #if os(macOS)
                         .opacity(hovered ? 1 : 0)

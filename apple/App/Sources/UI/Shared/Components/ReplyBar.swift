@@ -247,7 +247,7 @@ private struct MacAsleepNote: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            Text("「\(mac)」没开").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+            Text("「\(mac)」没开").font(Typography.secondaryBold).foregroundStyle(palette.ink)
             Text("开机后再发，写好的先留着").font(Typography.meta).foregroundStyle(palette.ink2)
         }
         .fixedSize()

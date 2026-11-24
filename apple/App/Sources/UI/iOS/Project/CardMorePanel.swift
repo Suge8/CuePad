@@ -51,7 +51,7 @@ private struct CardMorePanel: View {
 
     private var actions: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(card.title).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(2)
+            Text(card.title).font(Typography.secondaryBold).foregroundStyle(palette.ink).lineLimit(2)
                 .padding(.horizontal, Spacing.page).padding(.top, Spacing.group).padding(.bottom, Spacing.tight)
             ForEach(CardMenu.swipeMore(for: card, opens: opens), id: \.self) { item in
                 if let run = item.run(on: card, in: workspace) {
@@ -80,7 +80,7 @@ private struct CardMorePanel: View {
             Button { flip(false) } label: {
                 HStack(spacing: Spacing.glyph) {
                     Chevron(.back).foregroundStyle(palette.ink2)
-                    Text(CardMenu.Item.move.title).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+                    Text(CardMenu.Item.move.title).font(Typography.secondaryBold).foregroundStyle(palette.ink)
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, Spacing.page).frame(minHeight: RowMetrics.height).contentShape(.rect)
@@ -97,7 +97,7 @@ private struct CardMorePanel: View {
                     LinkRow(title: Text(project.shownName), chevron: false) {
                         ProjectGlyph(project: project, size: glyph)
                     } trailing: {
-                        if here { Image(.complete).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink3) }
+                        if here { Image(.complete).font(Typography.metaBold).foregroundStyle(palette.ink3) }
                     }
                 }
                 .buttonStyle(.row)

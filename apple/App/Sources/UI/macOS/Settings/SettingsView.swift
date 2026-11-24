@@ -288,7 +288,7 @@ private struct ConflictsRow: View {
     private func version(_ version: ConflictVersion, of conflict: CardConflict) -> some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
             HStack {
-                Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
+                Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.metaBold).foregroundStyle(palette.ink3)
                 Spacer()
                 Button(SyncChoices.keep) { choices.keep(version.keep, of: conflict, services) }
                     .buttonStyle(ControlButtonStyle(size: .compact))

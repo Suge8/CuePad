@@ -41,7 +41,7 @@ struct SettingsScreen: View {
                 }
             }
             Section {} footer: {
-                Text("CuePad \(AppServices.version)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text("CuePad \(AppServices.version)").font(Typography.meta).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)
             }
         }

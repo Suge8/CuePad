@@ -41,7 +41,7 @@ struct CueShots: View {
         let split = look.range(of: "：") ?? look.range(of: ": ")
         let parts = split.map { [String(look[..<$0.lowerBound]), String(look[$0.upperBound...])] } ?? [look]
         return VStack(alignment: .leading, spacing: Spacing.hair) {
-            Text(Self.keepingTail(parts.first ?? look)).fontWeight(.semibold).foregroundStyle(palette.ink)
+            Text(Self.keepingTail(parts.first ?? look)).emphasis(.bold).foregroundStyle(palette.ink)
             if parts.count > 1 { Text(Self.keepingTail(parts[1])).foregroundStyle(palette.ink2) }
         }
         .font(Typography.meta)

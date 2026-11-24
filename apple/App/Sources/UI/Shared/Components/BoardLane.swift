@@ -141,7 +141,7 @@ struct BoardColumnHeader: View {
             BoardLaneMark(column: column, size: isShelf ? 16 : Self.mark, drawn: drawn)
             Text(column.title).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
-            Text("\(count)").monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
+            Text("\(count)").foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
                 .padding(.leading, Spacing.glyph)
         }
         .font(font)
@@ -155,7 +155,7 @@ struct BoardColumnHeader: View {
         #endif
     }
 
-    private var font: Font { isShelf ? Typography.secondary.weight(.semibold) : Typography.laneTitle }
+    private var font: Font { isShelf ? Typography.secondaryBold : Typography.laneTitle }
 
     private var disc: CGFloat { isShelf ? TaskNextMark.disc : Self.add }
 

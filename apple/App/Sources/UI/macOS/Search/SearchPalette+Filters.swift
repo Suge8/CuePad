@@ -15,7 +15,7 @@ struct FilterBar: View {
                 }
                 .menuStyle(.button).menuIndicator(.hidden).buttonStyle(PressStyle())
             }
-            if let total { Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2).fixedSize().layoutPriority(1) }
+            if let total { Text(CountCopy.hits(total)).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize().layoutPriority(1) }
         }
     }
 }

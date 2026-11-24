@@ -49,7 +49,7 @@ private struct ConflictPair: View {
 
     private func version(_ version: ConflictVersion) -> some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.caption.weight(.medium)).foregroundStyle(palette.ink3)
+            Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.captionBold).foregroundStyle(palette.ink3)
             Text(Outgoing.text(of: version.card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(12).frame(maxWidth: .infinity, alignment: .leading)
             Button(SyncChoices.keep) { choices.keep(version.keep, of: conflict, services) }

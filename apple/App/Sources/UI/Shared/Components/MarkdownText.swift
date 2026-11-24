@@ -169,7 +169,7 @@ struct MarkdownText: View, Equatable {
         case (.document, 1): Typography.documentTitle
         case (.document, 2): Typography.documentHeading
         case (.document, 3), (.reply, ...2): Typography.readingHeading
-        default: Typography.reading.weight(.semibold)
+        default: Typography.readingBold
         }
     }
 
@@ -346,7 +346,7 @@ struct MarkdownTableView: View {
             let alignment = table.alignments[column]
             CappedWidth(cap: Self.cellWidth) {
                 MarkdownMediaView(source: text, images: images, exporting: exporting)
-                    .font(header ? Typography.secondary.weight(.semibold) : Typography.secondary)
+                    .font(header ? Typography.secondaryBold : Typography.secondary)
                     .foregroundStyle(palette.ink)
                     .multilineTextAlignment(alignment.text)
             }

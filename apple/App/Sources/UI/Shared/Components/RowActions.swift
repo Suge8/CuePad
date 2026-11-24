@@ -143,7 +143,7 @@ private struct SwipeRow: ViewModifier {
         return Button { run(action) } label: {
             VStack(spacing: Spacing.glyph) {
                 Image(action.icon)
-                    .font(Typography.body.weight(.semibold))
+                    .font(Typography.bodyBold)
                     .foregroundStyle(palette.onFill)
                     .frame(width: stretched ? max(width - 16, Self.pill.width) : Self.pill.width, height: Self.pill.height)
                     .background(action.tone.fill(palette), in: .capsule)

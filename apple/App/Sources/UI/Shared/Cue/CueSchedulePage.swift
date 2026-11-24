@@ -51,7 +51,6 @@ struct CueSchedulePage: View {
                 Button { picking.toggle() } label: {
                     let when = ScheduleText.when(draft)
                     Label { Text(verbatim: "\(when.day) \(when.time)") } icon: { Image(.schedule) }
-                        .monospacedDigit()
                         .chip(on: picking, size: .compact)
                         .fixedSize()
                 }
@@ -90,7 +89,7 @@ struct CueSchedulePage: View {
                         ForEach([10, 22], id: \.self) { Text(verbatim: ScheduleText.clock(hour: $0, minute: 58)).hidden() }
                         Text(verbatim: ScheduleText.time(line)).foregroundStyle(palette.ink)
                     }
-                    .font(ScheduleMetrics.time).monospacedDigit()
+                    .font(ScheduleMetrics.time)
                     VStack(alignment: .leading, spacing: Spacing.hair) {
                         Text(verbatim: line.text).font(Typography.body).foregroundStyle(palette.ink)
                         Text(note).font(Typography.meta).foregroundStyle(palette.ink3)
@@ -132,9 +131,9 @@ private struct Rescheduling: Equatable {
 
 private enum ScheduleMetrics {
     #if os(macOS)
-    static let time = Typography.bodyStrong.weight(.medium)
+    static let time = Typography.bodyStrong
     #else
-    static let time = Typography.title.weight(.medium)
+    static let time = Typography.title
     #endif
     static let gap = Spacing.group
 }

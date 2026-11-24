@@ -41,7 +41,7 @@ struct RailRow: View {
             RailLine {
                 Image(icon).font(Glyph.control).foregroundStyle(palette.signature)
             } rest: {
-                Text(title).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+                Text(title).font(selected ? Typography.bodyBold : Typography.body).foregroundStyle(palette.ink).lineLimit(1)
             }
         }
         .buttonStyle(RowStyle(selected: selected))
@@ -96,11 +96,11 @@ struct RailHome: View {
                     .cornerDot { CueDot() }
             }
             tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } content: {
-                Image(.task).font(.system(size: Self.glyph, weight: .semibold)).foregroundStyle(palette.signature)
+                Image(.task).font(Glyph.at(Self.glyph)).foregroundStyle(palette.signature)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .topTrailing) {
                         if moving > 0 {
-                            Text(moving, format: .number).font(Typography.caption.weight(.semibold)).monospacedDigit()
+                            Text(moving, format: .number).font(Typography.captionBold)
                                 .foregroundStyle(TaskBoard.Column.advancing.countInk(palette))
                                 .padding(Spacing.group)
                         }
@@ -182,11 +182,12 @@ struct RailSessions: View {
                 }
             }
             .padding(.horizontal, RowMetrics.bleed)
-            .safeAreaPadding(.bottom, Chrome.pad)
+            .safeAreaPadding(.bottom, Chrome.fade)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: rows.waiting.map(\.id))
         }
         .scrollIndicators(.hidden)
+        .fades(.bottom)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .onChange(of: workspace.mainRoute) { _, route in
             if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
@@ -228,9 +229,9 @@ struct RailSessions: View {
         let selected = workspace.mainRoute == .shelf
         return Button { workspace.selectPane(.projects) } label: {
             HStack(spacing: Spacing.glyph) {
-                Text("项目").fontWeight(selected ? .semibold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
+                Text("项目").emphasis(selected ? .bold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
                 Spacer(minLength: 0)
-                Text(workspace.catalog?.projects.count ?? 0, format: .number).monospacedDigit().foregroundStyle(palette.ink3)
+                Text(workspace.catalog?.projects.count ?? 0, format: .number).foregroundStyle(palette.ink3)
             }
             .font(Typography.label)
             .frame(height: Chrome.row)

@@ -216,7 +216,7 @@ private struct FigureStatus: View {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 DoingLine(text: live.verb).font(Typography.bodyStrong).lineLimit(1)
                 Text(timerInterval: since...Date.distantFuture, countsDown: false)
-                    .font(Typography.secondary.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+                    .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize()
             }
             ZStack(alignment: .leading) {
                 Text(verbatim: " ").hidden()

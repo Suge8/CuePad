@@ -11,7 +11,7 @@ struct LibrarySource: View {
 
     var body: some View {
         Text(Dotted(mac?.shownName, String(localized: "\(DateLabel.short(library.modifiedAt))报来")))
-            .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+            .font(Typography.meta).foregroundStyle(palette.ink3)
             .frame(maxWidth: .infinity)
             .observing(services.store, id: library.hostID, into: $mac, onError: workspace.fail) { [host = library.hostID] in try $0.macAgents(on: host) }
     }

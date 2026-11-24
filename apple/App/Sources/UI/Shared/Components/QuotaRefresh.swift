@@ -55,7 +55,7 @@ struct QuotaRefreshNote: View {
                 Text("正在查询").font(Typography.meta).foregroundStyle(palette.ink3)
             } else {
                 Button("重试") { Task { await services.refreshQuota(.manual) } }
-                    .font(Typography.meta.weight(.medium))
+                    .font(Typography.metaBold)
                     .accessibilityHint("再查一次额度")
             }
         }

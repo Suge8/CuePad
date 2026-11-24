@@ -18,7 +18,7 @@ extension TaskBoard.Column {
         }
     }
 
-    var titleWeight: Font.Weight? { light ? .regular : nil }
+    var titleWeight: Typography.Weight? { light ? .regular : nil }
 
     func countInk(_ palette: Palette) -> Color {
         switch self {

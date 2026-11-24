@@ -71,7 +71,7 @@ struct VariablesChip: View {
             if more > 0 { Text(verbatim: "+\(more)").foregroundStyle(palette.ink2) }
             Chevron(.expand).foregroundStyle(palette.ink2)
         }
-        .font(Typography.secondary.weight(.medium))
+        .font(Typography.secondaryBold)
         .padding(.horizontal, Spacing.inset)
         .frame(height: FloatingGlyph.face)
         .glass(in: .capsule, interactive: true)

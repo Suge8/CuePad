@@ -64,7 +64,7 @@ struct LibraryEntry<Icon: View, Trailing: View>: View {
         HStack(spacing: Spacing.group) {
             icon.frame(width: Self.tile, height: Self.tile).background(palette.fill, in: .rect(cornerRadius: Radius.chip)).readerHidden(true)
             VStack(alignment: .leading, spacing: Spacing.hair) {
-                Text(verbatim: title).font(Typography.body.weight(.medium)).foregroundStyle(dim ? palette.ink3 : palette.ink).lineLimit(1)
+                Text(verbatim: title).font(Typography.bodyBold).foregroundStyle(dim ? palette.ink3 : palette.ink).lineLimit(1)
                 Text(verbatim: detail).font(Typography.meta).foregroundStyle(dim ? palette.ink3 : palette.ink2)
                     .lineLimit(wraps ? nil : 2).fixedSize(horizontal: false, vertical: true)
             }

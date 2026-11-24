@@ -109,7 +109,7 @@ private struct LiveAddressField: View {
                 .accessibilityValue(Text(verbatim: shown))
             }
         }
-        .font(Typography.secondary.weight(.medium))
+        .font(Typography.secondaryBold)
         .foregroundStyle(palette.ink)
         .frame(height: ControlSize.compact.height)
         .frame(maxWidth: .infinity)
@@ -150,7 +150,7 @@ private struct LiveCandidates: View {
             }
         }
         .fixedSize(horizontal: true, vertical: false)
-        .font(Typography.secondary.weight(.medium))
+        .font(Typography.secondaryBold)
         .foregroundStyle(palette.ink)
         .padding(.horizontal, RowMetrics.bleed)
         .padding(.vertical, Spacing.tight)

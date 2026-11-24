@@ -22,6 +22,6 @@ enum Chrome {
     static let groupHeader: CGFloat = 28
     static let pad = Spacing.tight
     static let groupGap = Spacing.group
-    static let scrollFade = Spacing.block
+    static let fade = Spacing.block
     static var gutter: CGFloat { lead - RowMetrics.bleed }
 }

@@ -36,7 +36,7 @@ struct SlashPalette: View {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 VStack(alignment: .leading, spacing: Spacing.hair) {
                     HStack(spacing: Spacing.item) {
-                        Text("/" + command.name).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink)
+                        Text("/" + command.name).font(Typography.bodyBold).foregroundStyle(palette.ink)
                         if let hint = command.hint { Text(hint).font(Typography.meta).foregroundStyle(palette.ink3) }
                     }
                     .lineLimit(1)

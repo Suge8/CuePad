@@ -50,7 +50,7 @@ private struct QuotaEmpty: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            Text("还没有额度").font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
+            Text("还没有额度").font(Typography.secondaryBold).foregroundStyle(palette.ink)
             Text("连接 Agent 会话后，这里显示订阅额度与 API 余额")
                 .font(Typography.meta).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -126,7 +126,7 @@ private struct QuotaAccount: View {
     private var title: some View {
         let who = Dotted([meter.shownIdentity, meter.source].compactMap { $0 })
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text(verbatim: meter.product).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).fixedSize()
+            Text(verbatim: meter.product).font(Typography.secondaryBold).foregroundStyle(palette.ink).fixedSize()
             Group {
                 if !who.isEmpty { Text("\(Dotted.inline)\(Text(verbatim: who.visible))").truncationMode(.middle).layoutPriority(1) }
                 if let plan = meter.plan { Text("\(Dotted.inline)\(Text(verbatim: plan))") }
@@ -151,7 +151,7 @@ private struct QuotaAccount: View {
 
     private func balanceRow(_ balance: String) -> some View {
         MetaLine(gap: Spacing.item) {
-            Text(meter.owes ? "欠费" : "余额").font(Typography.meta).fontWeight(.medium).foregroundStyle(meter.owes ? palette.failure : palette.ink)
+            Text(meter.owes ? "欠费" : "余额").font(Typography.metaBold).foregroundStyle(meter.owes ? palette.failure : palette.ink)
         } meta: {
             Text(verbatim: balance).font(Typography.gaugeNumber).foregroundStyle(meter.owes ? palette.failure : palette.ink)
         }
@@ -180,13 +180,13 @@ private struct QuotaWindowRow: View {
     }
 
     @ViewBuilder private var heading: some View {
-        let name = Text(window.name).fontWeight(.medium).foregroundStyle(palette.ink)
+        let name = Text(window.name).emphasis(.bold).foregroundStyle(palette.ink)
         if let runway = window.runway {
             let tone = window.level == .critical ? palette.failure : palette.ink2
             Text("\(name)\(Dotted.inline)\(Text("\(runway)后用完").foregroundStyle(tone))")
         } else {
             LiveText(style: QuotaMeter.Countdown(end: window.resetsAt)) {
-                Text("\(name)\(Dotted.inline)\(Text("\(Text($0).monospacedDigit())后重置").foregroundStyle(palette.ink3))")
+                Text("\(name)\(Dotted.inline)\(Text("\(Text($0))后重置").foregroundStyle(palette.ink3))")
             }
         }
     }
@@ -254,7 +254,7 @@ struct QuotaRings: View {
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: Spacing.glyph) {
-            if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
+            if rings.isEmpty { Text("额度").font(Typography.metaBold).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.id) { ModelBadge(mark: Provider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)

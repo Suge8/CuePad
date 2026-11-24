@@ -127,7 +127,7 @@ struct SessionRailCell: View {
 
     private var name: some View {
         Text(verbatim: item.name)
-            .fontWeight(selected ? .semibold : nil)
+            .emphasis(selected ? .bold : nil)
             .foregroundStyle(item.ended ? palette.ink3 : item.resting ? palette.ink2 : palette.ink)
             .lineLimit(1)
     }
@@ -166,7 +166,7 @@ private struct SessionRailReadout: View {
     var body: some View {
         Group {
             switch item.pulse.word {
-            case .state(let shown): Text(shown.label).fontWeight(.semibold).foregroundStyle(shown.labelTint(palette))
+            case .state(let shown): Text(shown.label).emphasis(.bold).foregroundStyle(shown.labelTint(palette))
             case .context(let meter): ContextFact(meter: meter)
             case nil: SessionRailTime(item: item)
             }
@@ -186,7 +186,7 @@ private struct SessionRailTime: View {
         if let cache = item.cache, cache.warmUntil != nil {
             Moments(next: cache.nextTick(after:)) { now in
                 if let left = cache.minutesLeft(at: now) {
-                    (cache.estimated == true ? Text("缓存约 \(left)m 过期") : Text("缓存 \(left)m 过期")).foregroundStyle(palette.ink3).monospacedDigit()
+                    (cache.estimated == true ? Text("缓存约 \(left)m 过期") : Text("缓存 \(left)m 过期")).foregroundStyle(palette.ink3)
                 } else {
                     waited
                 }
@@ -198,7 +198,7 @@ private struct SessionRailTime: View {
 
     @ViewBuilder private var waited: some View {
         if let clock = item.shown.clock {
-            LiveText(style: clock.live(.span)) { Text($0).foregroundStyle(palette.ink3).monospacedDigit() }
+            LiveText(style: clock.live(.span)) { Text($0).foregroundStyle(palette.ink3) }
         }
     }
 }
