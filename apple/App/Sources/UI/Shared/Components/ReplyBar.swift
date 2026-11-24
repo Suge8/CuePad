@@ -8,7 +8,6 @@ struct ReplyBar: View {
     let session: SessionState
     let config: ConfigShown?
     let catalog: AgentCatalog?
-    var compact = false
     let stopping: Bool
     var commandProgress: MacDelivery.CommandProgress?
     var sending = false
@@ -22,6 +21,7 @@ struct ReplyBar: View {
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @Environment(\.sendFlight) private var flight
+    @Environment(\.replyCompact) private var compact
     @State private var sentCount = 0
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
@@ -60,7 +60,7 @@ struct ReplyBar: View {
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft }
     private var canStop: Bool { session.canStop }
-    private var shownSending: Bool { !hasDraft && !canStop && (workspace.launching.contains(session) || sending) }
+    private var shownSending: Bool { !hasDraft && !canStop && (workspace.launching.contains(SendingTarget(session)) || sending) }
     private var glyph: SendGlyph.Phase { canSend ? .ready : shownSending ? .sending : .idle }
     private var commandLine: String? { commands.isEmpty ? nil : Slash.line(of: draft, in: commands, for: session) }
     private var button: ReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
@@ -105,7 +105,7 @@ struct ReplyBar: View {
             Composer(
                 draft: box, prompt: prompt, promptIcon: wakes ? .wakeSession : nil, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending || macOff != nil, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
-                commands: commands, shortcuts: shortcuts, recall: recall,
+                commands: commands, submit: submit, picks: picks, recall: recall,
                 header: {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
@@ -115,10 +115,7 @@ struct ReplyBar: View {
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
-            .onChange(of: sending) { workspace.launching.settle(session) }
-            .onChange(of: canStop) { workspace.launching.settle(session) }
-            .onDisappear { workspace.launching.settle(session) }
-            .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
+            .task { await DebugHooks.pressSendIfAsked(session: true) { submit?() } }
     }
 
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
@@ -131,25 +128,24 @@ struct ReplyBar: View {
 
     private static let unanswerable: LocalizedStringResource = "CuePad 答不了这类提问，只能让这个会话休眠"
 
-    private var shortcuts: [ReplyShortcut: () -> Void] {
-        var map: [ReplyShortcut: () -> Void] = [:]
-        switch macOff == nil ? button : nil {
-        case .answer: map[.send] = answer
-        case .send(let mode): map[.send] = { send(mode) }
-        case .stop, nil: break
+    private var submit: (() -> Void)? {
+        if macOff != nil { return { asleepNote.open = true } }
+        return switch button {
+        case .answer: answer
+        case .send(let mode): { send(mode) }
+        case .stop, nil: nil
         }
-        if macOff != nil { map[.send] = { asleepNote.open = true } }
-        #if os(macOS)
-        if hasTools {
-            map[.model] = { opening = .model }
-            map[.thinking] = { opening = .thinking }
-        }
-        #endif
-        return map
     }
 
-    private func didSend(talked: Bool = true) {
-        if talked { workspace.launching.begin(session) } else { workspace.launching.settle(session) }
+    private var picks: ((ConfigPick) -> Void)? {
+        #if os(macOS)
+        hasTools ? { opening = $0 } : nil
+        #else
+        nil
+        #endif
+    }
+
+    private func didSend() {
         #if os(iOS)
         focused = false
         #endif
@@ -241,11 +237,10 @@ struct ReplyBar: View {
 
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
-        let talked = commandLine == nil
         let id = UUID()
-        if talked { flight?.depart(draft, as: id) }
+        if commandLine == nil { flight?.depart(draft, as: id) }
         workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card, as: id)
-        didSend(talked: talked)
+        didSend()
     }
 }
 
@@ -267,4 +262,8 @@ extension AppSettings {
     func replyDraftBinding(for session: UUID) -> Binding<ComposerDraft> {
         Binding(get: { self.replyDraft(for: session) }, set: { self.setReplyDraft($0, for: session) })
     }
+}
+
+extension EnvironmentValues {
+    @Entry var replyCompact = false
 }

@@ -6,15 +6,14 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var nearOldest = false
     private(set) var prepending = false
     private(set) var toNewest: ToNewest?
-    private(set) var target: Target?
+    private(set) var jump: Jump?
     private(set) var seeking: Target?
     private(set) var owesLanding = false
     var scrolling = false {
         didSet {
             if scrolling {
-                jumping = false
+                jump = nil
                 opened = []
-                target = nil
                 owesLanding = false
             }
             if scrolling, !withinSlack {
@@ -23,9 +22,8 @@ nonisolated struct ChatFollow: Equatable {
             }
         }
     }
-    private var jumping = false
     private var opened: Set<UUID> = []
-    private var growingUp: Set<UUID> = []
+    private var growingUp: [UUID: Int] = [:]
     private var withinSlack = true
     private var revealed = false
     private(set) var deferred = false
@@ -35,6 +33,19 @@ nonisolated struct ChatFollow: Equatable {
     var wantsEarlier: Bool { nearOldest && !prepending }
 
     var showsHeader: Bool { atNewest || revealed }
+
+    var target: Target? { jump?.target }
+
+    /// 滚过去的那一帧画好之前（`flying`）读数还报着跳之前的位置，不能按它认落没落在最新处。
+    enum Jump: Equatable {
+        case flying(Target), landed(Target)
+
+        var target: Target {
+            switch self {
+            case .flying(let target), .landed(let target): target
+            }
+        }
+    }
 
     struct Target: Equatable {
         let id: UUID
@@ -55,10 +66,8 @@ nonisolated struct ChatFollow: Equatable {
         showsJump = beyondScreen
         self.nearOldest = nearOldest
         withinSlack = near
-        if !near { jumping = false }
-        if near, !jumping, opened.isEmpty {
-            atNewest = true
-            revealed = false
+        if near, !flying, opened.isEmpty {
+            settle()
         } else if byUser {
             atNewest = false
             revealed = false
@@ -67,10 +76,17 @@ nonisolated struct ChatFollow: Equatable {
 
     /// 钮在底边的折叠（`RisingFold`）开合的那一段：它底下的都不动、内容朝上长，滚动区不把这段高当成末尾新长出来的。
     mutating func grow(_ key: UUID, _ growing: Bool) {
-        if growing { growingUp.insert(key) } else { growingUp.remove(key) }
+        let count = growingUp[key, default: 0] + (growing ? 1 : -1)
+        growingUp[key] = count > 0 ? count : nil
     }
 
     var growsUp: Bool { !growingUp.isEmpty }
+
+    /// 一块折叠离开了对话（段换成占位、气泡换下）：它的开合动画的收尾不一定还来。
+    mutating func leave(_ key: UUID) {
+        growingUp[key] = nil
+        opened.remove(key)
+    }
 
     mutating func stay(_ key: UUID, _ open: Bool) {
         guard open else {
@@ -110,11 +126,8 @@ nonisolated struct ChatFollow: Equatable {
 
     private mutating func returnToNewest(sent: Bool) {
         owesLanding = false
-        atNewest = true
-        revealed = false
-        jumping = false
+        settle()
         opened = []
-        target = nil
         deferred = false
         unheld = true
         toNewest = ToNewest(sent: sent)
@@ -143,8 +156,20 @@ nonisolated struct ChatFollow: Equatable {
     mutating func jump(to target: Target) {
         atNewest = false
         revealed = false
-        jumping = true
-        self.target = target
+        jump = .flying(target)
+    }
+
+    mutating func arrived(at target: Target) {
+        guard jump == .flying(target) else { return }
+        if withinSlack, opened.isEmpty { settle() } else { jump = .landed(target) }
+    }
+
+    private var flying: Bool { if case .flying = jump { true } else { false } }
+
+    private mutating func settle() {
+        atNewest = true
+        revealed = false
+        jump = nil
     }
 }
 
@@ -163,6 +188,7 @@ struct ChatStay: Equatable {
     let column: UUID
     let stay: (UUID, Bool) -> Void
     let grow: (UUID, Bool) -> Void
+    let leave: (UUID) -> Void
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }

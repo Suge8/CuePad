@@ -164,6 +164,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         Task {
                             await NextFrame.wait()
                             reader.scrollTo(target.id, anchor: target.anchor)
+                            await NextFrame.drawn()
+                            follow.wrappedValue.arrived(at: target)
                         }
                     }
             }

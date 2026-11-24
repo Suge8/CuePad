@@ -8,8 +8,6 @@ final class CueWatch {
     private(set) var presence = CuePresence.derive(.empty, at: .always())
     private(set) var canHear = false
     private(set) var sending = false
-    private(set) var launching = false
-    private(set) var lastYouSaid: Date?
     private(set) var now = CueNow.empty
     private(set) var wake: Wake?
     private var transition: Transition?
@@ -46,15 +44,13 @@ final class CueWatch {
     }
 
     func sent(_ event: Send) {
-        launching = true
         hold(event.beat, until: event.at.addingTimeInterval(RelayFlight.launchLanding))
     }
 
-    func launchFailed() { launching = false }
-
-    func follow(_ services: AppServices) async throws {
+    func follow(_ services: AppServices, launching: Launching) async throws {
         for try await seen in services.cueUpdates() {
             apply(seen.read.digest, at: seen.moment, local: seen.local, catchingUp: services.syncing.isCatchingUp(on: seen.read.digest.hostID))
+            if let said = seen.read.digest.lastYou?.id { launching.observed(.cue) { $0 == said } }
         }
     }
 
@@ -64,8 +60,6 @@ final class CueWatch {
         self.presence = presence
         canHear = presence != .disabled
         sending = if case .sending = presence { true } else { false }
-        if lastYouSaid != digest.lastYou?.said { launching = false }
-        lastYouSaid = digest.lastYou?.said
         noteWake(digest.woke, catchingUp: catchingUp)
         let next = AppServices.cueNow(digest, at: moment, local: local).aged(to: .now)
         if !next.same(as: now) { show(next) }

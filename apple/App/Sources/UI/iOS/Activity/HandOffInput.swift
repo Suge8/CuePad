@@ -72,7 +72,7 @@ struct HandOffInput: View {
         Composer(
             draft: box, prompt: "补一句", label: "发给 Agent", focus: $focused,
             accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil || launchTools != nil,
-            commands: commands,
+            commands: commands, submit: send,
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
                 if let tools {

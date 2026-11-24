@@ -33,7 +33,7 @@ struct NewSessionInput: View {
         Composer(
             draft: $draft, prompt: nil, label: "新会话的第一句话", focus: $focused,
             cardsFrom: chosen?.project.id,
-            tooled: brain != nil, shortcuts: [.send: launch],
+            tooled: brain != nil, submit: launch,
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id) } },
             send: {

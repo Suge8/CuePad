@@ -6,7 +6,7 @@ extension Workspace {
     func followCue() async {
         let services = services
         do {
-            try await cue.follow(services)
+            try await cue.follow(services, launching: launching)
         } catch is CancellationError {
         } catch {
             fail(error)

@@ -9,24 +9,22 @@ struct SessionChat: View {
     let digest: SessionDigest
     let readingWidth: CGFloat
     let inset: CGFloat
+    let chat: ChatDerived.Facts
     @Binding var follow: ChatFollow
     #if os(macOS)
     var slot: Bridge.Slot?
     #endif
-    @State private var derived = ChatDerived()
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let _ = derived.refresh(digest, at: services.speech)
-        let items = derived.items
+        let items = chat.items
         ChatColumn(
-            followKey: Conversation.followKey(
-                session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, at: services.speech),
-            readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, ids: items.map(\.id),
+            followKey: Conversation.FollowKey(messages: digest.messages.count, previews: digest.previews.count, outgoing: chat.trips, state: session.state),
+            readingWidth: readingWidth, inset: inset, follow: $follow, marks: chat.marks, ids: items.map(\.id),
             paging: Conversation.paging,
             holding: services.syncing.isCatchingUp(on: session.hostID)
         ) { window in
-            conversation(window: window)
+            conversation(window: window).equatable()
         }
         .overlay {
             BlankChat(shown: items.isEmpty && digest.deliveries.isEmpty && !session.hasStarted && session.state != .known(.ended)
@@ -36,7 +34,7 @@ struct SessionChat: View {
 
     private func conversation(window: ChatWindow) -> Conversation {
         var conversation = Conversation(
-            session: session, items: derived.items, messages: digest.messages, window: window,
+            session: session, items: chat.items, messages: digest.messages, window: window,
             fetching: digest.fetchingTranscript(at: services.speech))
         #if os(macOS)
         conversation.slot = slot

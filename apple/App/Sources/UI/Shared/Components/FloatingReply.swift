@@ -24,7 +24,7 @@ struct FloatingReply<Chat: View, Reply: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if let height {
-                chat.environment(\.chatBottomInset, height).environment(\.chatHeight, visible)
+                chat.environment(\.chatBottomInset, height)
                     #if os(iOS)
                     .scrollEdgeEffectHidden(true, for: .top)
                     .simultaneousGesture(TapGesture().onEnded {

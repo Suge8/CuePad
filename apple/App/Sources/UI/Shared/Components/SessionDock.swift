@@ -4,7 +4,7 @@ import SwiftUI
 struct SessionDock: View {
     let session: SessionState
     let digest: SessionDigest?
-    var compact = false
+    let chat: ChatDerived.Facts
     var revealNote: (ReplyNote) -> Void = { _ in }
     let sent: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -13,10 +13,10 @@ struct SessionDock: View {
 
     var body: some View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
-        let endIssue = MacDelivery.endProgress(deliveries, at: speech)
+        let endIssue = MacDelivery.endProgress(deliveries, at: speech), config = digest?.config(at: speech)
         VStack(spacing: 0) {
             QuestionDock(session: session)
-            FailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
+            FailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: config)
             DockedCard(endIssue?.unconfirmedReason) { reason in
                 Callout(.unknown, text: String(localized: "休眠结果尚未确认：\(reason)"), docked: true) { recoverEnd }
             }
@@ -27,11 +27,11 @@ struct SessionDock: View {
                 Text("这个会话已经不在了，发不到它").font(Typography.meta).foregroundStyle(palette.ink3)
             } else {
                 ReplyBar(
-                    session: session, config: digest?.config(at: speech), catalog: digest?.catalog, compact: compact,
+                    session: session, config: config, catalog: digest?.catalog,
                     stopping: MacDelivery.stopping(session, deliveries: deliveries, at: speech),
                     commandProgress: MacDelivery.commandProgress(deliveries, messages: messages, at: speech),
-                    sending: Chat.sending(deliveries, messages: messages, at: speech),
-                    recall: Chat.lastSaid(messages),
+                    sending: chat.sending,
+                    recall: chat.lastSaid,
                     previews: digest?.previews ?? [],
                     cache: messages.last { $0.role == .known(.pi) }?.tools?.cache,
                     revealNote: revealNote,
