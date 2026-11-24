@@ -22,13 +22,6 @@ nonisolated enum TaskNext: Equatable, Sendable {
         }
     }
 
-    var agentBusy: Bool { busySession != nil }
-
-    var busySession: SessionState? {
-        guard case .agent(let shown, let session) = self, shown.agentBusy else { return nil }
-        return session
-    }
-
     var speech: String {
         switch self {
         case .agent(let shown, _): shown.label

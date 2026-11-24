@@ -229,9 +229,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let finished = try store.tasksDone().filter { Column.of($0, in: tally) == .done }
         let todo = open.roots.compactMap(open.task).filter { Column.of($0, in: tally) == .todo }
         let working = tally.advancing.compactMap { if case .task(let board) = $0 { board } else { nil } }
-        let started = Set(working.map(\.id))
-        let held = try tally.held.subtracting(started).compactMap { try store.card($0) }
-        let others = try store.boardItems((todo + finished + held).filter { !started.contains($0.id) })
+        let held = try tally.held.compactMap { try store.card($0) }
+        let others = try store.boardItems(todo + finished + held)
         let boards = Dictionary((working + others).map { ($0.id, $0) }) { first, _ in first }
         let loose = tally.advancing.compactMap { if case .session(let state) = $0 { state } else { nil } }
         let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))

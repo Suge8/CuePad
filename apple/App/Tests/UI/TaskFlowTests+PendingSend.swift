@@ -155,9 +155,8 @@ extension TaskFlowTests {
         try await store.deleteDelivery(launch.id)
         ext.setState(["kind": "thinking"])
         func asked(_ id: UUID) async throws -> (session: SessionState, sleeps: Bool)? {
-            let card = try #require(try await store.card(id))
-            try await eventually("在做") { workspace.next(for: card, in: workspace.agentLinks, steps: nil)?.busySession != nil }
-            try await workspace.confirmComplete(card)
+            try await eventually("在做") { workspace.agentLinks.items[id].map { workspace.pulse(of: $0).shown?.agentBusy == true } ?? false }
+            try await workspace.confirmComplete(id)
             defer { workspace.sessionAsk = nil }
             guard case .complete(.agent(let busy, let sleeps), _, _) = workspace.sessionAsk else { return nil }
             return (busy, sleeps)
