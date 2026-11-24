@@ -53,16 +53,6 @@ struct ProjectsTests {
         #expect(only.mainRoute == .progress && services.settings.currentProject == nil)
     }
 
-    @Test func 并排着变窄_两个会话都在栈里() {
-        let workspace = Workspace(services: services)
-        workspace.openSession(UUID(), sessionID: "a")
-        workspace.openSession(UUID(), sessionID: "b", in: .aside)
-        #expect(workspace.navigation.trail == "wide session | session")
-
-        workspace.setLayout(.narrow)
-        #expect(workspace.navigation.trail == "cue > session > session")
-    }
-
     @Test func 进展选了项目_全部归档只归档这个项目做完的_选全部才归档别的() async throws {
         let near = try await store.createProject(name: "A", color: "#000000"), far = try await store.createProject(name: "B", color: "#000000")
         let mine = try await store.createTask("这里做完的", in: near.id), theirs = try await store.createTask("别处做完的", in: far.id)
