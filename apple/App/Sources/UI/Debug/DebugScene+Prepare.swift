@@ -56,7 +56,7 @@ extension DebugScene {
         await voiceLayoutIfAsked(workspace)
         switch args.driveOpts.bench {
         case "churn": await benchChurn(workspace)
-        case "interact": await InteractionBench.run(workspace)
+        case "interact": Task { await InteractionBench.run(workspace) }
         case "chatscroll": Task { await ChatScrollBench.run() }
         default: break
         }

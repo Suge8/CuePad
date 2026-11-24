@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.dont_write_bytecode = True
-from _perf import SEED, TRACE, fail, fresh, mac, relay, rows_file, seeded, trace_path  # noqa: E402
+from _perf import SEED, TRACE, fail, fresh, last_error, mac, relay, rows_file, seeded, trace_path  # noqa: E402
 from app_env import APPLE, BUNDLE_ID  # noqa: E402
 
 
@@ -35,6 +35,7 @@ def interact_mac(app, derived, runs, extra):
                 for line in lines:
                     if line.startswith("BENCH-ERR "):
                         print(f"CuePad 没量完（{label}）：{line[10:].strip()}", file=sys.stderr)
+                print(f"CuePad 以 {status} 退出（{label}）：{last_error(library) or '标准错误里没有原因'}", file=sys.stderr)
                 sys.exit(status)
             rows += [{"库": label, **json.loads(line[9:])} for line in lines if line.startswith("INTERACT ")]
     shutil.rmtree(f"{derived}/library-run", ignore_errors=True)
