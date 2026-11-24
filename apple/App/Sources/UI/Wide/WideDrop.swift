@@ -48,12 +48,11 @@ enum WideDrag: Equatable {
 }
 
 /// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：每一块的胶囊（`PaneTitle`）、会话条的行、带会话的看板卡、灵感卡。
-/// 落在一块的左右四分之一插在它旁边，正中换掉它；放满了只能换。独占的页（进展）只能换掉。
+/// 从页里拖起的卡（带 `.cuepadCard`）先问指针下页里自己的落点（看板换列、任务行排序、灵感拖到任务上），页接了主区就不接；页不接才按下面的规则。
+/// 落在一块的左右四分之一插在它旁边，正中换掉它；放满了只能换。独占的页（进展）只能换掉，从页里拖起的卡在它上面主区不接。
 /// 已在这一排的是挪位置：落在别的块上哪里都有结果，插过去位置没变（本来就挨着）就与那一块对调。
-/// 从页里拖起的卡（带 `.cuepadCard`：看板的气泡、任务行、灵感卡）在页上只有右边四分之一是"拖出去并排"（放满了是换掉这一页），
-/// 其余归页自己、主区不接：任务行与卡都靠左排，排序、灵感拖到任务上的落点在左边与正中；位置按落点先判，不看放没放满。
-/// 进展不能并排，整页归它，气泡在上面怎么拖都是换列。灵感卡是拿来并排看的，落在别的块正中也放到那一块右边，放满了才换。
-/// 拖着时只看得到类型、读不到内容，落点只按类型定：带会话的就当会话，只带卡的当灵感（不带会话的任务卡放下时不接）。
+/// 从页里拖起的卡不换掉页、灵感卡不换掉别的块：正中也放到那一块右边，放满了才换。
+/// 拖着时主区按拖起的那一头报的认是哪一块（`Workspace.dragging`），没人报的按类型猜：带会话的当会话，只带卡的当灵感。
 enum WideDrop {
     static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
 
@@ -71,9 +70,9 @@ enum WideDrop {
         let fresh = !state.panes.contains(pane)
         let full = fresh && workspace.wideShown >= workspace.wideRoom
         let card = types.contains(.cuepadCard)
-        if card, over.page != nil, over.standsAlone || fraction <= 0.75 { return nil }
+        if card, over.standsAlone { return nil }
         var zone: WideDropZone = over.standsAlone || full ? .replace : fraction < 0.25 ? .before : fraction > 0.75 ? .after : .replace
-        if zone == .replace, card, pane.card != nil, fresh, !full { zone = .after }
+        if zone == .replace, card, fresh, !full, pane.card != nil || over.page != nil { zone = .after }
         func landing(_ zone: WideDropZone) -> WideDropTarget? {
             guard let next = state.dropping(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace, room: workspace.wideRoom),
                   let index = next.panes.firstIndex(of: pane), index < workspace.wideRoom else { return nil }
@@ -151,20 +150,62 @@ extension WideColumnController: UIDropInteractionDelegate {
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
-        let target = slot?.column.flatMap { target(session, in: $0) }
+        let types = Set(WideDrop.types.filter { session.hasItemsConforming(toTypeIdentifiers: [$0.identifier]) })
+        let column = slot?.column
+        let onPage = types.contains(.cuepadCard) && column.flatMap { workspace.pane(in: $0)?.page } != nil
+        let taken = pass(onPage ? pageDrop(beside: interaction, session) : nil, session)
+        let target = taken == nil ? column.flatMap { WideDrop.target(types, at: session.location(in: view).x / max(1, view.bounds.width - dropUnder), in: $0, workspace: workspace) } : nil
         if workspace.dropTarget != target { workspace.dropTarget = target }
-        return UIDropProposal(operation: target == nil ? .cancel : .copy)
+        return taken ?? UIDropProposal(operation: target == nil ? .cancel : .copy)
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) {
+        stopPassing(session)
         if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) {
+        if let page = passedDrop?.interaction { page.delegate?.dropInteraction?(page, sessionDidEnd: session) }
+        passedDrop = nil
         if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
     }
 
+    /// 同一个视图上有几个接收器时 UIKit 只问其中一个（iPadOS 27 实测：页的托管视图上 SwiftUI 的接收器与这里加的并存，整场只问这里的），
+    /// 这里答"不接"也不会再去问别的。所以页里自己的落点由这里转着问：同一个视图上 SwiftUI 的那个接收器（它不答 canHandle，UIKit 当作能接）。
+    private func pageDrop(beside ours: UIDropInteraction, _ session: any UIDropSession) -> UIDropInteraction? {
+        ours.view?.interactions.lazy.compactMap { $0 as? UIDropInteraction }.first { other in
+            guard other !== ours, let delegate = other.delegate else { return false }
+            return delegate.dropInteraction?(other, canHandle: session) ?? true
+        }
+    }
+
+    private func pass(_ page: UIDropInteraction?, _ session: any UIDropSession) -> UIDropProposal? {
+        if let passed = passedDrop?.interaction, passed !== page { passed.delegate?.dropInteraction?(passed, sessionDidExit: session) }
+        guard let page, let delegate = page.delegate else {
+            passedDrop = nil
+            return nil
+        }
+        if passedDrop?.interaction !== page { delegate.dropInteraction?(page, sessionDidEnter: session) }
+        let proposal = delegate.dropInteraction?(page, sessionDidUpdate: session)
+        let takes = proposal.map { $0.operation != .cancel && $0.operation != .forbidden } ?? false
+        passedDrop = (page, takes)
+        return takes ? proposal : nil
+    }
+
+    private func stopPassing(_ session: any UIDropSession) {
+        if let page = passedDrop?.interaction { page.delegate?.dropInteraction?(page, sessionDidExit: session) }
+        passedDrop = nil
+    }
+
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
+        if let passed = passedDrop {
+            passedDrop = nil
+            if passed.takes {
+                passed.interaction.delegate?.dropInteraction?(passed.interaction, performDrop: session)
+                return
+            }
+            passed.interaction.delegate?.dropInteraction?(passed.interaction, sessionDidExit: session)
+        }
         let target = workspace.dropTarget
         workspace.dropTarget = nil
         guard let target, target.column == slot?.column, let provider = session.items.first?.itemProvider,
@@ -187,12 +228,6 @@ extension WideColumnController: UIDropInteractionDelegate {
                 })
             }
         }
-    }
-
-    private func target(_ session: any UIDropSession, in column: Workspace.Column) -> WideDropTarget? {
-        let types = Set(WideDrop.types.filter { session.hasItemsConforming(toTypeIdentifiers: [$0.identifier]) })
-        let fraction = session.location(in: view).x / max(1, view.bounds.width - dropUnder)
-        return WideDrop.target(types, at: fraction, in: column, workspace: workspace)
     }
 }
 #endif

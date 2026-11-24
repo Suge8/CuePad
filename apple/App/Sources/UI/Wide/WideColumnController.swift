@@ -18,6 +18,7 @@ final class WideColumnController: UIHostingController<AnyView> {
     let pane: Bool
     var slot: WideSlot?
     var dropUnder: CGFloat = 0
+    var passedDrop: (interaction: UIDropInteraction, takes: Bool)?
     let focus: WideFocus
     let workspace: Workspace
     private(set) lazy var slide = WideColumnSlide { [unowned self] in self.view.isHidden = $0 }
