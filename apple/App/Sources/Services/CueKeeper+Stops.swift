@@ -5,7 +5,7 @@ import Foundation
 
 extension CueKeeper {
     func leaveUnattended() async {
-        guard let turn, turn.round.failure == nil, !turn.stops.isEmpty else { return }
+        guard let turn, !turn.stops.isEmpty, turn.round.failure == nil || retriedInVain(turn) else { return }
         let given = Set(turn.round.calls.filter { !$0.failed && CueActivity.settlesStop(tool: $0.name, arguments: $0.arguments) }
             .flatMap { [$0.named.task, $0.named.session] }.compactMap(\.self))
         for stop in turn.stops {
@@ -19,6 +19,10 @@ extension CueKeeper {
                 Self.log.error("没给去处的停下没能留给他回：\(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    private func retriedInVain(_ turn: Turn) -> Bool {
+        turn.selfStarted.map { Setback.supersedable($0) && !firstError($0) } == true
     }
 }
 #endif

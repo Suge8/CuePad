@@ -19,12 +19,13 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    @Test func 自己醒来重试也出错才告诉你() async throws {
+    @Test func 自己醒来重试也出错才告诉你_这次停下留给你() async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 先出两次错")
         try await rig.message(.cue, containing: "bad things happened", skippingBackoff: true)
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueMessages().filter { $0.text.contains("bad things happened") }.count == 1)
+        try await eventually("Cue 没处理成的停下留给你") { try await rig.store.sessionsAwaitingReply().count == 1 }
         await rig.stop()
     }
 
