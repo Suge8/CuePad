@@ -18,30 +18,32 @@ struct SideBySideTests {
         workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, in: column)
     }
 
-    private func cueShown(_ workspace: Workspace) -> Bool { workspace.cueShown(WideMetrics(width: 1600, workspace: workspace)) }
+    private func fit(_ workspace: Workspace, width: CGFloat = 1600) { workspace.fit(WideMetrics(width: width, workspace: workspace).fits) }
 
-    @Test func 右半开着时Cue收成钮_收起右半回到原来的选择_选择本身没被改() {
-        services.settings.cueOpen = true
-        let workspace = wide()
-        open("a", workspace)
-        #expect(cueShown(workspace))
+    @Test func 并排时拉出Cue抽屉看一眼_收起并排后Cue栏还是原来的开合() {
+        for chosen in [true, false] {
+            services.settings.cueOpen = chosen
+            let workspace = wide()
+            open("a", workspace)
+            open("b", in: .aside, workspace)
+            fit(workspace)
+            workspace.toggleCue()
+            #expect(workspace.cueDrawer && services.settings.cueOpen == chosen)
+            workspace.toggleCue()
+            workspace.closeColumn(.beside(0))
+            fit(workspace)
+            #expect(!workspace.cueDrawer && services.settings.cueOpen == chosen)
+        }
+    }
 
-        open("b", in: .aside, workspace)
-        #expect(!cueShown(workspace) && services.settings.cueOpen)
-        workspace.closeColumn(.beside(0))
-        #expect(cueShown(workspace))
-
-        #if os(macOS)
-        workspace.toggleLivePreview()
-        #expect(workspace.isSplit && !cueShown(workspace) && services.settings.cueOpen)
-        workspace.toggleLivePreview()
-        #expect(cueShown(workspace))
-        #endif
-
+    @Test func 窄窗拉出的Cue抽屉_窗口放宽后成了右栏() {
         services.settings.cueOpen = false
-        open("b", in: .aside, workspace)
-        workspace.closeColumn(.beside(0))
-        #expect(!cueShown(workspace) && !services.settings.cueOpen)
+        let workspace = wide()
+        fit(workspace, width: 700)
+        workspace.toggleCue()
+        #expect(workspace.cueDrawer && !services.settings.cueOpen)
+        fit(workspace)
+        #expect(!workspace.cueDrawer && services.settings.cueOpen)
     }
 
     private func session(_ sessionID: String) -> WideNavigation.Pane {
