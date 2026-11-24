@@ -12,7 +12,7 @@ struct NoticeBanner: View {
     }
 
     var body: some View {
-        let field = workspace.layout == .narrow && (workspace.top == .shelf || workspace.top == .progress)
+        let field = workspace.layout == .narrow && (workspace.mainRoute == .shelf || workspace.mainRoute == .progress)
         NoticeSlot(place: .head(fills: true))
             .frame(maxWidth: field ? .infinity : Self.maxWidth)
             .frame(maxWidth: .infinity)

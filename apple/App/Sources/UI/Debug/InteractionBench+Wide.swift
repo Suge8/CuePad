@@ -53,7 +53,7 @@ extension InteractionBench {
         for item in selected {
             arrange(item, in: workspace, sessions: sessions)
             let split = item.sessions > 1
-            let threshold = WideMetrics.railThreshold(split: split), cueThreshold = WideMetrics.cueThreshold(split: split)
+            let threshold = WideMetrics.railThreshold(of: workspace.panes), cueThreshold = threshold + WideMetrics.cue
             resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
@@ -157,7 +157,7 @@ extension InteractionBench {
 
     private static func columns(in view: NSView) -> (main: WideColumnView?, cue: WideColumnView?) {
         let all = wideColumns(in: view)
-        return (all.first { $0.slot == .main }, all.first { $0.slot == .cue })
+        return (all.first { $0.slot == .pane(.main) }, all.first { $0.slot == .cue })
     }
 
     static func wideColumns(in view: NSView) -> [WideColumnView] {

@@ -119,7 +119,7 @@ struct WideMetrics {
         let kinds = order.map(\.kind)
         fill = kinds.contains(.preview) && workspace.liveFill != nil
         let narrowest = kinds.map(\.narrowest).reduce(0, +)
-        railFits = width >= Chrome.rail + narrowest
+        railFits = width >= Self.railThreshold(kinds)
         rail = workspace.sidebarOpen && railFits && !fill ? Chrome.rail : 0
         cueFits = shown == 1 && width >= rail + narrowest + Self.cue
         cue = workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
@@ -149,11 +149,10 @@ struct WideMetrics {
 
     static func boardLead(_ inset: EdgeInsets) -> CGFloat { inset.leading + Spacing.item + Chrome.control - BoardCardMetrics.inset }
 
-    static func narrowestMain(split: Bool) -> CGFloat { split ? 2 * session : session }
+    /// 这几块都摆得下、会话条也放得下的最窄窗口。
+    static func railThreshold(_ kinds: [Kind]) -> CGFloat { Chrome.rail + kinds.map(\.narrowest).reduce(0, +) }
 
-    static func railThreshold(split: Bool) -> CGFloat { Chrome.rail + narrowestMain(split: split) }
-
-    static func cueThreshold(split: Bool) -> CGFloat { railThreshold(split: split) + cue }
+    static func railThreshold(of panes: [WideNavigation.Pane]) -> CGFloat { railThreshold(panes.map { Piece($0).kind }) }
 }
 
 extension View {

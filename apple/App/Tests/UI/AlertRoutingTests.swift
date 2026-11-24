@@ -48,7 +48,7 @@ struct AlertRoutingTests {
         workspace.show(.project(Project.defaultID))
 
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
-        #expect(app.services.pendingDeepLink == nil && workspace.top == .project(Project.defaultID))
+        #expect(app.services.pendingDeepLink == nil && workspace.mainRoute == .project(Project.defaultID))
 
         alerts.receive(tapped(session.id))
         try await eventually("打开那个会话") { workspace.shownSessions.contains { $0.id == session.id } }

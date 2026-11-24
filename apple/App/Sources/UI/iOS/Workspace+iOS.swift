@@ -26,7 +26,7 @@ extension Workspace {
     }
 
     /// 宽屏上搜索是这一排里的那一页，不一定在最左。
-    var searching: Bool { (pageRoute ?? top) == .search }
+    var searching: Bool { (pageRoute ?? mainRoute) == .search }
 
     func openSearch() {
         searchFocusRequests += 1

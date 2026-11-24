@@ -35,7 +35,7 @@ extension InteractionBench {
             default: if let project { workspace.show(.project(project)) } else { continue }
             }
             await Task.wait(for: .seconds(2))
-            guard let column = wideColumns(in: root).first(where: { $0.slot == .main }) else { throw DebugScene.Unmet("换宽测量找不到主区") }
+            guard let column = wideColumns(in: root).first(where: { $0.slot == .pane(.main) }) else { throw DebugScene.Unmet("换宽测量找不到主区") }
             let frame = column.frame
             var steps: [(ms: Double, instructions: Double, cycles: Double, sync: Double)] = []
             let interval = signposter.beginInterval("交互", id: signposter.makeSignpostID(), "\(name, privacy: .public)")
