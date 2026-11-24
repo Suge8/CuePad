@@ -47,6 +47,14 @@ extension CueStore {
     return CueDuty(name: profile.name, left: state?.left ?? [], tiers: try chosenTiers())
   }
 
+  public func sessionsLeftToYou() throws -> Set<CueLeft> {
+    let tiers = try chosenTiers()
+    let stopped = try db.query(
+      "SELECT \(SessionState.selection) FROM piSessionStates WHERE state IN (\(sqlList(SessionState.leftStops)))") { SessionState(row: $0) }
+    let derived = stopped.filter { $0.isLeftToYou([], tiers: tiers) }.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) }
+    return Set((try cueState()?.left ?? []) + derived)
+  }
+
   @discardableResult
   public func leaveToYou(_ sessionID: String) throws -> UUID {
     try write {

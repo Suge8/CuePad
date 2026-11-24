@@ -14,7 +14,7 @@ extension CueStore {
     }
     let owners = try sessionOwners(Array(sessions.keys))
     let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
-    let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys)).merging(try tiersChosen(after: 0), uniquingKeysWith: max)
+    let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys)).merging(try tierSeqs(), uniquingKeysWith: max)
     let tiers = try chosenTiers()
     func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
     func stall(_ session: SessionState, seq: Int, task: Card?, leaf: Card?, tier: CueTier) throws {
@@ -79,26 +79,9 @@ extension CueStore {
       detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted), tier: tier)
   }
 
-  public func leaveStopsCueSkips(after mark: Int) throws -> Int {
-    try write {
-      let latest = try lastWrite()
-      guard latest > mark else { return latest }
-      let rechosen = Set(try tiersChosen(after: mark).keys)
-      let stopped = try select(
-        SessionState.self,
-        where: "state IN (\(sqlList(WorkState.allCases.filter(\.isStopped)))) AND (writeSeq > ? OR sessionID IN (SELECT value FROM json_each(?)))",
-        [mark, JSONColumn.encode(Array(rechosen))])
-      let tiers = try chosenTiers()
-      let atStop = stopped.filter(\.atStop)
-      func reaches(_ session: SessionState) -> Bool { session.reachesCue(CueTier.of(session, chosen: tiers)) }
-      try putLeft(atStop.filter { !reaches($0) }, removing: atStop.filter { rechosen.contains($0.sessionID) && reaches($0) }.map(\.sessionID))
-      return latest
-    }
-  }
-
-  private func tiersChosen(after mark: Int) throws -> [String: Int] {
+  private func tierSeqs() throws -> [String: Int] {
     Dictionary(
-      try db.query("SELECT subject, MAX(writeSeq) FROM marks WHERE kind LIKE '\(Mark.tierPrefix)%' AND writeSeq > ? GROUP BY subject", [mark]) {
+      try db.query("SELECT subject, MAX(writeSeq) FROM marks WHERE kind LIKE '\(Mark.tierPrefix)%' GROUP BY subject") {
         ($0.text(0), Int($0.int(1)))
       }, uniquingKeysWith: max)
   }

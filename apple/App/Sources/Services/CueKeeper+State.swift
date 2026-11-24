@@ -111,6 +111,7 @@ extension CueKeeper {
         var since: Date
         var failure: String?
         var held: Set<UUID> = []
+        var stops: [CueLeft] = []
 
         var retryAt: Date? {
             switch stage {

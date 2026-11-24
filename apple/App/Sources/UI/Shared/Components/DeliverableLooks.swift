@@ -39,7 +39,7 @@ nonisolated struct LookBox: Hashable, Sendable {
     }
 }
 
-/// 解码与系统缩略图不在主线程；网页快照（`WebPage`）与 Markdown 首屏（`ImageRenderer`）只能在主线程上起，新出一张排在这一帧画上屏之后（`NextFrame.drawn`）：排在这一帧提交之前的话，起网页进程那几十毫秒就压在页面出来的这一帧上（第一次打开 Cue 页，结果卡与拍板卡里点名的网页还没有快照）。
+/// 解码与系统缩略图不在主线程；网页快照（`WebPage`）与 Markdown 首屏（`ImageRenderer`）只能在主线程上起，新出一张排在这一帧画上屏之后（`NextFrame.drawn`）：排在这一帧提交之前的话，起网页进程那几十毫秒就压在页面出来的这一帧上（第一次打开 Cue 页，结果卡里点名的网页还没有快照）。
 /// 出好的画面按"哈希 + 框"存一份到磁盘（`LookFiles`），也留在内存里（系统内存紧张时自动清）：每次启动后第一次打开 Cue 页不再把几十张原图重新解一遍（真实库上一次约 650ms 的后台 CPU，与主线程抢核），同一份在别处再出现、滚走再滚回来都不重读，第一帧就是它该有的比例。
 enum DeliverableLooks {
     private final class Entry {

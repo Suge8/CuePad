@@ -4,21 +4,7 @@ import SwiftUI
 
 extension DebugScene {
     static func prepareNarrow(_ workspace: Workspace) async {
-        await running("窄屏验收") {
-            let store = workspace.services.store
-            let recorder = demoRecorder(store)
-            let extra = args.layoutOpts.narrowWaiting
-            for index in 0..<max(0, extra) {
-                let id = "ask-\(index + 1)"
-                _ = try await recorder.update(
-                    sessionID: id, state: .waitingForUser, title: id, directory: "demo",
-                    question: Question(promptID: nil, kind: .unknown("editor"), text: String(localized: "编辑提交说明", table: "Demo")),
-                    agent: .codex)
-            }
-            if let pane = args.layoutOpts.narrowPane.flatMap(NavigationPane.init(rawValue:)) {
-                workspace.selectPane(pane)
-            }
-        }
+        if let pane = args.layoutOpts.narrowPane.flatMap(NavigationPane.init(rawValue:)) { workspace.selectPane(pane) }
         if let dock = args.inspirationOpts.dock { await running("边聊边看") { try await presetDock(dock, workspace) } }
         if args.layoutOpts.narrowCycle { Task { await cycleNarrow(workspace) } }
         if args.layoutOpts.quotaCycle { Task { await cycleQuota() } }

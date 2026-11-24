@@ -4,12 +4,7 @@ import Foundation
 
 extension CueActivity {
   public static func settlesStop(tool: String, arguments: String) -> Bool {
-    let args = Parsed(arguments)
-    switch tool {
-    case "task": return args.action?.settlesStop ?? false
-    case "tell": return args.raw["ask"] != nil
-    default: return false
-    }
+    tool == "task" && Parsed(arguments).action?.settlesStop == true
   }
 
   public static func named(tool: String, arguments: String, store: CueStore) async -> Named {
@@ -30,7 +25,7 @@ extension CueActivity {
     }
     switch tool {
     case "task": return args.line("action") == "peek" && args.board ? "看板" : "看任务"
-    case "tell": return args.raw["ask"] == nil ? "给你写话" : "问你"
+    case "tell": return "给你写话"
     case "memory":
       switch args.line("action") {
       case "recall": return line("回想", args.line("query"))
@@ -61,9 +56,7 @@ extension CueActivity {
       guard let kind = action?.kind else { return item(.other, words) }
       let place = action == .add && !failed ? await named.added(args, store: store) : named
       return item(kind, action == .say ? "\(words)：\(args.line("text") ?? "")" : words, at: place)
-    case "tell":
-      guard let line = args.line("text") else { return item(.other, "撤回一条提问") }
-      return item(args.raw["ask"] == nil ? .said : .ask, line)
+    case "tell": return item(.said, args.line("text") ?? "")
     case "memory":
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")

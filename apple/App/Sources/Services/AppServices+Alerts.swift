@@ -6,7 +6,7 @@ extension AppServices {
     func startAlerts() {
         follow(reporting: { .syncUnavailable(String(localized: "Cue 留给你回的会话没能推到手机：\(String(describing: $0))")) }) { [store, hostID] in
             var known: Set<CueLeft>?
-            for try await left in store.observe({ Set(try $0.cueDuty()?.left ?? []) }) {
+            for try await left in store.observe({ try $0.sessionsLeftToYou() }) {
                 defer { known = left }
                 guard let known else { continue }
                 for entry in left.subtracting(known) {

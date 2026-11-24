@@ -69,7 +69,7 @@ extension CueTools {
 
   func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
-    let now = store.timing.now(), left = try await store.cueState()?.left ?? []
+    let now = store.timing.now(), left = try await store.cueState()?.left ?? [], tiers = try await store.chosenTiers()
     let project = try await store.projects().first { $0.id == detail.task.projectID }?.name
     var lines = [
       "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (project.map { " · 项目「\($0)」" } ?? "")
@@ -84,7 +84,7 @@ extension CueTools {
         continue
       }
       if let session = leaf.session {
-        head += " · " + Self.sessionHead(session.session, now: now, left: left)
+        head += " · " + Self.sessionHead(session.session, now: now, left: left, tiers: tiers)
       } else if let request = leaf.handoffs.last, case .preparing(let reason) = Speech.trip(request, at: .always(at: now)) {
         head += " · \(reason)（原请求仍保留，不要重复开工）"
       } else {
@@ -103,8 +103,8 @@ extension CueTools {
   func peek(_ session: SessionState) async throws -> Result {
     guard let detail = try await store.cueSessionDetail(session.sessionID) else { throw Failure("找不到会话「\(session.title)」") }
     let bound = try await store.tasks(boundTo: session.sessionID)
-    let left = try await store.cueState()?.left ?? []
-    var lines = ["会话「\(session.title)」（\(session.shortID)）· " + Self.sessionHead(detail.session, now: Date(), left: left)]
+    let left = try await store.cueState()?.left ?? [], tiers = try await store.chosenTiers()
+    var lines = ["会话「\(session.title)」（\(session.shortID)）· " + Self.sessionHead(detail.session, now: Date(), left: left, tiers: tiers)]
     lines.append(
       bound.isEmpty ? "没绑任务（要为它的结果负责时用 add 带 session）"
         : "绑着：" + bound.map { "「\($0.task.heading)」（\($0.task.id.shortID)）\(status($0.task))" }.joined(separator: "、"))
@@ -127,9 +127,9 @@ extension CueTools {
     date.formatted(.verbatim("\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
   }
 
-  private static func sessionHead(_ session: SessionState, now: Date, left: [CueLeft]) -> String {
+  private static func sessionHead(_ session: SessionState, now: Date, left: [CueLeft], tiers: [String: CueTier]) -> String {
     var head = "\(agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
-    if left.contains(where: { $0.holds(for: session) }) { head += " · " + CueEnvelope.leftNote }
+    if session.isLeftToYou(left, tiers: tiers) { head += " · " + CueEnvelope.leftNote }
     if let question = session.question {
       head += " · 提问：\(CueEnvelope.clip(question.text, 120))" + (question.options.isEmpty ? "" : "（\(question.options.joined(separator: " / "))）")
     }

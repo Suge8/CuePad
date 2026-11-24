@@ -198,7 +198,7 @@ public enum CueEnvelope {
 
   static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft], tiers: [String: CueTier]) -> String {
     var parts = [sessionName(session), tierNote(CueTier.of(session, chosen: tiers)), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
-    if left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
+    if session.isLeftToYou(left, tiers: tiers) { parts.append(leftNote) }
     if let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
     return parts.joined(separator: " · ")
   }
@@ -219,7 +219,7 @@ public enum CueEnvelope {
     let state = leaf.session.map { state($0.state) } ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
     var parts = ["\(name.map { "\($0) › " } ?? "")\(state) \(duration(now.timeIntervalSince(leaf.since)))"]
     if let session = leaf.session { parts.append(tierNote(CueTier.of(session, chosen: tiers))) }
-    if let session = leaf.session, left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
+    if let session = leaf.session, session.isLeftToYou(left, tiers: tiers) { parts.append(leftNote) }
     if let session = leaf.session, let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
     return parts
   }

@@ -66,7 +66,6 @@ final class CueKeeper {
     @ObservationIgnored var claimed = false
     @ObservationIgnored var unfired: [CueFire] = []
     @ObservationIgnored var greeting: Date?
-    @ObservationIgnored var handedOver: Int?
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
     @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]

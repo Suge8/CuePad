@@ -21,7 +21,7 @@ extension DebugScene {
     /// 这些替身都当已和 iCloud 对过。
     /// `-CuePadSync blips`：已同步，之后像一句句传上去那样反复报一小段同步中（`BlipSync`），看设置里同步那一行闪不闪；
     /// `-CuePadSync catchup`：反复像回到前台那样对一遍（长短各一次），看页头、空态的"正在同步"怎么进出；
-    /// `-CuePadSync flaky`：反复连不上 iCloud 又恢复（长短各一次），看同步到不了 Mac 的提醒点与拍板卡"现在答不了"那一行怎么进出。
+    /// `-CuePadSync flaky`：反复连不上 iCloud 又恢复（长短各一次），看同步到不了 Mac 的提醒点怎么进出。
     /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
     /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
