@@ -77,7 +77,7 @@ struct LivePhoneTests {
     }
 
     private func route(_ proxy: LiveTunnel.Proxy, _ key: SymmetricKey, _ door: LiveSignal.Door, ticket: Data? = nil) {
-        proxy.use(.init(key: key, ticket: ticket ?? door.ticket, mac: .hostPort(host: "127.0.0.1", port: .init(rawValue: door.port)!), addresses: []))
+        proxy.use(.init(key: key, ticket: ticket ?? door.entrance.ticket, mac: .hostPort(host: "127.0.0.1", port: .init(rawValue: door.entrance.port)!), addresses: []))
     }
 
     private func awaited<T>(_ what: String, _ read: () -> T?) async throws -> T {

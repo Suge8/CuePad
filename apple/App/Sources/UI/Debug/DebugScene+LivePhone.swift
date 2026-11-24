@@ -53,7 +53,7 @@ extension DebugScene {
             }
             let port = try await server.start()
             let addresses = args.layoutOpts.liveApart ? [.init(host: "127.0.0.2", prefix: 32)] : LiveTunnel.localAddresses().filter { !$0.host.contains(":") }
-            mac.door = LiveSignal.Door(addresses: addresses.isEmpty ? [.init(host: "127.0.0.1", prefix: 8)] : addresses, port: port, ticket: ticket, ports: [url.port].compactMap(\.self))
+            mac.door = LiveSignal.Door(entrance: .init(addresses: addresses.isEmpty ? [.init(host: "127.0.0.1", prefix: 8)] : addresses, port: port, ticket: ticket), ports: [url.port].compactMap(\.self))
             liveMac = (mac, server)
             services.liveSignaling = mac
             services.liveRemote.renew(sessionID)

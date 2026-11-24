@@ -27,7 +27,7 @@ final class LiveLink {
 
     @ObservationIgnored let proxy: LiveTunnel.Proxy
     @ObservationIgnored private var connecting: Task<Void, Never>?
-    @ObservationIgnored private var door: LiveSignal.Door?
+    @ObservationIgnored private var entrance: LiveSignal.Entrance?
     @ObservationIgnored private var route: UUID?
     @ObservationIgnored private var answer: () -> LiveRemote.Pages? = { nil }
     private var mirrored = LiveTunnel.Proxy.Mirrored()
@@ -80,7 +80,7 @@ final class LiveLink {
     private func mend(_ broken: AsyncStream<LiveTunnel.Break>, _ preview: LivePreview, sessionID: String, remote: LiveRemote,
                       key: @escaping @MainActor () -> SymmetricKey?) async {
         for await report in broken where report.route == route {
-            if report.answer == .ticket { remote.renew(sessionID) } else if let door { connect(door, preview, key: key) }
+            if report.answer == .ticket { remote.renew(sessionID) } else if let entrance { connect(entrance, preview, key: key) }
         }
     }
 
@@ -99,38 +99,37 @@ final class LiveLink {
     private func follow(_ seen: Seen, _ preview: LivePreview, _ previews: LivePreviews, key: () -> SymmetricKey?) {
         if seen.offline { return lose(.offline, preview) }
         guard let answer = seen.answer else {
-            if door != nil { lose(.gone, preview) }
+            if entrance != nil { lose(.gone, preview) }
             return
         }
         proxy.mirror(Set((answer.door?.ports ?? []).compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
         previews.follow(preview, answer, showing: true)
         if state == .ready { preview.serve(served) }
-        guard let next = answer.door else { return }
-        let reconnect = !next.sameEntrance(as: door)
-        door = next
-        if reconnect { connect(next, preview, key: key) }
+        guard let next = answer.door?.entrance, next != entrance else { return }
+        entrance = next
+        connect(next, preview, key: key)
     }
 
     private func lose(_ trouble: LiveTrouble, _ preview: LivePreview) {
         connecting?.cancel()
-        door = nil
+        entrance = nil
         route = nil
         proxy.use(nil)
         preview.serve([])
         state = .trouble(trouble)
     }
 
-    private func connect(_ door: LiveSignal.Door, _ preview: LivePreview, key: () -> SymmetricKey?) {
+    private func connect(_ entrance: LiveSignal.Entrance, _ preview: LivePreview, key: () -> SymmetricKey?) {
         connecting?.cancel()
         guard let key = key() else { return state = .trouble(.offline) }
         connecting = Task {
             while !Task.isCancelled {
-                let reached = await Self.reach(door, key: key)
+                let reached = await Self.reach(entrance, key: key)
                 guard !Task.isCancelled else { return }
                 switch reached {
                 case .mac(let mac):
-                    let addresses = Set(door.addresses.map(\.host))
-                    let next = LiveTunnel.Route(key: key, ticket: door.ticket, mac: mac, addresses: addresses)
+                    let addresses = Set(entrance.addresses.map(\.host))
+                    let next = LiveTunnel.Route(key: key, ticket: entrance.ticket, mac: mac, addresses: addresses)
                     route = next.id
                     proxy.use(next)
                     preview.tunneled = addresses
@@ -161,13 +160,13 @@ final class LiveLink {
         case denied, failed
     }
 
-    private nonisolated static func reach(_ door: LiveSignal.Door, key: SymmetricKey) async -> Reached {
+    private nonisolated static func reach(_ entrance: LiveSignal.Entrance, key: SymmetricKey) async -> Reached {
         let mine = LiveTunnel.localAddresses()
         guard !mine.isEmpty else { return .trouble(.noWiFi) }
         var denied = false
         let found: NWEndpoint? = await withTaskGroup(of: Probe.self) { group in
-            for address in door.addresses {
-                group.addTask { await probe(.hostPort(host: .init(address.host), port: .init(rawValue: door.port)!), key: key, ticket: door.ticket) }
+            for address in entrance.addresses {
+                group.addTask { await probe(.hostPort(host: .init(address.host), port: .init(rawValue: entrance.port)!), key: key, ticket: entrance.ticket) }
             }
             for await result in group {
                 switch result {
@@ -182,7 +181,7 @@ final class LiveLink {
         }
         if let found { return .mac(found) }
         if denied { return .trouble(.denied) }
-        let together = mine.contains { mine in door.addresses.contains(where: mine.shares) }
+        let together = mine.contains { mine in entrance.addresses.contains(where: mine.shares) }
         return .trouble(together ? .isolated : .apart)
     }
 

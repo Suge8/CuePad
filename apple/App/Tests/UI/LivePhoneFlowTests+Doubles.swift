@@ -90,7 +90,7 @@ extension LivePhoneFlowTests {
                 throw VoiceSignalError.peerUnavailable
             }
             opened = open
-            let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket, ports: pages.compactMap(\.port)) } : nil
+            let door = open ? door.map { LiveSignal.Door(entrance: .init(addresses: $0.addresses, port: $0.port, ticket: ticket), ports: pages.compactMap(\.port)) } : nil
             let reply = VoiceSignalPayload.live(signal: .pages(request: request, session: sessionID, pages: pages, serving: found ?? pages, sent: sent, door: door))
             let replied = header(reply, from: endpoint, to: local)
             Task { answer(.received(.init(header: replied, payload: reply))) }

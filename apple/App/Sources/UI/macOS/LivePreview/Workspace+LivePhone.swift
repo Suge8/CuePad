@@ -62,7 +62,7 @@ extension Workspace {
             if let ticket = phone.ticket {
                 let allowed = here ? await livePorts(key.sessionID) : [:]
                 liveServer?.server.limit(ticket, to: Set(allowed.keys.compactMap { UInt16(exactly: $0) }))
-                if let port { door = LiveSignal.Door(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket, ports: allowed.keys.sorted()) }
+                if let port { door = LiveSignal.Door(entrance: .init(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket), ports: allowed.keys.sorted()) }
             }
             let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? livePreviews.entries[id]?.found ?? [] : [],
                                           sent: here ? livePreviews.entries[id]?.sent : nil, door: here ? door : nil)

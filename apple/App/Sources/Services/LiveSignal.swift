@@ -14,16 +14,16 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
     }
 
     struct Door: Equatable, Codable, Sendable {
+        /// 手机连的那个口：它变了才重连。
+        let entrance: Entrance
+        /// 这个会话放行的端口：手机照搬到自己回环上的（`LiveTunnel.Proxy.mirror`），变了不断开正看着的页面。
+        let ports: [Int]
+    }
+
+    struct Entrance: Equatable, Codable, Sendable {
         let addresses: [LiveTunnel.Address]
         let port: UInt16
         let ticket: Data
-        /// 这个会话放行的端口：手机照搬到自己回环上的（`LiveTunnel.Proxy.mirror`）。
-        let ports: [Int]
-
-        /// 手机连的是哪个口：只有它变了才重连，放行的端口变了照搬就够（`LiveTunnel.Proxy.mirror`），不断开正看着的页面。
-        func sameEntrance(as other: Door?) -> Bool {
-            addresses == other?.addresses && port == other?.port && ticket == other?.ticket
-        }
     }
 
     static let renewal = Duration.seconds(10)
