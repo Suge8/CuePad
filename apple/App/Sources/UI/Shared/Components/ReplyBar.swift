@@ -105,7 +105,7 @@ struct ReplyBar: View {
             Composer(
                 draft: box, prompt: prompt, promptIcon: wakes ? .wakeSession : nil, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending || macOff != nil, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
-                commands: commands, submit: submit, shortcuts: shortcuts, recall: recall,
+                commands: commands, submit: submit, picks: picks, recall: recall,
                 header: {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
@@ -137,15 +137,12 @@ struct ReplyBar: View {
         }
     }
 
-    private var shortcuts: [ReplyShortcut: () -> Void] {
-        var map: [ReplyShortcut: () -> Void] = [:]
+    private var picks: ((ConfigPick) -> Void)? {
         #if os(macOS)
-        if hasTools {
-            map[.model] = { opening = .model }
-            map[.thinking] = { opening = .thinking }
-        }
+        hasTools ? { opening = $0 } : nil
+        #else
+        nil
         #endif
-        return map
     }
 
     private func didSend() {
