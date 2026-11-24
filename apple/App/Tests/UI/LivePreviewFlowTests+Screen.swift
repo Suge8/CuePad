@@ -59,22 +59,22 @@ extension LivePreviewFlowTests {
         _ = try await live("http://127.0.0.1:\(port)/", for: "a", in: workspace)
         try await eventually("后台建好了 a 的预览") { workspace.livePreviews[id("a")]?.web.title == "替身" }
 
-        let page = await agent(workspace, "snapshot")
+        let page = await agent(workspace, .snapshot())
         #expect(page.text.contains("button \"点我\""), "\(page.text)")
 
-        let clicked = await agent(workspace, "click", .init(ref: try ref("button \"点我\"", in: page.text)))
+        let clicked = await agent(workspace, .click(ref: try ref("button \"点我\"", in: page.text)))
         #expect(clicked.text.contains("点了 button \"点我\""), "\(clicked.text)")
-        let waited = await agent(workspace, "wait", .init(text: "点了 1 下", timeout: 5))
+        let waited = await agent(workspace, .wait(.text("点了 1 下"), timeout: 5))
         #expect(waited.text.contains("等到了"), "\(waited.text)")
 
-        let kept = await agent(workspace, "fill", .init(ref: try ref("textbox \"收下\"", in: page.text), text: "abc"))
+        let kept = await agent(workspace, .fill(ref: try ref("textbox \"收下\"", in: page.text), text: "abc"))
         #expect(kept.text == "textbox \"收下\" 填成了 \"abc\"")
         #expect(desk.state.withLock { $0.kept } == "abc")
-        let spat = await agent(workspace, "fill", .init(ref: try ref("textbox \"不收\"", in: page.text), text: "abc"))
+        let spat = await agent(workspace, .fill(ref: try ref("textbox \"不收\"", in: page.text), text: "abc"))
         #expect(spat.text.contains("不是填的这段"), "\(spat.text)")
 
-        _ = await agent(workspace, "press", .init(ref: try ref("textbox \"收下\"", in: page.text), key: "Backspace"))
-        _ = await agent(workspace, "click", .init(ref: try ref("button \"点我\"", in: page.text)))
+        _ = await agent(workspace, .press(key: "Backspace", ref: try ref("textbox \"收下\"", in: page.text)))
+        _ = await agent(workspace, .click(ref: try ref("button \"点我\"", in: page.text)))
         try await eventually("后面的那一下点到了应用") { desk.state.withLock { $0.taps } == 2 }
         #expect(desk.state.withLock { $0.keys } == [42])
         _ = server

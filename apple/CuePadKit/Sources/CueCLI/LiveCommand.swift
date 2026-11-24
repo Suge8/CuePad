@@ -62,21 +62,20 @@ extension Command {
 
   /// 交给 App 打开：它照此刻的排布决定滑开还是只亮钮，在回执里说是哪一种。
   static func openLive(_ call: Call, _ url: URL, found: Bool, session: String, name: String) throws -> String {
-    let reply = try askLive(call, LiveChannel.Request(session: session, op: "open", args: .init(url: url.absoluteString, found: found)), name: name)
+    let reply = try askLive(call, LiveChannel.Request(session: session, op: .open(url: url, found: found)), name: name)
     if reply.failed { throw CLIError.invalid(reply.text) }
     return reply.text
   }
 
   static func askLive(_ call: Call, _ request: LiveChannel.Request, name: String) throws -> LiveChannel.Reply {
-    let timeout = Duration.seconds((request.args.timeout ?? 0) + 60)
     do throws(LiveChannel.Failure) {
-      return try LiveChannel.ask(request, path: LiveChannel.socketPath(databasePath: call.store.databasePath), timeout: timeout)
+      return try LiveChannel.ask(request, path: LiveChannel.socketPath(databasePath: call.store.databasePath))
     } catch .notListening {
       throw CLIError.invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：请用户打开 CuePad 后再运行 cuepad \(name)")
     } catch .sandboxed {
       throw CLIError.invalid("沙箱不让这条命令连 CuePad（connect: Operation not permitted）：申请在沙箱外运行这条命令再试")
     } catch .timedOut {
-      throw CLIError.invalid("CuePad \(timeout.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
+      throw CLIError.invalid("CuePad \(request.op.patience.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
     } catch .broken(let reason) {
       throw CLIError.invalid("与 CuePad 的连接出错：\(reason)")
     }

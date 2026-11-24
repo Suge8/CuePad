@@ -77,7 +77,7 @@ import Testing
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 0 && result.out.hasPrefix("预览滑开了。"), "\(result.err)")
     let url = try #require(LiveAddress.url(from: address))
-    #expect(received.all == [LiveChannel.Request(session: "s1", op: "open", args: .init(url: url.absoluteString, found: false))])
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: .open(url: url, found: false))])
   }
 
   @Test func liveActionsWithoutCuePadOpenFailAndAskForIt() async throws {
@@ -108,7 +108,7 @@ import Testing
 
     let result = await sb.run("live", "click", "a5", environment: ["CUEPAD_SESSION_ID": "s1"])
     #expect(result.code == 0 && result.out == "点了 button \"登录\"\n")
-    #expect(received.all == [LiveChannel.Request(session: "s1", op: "click", args: .init(ref: "a5"))])
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: .click(ref: "a5"))])
 
     let nobody = await sb.run("live", "click", "a5")
     #expect(nobody.code != 0 && nobody.err.contains("CUEPAD_SESSION_ID"))
@@ -135,8 +135,8 @@ import Testing
     let missing = await sb.run("live", "upload", "a3", "nope.png", cwd: work.path, environment: ["CUEPAD_SESSION_ID": "s1"])
     #expect(missing.code != 0 && missing.err.contains("读不到 ") && missing.err.contains("/work/nope.png"))
     #expect(received.all == [
-      LiveChannel.Request(session: "s1", op: "screenshot"),
-      LiveChannel.Request(session: "s1", op: "upload", args: .init(ref: "a3", files: [.init(name: "avatar.png", data: Data("头像".utf8))])),
+      LiveChannel.Request(session: "s1", op: .screenshot()),
+      LiveChannel.Request(session: "s1", op: .upload(ref: "a3", files: [.init(name: "avatar.png", data: Data("头像".utf8))])),
     ])
   }
 

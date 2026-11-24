@@ -32,11 +32,11 @@ extension LivePreviewFlowTests {
         _ = try await live(url.absoluteString, for: "a", in: workspace)
         try await eventually("后台建好了 a 的预览") { workspace.livePreviews[id("a")]?.web.title == "现问的页" }
 
-        let page = await agent(workspace, "snapshot")
+        let page = await agent(workspace, .snapshot())
         #expect(page.text.contains("button \"问回来的钮\""), "\(page.text)")
-        let kept = await agent(workspace, "fill", .init(ref: try ref("textbox \"收下\"", in: page.text), text: "abc"))
+        let kept = await agent(workspace, .fill(ref: try ref("textbox \"收下\"", in: page.text), text: "abc"))
         #expect(kept.text == "textbox \"收下\" 填成了 \"abc\"")
-        let spat = await agent(workspace, "fill", .init(ref: try ref("textbox \"不收\"", in: page.text), text: "abc"))
+        let spat = await agent(workspace, .fill(ref: try ref("textbox \"不收\"", in: page.text), text: "abc"))
         #expect(spat.text == "textbox \"不收\" 没填进去：页面安定后它的值是 \"原样\"，不是填的这段")
     }
 }

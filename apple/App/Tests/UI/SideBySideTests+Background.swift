@@ -14,7 +14,7 @@ extension LivePreviewFlowTests {
         let (server, url) = try await backgroundPage(workspace)
         defer { server.terminate() }
 
-        let frames = await agent(workspace, "eval", .init(code: """
+        let frames = await agent(workspace, .eval(code: """
             return await new Promise(done => {
                 let n = 0;
                 (function tick() { n++; requestAnimationFrame(tick) })();
@@ -23,17 +23,17 @@ extension LivePreviewFlowTests {
             """))
         #expect(frames.text == "[\"visible\",true]")
 
-        _ = await agent(workspace, "eval", .init(code: "document.body.insertAdjacentHTML('beforeend', '<label>附件<input type=file id=f multiple></label>')"))
-        let page = await agent(workspace, "snapshot")
+        _ = await agent(workspace, .eval(code: "document.body.insertAdjacentHTML('beforeend', '<label>附件<input type=file id=f multiple></label>')"))
+        let page = await agent(workspace, .snapshot())
         let field = try ref("[file]", in: page.text)
         let files: [LiveChannel.Upload] = [.init(name: "说明.txt", data: Data("一".utf8)), .init(name: "说明.txt", data: Data("二".utf8))]
-        let sent = await agent(workspace, "upload", .init(ref: field, files: files))
+        let sent = await agent(workspace, .upload(ref: field, files: files))
         #expect(!sent.failed && sent.text.hasSuffix("交了 2 个文件：说明.txt、说明.txt"), "\(sent.text)")
-        let read = await agent(workspace, "eval", .init(code: "return Promise.all([...document.getElementById('f').files].map(async f => f.name + '=' + await f.text()))"))
+        let read = await agent(workspace, .eval(code: "return Promise.all([...document.getElementById('f').files].map(async f => f.name + '=' + await f.text()))"))
         #expect(read.text == "[\"说明.txt=一\",\"说明.txt=二\"]", "\(read.text)")
 
         _ = try await live(url.appending(path: "next.html").absoluteString, for: "a", in: workspace)
-        let moved = await agent(workspace, "snapshot")
+        let moved = await agent(workspace, .snapshot())
         #expect(moved.text.contains("第二页"), "\(moved.text.prefix(200))")
 
         let kept = try #require(workspace.livePreviews[id("a")]).uploadFolder

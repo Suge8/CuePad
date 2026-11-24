@@ -36,33 +36,19 @@ extension Workspace {
     private func performLive(_ request: LiveChannel.Request, _ id: UUID) async -> LiveChannel.Reply {
         guard !Task.isCancelled else { return .refused("取消了") }
         do {
-            if request.op == "open" {
-                guard let text = request.args.url, let url = URL(string: text) else { throw LiveRefusal("请求缺参数：命令行与开着的 CuePad 不是同一版") }
-                return try await openLive(request.session, url: url, found: request.args.found == true)
-            }
-            let (preview, rebuilt) = try await livePreview(forAgent: request.session, id)
-            await preview.touchedByAgent()
-            defer { preview.agent.used = .now }
-            let args = request.args
-            let colors = preview.pickColors
-            let mark = (tint: colors["tint"] ?? "", ink: colors["ink"] ?? "")
-            var reply: LiveChannel.Reply
+            let session = request.session
             switch request.op {
-            case "snapshot": reply = try await preview.agentSnapshot(args)
-            case "screenshot": reply = try await preview.agentScreenshot(args)
-            case "console": reply = preview.agentConsole(args)
-            case "wait": reply = try await preview.agentWait(args)
-            case "click": reply = try await preview.agentAct(.click(try Self.need(args.ref)), mark: mark)
-            case "fill": reply = try await preview.agentAct(.fill(try Self.need(args.ref), args.text ?? ""), mark: mark)
-            case "press": reply = try await preview.agentAct(.press(try Self.need(args.key), args.ref), mark: mark)
-            case "upload": reply = try await preview.agentAct(.upload(try Self.need(args.ref), args.files ?? []), mark: mark)
-            case "eval": reply = try await preview.agentAct(.eval(try Self.need(args.code)), mark: mark)
-            default: throw LiveRefusal("不认识 cuepad live \(request.op)：命令行比开着的 CuePad 新，请用户更新 CuePad")
+            case .open(let url, let found): return try await openLive(session, url: url, found: found)
+            case .snapshot(let ref, let interactive, let find): return try await onPreview(session, id) { try await $0.agentSnapshot(ref: ref, interactive: interactive, find: find) }
+            case .screenshot(let ref): return try await onPreview(session, id) { try await $0.agentScreenshot(ref: ref) }
+            case .console(let all): return try await onPreview(session, id) { $0.agentConsole(all: all) }
+            case .wait(let awaited, let timeout): return try await onPreview(session, id) { try await $0.agentWait(awaited, timeout: timeout) }
+            case .click(let ref): return try await onPreview(session, id) { try await $0.agentAct(.click(ref)) }
+            case .fill(let ref, let text): return try await onPreview(session, id) { try await $0.agentAct(.fill(ref, text)) }
+            case .press(let key, let ref): return try await onPreview(session, id) { try await $0.agentAct(.press(key, ref)) }
+            case .upload(let ref, let files): return try await onPreview(session, id) { try await $0.agentAct(.upload(ref, files)) }
+            case .eval(let code): return try await onPreview(session, id) { try await $0.agentAct(.eval(code)) }
             }
-            if rebuilt {
-                reply.text = "（这个预览闲置超过 \(Self.liveIdle.components.seconds / 60) 分钟被释放过，这是重新载入的页面：之前页面里的状态与登录都没了）\n" + reply.text
-            }
-            return reply
         } catch let refusal as LiveRefusal {
             return .refused(refusal.text)
         } catch is CancellationError {
@@ -72,12 +58,18 @@ extension Workspace {
         }
     }
 
-    private static func need<T>(_ value: T?) throws -> T {
-        guard let value else { throw LiveRefusal("请求缺参数：命令行与开着的 CuePad 不是同一版") }
-        return value
+    private func onPreview(_ sessionID: String, _ id: UUID, _ work: (LivePreview) async throws -> LiveChannel.Reply) async throws -> LiveChannel.Reply {
+        let (preview, rebuilt) = try livePreview(forAgent: sessionID, id)
+        await preview.touchedByAgent()
+        defer { preview.agent.used = .now }
+        var reply = try await work(preview)
+        if rebuilt {
+            reply.text = "（这个预览闲置超过 \(Self.liveIdle.components.seconds / 60) 分钟被释放过，这是重新载入的页面：之前页面里的状态与登录都没了）\n" + reply.text
+        }
+        return reply
     }
 
-    private func livePreview(forAgent sessionID: String, _ id: UUID) async throws -> (LivePreview, rebuilt: Bool) {
+    private func livePreview(forAgent sessionID: String, _ id: UUID) throws -> (LivePreview, rebuilt: Bool) {
         if let preview = livePreviews[id] { return (preview, false) }
         guard let sent = liveSent.removeValue(forKey: id) else {
             throw LiveRefusal("这个会话还没有活预览：先 cuepad live（或 cuepad live <端口>）把页面开在 CuePad 里，再操作它")
