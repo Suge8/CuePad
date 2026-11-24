@@ -63,10 +63,11 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     @ObservationIgnored private var painted = false
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
 
-    init(sessionID: String, target: Target) {
+    init(sessionID: String, target: Target, paneSize: CGSize) {
         self.sessionID = sessionID
         address = target.url
         source = target.source
+        self.paneSize = paneSize
         let configuration = WKWebViewConfiguration()
         #if os(macOS)
         configuration.websiteDataStore = .nonPersistent()
@@ -81,7 +82,7 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         content.addUserScript(WKUserScript(source: LiveAgentScript.agent, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: LiveAgentScript.world))
         content.add(record, contentWorld: .page, name: LivePageRecord.logChannel)
         content.add(record, contentWorld: LiveAgentScript.world, name: LivePageRecord.agentChannel)
-        web = PageView(frame: CGRect(origin: .zero, size: LivePreviewPane.page(in: Self.paneSize, phone: false)), configuration: configuration)
+        web = PageView(frame: CGRect(origin: .zero, size: LivePreviewPane.page(in: paneSize, phone: false)), configuration: configuration)
         #else
         web = PageView(frame: .zero, configuration: configuration)
         #endif
@@ -132,9 +133,10 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         if phase == .idle { load(address) }
     }
 
-    static var paneSize = CGSize(width: 800, height: 900)
+    /// 这一页上次在面板里多大：不在面板里时（Agent 在后台用）照它排版，截图、点的位置与用户打开后看到的一样。
+    @ObservationIgnored var paneSize: CGSize
 
-    var pageSize: CGSize { LivePreviewPane.page(in: Self.paneSize, phone: viewport == .phone) }
+    var pageSize: CGSize { LivePreviewPane.page(in: paneSize, phone: viewport == .phone) }
 
     func run(_ script: String, arguments: [String: Any] = [:]) async throws -> Any? {
         try await web.callAsyncJavaScript(script, arguments: arguments, contentWorld: .page)

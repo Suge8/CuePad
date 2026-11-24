@@ -23,11 +23,7 @@ struct SessionActions: View {
                 }
                 RowActionButtons(actions: [Self.rename(session, task: task, in: workspace)])
                 MarkUnreadButton(session: session)
-                #if os(macOS)
-                if workspace.livesHere(session), workspace.liveButton(session.id) == nil {
-                    Button("打开活预览", icon: .livePreview) { workspace.openLivePreview(session) }
-                }
-                #endif
+                OpenLivePreviewButton(session: session)
             }
             Section {
                 if let complete = Self.complete(session, task: task, in: workspace) { RowActionButtons(actions: [complete]) }

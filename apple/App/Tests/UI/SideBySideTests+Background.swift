@@ -38,7 +38,7 @@ extension LivePreviewFlowTests {
 
         let kept = try #require(workspace.livePreviews[id("a")]).uploadFolder
         #expect(FileManager.default.fileExists(atPath: kept.path))
-        await workspace.releaseLivePreviews(at: .now + Workspace.liveIdle + .seconds(1))
+        try await workspace.releaseLivePreviews(at: .now + Workspace.liveIdle + .seconds(1))
         try await eventually("释放后交过的文件删了") { !FileManager.default.fileExists(atPath: kept.path) }
     }
 }

@@ -22,7 +22,7 @@ extension Workspace {
         if let given {
             url = given
         } else {
-            await scanLive(only: [sessionID])
+            try await scanLive(only: [sessionID])
             guard let first = livePreviews.entries[id]?.found.first else {
                 throw LiveRefusal("没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
             }
@@ -52,6 +52,7 @@ extension Workspace {
     }
 
     func watchLiveServers() async {
+        var failing = false
         while !Task.isCancelled {
             let everyone = services.viewer.present
             let phones = Set(livePhones.keys.map(\.sessionID))
@@ -59,32 +60,39 @@ extension Workspace {
                 for await busy in Observations({ self.services.viewer.present || !self.livePhones.isEmpty }) where busy { break }
                 continue
             }
-            await scanLive(only: everyone ? nil : phones)
-            await answerLivePhones()
+            do {
+                try await scanLive(only: everyone ? nil : phones)
+                try await answerLivePhones()
+                failing = false
+            } catch {
+                // 每 2 秒一遍：同一次故障只报一回，好了再坏再报
+                if !failing { fail(error) }
+                failing = true
+            }
             try? await Task.sleep(for: Self.liveScan)
         }
     }
 
-    func liveOwners() async -> [String: LiveServers.Owner] {
-        var owners = (try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]
+    func liveOwners() async throws -> [String: LiveServers.Owner] {
+        var owners = try await services.store.liveOwners(hosts: Self.liveHosts(services))
         for (sessionID, owner) in owners where owner.directory?.isEmpty != false {
             owners[sessionID]?.directory = services.bridge.session(sessionID: sessionID)?.cwd.path
         }
         return owners
     }
 
-    func scanLive(only sessionIDs: Set<String>? = nil) async {
+    func scanLive(only sessionIDs: Set<String>? = nil) async throws {
         let before = liveScanning
         let scan = Task {
-            await before?.value
-            await self.scanLiveNow(only: sessionIDs)
+            _ = await before?.result
+            try await self.scanLiveNow(only: sessionIDs)
         }
         liveScanning = scan
-        await scan.value
+        try await scan.value
     }
 
-    private func scanLiveNow(only sessionIDs: Set<String>?) async {
-        let owners = await liveOwners()
+    private func scanLiveNow(only sessionIDs: Set<String>?) async throws {
+        let owners = try await liveOwners()
         var scanner = liveScanner
         let found = await scanner.find(for: owners, only: sessionIDs).reduce(into: [UUID: [URL]]()) { $0[SessionState.recordID(sessionID: $1.key)] = $1.value }
         liveScanner = scanner

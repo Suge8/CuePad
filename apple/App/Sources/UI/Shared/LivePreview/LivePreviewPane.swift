@@ -56,8 +56,8 @@ struct LivePreviewPane: View {
         .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            guard workspace.panes.contains(where: { $0.previewed != nil }) else { return }
-            LivePreview.paneSize = size
+            preview.paneSize = size
+            workspace.livePreviews.paneSize = size
         }
         .onDisappear {
             if preview.picking { preview.cancelPick() }

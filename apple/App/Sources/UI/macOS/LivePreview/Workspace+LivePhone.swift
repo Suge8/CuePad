@@ -17,13 +17,15 @@ extension Workspace {
     }
 
     func followLivePhones() async {
-        for await event in services.liveEvents.stream { await receiveLive(event) }
+        for await event in services.liveEvents.stream {
+            do { try await receiveLive(event) } catch { fail(error) }
+        }
     }
 
-    func receiveLive(_ event: VoiceRelayEvent) async {
+    func receiveLive(_ event: VoiceRelayEvent) async throws {
         switch event {
         case .received(let received):
-            if case .live(.show(_, let sessionID)) = received.payload { return await showLive(sessionID) }
+            if case .live(.show(_, let sessionID)) = received.payload { return try await showLive(sessionID) }
             if case .live(.back(_, let sessionID)) = received.payload {
                 return endRemoteFill(SessionState.recordID(sessionID: sessionID))
             }
@@ -38,8 +40,8 @@ extension Workspace {
             if !open { phone.ticket = nil }
             phone.answered = nil
             livePhones[key] = phone
-            if fresh { await scanLive(only: [sessionID]) }
-            await answerLivePhones()
+            if fresh { try await scanLive(only: [sessionID]) }
+            try await answerLivePhones()
         case .peerClosed(let endpoint, _):
             livePhones = livePhones.filter { $0.key.phone != endpoint }
         case .localClosed:
@@ -48,19 +50,19 @@ extension Workspace {
         }
     }
 
-    func answerLivePhones() async {
+    func answerLivePhones() async throws {
         let now = ContinuousClock.now
         livePhones = livePhones.filter { $0.value.until > now }
         guard !livePhones.isEmpty else { return }
         let needsDoor = livePhones.values.contains { $0.ticket != nil }
         let port = needsDoor ? await openLiveDoor() : nil
-        let hosted = Set(((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys)
+        let hosted = Set(try await services.store.liveOwners(hosts: Self.liveHosts(services)).keys)
         for (key, phone) in livePhones {
             let id = SessionState.recordID(sessionID: key.sessionID)
             let here = hosted.contains(key.sessionID)
             var door: LiveSignal.Door?
             if let ticket = phone.ticket {
-                let allowed = here ? await livePorts(key.sessionID) : [:]
+                let allowed = here ? try await livePorts(key.sessionID) : [:]
                 liveServer?.server.limit(ticket, to: Set(allowed.keys.compactMap { UInt16(exactly: $0) }))
                 if let port { door = LiveSignal.Door(entrance: .init(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket), ports: allowed.keys.sorted()) }
             }
@@ -76,10 +78,10 @@ extension Workspace {
         }
     }
 
-    private func showLive(_ sessionID: String) async {
-        let hosted = ((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys
-        guard hosted.contains(sessionID), let state = try? await services.store.sessionState(sessionID) else { return }
-        await scanLive(only: [sessionID])
+    private func showLive(_ sessionID: String) async throws {
+        let hosted = try await services.store.liveOwners(hosts: Self.liveHosts(services)).keys
+        guard hosted.contains(sessionID), let state = try await services.store.sessionState(sessionID) else { return }
+        try await scanLive(only: [sessionID])
         let own = liveFill?.session == state.id && liveFill?.own == true
         liveFill = nil
         overlay = nil
@@ -138,16 +140,23 @@ extension Workspace {
         guard request.port != 0 else { return .probe }
         var host = request.host.lowercased()
         if host.hasPrefix("[") { host = String(host.dropFirst().dropLast()) }
-        guard LiveTunnel.Proxy.isMac(host, addresses: Set(LiveTunnel.localAddresses().map(\.host))), let target = await livePorts(key.sessionID)[Int(request.port)] else {
+        let target: String?
+        do {
+            target = LiveTunnel.Proxy.isMac(host, addresses: Set(LiveTunnel.localAddresses().map(\.host))) ? try await livePorts(key.sessionID)[Int(request.port)] : nil
+        } catch {
+            fail(error)
+            return .refused
+        }
+        guard let target else {
             AppServices.log.notice("活预览的隧道没放行 \(host, privacy: .public):\(request.port)：不是这个会话的口")
             return .refused
         }
         return .open(host: target, port: request.port)
     }
 
-    private func livePorts(_ sessionID: String) async -> [Int: String] {
+    private func livePorts(_ sessionID: String) async throws -> [Int: String] {
         if let kept = livePorts[sessionID], ContinuousClock.now - kept.at < .seconds(1) { return kept.ports }
-        var ports = await liveScanner.ports(for: liveOwners(), only: [sessionID])[sessionID] ?? [:]
+        var ports = try await liveScanner.ports(for: liveOwners(), only: [sessionID])[sessionID] ?? [:]
         let local = Set(LiveTunnel.localAddresses().map(\.host))
         for url in livePages(SessionState.recordID(sessionID: sessionID)) {
             guard let port = url.port, ports[port] == nil, let host = url.host(percentEncoded: false)?.lowercased(), LiveTunnel.Proxy.isMac(host, addresses: local) else { continue }

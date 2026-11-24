@@ -218,7 +218,7 @@ final class Workspace {
     var liveCover: UUID?
     #if os(macOS)
     @ObservationIgnored var liveScanner = LiveServers()
-    @ObservationIgnored var liveScanning: Task<Void, Never>?
+    @ObservationIgnored var liveScanning: Task<Void, any Error>?
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
     var livePhones: [LivePhone.Key: LivePhone] = [:] { didSet { syncLiveDoor() } }
     @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?

@@ -23,6 +23,8 @@ final class LivePreviews {
     }
 
     private(set) var entries: [UUID: Entry] = [:]
+    /// 活预览面板上次多大：新建的网页视图先照它排，开进面板前 Agent 用到的就是打开后的样子。
+    @ObservationIgnored var paneSize = CGSize(width: 800, height: 900)
     @ObservationIgnored private var watching: [UUID: Task<Void, Never>] = [:]
     #if os(iOS)
     @ObservationIgnored private let remote: LiveRemote
@@ -100,7 +102,7 @@ final class LivePreviews {
     }
 
     @discardableResult private func load(_ id: UUID, _ sessionID: String, _ target: LivePreview.Target) -> LivePreview {
-        let preview = LivePreview(sessionID: sessionID, target: target)
+        let preview = LivePreview(sessionID: sessionID, target: target, paneSize: paneSize)
         entries[id, default: Entry()].stage = .loaded(preview, held: nil)
         watching.removeValue(forKey: id)?.cancel()
         watching[id] = Task { await preview.watch() }

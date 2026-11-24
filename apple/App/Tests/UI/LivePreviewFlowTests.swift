@@ -121,10 +121,10 @@ struct LivePreviewFlowTests {
         defer { server.terminate() }
 
         try await eventually("一起认时归起它的那个会话") {
-            await workspace.scanLive()
+            try await workspace.scanLive()
             return workspace.livePages(id("other")) == [url] && workspace.livePages(mine.id).isEmpty
         }
-        await workspace.scanLive(only: ["mine"])
+        try await workspace.scanLive(only: ["mine"])
         #expect(workspace.livePages(mine.id).isEmpty, "手机只看着 mine 时也一样")
     }
 
@@ -275,11 +275,11 @@ struct LivePreviewFlowTests {
         _ = try await live(url.absoluteString, for: "done", in: workspace)
         try await eventually("结束了的会话也收下了地址") { workspace.livePreviews[id("done")] != nil }
 
-        await workspace.releaseLivePreviews(at: .now)
+        try await workspace.releaseLivePreviews(at: .now)
         #expect(workspace.livePreviews[id("done")] == nil && workspace.liveButton(id("done")) == nil)
         #expect(workspace.livePreviews[id("a")] != nil)
 
-        await workspace.releaseLivePreviews(at: .now + Workspace.liveIdle + .seconds(1))
+        try await workspace.releaseLivePreviews(at: .now + Workspace.liveIdle + .seconds(1))
         #expect(workspace.livePreviews[id("a")] == nil && workspace.liveButton(id("a")) == .closed(url))
         #expect(workspace.livePreviews[id("b")] != nil)
 

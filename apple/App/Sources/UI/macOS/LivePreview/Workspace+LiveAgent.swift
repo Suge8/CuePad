@@ -14,7 +14,7 @@ extension Workspace {
         let monitor = watchUserInput()
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(60))
-            await releaseLivePreviews(at: .now)
+            do { try await releaseLivePreviews(at: .now) } catch { fail(error) }
         }
         if let monitor { NSEvent.removeMonitor(monitor) }
         withExtendedLifetime(server) {}
@@ -69,14 +69,14 @@ extension Workspace {
         return reply
     }
 
-    func releaseLivePreviews(at now: ContinuousClock.Instant) async {
-        let open = Set(((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys)
+    func releaseLivePreviews(at now: ContinuousClock.Instant) async throws {
+        let open = Set(try await services.store.liveOwners(hosts: Self.liveHosts(services)).keys)
         for preview in livePreviews.loaded {
             let id = SessionState.recordID(sessionID: preview.sessionID)
             if now - preview.agent.acted > Self.liveIdle { preview.disengage() }
             guard !showsLivePreview(id) else { continue }
             var ended = false
-            if !open.contains(preview.sessionID), let state = try? await services.store.sessionState(preview.sessionID) { ended = state.state == .known(.ended) }
+            if !open.contains(preview.sessionID), let state = try await services.store.sessionState(preview.sessionID) { ended = state.state == .known(.ended) }
             guard ended || now - preview.agent.used > Self.liveIdle, livePreviews[id] === preview, !showsLivePreview(id) else { continue }
             livePreviews.release(id, ended: ended)
         }

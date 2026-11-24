@@ -17,7 +17,7 @@ struct LivePhoneTests {
         let pair = LiveSignalPair(macHost: flow.services.hostID)
         flow.services.liveSignaling = pair.mac
         let remote = LiveRemote(store: phoneApp.services.store, settings: phoneApp.services.settings) { pair.phone }
-        pair.phone.deliver = { await workspace.receiveLive($0) }
+        pair.phone.deliver = { do { try await workspace.receiveLive($0) } catch { Issue.record(error) } }
         pair.mac.deliver = { remote.receive($0) }
         try await phoneApp.services.store.recordMacPresence(host: flow.services.hostID) { true }
         let scanning = Task { await workspace.watchLiveServers() }
@@ -328,7 +328,7 @@ struct LivePhoneTests {
         try await eventually("取完的去掉、还连着的记着") { workspace.liveServer?.server.connections == 1 }
 
         await watching.stop()
-        await workspace.receiveLive(.peerClosed(endpoint: pair.phone.local, reason: .disconnected))
+        try await workspace.receiveLive(.peerClosed(endpoint: pair.phone.local, reason: .disconnected))
         #expect(workspace.livePhones.isEmpty && workspace.liveServer == nil)
         await #expect(throws: (any Error).self) { try await held.get("index.html") }
         }
