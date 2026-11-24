@@ -6,15 +6,14 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var nearOldest = false
     private(set) var prepending = false
     private(set) var toNewest: ToNewest?
-    private(set) var target: Target?
+    private(set) var jump: Jump?
     private(set) var seeking: Target?
     private(set) var owesLanding = false
     var scrolling = false {
         didSet {
             if scrolling {
-                jumping = false
+                jump = nil
                 opened = []
-                target = nil
                 owesLanding = false
             }
             if scrolling, !withinSlack {
@@ -23,7 +22,6 @@ nonisolated struct ChatFollow: Equatable {
             }
         }
     }
-    private var jumping = false
     private var opened: Set<UUID> = []
     private var growingUp: Set<UUID> = []
     private var withinSlack = true
@@ -35,6 +33,19 @@ nonisolated struct ChatFollow: Equatable {
     var wantsEarlier: Bool { nearOldest && !prepending }
 
     var showsHeader: Bool { atNewest || revealed }
+
+    var target: Target? { jump?.target }
+
+    /// 滚过去的那一帧画好之前（`flying`）读数还报着跳之前的位置，不能按它认落没落在最新处。
+    enum Jump: Equatable {
+        case flying(Target), landed(Target)
+
+        var target: Target {
+            switch self {
+            case .flying(let target), .landed(let target): target
+            }
+        }
+    }
 
     struct Target: Equatable {
         let id: UUID
@@ -55,10 +66,9 @@ nonisolated struct ChatFollow: Equatable {
         showsJump = beyondScreen
         self.nearOldest = nearOldest
         withinSlack = near
-        if !near { jumping = false }
-        if near, !jumping, opened.isEmpty {
-            atNewest = true
-            revealed = false
+        if !near, case .flying(let target) = jump { jump = .landed(target) }
+        if near, !flying, opened.isEmpty {
+            settle()
         } else if byUser {
             atNewest = false
             revealed = false
@@ -110,11 +120,8 @@ nonisolated struct ChatFollow: Equatable {
 
     private mutating func returnToNewest(sent: Bool) {
         owesLanding = false
-        atNewest = true
-        revealed = false
-        jumping = false
+        settle()
         opened = []
-        target = nil
         deferred = false
         unheld = true
         toNewest = ToNewest(sent: sent)
@@ -143,8 +150,20 @@ nonisolated struct ChatFollow: Equatable {
     mutating func jump(to target: Target) {
         atNewest = false
         revealed = false
-        jumping = true
-        self.target = target
+        jump = .flying(target)
+    }
+
+    mutating func arrived(at target: Target) {
+        guard jump == .flying(target) else { return }
+        if withinSlack, opened.isEmpty { settle() } else { jump = .landed(target) }
+    }
+
+    private var flying: Bool { if case .flying = jump { true } else { false } }
+
+    private mutating func settle() {
+        atNewest = true
+        revealed = false
+        jump = nil
     }
 }
 
