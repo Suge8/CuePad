@@ -45,14 +45,13 @@ private struct SessionRailContent: View {
         GeometryReader { geometry in
             let waitingIdeal = idealHeight(rows.waiting), waitingCap = geometry.size.height * (rows.advancing.isEmpty ? 1 : 0.5)
             let waitingHeight = min(waitingIdeal, waitingCap)
-            let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap)
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
-                    group(rows.waiting, column: .waiting, overflows: waitingIdeal > waitingCap)
+                    group(rows.waiting, column: .waiting)
                         .frame(height: waitingHeight)
                 }
                 if !rows.advancing.isEmpty {
-                    group(rows.advancing, column: .advancing, overflows: idealHeight(rows.advancing) > advancingRoom)
+                    group(rows.advancing, column: .advancing)
                         .frame(maxHeight: idealHeight(rows.advancing))
                 }
                 if rows.waiting.isEmpty, rows.advancing.isEmpty { SessionRailEmpty() }
@@ -74,10 +73,10 @@ private struct SessionRailContent: View {
     }
 
     private func idealHeight(_ items: [SessionRailRows.Item]) -> CGFloat {
-        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
+        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.scrollFade
     }
 
-    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
+    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column) -> some View {
         VStack(spacing: 0) {
             SectionHeader(Dotted(column.title), level: .group, count: items.count, countInk: column.countInk(palette))
                 .railGroupHeader()
@@ -95,10 +94,10 @@ private struct SessionRailContent: View {
                     }
                     .padding(.horizontal, RowMetrics.bleed)
                     .scrollTargetLayout()
-                    .safeAreaPadding(.bottom, overflows ? Chrome.scrollFade : Chrome.pad)
+                    .safeAreaPadding(.bottom, Chrome.scrollFade)
                 }
                 .scrollIndicators(.hidden)
-                .modifier(BottomFade(on: overflows))
+                .fades(.bottom)
                 .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: items.map(\.id))
                 .onScrollPhaseChange { _, phase in
                     if phase == .idle { reveal.busy.remove(column) } else { reveal.busy.insert(column) }
@@ -120,24 +119,6 @@ private struct SessionRailContent: View {
 extension View {
     func railGroupHeader() -> some View {
         padding(.bottom, Spacing.tight).frame(maxWidth: .infinity, alignment: .bottomLeading).frame(height: Chrome.groupHeader, alignment: .bottom)
-    }
-}
-
-/// 要滚的一组下沿淡出一截：遮罩只在要滚时挂（挂着的遮罩每一帧都要离屏合成一遍，放得下的组不付这笔）。
-private struct BottomFade: ViewModifier {
-    let on: Bool
-
-    func body(content: Content) -> some View {
-        if on {
-            content.mask {
-                VStack(spacing: 0) {
-                    Color.black
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Chrome.scrollFade)
-                }
-            }
-        } else {
-            content
-        }
     }
 }
 

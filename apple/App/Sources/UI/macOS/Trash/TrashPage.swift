@@ -15,7 +15,7 @@ struct TrashPage: View {
             .storedList()
         }
         .safeAreaPadding(.top, Bars.contentGap)
-        .fadesUnderHead()
+        .fades(.top)
         .emptyTrashConfirmation(workspace)
         .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)

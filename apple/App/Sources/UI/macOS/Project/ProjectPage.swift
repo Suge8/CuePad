@@ -25,7 +25,7 @@ struct ProjectPage: View {
         ScrollViewReader { proxy in
             ScrollView { content }
                 .scrollPosition($position)
-                .fadesUnderHead()
+                .fades(.top)
                 .taskFoldScroll(anchor)
                 .compactFocus(open: data?.tasks.roots.count ?? 0, shown: data?.tasks.isEmpty == false, position: $position)
                 .debugScrollsToOlder(proxy, ready: board.arrangement != nil)

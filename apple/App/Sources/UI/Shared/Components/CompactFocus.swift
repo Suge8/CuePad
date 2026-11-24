@@ -2,7 +2,7 @@ import SwiftUI
 
 extension View {
     /// 项目页滚过封面以后，栏头那一排正中一颗回到顶部，写着还有几件没做完（Mac 与 iPad 宽屏；手机窄屏的页头另排）。
-    /// 挂在页头之外：iPad 的页头在内容上盖一层桌面色淡出（`fadesUnderHead`），挂在里面就被它盖住。
+    /// 挂在页头之外：页头让出的那一截内容是淡掉的（`underHead`），挂在里面就被它一起淡掉。
     func compactFocus(open: Int, shown: Bool, position: Binding<ScrollPosition>) -> some View {
         modifier(CompactFocusSlot(open: open, shown: shown, position: position))
     }

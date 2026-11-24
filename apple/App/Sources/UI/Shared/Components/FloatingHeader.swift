@@ -109,8 +109,8 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 content.safeAreaPadding(.top, clearance)
             case .column:
                 content
-                    .fadesUnderHead()
-                    .safeAreaPadding(.top, clearance)
+                    .safeAreaPadding(.top, Bars.contentGap)
+                    .underHead(height)
                     .readerHidden(covered)
             case .page, .panel:
                 let bar = PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
@@ -120,7 +120,8 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 if hasPanel {
                     // 原生栏外的按钮接不到点按；会展开的页头始终留在页面浮层，只让出收起高度。
                     content
-                        .safeAreaPadding(.top, clearance)
+                        .safeAreaPadding(.top, Bars.contentGap)
+                        .underHead(height)
                         .readerHidden(covered)
                         .overlay(alignment: .top) { bar }
                 } else {

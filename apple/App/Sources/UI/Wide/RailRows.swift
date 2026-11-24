@@ -182,11 +182,12 @@ struct RailSessions: View {
                 }
             }
             .padding(.horizontal, RowMetrics.bleed)
-            .safeAreaPadding(.bottom, Chrome.pad)
+            .safeAreaPadding(.bottom, Chrome.scrollFade)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: rows.waiting.map(\.id))
         }
         .scrollIndicators(.hidden)
+        .fades(.bottom)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .onChange(of: workspace.mainRoute) { _, route in
             if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
