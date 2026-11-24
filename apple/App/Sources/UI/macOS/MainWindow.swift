@@ -32,8 +32,8 @@ struct MainWindow: View {
             let besideCue = index == sizes.widths.count - 1 || index > 0 && sizes.fill
             let trailing = besideCue && sizes.cue == 0 ? CueButton.reserve : Spacing.page
             return EdgeInsets(top: 0, leading: leading, bottom: 0, trailing: trailing)
-        } rail: { _, width in
-            WideRail(width: width)
+        } rail: { sizes, width in
+            WideRail(width: width, sizes: sizes)
         } tools: { sizes in
             if !sizes.fill { SidebarToggle(sizes: sizes) }
             if !workspace.cueShown(sizes) {

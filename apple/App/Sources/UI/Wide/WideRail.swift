@@ -3,9 +3,7 @@ import SwiftUI
 
 struct WideRail: View {
     let width: CGFloat
-    #if os(iOS)
-    var sizes: WideMetrics?
-    #endif
+    let sizes: WideMetrics
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -34,15 +32,22 @@ struct WideRail: View {
     private var rows: some View {
         VStack(spacing: Chrome.groupGap) {
             #if os(iOS)
-            if let sizes { RailTopTools(sizes: sizes, floating: false) }
+            RailTopTools(sizes: sizes, floating: false)
             #endif
             RailHome()
-            RailSessions(data: services.sessionFeed.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
+            RailSessions(data: services.sessionFeed.rail, marked: marked, page: page) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .aside : .main)
             }
             tools
         }
     }
+
+    /// 亮的只是窗口里看得见的块：窗口窄到放不下而停在窗口外的会话与页不亮（`WideMetrics.order`）。
+    private var marked: Set<String> {
+        Set(workspace.shownSessions.filter { sizes.order.contains(.session($0.id)) }.compactMap(\.sessionID))
+    }
+
+    private var page: Route? { sizes.order.contains(.page) ? workspace.pageRoute : nil }
 
     private var tools: some View {
         HStack(spacing: Spacing.tight) {
