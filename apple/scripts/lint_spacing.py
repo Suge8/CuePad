@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lint.sh 的一条规则（在 apple/ 下跑）：间距只经 Spacing 的几档（棘轮清零后的全仓规则）：padding、safeAreaPadding、spacing:、EdgeInsets 的参数里不写数。
+"""lint.sh 的一条规则（在 apple/ 下跑）：间距只经 Spacing 的几档（棘轮清零后的全仓规则）：padding、safeAreaPadding、spacing:（连同网格的 horizontalSpacing:、verticalSpacing:）、Spacer(minLength:)、EdgeInsets 的参数里不写数。
 具名常量也查：名字说它是间距（gap、margin、inset、spacing、padding）或值是一组边距（EdgeInsets）的，写数就要在它上一行或行尾写一句为什么（组件几何、光学校准），
 否则读 Spacing 的档——不然档外的数换个名字就绕过去了（Mac 浮层气泡的上边抄过一份工具栏高 52）。
 用 Python 认括号：一次调用的参数里可能套着别的调用（三元式、加减），正则认不准哪段是参数。0 与按比例的乘除（size * 0.08、height / 2）不算
@@ -7,7 +7,7 @@
 import os, re
 skip = re.compile(r"(?:^|/)Theme/|^App/Sources/UI/Debug/|^App/Widget/|/Tests/")
 call = re.compile(r"\.(?:padding|safeAreaPadding)\(|\b(?:UI|NS)?EdgeInsets\(")
-label = re.compile(r"\bspacing:\s*")
+label = re.compile(r"\b(?:spacing|horizontalSpacing|verticalSpacing|minLength):\s*")
 number = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w.])")
 role = re.compile(r"\bstatic\s+(?:let|var)\s+(?:\w*(?:[gG]ap|[mM]argin|[iI]nset|[sS]pacing|[pP]adding)\w*\s*:\s*CGFloat\s*(?:=|\{)|\w+(?:\s*:\s*\w*EdgeInsets)?\s*(?:=|\{)\s*(?:UI|NS)?EdgeInsets\()")
 named = re.compile(r"\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:private|fileprivate|internal|public|nonisolated)\s+)*static\s+(?:let|var)\b")
@@ -50,6 +50,6 @@ for root in ("App", "CuePadKit"):
                 if found: hits.append(f"{path}:{n}:{line.strip()}")
 if hits:
     print("\n".join(hits))
-    print("  → 间距只经 Spacing 的几档（Theme/Spacing.swift，按这段空隔开的是什么取）、ControlSize、Chrome 与组件里有名字的常量：padding、safeAreaPadding、spacing:、EdgeInsets 的参数里写的数是又一套手感，"
+    print("  → 间距只经 Spacing 的几档（Theme/Spacing.swift，按这段空隔开的是什么取）、ControlSize、Chrome 与组件里有名字的常量：padding、safeAreaPadding、spacing:、Spacer(minLength:)、EdgeInsets 的参数里写的数是又一套手感，"
           "不在档上的按角色就近落档；确是组件几何或光学校准的提成 static let，在它上一行或行尾写一句为什么。0 与按比例的乘除（size * 0.08、height / 2）不算\n")
     raise SystemExit(1)

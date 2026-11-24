@@ -142,7 +142,7 @@ struct TokenSheet: View {
 
     private static let spacings: [(String, CGFloat)] = [
         ("hair", Spacing.hair), ("tight", Spacing.tight), ("glyph", Spacing.glyph), ("item", Spacing.item), ("group", Spacing.group),
-        ("block", Spacing.block), ("part", Spacing.part), ("sheet", Spacing.sheet), ("inset", Spacing.inset), ("panel", Spacing.panel),
+        ("block", Spacing.block), ("part", Spacing.part), ("inset", Spacing.inset), ("panel", Spacing.panel),
         ("page", Spacing.page), ("section", Spacing.section), ("vacant", Spacing.vacant), ("reading", Spacing.reading),
         ("replyBottom", Spacing.replyBottom),
     ] + platformSpacings

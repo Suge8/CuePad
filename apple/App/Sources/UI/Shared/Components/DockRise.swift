@@ -15,11 +15,9 @@ struct RiseBehind: ViewModifier, Animatable {
         RiseLayout(shown: shown, floats: floats, limit: limit) { content }
             // 矩形裁剪，不用遮罩：遮罩每画一次都要渲染服务另开一遍离屏，卡停着时下面的计时、进展每次换字都付一次
             .clipShape(RiseClip(
-                side: floats ? RiseBehind.shadowRoom : RiseBehind.shadowRoom * shown,
-                top: floats ? limit + RiseBehind.shadowRoom : RiseBehind.shadowRoom * shown))
+                side: floats ? Elevation.lifted.reach : Elevation.lifted.reach * shown,
+                top: floats ? limit + Elevation.lifted.reach : Elevation.lifted.reach * shown))
     }
-
-    private static let shadowRoom: CGFloat = 24
 }
 
 private nonisolated struct RiseClip: Shape {

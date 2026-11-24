@@ -1,7 +1,6 @@
 import SwiftUI
 
 enum TaskMetrics {
-    static let cardRadius = Radius.sheet
     #if os(iOS)
     nonisolated static let rowHeight: CGFloat = 44
     static let caption = Typography.meta

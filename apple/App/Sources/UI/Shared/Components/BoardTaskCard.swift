@@ -117,7 +117,7 @@ struct BoardTaskCard: View {
             if workspace.layout == .wide { card().gesture(SessionTap(action: enter)) }
             else { card().onTapGesture { tap() } }
         }
-            .contentShape(.contextMenuPreview, .rect(cornerRadius: TaskMetrics.cardRadius))
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Radius.card))
             .contextMenu { menu }
     }
     #endif

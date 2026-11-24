@@ -14,25 +14,18 @@ enum LibraryLayout {
     #endif
 }
 
-struct LibraryGroup<Label: View, Action: View, Content: View>: View {
+struct LibraryGroup<Lead: View, Action: View, Content: View>: View {
+    let title: Dotted
     var count: Int?
-    @ViewBuilder var label: Label
+    @ViewBuilder var lead: Lead
     @ViewBuilder var action: Action
     @ViewBuilder var content: Content
-    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            HStack(spacing: Spacing.item) {
-                HStack(spacing: Spacing.glyph) {
-                    label.foregroundStyle(palette.ink2)
-                    if let count { Text(verbatim: "\(count)").monospacedDigit().foregroundStyle(palette.ink3) }
-                }
-                .font(Typography.label)
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                action
+            HStack(spacing: Spacing.glyph) {
+                lead.readerHidden(true)
+                SectionHeader(title, level: .group, count: count) { action }
             }
             .frame(minHeight: ControlSize.inline.height)
             VStack(spacing: 0) { content }
@@ -40,9 +33,21 @@ struct LibraryGroup<Label: View, Action: View, Content: View>: View {
     }
 }
 
+extension LibraryGroup where Lead == EmptyView {
+    init(_ title: Dotted, count: Int? = nil, @ViewBuilder content: () -> Content, @ViewBuilder action: () -> Action) {
+        self.init(title: title, count: count, lead: { EmptyView() }, action: action, content: content)
+    }
+}
+
 extension LibraryGroup where Action == EmptyView {
-    init(count: Int? = nil, @ViewBuilder label: () -> Label, @ViewBuilder content: () -> Content) {
-        self.init(count: count, label: label, action: { EmptyView() }, content: content)
+    init(_ title: Dotted, count: Int? = nil, @ViewBuilder lead: () -> Lead, @ViewBuilder content: () -> Content) {
+        self.init(title: title, count: count, lead: lead, action: { EmptyView() }, content: content)
+    }
+}
+
+extension LibraryGroup where Lead == EmptyView, Action == EmptyView {
+    init(_ title: Dotted, count: Int? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title: title, count: count, lead: { EmptyView() }, action: { EmptyView() }, content: content)
     }
 }
 
@@ -87,14 +92,12 @@ struct TidySlot: View {
         let tidies = library.automaticTidies.filter { ($0.instruction != nil) == rules }
         Group {
             if !tidies.isEmpty {
-                LibraryGroup(count: tidies.count) {
-                    Text("可以整理")
+                LibraryGroup(Dotted(String(localized: "可以整理")), count: tidies.count) {
+                    TidyFacts(tidies: tidies, library: library)
                 } action: {
                     Button { run(tidies) } label: { TidyLabel(title: "一键整理", working: working) }
                         .buttonStyle(ControlButtonStyle(kind: .primary, size: .inline))
                         .disabled(working)
-                } content: {
-                    TidyFacts(tidies: tidies, library: library)
                 }
                 .transition(.opacity)
             }
@@ -159,10 +162,10 @@ struct InstructionSection: View {
         VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: true)
             if !global.isEmpty {
-                LibraryGroup { Text("全局") } content: { ForEach(global) { row($0) } }
+                LibraryGroup(Dotted(String(localized: "全局"))) { ForEach(global) { row($0) } }
             }
             if !projects.isEmpty {
-                LibraryGroup { Text("项目") } content: { ForEach(projects) { row($0) } }
+                LibraryGroup(Dotted(String(localized: "项目"))) { ForEach(projects) { row($0) } }
             }
         }
     }

@@ -6,10 +6,16 @@ struct ProjectScopeSlot: View {
     var body: some View {
         let current = workspace.catalog?.project(workspace.scopedProject)
         Menu { ProjectScopePicker().pickerStyle(.inline).labelStyle(.titleAndIcon) } label: {
-            ProjectScopeLabel().menuLabel(current.map { "项目范围：\($0.shownName)" } ?? "项目范围：全部项目")
+            Label { Text("项目范围") } icon: { ProjectScopeLabel() }
+                .menuLabel(current.map { "项目范围：\($0.shownName)" } ?? "项目范围：全部项目")
         }
         .menuStyle(.button).menuIndicator(.hidden)
+        #if os(iOS)
+        .glassCircle()
+        #else
+        .labelStyle(.iconOnly)
         .buttonStyle(ControlButtonStyle(kind: .circular))
+        #endif
         .fixedSize()
         .help("项目范围")
         .sensoryFeedback(.selection, trigger: workspace.scopedProject)

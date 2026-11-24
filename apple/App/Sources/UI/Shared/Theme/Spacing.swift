@@ -9,7 +9,6 @@ nonisolated enum Spacing {
     static let group: CGFloat = 12
     static let block: CGFloat = 16
     static let part: CGFloat = 24
-    static let sheet: CGFloat = 24
     #if os(macOS)
     static let inset: CGFloat = 12
     static let panel: CGFloat = 20

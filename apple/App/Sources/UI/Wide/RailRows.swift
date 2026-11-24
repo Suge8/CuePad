@@ -93,7 +93,7 @@ struct RailHome: View {
         HStack(spacing: Spacing.item) {
             tile(Text(verbatim: cue.name), selected: workspace.cueVisible) { workspace.toggleCue() } content: {
                 CueAvatar(cue.beat, size: .card, plate: false).relaySpot(cue: workspace.cueVisible ? nil : .entry)
-                    .overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
+                    .cornerDot { CueDot() }
             }
             tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } content: {
                 Image(.task).font(.system(size: Self.glyph, weight: .semibold)).foregroundStyle(palette.signature)
@@ -166,7 +166,8 @@ struct RailSessions: View {
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
                     VStack(spacing: Spacing.tight) {
-                        header(Text(verbatim: TaskBoard.Column.waiting.title), count: rows.waiting.count, ink: TaskBoard.Column.waiting.countInk(palette))
+                        SectionHeader(Dotted(TaskBoard.Column.waiting.title), level: .group, count: rows.waiting.count, countInk: TaskBoard.Column.waiting.countInk(palette))
+                            .railGroupHeader()
                         ForEach(rows.waiting) { cell($0) }
                     }
                     .transition(.opacity)
@@ -223,18 +224,6 @@ struct RailSessions: View {
         }
     }
 
-    private func header(_ title: Text, count: Int?, ink: Color) -> some View {
-        HStack(spacing: Spacing.glyph) {
-            title.foregroundStyle(palette.ink3).lineLimit(1)
-            if let count { Text(count, format: .number).foregroundStyle(ink).monospacedDigit() }
-        }
-        .font(Typography.label)
-        .padding(.bottom, Spacing.tight)
-        .frame(maxWidth: .infinity, alignment: .bottomLeading)
-        .frame(height: Chrome.groupHeader, alignment: .bottom)
-        .accessibilityAddTraits(.isHeader)
-    }
-
     private var projectsHeader: some View {
         let selected = workspace.mainRoute == .shelf
         return Button { workspace.selectPane(.projects) } label: {
@@ -273,14 +262,12 @@ private struct RailWaitingDot: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let shift: CGFloat = Spacing.hair
-
     func body(content: Content) -> some View {
         let tally = workspace.cue.now.tally
         let dot: Color? = !railHidden ? nil : tally.asks > 0 ? palette.waiting : tally.reply > 0 ? palette.ink : nil
         content
-            .overlay(alignment: .topTrailing) {
-                if let dot { StatusDot(color: dot, rim: palette.desk).offset(x: Self.shift, y: -Self.shift).transition(Motion.pop(reduceMotion: reduceMotion)) }
+            .cornerDot {
+                if let dot { StatusDot(color: dot, rim: palette.desk).transition(Motion.pop(reduceMotion: reduceMotion)) }
             }
             .animation(Motion.fade, value: dot)
             .accessibilityValue(dot == nil ? Text("") : Text("等你 \(tally.needsYou)"))

@@ -14,7 +14,7 @@ struct SelectionBar: View {
             Button("全选") { presses.selectAll() }
                 .keyboardShortcut("a")
                 .disabled(Set(presses.selectable).isSubset(of: presses.selected))
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             Button("完成") { presses.clearSelection() }
                 .keyboardShortcut(.cancelAction)
             Button(role: .destructive) { delete() } label: {

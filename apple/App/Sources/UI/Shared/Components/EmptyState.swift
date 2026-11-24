@@ -28,7 +28,7 @@ struct EmptyState<Action: View>: View {
         .animation(Motion.fade, value: syncing)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
-        .padding(Spacing.sheet)
+        .padding(Spacing.part)
         .frame(maxWidth: .infinity)
         .modifier(Sheet(bare: bare))
         .scaleEffect(shown || reduceMotion ? 1 : 0.97)

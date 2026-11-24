@@ -187,7 +187,7 @@ struct SetupPanel: View {
     private var footer: some View {
         HStack(alignment: .center, spacing: Spacing.group) {
             Text(tidying != nil ? "做完能撤销；原来的那些进废纸篓" : "可在设置里改").font(Typography.meta).foregroundStyle(palette.ink3)
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             if let tidying {
                 Button("跳过") { close() }
                     .buttonStyle(ControlButtonStyle(kind: .secondary))

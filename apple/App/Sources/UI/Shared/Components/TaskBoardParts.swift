@@ -84,7 +84,7 @@ struct BoardColumn: View {
             .overlay(alignment: .top) {
                 BoardColumnHeader(column: column, count: board.count(column), archives: archives)
                     .padding(.horizontal, TaskMetrics.cardPadding)
-                    .glass(in: .rect(cornerRadius: TaskMetrics.cardRadius))
+                    .glass(in: .capsule)
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
             }
             .background { BoardLane(targeted: lit) }
@@ -220,7 +220,7 @@ struct BoardColumn: View {
         }
             .padding(.horizontal, BoardCardMetrics.inset)
             .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
-            .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
+            .background(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }
 
     private func toggleEarlier() {
@@ -314,7 +314,7 @@ private struct BoardPile: View {
             .boardCard(.done)
             .background {
                 ForEach([2, 1], id: \.self) { depth in
-                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
+                    RoundedRectangle(cornerRadius: Radius.card).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
                         .padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step)
                 }
             }
