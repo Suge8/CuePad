@@ -27,7 +27,7 @@ struct ProjectPage: View {
                 .scrollPosition($position)
                 .fadesUnderHead()
                 .taskFoldScroll(anchor)
-                .compactFocus(open: data?.taskCounts.open ?? 0, shown: data?.tasks.isEmpty == false, position: $position)
+                .compactFocus(open: data?.tasks.roots.count ?? 0, shown: data?.tasks.isEmpty == false, position: $position)
                 .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
         .onChange(of: SelectableKey(active: active, ids: board.arrangement.map { $0.pinned + $0.wall + $0.older }), initial: true) { _, key in

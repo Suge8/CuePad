@@ -44,7 +44,7 @@ struct TaskCountTests {
         #expect(Set(board.todo.map(\.id)) == [closed.id, orphan.id])
         #expect(board.advancing.compactMap(\.item?.id) == [release.id])
         let done = [fix.id, shipped.id]
-        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)
+        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.doneCount == done.count)
     }
 
     #if os(macOS)

@@ -52,7 +52,7 @@ struct ProjectScreen: View {
         .scrollPosition($position)
         .taskFoldScroll(anchor)
         .modifier(Head(project: project, panes: sizeClass == .compact && project != nil ? AnyView(panes) : nil))
-        .compactFocus(open: data?.taskCounts.open ?? 0, shown: sizeClass == .regular && data?.tasks.isEmpty == false, position: $position)
+        .compactFocus(open: data?.tasks.roots.count ?? 0, shown: sizeClass == .regular && data?.tasks.isEmpty == false, position: $position)
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) {
             [projectID] store in try ProjectPageData.read(projectID, from: store)
         }

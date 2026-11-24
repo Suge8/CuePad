@@ -132,7 +132,7 @@ private struct AddIdea: View {
     private var mood: AddIdeaTile.Mood {
         let waits = data.tasks.ordered.contains { workspace.agent(of: $0.id, in: agents)?.shown.needsYou ?? false }
         if waits { return .waiting }
-        return data.taskCounts.done > 0 && data.taskCounts.open == 0 ? .done : .idea
+        return data.doneCount > 0 && data.tasks.isEmpty ? .done : .idea
     }
 }
 
