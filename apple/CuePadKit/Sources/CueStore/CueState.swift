@@ -95,7 +95,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
   }
 
   public func holds(for session: SessionState) -> Bool {
-    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
+    session.sessionID == sessionID && session.stateSince.stored == since.stored
   }
 }
 
