@@ -75,7 +75,7 @@ enum DebugHooks {
         DebugScene.later(delay, fileID: fileID, line: line, work)
         #else
         Task {
-            try await Task.sleep(for: delay)
+            try? await Task.sleep(for: delay)
             work()
         }
         #endif

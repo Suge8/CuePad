@@ -144,6 +144,8 @@ private struct TileSurface: ViewModifier {
 struct RailSessions: View {
     let data: SessionRailData
     let marked: Set<String>
+    /// 窗口里看得见的那一页（`WideRail.page`）。
+    let page: Route?
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -189,7 +191,7 @@ struct RailSessions: View {
         .scrollIndicators(.hidden)
         .fadesAtBottom()
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .onChange(of: workspace.pageRoute) { _, route in
+        .onChange(of: page) { _, route in
             if case .project(let id)? = route, !expanded.contains(id) { expand { $0.insert(id) } }
         }
         .onChange(of: marked) { old, new in
@@ -215,7 +217,7 @@ struct RailSessions: View {
     private func shownProjects(running: [UUID: [SessionRailRows.Item]]) -> [Project] {
         let all = workspace.catalog?.projects ?? []
         func kept(_ project: Project) -> Bool {
-            running[project.id] != nil || project.isPinned || expanded.contains(project.id) || workspace.pageRoute == .project(project.id)
+            running[project.id] != nil || project.isPinned || expanded.contains(project.id) || page == .project(project.id)
         }
         var room = Self.projectCap - all.count(where: kept)
         return all.filter { project in
@@ -226,7 +228,7 @@ struct RailSessions: View {
     }
 
     private var projectsHeader: some View {
-        let selected = workspace.pageRoute == .shelf
+        let selected = page == .shelf
         return Button { workspace.selectPane(.projects) } label: {
             HStack(spacing: Spacing.glyph) {
                 Text("项目").emphasis(selected ? .bold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
@@ -242,7 +244,7 @@ struct RailSessions: View {
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
-        RailProjectRow(project: project, running: running, selected: workspace.pageRoute == .project(project.id), open: expanded.contains(project.id)) {
+        RailProjectRow(project: project, running: running, selected: page == .project(project.id), open: expanded.contains(project.id)) {
             workspace.show(.project(project.id))
             expand { $0.insert(project.id) }
         } toggle: {

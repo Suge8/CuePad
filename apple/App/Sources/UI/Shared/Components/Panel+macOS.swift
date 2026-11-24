@@ -12,7 +12,7 @@ extension View {
 
     func keptPanel(isPresented: Binding<Bool>, mounted: Bool, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(WindowPanel(
-            key: isPresented.wrappedValue ? AnyHashable(true) : nil, retained: mounted, style: .sheet,
+            key: isPresented.wrappedValue ? AnyHashable(true) : nil, retained: mounted, style: .bare(from: nil),
             close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
 
@@ -296,6 +296,7 @@ private struct BareStage<Content: View>: View {
     let from: CGPoint?
     @ViewBuilder let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pageActive) private var active
     @State private var grown = false
     @State private var origin: CGPoint?
 
@@ -314,9 +315,10 @@ private struct BareStage<Content: View>: View {
                 .scaleEffect(grown || reduceMotion ? 1 : Self.seed, anchor: anchor)
                 .opacity(grown ? 1 : 0)
         }
-        .onAppear {
+        // 留着不撤的那一份（搜索）每次开合都长开、收回，不只头一次
+        .onChange(of: active, initial: true) {
             origin = from
-            withAnimation(Motion.nudge) { grown = true }
+            withAnimation(Motion.nudge) { grown = active }
         }
     }
 }

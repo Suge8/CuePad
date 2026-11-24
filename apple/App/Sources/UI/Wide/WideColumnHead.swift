@@ -11,6 +11,7 @@ struct WideColumnHead: View {
         let page = workspace.pageRoute
         HStack(spacing: Spacing.item) {
             if page == .progress { ProjectScopeSlot() } else if let page { title(page) }
+            PageTopButton()
             Spacer(minLength: Spacing.item)
             #if os(macOS)
             if page != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }

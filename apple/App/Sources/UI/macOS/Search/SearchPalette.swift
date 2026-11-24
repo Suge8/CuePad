@@ -36,7 +36,7 @@ struct SearchPalette: View {
     @FocusState private var focused: Bool
 
     private static let maxWidth: CGFloat = 840
-    private static let height: CGFloat = 500
+    private static let listHeight: CGFloat = 400
     private static let listWidth: CGFloat = 380
     private static let sideBySide: CGFloat = 680
 
@@ -75,7 +75,7 @@ struct SearchPalette: View {
             header
             content
         }
-        .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
+        .frame(maxWidth: Self.maxWidth)
         .rowContainer(.rect(cornerRadius: Radius.card))
         .glass(in: .rect(cornerRadius: Radius.card))
         .opacity(data == nil || sessions == nil ? 0 : 1)
@@ -99,7 +99,7 @@ struct SearchPalette: View {
         FilterBar(query: $query, total: query.listsCards ? data?.matches.total : nil)
              .padding(.horizontal, Spacing.inset).padding(.bottom, Spacing.item)
         Divider()
-        ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
+        ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide, maxHeight: Self.listHeight) {
             results
             preview
         }
@@ -352,9 +352,18 @@ private struct SessionObservation: ViewModifier {
 private struct ListWithPreview: Layout {
     let listWidth: CGFloat
     let minimumWidth: CGFloat
+    let maxHeight: CGFloat
 
+    /// 高是列表与预览里高的那一边，不超过 `maxHeight` 与给的高：只有几行建议时面板不留下面一大片空白。
+    /// 面板上沿钉在窗口上方（`BareStage`），随结果多少往下长、往上收，搜索框不动。
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
-        proposal.replacingUnspecifiedDimensions(by: CGSize(width: minimumWidth, height: 300))
+        let size = proposal.replacingUnspecifiedDimensions(by: CGSize(width: minimumWidth, height: 300))
+        guard subviews.count == 2 else { return size }
+        let wide = size.width >= minimumWidth, list = wide ? listWidth : size.width
+        let tallest = max(
+            subviews[0].sizeThatFits(ProposedViewSize(width: list, height: nil)).height,
+            wide ? subviews[1].sizeThatFits(ProposedViewSize(width: size.width - list, height: nil)).height : 0)
+        return CGSize(width: size.width, height: min(size.height, maxHeight, tallest))
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {

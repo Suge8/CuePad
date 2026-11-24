@@ -49,7 +49,7 @@ enum MainMenu {
             // macOS 标准的显示/隐藏侧栏；不用 ⌘\：常见的 1Password 把它占作全局快捷键，按键到不了 App
             .item("侧栏", #selector(AppDelegate.toggleCueSidebar(_:)), "s", [.control, .command]),
             .item("右栏", #selector(AppDelegate.toggleCueColumn(_:)), "i", [.control, .command]),
-            .item("切换栏焦点", #selector(WideColumnView.switchWideFocus(_:)), "\t", [.control]),
+            .item("切换栏焦点", #selector(MainShellWindow.switchWideFocus(_:)), "\t", [.control]),
             .item("会话移到左边", #selector(WideColumnView.moveWideLeft(_:)), "\u{F702}", [.command, .option]),
             .item("会话移到右边", #selector(WideColumnView.moveWideRight(_:)), "\u{F703}", [.command, .option]),
             .separator,

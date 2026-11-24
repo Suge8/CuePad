@@ -2,7 +2,7 @@
 import AppKit
 
 /// 宽屏跨阈值时主区与 Cue 的页面保住了没有（`InteractionBench+Wide` 的 `page`：ok、untested、broken）。
-/// - 块视图与块里原来的每个滚动视图都还在（宽了多露出的不算）：页面没被重建，内容随路由与会话一起由 `Snapshot` 比；收起的 Cue 藏着时不比，露出来那一下再比；
+/// - 块视图与块里原来的每个滚动视图都还在（宽了多露出的不算，窄了挤出块外的还算在；只认能滚的，`objects`）：页面没被重建，内容随路由与会话一起由 `Snapshot` 比；收起的 Cue 藏着时不比，露出来那一下再比；
 /// - 每栏里每个能滚的滚动视图（看板的每一列、对话）都像用户那样滚到中段（`scrollToMiddle`），各记下可视区正中的那一条（看板卡、对话里的一条，按它们自己报的位置认，`benchSpot`）；
 ///   跨阈值后每一条都还在它那个滚动视图的可视区里，且没被滚回顶或底。栏宽变了内容会重新折行，离两端的距离跟着变，所以认那一条、不比距离。
 ///   读屏树认不了：没有辅助功能客户端连着时 SwiftUI 不在进程里建它。
@@ -69,7 +69,7 @@ struct WidePage {
     private static let settleFrames = 120
 
     init(_ columns: [WideColumnView]) {
-        views = Dictionary(uniqueKeysWithValues: columns.map { (ObjectIdentifier($0), Self.objects(in: $0)) })
+        views = Dictionary(uniqueKeysWithValues: columns.map { (ObjectIdentifier($0), Self.objects(in: $0, scrollable: true)) })
         baseline = columns.map { column in
             let scrolls = Self.scrollables(in: column)
             return [
@@ -80,7 +80,7 @@ struct WidePage {
             ]
         }
         var readings: [Reading] = [], untested: [String] = []
-        for column in columns {
+        for column in columns where column.slot != nil && !column.isHidden {
             let all = Self.scrolls(in: column)
             if !all.contains(where: Self.isScrollable) { untested.append("\(Self.name(column)):没有能滚的") }
             for (index, scroll) in all.enumerated() where Self.isScrollable(scroll) {
@@ -107,7 +107,7 @@ struct WidePage {
         let detail = readings.map { reading -> [String: Any] in
             let column = columns.first { ObjectIdentifier($0) == reading.column }
             if hidden.contains(reading.column) { return ["column": reading.name, "verdict": Verdict.ok.rawValue, "reason": Reason.kept.rawValue] }
-            let scroll = column.flatMap { Self.scrolls(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
+            let scroll = column.flatMap { Self.held(in: $0).first { ObjectIdentifier($0) == reading.scroll } }
             let ends = scroll.flatMap(Self.ends)
             let shown = column.flatMap { column in scroll.flatMap { Self.items(in: column, shownBy: $0).first { $0.id == reading.anchor.id } } }
             let reason: Reason = scroll == nil ? .scrollGone : !(ends.map { $0.top > 1 && $0.bottom > 1 } ?? false) ? .atEnd : shown == nil ? .cardGone : .kept
@@ -124,7 +124,7 @@ struct WidePage {
         let verdicts = detail.compactMap { $0["verdict"] as? String }.compactMap(Verdict.init)
         if changed || verdicts.contains(.broken) {
             let objects = swapped.map { column -> [String: Any] in
-                ["column": "\(Self.name(column))", "swapped": Self.scrolls(in: column).map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height)) \(views[ObjectIdentifier(column)]?.contains(ObjectIdentifier($0)) == true ? "same" : "new")" },
+                ["column": "\(Self.name(column))", "swapped": Self.held(in: column).map { "\(type(of: $0)) \(Int($0.frame.width))x\(Int($0.frame.height)) \(views[ObjectIdentifier(column)]?.contains(ObjectIdentifier($0)) == true ? "same" : "new")" },
                  "before": views[ObjectIdentifier(column)]?.count ?? 0]
             }
             return (.broken, detail + objects)
@@ -134,8 +134,14 @@ struct WidePage {
 
     private static func name(_ column: WideColumnView) -> String { column.slot.map { "\($0)" } ?? "off" }
 
-    private static func objects(in column: WideColumnView) -> [ObjectIdentifier] {
-        [ObjectIdentifier(column)] + scrolls(in: column).map(ObjectIdentifier.init)
+    /// 跨阈值前只记块与能滚的（记着用户滚到哪的那几个）：对话里代码块的横滑条随惰性列表的行进出重建，不算页面换了。
+    private static func objects(in column: WideColumnView, scrollable: Bool = false) -> [ObjectIdentifier] {
+        [ObjectIdentifier(column)] + held(in: column).filter { !scrollable || isScrollable($0) }.map(ObjectIdentifier.init)
+    }
+
+    /// 认的是对象还在不在，不管看不看得见：窄了被挤出块外的列、藏起来的滚动区都还是原来那个。
+    private static func held(in view: NSView) -> [NSScrollView] {
+        ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap(held)
     }
 
     private static func json(_ rect: CGRect?) -> Any {
