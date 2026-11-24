@@ -222,6 +222,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         (advancing.compactMap(\.loose) + held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }).first { $0.state.sessionID == session }
     }
 
+    /// 任务有会话在等你时整件在等你（Cue 的计数也这么数）；看板另把它别的还在跑的会话各以会话留在进行中，卡面是这件任务。
+    private static func siblingsRunning(_ tally: CueTally) -> [(session: SessionState, task: Card)] {
+        tally.works.filter { tally.held(of: $0) > 0 }.flatMap { work in
+            work.task.map { task in work.sessions.filter(\.state.isWorking).map { (session: $0, task: task) } } ?? []
+        }
+    }
+
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()
@@ -234,8 +241,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let others = try store.boardItems(todo + finished + held)
         let boards = Dictionary((working + others).map { ($0.id, $0) }) { first, _ in first }
         let loose = tally.advancing.compactMap { if case .session(let state) = $0 { state } else { nil } }
-        let owners = Dictionary(tally.works.flatMap { work in work.task.map { task in work.sessions.map { ($0.sessionID, task) } } ?? [] }) { first, _ in first }
-        let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))
+        let siblings = siblingsRunning(tally)
+        let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + (loose + siblings.map(\.session)).map(\.sessionID))
         func item(_ task: Card) throws -> Item {
             let progress = steps[task.id]
             let leaf = progress == nil ? task : task.status == .inProgress ? try store.workingLeaf(of: task.id) : nil
@@ -258,14 +265,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             todo: try todo.map(item),
             advancing: try tally.advancing.map { work in
                 switch work {
-                case .task(let board): return Work(work: work, item: try item(board.task))
-                case .session(let state):
-                    let agent = agents[state.sessionID] ?? SessionListItem(state: state)
-                    guard let task = owners[state.sessionID] else { return Work(work: work, loose: agent) }
-                    var running = try item(task)
-                    running.agent = agent
-                    return Work(work: work, item: running)
+                case .task(let board): Work(work: work, item: try item(board.task))
+                case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? SessionListItem(state: state))
                 }
+            } + siblings.map { sibling in
+                var running = try item(sibling.task)
+                running.agent = agents[sibling.session.sessionID] ?? SessionListItem(state: sibling.session)
+                return Work(work: .session(sibling.session), item: running)
             },
             held: try heldCards(tally, from: store, item: item),
             done: try (pinned + rest[..<split]).map(finishedItem),
