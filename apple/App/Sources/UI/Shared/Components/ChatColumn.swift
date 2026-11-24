@@ -76,7 +76,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         .environment(\.chatHighlight, highlight.id)
         .environment(\.chatTarget, follow.target?.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
-        .environment(\.chatStay, ChatStay(column: column, stay: { follow.stay($0, $1) }, grow: { follow.grow($0, $1) }))
+        .environment(\.chatStay, ChatStay(column: column, stay: { follow.stay($0, $1) }, grow: { follow.grow($0, $1) }, leave: { follow.leave($0) }))
     }
 
     private func seek(_ target: ChatFollow.Target, size: CGSize) {

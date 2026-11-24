@@ -23,7 +23,7 @@ nonisolated struct ChatFollow: Equatable {
         }
     }
     private var opened: Set<UUID> = []
-    private var growingUp: Set<UUID> = []
+    private var growingUp: [UUID: Int] = [:]
     private var withinSlack = true
     private var revealed = false
     private(set) var deferred = false
@@ -77,10 +77,17 @@ nonisolated struct ChatFollow: Equatable {
 
     /// 钮在底边的折叠（`RisingFold`）开合的那一段：它底下的都不动、内容朝上长，滚动区不把这段高当成末尾新长出来的。
     mutating func grow(_ key: UUID, _ growing: Bool) {
-        if growing { growingUp.insert(key) } else { growingUp.remove(key) }
+        let count = growingUp[key, default: 0] + (growing ? 1 : -1)
+        growingUp[key] = count > 0 ? count : nil
     }
 
     var growsUp: Bool { !growingUp.isEmpty }
+
+    /// 一块折叠离开了对话（段换成占位、气泡换下）：它的开合动画的收尾不一定还来。
+    mutating func leave(_ key: UUID) {
+        growingUp[key] = nil
+        opened.remove(key)
+    }
 
     mutating func stay(_ key: UUID, _ open: Bool) {
         guard open else {
@@ -182,6 +189,7 @@ struct ChatStay: Equatable {
     let column: UUID
     let stay: (UUID, Bool) -> Void
     let grow: (UUID, Bool) -> Void
+    let leave: (UUID) -> Void
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }

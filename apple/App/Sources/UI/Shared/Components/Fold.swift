@@ -21,7 +21,7 @@ struct Fold<Label: View, Content: View>: View {
             }
             VStack(alignment: .leading, spacing: 0) { content }.clipsFold()
         }
-        .onDisappear { if open { stay?.stay(key, false) } }
+        .onDisappear { stay?.leave(key) }
     }
 }
 
@@ -51,6 +51,7 @@ struct RisingFold<Label: View, Content: View>: View {
                 label
             }
         }
+        .onDisappear { stay?.leave(key) }
     }
 }
 
