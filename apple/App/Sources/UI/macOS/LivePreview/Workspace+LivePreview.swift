@@ -14,22 +14,38 @@ extension Workspace {
 
     static func liveHosts(_ services: AppServices) -> [String] { [services.hostID] + DebugHooks.liveHosts }
 
-    /// Agent 交来的地址（`cuepad live`、`live app`、`live sim`）：后台照开着的载入，照此刻的排布滑开或只亮钮，回执说的是实际是哪一种。
-    func openLive(_ sessionID: String, url: URL, found: Bool) async throws -> LiveChannel.Reply {
+    /// Agent 交来的地址（`cuepad live`、`live app`、`live sim`；不给地址时用这里认出的这个会话的服务）：后台照开着的载入，照此刻的排布滑开或只亮钮，
+    /// 回执说的是实际是哪一种、开的是哪个地址。
+    func openLive(_ sessionID: String, url given: URL?) async throws -> LiveChannel.Reply {
         let id = SessionState.recordID(sessionID: sessionID)
+        let url: URL
+        if let given {
+            url = given
+        } else {
+            await scanLive(only: [sessionID])
+            guard let first = livePreviews.entries[id]?.found.first else {
+                throw LiveRefusal("没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
+            }
+            url = first
+        }
+        let reply = try await openLive(sessionID, id, url: url, found: given == nil)
+        return .done(reply, LiveChannel.Info(url: url.absoluteString))
+    }
+
+    private func openLive(_ sessionID: String, _ id: UUID, url: URL, found: Bool) async throws -> String {
         let here = try await services.store.sessionState(sessionID).map(livesHere) ?? false
         let shown = LiveAddress.shown(url)
         switch livePreviews.receive(.init(url: url, found: found, at: .now), for: id, sessionID: sessionID, showing: showsLivePreview(id)) {
         case .held(let typed):
-            return .done("用户正开着这个会话的预览、看着他自己填的 \(LiveAddress.shown(typed))，没换掉：他收起再打开时换成 \(shown)。在那之前 cuepad live snapshot 等操作的是他那一页。")
+            return "用户正开着这个会话的预览、看着他自己填的 \(LiveAddress.shown(typed))，没换掉：他收起再打开时换成 \(shown)。在那之前 cuepad live snapshot 等操作的是他那一页。"
         case .loaded(let preview):
             preview.start()
             preview.engage()
         }
         if session(in: .main)?.id == id, !isSplit { toggleLivePreview() }
-        if showsLivePreview(id) { return .done("已在这台 Mac 的 CuePad 里打开 \(shown)：会话开在主区，预览滑开了。") }
-        guard here else { return .done("已交给这台 Mac 上的 CuePad：\(shown)。这个会话不在这台 Mac 的 CuePad 里，用户看不到这一页；页面在后台载着，你照样能操作它。") }
-        return .done("已交给这台 Mac 上的 CuePad：\(shown)。会话没开在主区（或右半开着别的），会话栏头的预览钮亮起、等用户点开；页面在后台载着。")
+        if showsLivePreview(id) { return "已在这台 Mac 的 CuePad 里打开 \(shown)：会话开在主区，预览滑开了。" }
+        guard here else { return "已交给这台 Mac 上的 CuePad：\(shown)。这个会话不在这台 Mac 的 CuePad 里，用户看不到这一页；页面在后台载着，你照样能操作它。" }
+        return "已交给这台 Mac 上的 CuePad：\(shown)。会话没开在主区（或右半开着别的），会话栏头的预览钮亮起、等用户点开；页面在后台载着。"
     }
 
     func watchLiveServers() async {

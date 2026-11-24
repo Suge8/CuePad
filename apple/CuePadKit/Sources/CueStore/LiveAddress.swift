@@ -59,12 +59,6 @@ extension CueStore {
     return LiveServers.Owner(process: process, directory: try indexedSession(sessionID)?.cwd)
   }
 
-  public func liveAgents() throws -> [String: LiveServers.Owner] {
-    Dictionary(try db.query("SELECT sessionID, pid, startedAt FROM piProcesses") { row in
-      (row.text(0), LiveServers.Owner(process: SessionProcess(pid: Int32(row.int(1)), startedAt: row.int(2)), directory: nil))
-    }, uniquingKeysWith: { first, _ in first })
-  }
-
   public func liveOwners(hosts: [String]) throws -> [String: LiveServers.Owner] {
     guard !hosts.isEmpty else { return [:] }
     let marks = Array(repeating: "?", count: hosts.count).joined(separator: ", ")

@@ -29,7 +29,8 @@ public enum LiveChannel {
 
   /// 命令行能交给 App 的每一件事（`cuepad live` 与它的动词）：两头都只认这一份，加一件两头一起编。
   public enum Op: Codable, Sendable, Equatable {
-    case open(url: URL, found: Bool)
+    /// 不带地址：用 App 认出的这个会话的服务。
+    case open(URL?)
     case snapshot(ref: String? = nil, interactive: Bool = false, find: String? = nil)
     case click(ref: String)
     case fill(ref: String, text: String)

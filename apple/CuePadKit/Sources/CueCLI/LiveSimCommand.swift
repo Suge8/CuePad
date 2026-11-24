@@ -31,7 +31,7 @@ extension Command {
       device = only
     }
     let url = URL(string: "http://localhost:\(try await SimServe.ensure(device))")!
-    let opened = try openLive(call, url, found: false, session: session, name: "live sim")
+    let (opened, _) = try openLive(call, url, session: session, name: "live sim")
     let text = "模拟器「\(device.name)」的屏：" + opened + "重新构建、重装应用不用再发。\n"
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: false)))
   }

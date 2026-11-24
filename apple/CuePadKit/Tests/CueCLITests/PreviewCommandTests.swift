@@ -72,12 +72,12 @@ import Testing
   @Test(arguments: ["localhost:3000", "192.168.1.20:5173", "myapp.local:8080", "http://[::1]:3000", "devbox:8000"])
   func liveTakesTheLocalAddressesOfThisMac(address: String) async throws {
     let sb = try Fixture()
-    let (server, received) = try listen(sb, answer: .done("预览滑开了。"))
+    let url = try #require(LiveAddress.url(from: address))
+    let (server, received) = try listen(sb, answer: .done("预览滑开了。", .init(url: url.absoluteString)))
     defer { withExtendedLifetime(server) {} }
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 0 && result.out.hasPrefix("预览滑开了。"), "\(result.err)")
-    let url = try #require(LiveAddress.url(from: address))
-    #expect(received.all == [LiveChannel.Request(session: "s1", op: .open(url: url, found: false))])
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: .open(url))])
   }
 
   @Test func liveActionsWithoutCuePadOpenFailAndAskForIt() async throws {

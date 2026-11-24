@@ -24,7 +24,7 @@ struct LivePreviewFlowTests {
 
     func live(_ address: String, for sessionID: String, in workspace: Workspace) async throws -> URL {
         let url = try #require(URL(string: address))
-        let reply = await workspace.answerLive(.init(session: sessionID, op: .open(url: url, found: false)))
+        let reply = await workspace.answerLive(.init(session: sessionID, op: .open(url)))
         #expect(!reply.failed, "\(reply.text)")
         return url
     }
@@ -222,6 +222,21 @@ struct LivePreviewFlowTests {
         let stale = await agent(workspace, .click(ref: login))
         #expect(stale.failed && stale.text.contains("之前那一页"))
         #expect(await agent(workspace, .eval(code: "document.title")).text == "\"第二页\"")
+    }
+
+    @Test func live_不给地址_用App认出的这个会话的服务_认不出就报错() async throws {
+        let workspace = wide()
+        let directory = try folder()
+        _ = try await session("mine", .settled, in: directory)
+        _ = try await session("quiet", .settled, in: try folder())
+        let (server, url) = try await serve(in: directory)
+        defer { server.terminate() }
+
+        let opened = await workspace.answerLive(.init(session: "mine", op: .open(nil)))
+        #expect(!opened.failed && opened.info?.url == url.absoluteString, "\(opened.text)")
+        #expect(workspace.livePreviews[id("mine")]?.target == .init(url: url, source: .found))
+        let none = await workspace.answerLive(.init(session: "quiet", op: .open(nil)))
+        #expect(none.failed && workspace.livePreviews[id("quiet")] == nil)
     }
 
     @Test func live_服务还没起来就发来_没开在面板里也等它起来自己载出() async throws {

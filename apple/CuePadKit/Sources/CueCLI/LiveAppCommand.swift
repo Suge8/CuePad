@@ -30,7 +30,7 @@ extension Command {
     }
     let (port, pid) = try await AppServe.launch(app, executable: executable, arguments: Array(call.args.positionals.dropFirst()), session: session)
     let url = URL(string: "http://localhost:\(port)")!
-    let opened = try openLive(call, url, found: false, session: session, name: "live app")
+    let (opened, _) = try openLive(call, url, session: session, name: "live app")
     let text = "已起「\(name)」（进程 \(pid)）。" + opened + "重新构建后再运行这一条，这一份会被退掉换成新的。\n"
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: false)))
   }

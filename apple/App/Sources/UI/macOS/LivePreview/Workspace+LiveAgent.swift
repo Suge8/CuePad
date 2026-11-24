@@ -38,7 +38,7 @@ extension Workspace {
         do {
             let session = request.session
             switch request.op {
-            case .open(let url, let found): return try await openLive(session, url: url, found: found)
+            case .open(let url): return try await openLive(session, url: url)
             case .snapshot(let ref, let interactive, let find): return try await onPreview(session, id) { try await $0.agentSnapshot(ref: ref, interactive: interactive, find: find) }
             case .screenshot(let ref): return try await onPreview(session, id) { try await $0.agentScreenshot(ref: ref) }
             case .console(let all): return try await onPreview(session, id) { $0.agentConsole(all: all) }

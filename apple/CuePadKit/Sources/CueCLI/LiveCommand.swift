@@ -33,24 +33,15 @@ extension Command {
     let session = try agentSession(call, "live 只能在 Agent 执行的命令里运行，预览开在那个会话旁边")
     let given = call.args.positionals
     guard given.count <= 1 else { throw CLIError.usage("最多一个地址或端口（给了 \(given.count) 个）") }
-    let url: URL
+    var url: URL?
     if let text = given.first {
       guard let parsed = LiveAddress.url(from: text) else { throw CLIError.usage("「\(text)」不是能打开的网页地址：给端口（1–65535，如 5173）或 http(s) 地址（localhost:3000/admin）") }
       guard LiveAddress.isLocal(parsed) else { throw CLIError.usage("「\(text)」不是本机地址：活预览只开本机的开发服务（localhost、127.0.0.1、局域网 IP、.local）") }
       url = parsed
-    } else {
-      var servers = LiveServers(), owners = try await call.store.liveAgents()
-      owners[session] = try await call.store.liveOwner(session)
-      guard let first = await servers.find(for: owners, only: [session])[session]?.first else {
-        throw CLIError.invalid(
-          "没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
-      }
-      url = first
     }
-    let found = given.isEmpty
-    let opened = try openLive(call, url, found: found, session: session, name: "live")
+    let (opened, shown) = try openLive(call, url, session: session, name: "live")
     let text = opened + "要自己看、点它，用 cuepad live snapshot（cuepad live --help）。手机、iPad 与这台 Mac 在同一个网络时也看得到。\n"
-    return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: found)))
+    return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: shown.absoluteString, found: url == nil)))
   }
 
   private static func synopsis(_ command: Command) -> String {
@@ -60,11 +51,12 @@ extension Command {
     return (["cuepad", command.name, command.arguments] + options).filter { !$0.isEmpty }.joined(separator: " ")
   }
 
-  /// 交给 App 打开：它照此刻的排布决定滑开还是只亮钮，在回执里说是哪一种。
-  static func openLive(_ call: Call, _ url: URL, found: Bool, session: String, name: String) throws -> String {
-    let reply = try askLive(call, LiveChannel.Request(session: session, op: .open(url: url, found: found)), name: name)
+  /// 交给 App 打开（不给地址时由它认这个会话的服务）：它照此刻的排布决定滑开还是只亮钮，在回执里说是哪一种，带回开的是哪个地址。
+  static func openLive(_ call: Call, _ url: URL?, session: String, name: String) throws -> (text: String, url: URL) {
+    let reply = try askLive(call, LiveChannel.Request(session: session, op: .open(url)), name: name)
     if reply.failed { throw CLIError.invalid(reply.text) }
-    return reply.text
+    guard let opened = reply.info?.url.flatMap(URL.init(string:)) else { throw CLIError.invalid("CuePad 没说开的是哪个地址") }
+    return (reply.text, opened)
   }
 
   static func askLive(_ call: Call, _ request: LiveChannel.Request, name: String) throws -> LiveChannel.Reply {
