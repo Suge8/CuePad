@@ -55,7 +55,7 @@ extension MacSyncTests {
         let noSession = try await bound(BindRequest(project: project.id, folder: .besideSession("nope")))
         #expect(noSession.status == .known(.failed) && noSession.reason?.text.isEmpty == false)
         let missing = try await bound(BindRequest(project: project.id, folder: .besideSession("gone-folder")))
-        #expect(missing.status == .known(.failed) && missing.reason?.text == "目录不存在：gone")
+        #expect(missing.status == .known(.failed) && missing.reason?.text == ShownText(SendError.directoryMissing("gone")).text)
         let unbound = try await bound(BindRequest(project: project.id, folder: .project(bare.id)))
         #expect(unbound.status == .known(.failed) && unbound.reason?.text.isEmpty == false)
         #expect(try await services.store.directory(of: project.id) == existing.path)
@@ -70,9 +70,9 @@ extension MacSyncTests {
         let send = try await services.store.requestDelivery(
             "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
         let resumed = try await awaitFinished(send.id)
-        #expect(resumed.status == .known(.failed) && resumed.reason?.text == "目录不存在：gone")
+        #expect(resumed.status == .known(.failed) && resumed.reason?.text == ShownText(SendError.directoryMissing("gone")).text)
         let start = try await launched(LaunchRequest(project: project.id, prompt: nil, token: "tok-4"), title: "App")
-        #expect(start.status == .known(.failed) && start.reason?.text == "目录不存在：moved")
+        #expect(start.status == .known(.failed) && start.reason?.text == ShownText(SendError.directoryMissing("moved")).text)
         #expect(rig.host.calls.isEmpty)
     }
 

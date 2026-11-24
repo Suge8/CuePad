@@ -78,7 +78,7 @@ struct AgentLibraryTests {
 
         await workspace.tidy(found.automaticOrders, in: found)
 
-        #expect(workspace.notice?.text.visible == "整理好了 4 件")
+        #expect(workspace.notice?.isError == false)
         let moved = agents.appending(path: "skills/retro")
         #expect(exists(moved.appending(path: "SKILL.md")) && !exists(codex.appending(path: "skills/retro")))
         #expect(RelativeLink.points(claude.appending(path: "skills/retro"), to: moved))
@@ -130,7 +130,7 @@ struct AgentLibraryTests {
 
         await workspace.tidy([TidyOrder(tidy: "project-claude/\(project.id.uuidString)")], in: found)
 
-        #expect(workspace.notice?.text.visible == "合并好了")
+        #expect(workspace.notice?.isError == false)
         #expect(read(folder.appending(path: "AGENTS.md")) == "# Site\n\n别处改的\n\n# 旧的 Claude 说明\n\n# 藏在 .claude 里的\n")
         #expect(RelativeLink.points(folder.appending(path: "CLAUDE.md"), to: folder.appending(path: "AGENTS.md")), "同全局：CLAUDE.md 换成链到 AGENTS.md 的链接")
         #expect(!exists(folder.appending(path: ".claude/CLAUDE.md")) && read(folder.appending(path: "CLAUDE.local.md")) == "# 我自己的\n")

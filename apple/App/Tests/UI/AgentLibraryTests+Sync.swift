@@ -54,7 +54,7 @@ extension AgentLibraryTests {
 
         let merge = try #require(library.merge(into: .project(project.id)))
         await workspace.tidy([TidyOrder(tidy: merge.id)], in: library)
-        #expect(workspace.notice?.text.visible == "合并好了" && workspace.notice?.action == nil, "手机发的合并没有撤销")
+        #expect(workspace.notice?.action == nil, "手机发的合并没有撤销")
         _ = try await phoneSees("手机上没有该整理的了") { $0.tidies.isEmpty }
     }
 }

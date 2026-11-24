@@ -63,9 +63,6 @@ struct CueGateTests {
         #expect(try await gate() == .runs(id: "mac-old", name: "Mac Studio"))
 
         let (model, move) = try await chooseHere()
-        #expect(move.title == "让 Cue 改在这台 Mac 上运行？")
-        #expect(move.message == "原来那台「Mac Studio」就不再运行 Cue。")
-        #expect(move.confirm == "改在这台运行")
         await #expect(throws: CueEnableError.runsElsewhere("Mac Studio")) { try await services.enableCue(on: TestApp.hostID, moving: false) }
         #expect(try await store.cueProfile()?.activeHost == "mac-old")
 

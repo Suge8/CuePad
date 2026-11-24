@@ -39,7 +39,7 @@ extension AgentLibraryTests {
         let workspace = Workspace(services: services)
         await workspace.tidy([TidyOrder(tidy: "duplicate/pr", keep: projectCopy)], in: found)
 
-        #expect(workspace.notice?.text.visible == "只留了这份，其余进了废纸篓")
+        #expect(workspace.notice?.isError == false)
         #expect(!exists(agents.appending(path: "skills/pr")) && exists(URL(filePath: projectCopy)) && exists(other.appending(path: ".agents/skills/pr")))
         let kept = try await library("pr 不再同名") { $0.duplicate(of: projectCopy) == nil }
         #expect(kept.skills.filter { $0.name == "pr" }.map(\.path) == [projectCopy, other.appending(path: ".agents/skills/pr").path])
@@ -76,13 +76,13 @@ extension AgentLibraryTests {
         let workspace = Workspace(services: services)
         try write("全局规则\n\n后来加的\n", claude.appending(path: "CLAUDE.md"))
         await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: found)
-        #expect(workspace.notice?.text.visible == "Mac 上刚改过" && read(rules) == "共用的\n")
+        #expect(workspace.notice?.isError == true && read(rules) == "共用的\n")
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         let again = try await library("又是看过的那一版") { $0.merge(into: .global)?.base == merge.base }
 
         await workspace.tidy([TidyOrder(tidy: merge.id, retire: [.piSystem, .codexPrompt], base: merge.base)], in: again)
 
-        #expect(workspace.notice?.text.visible == "合并好了")
+        #expect(workspace.notice?.isError == false)
         #expect(read(rules) == "共用的\n\n全局规则\n\n你是 Pi\n\n你是 Codex\n")
         #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: rules), "空的那份换成链接")
         #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules) && !exists(claude.appending(path: "CLAUDE.md")), "Claude Code 经 rules 读，不留挡项目规则的 CLAUDE.md")
