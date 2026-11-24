@@ -4,7 +4,7 @@ import CueStore
 import Foundation
 
 struct CueRound: Identifiable {
-    let id: Int
+    let id = UUID()
     let wake: CueWake
     let startedAt: Date
     var sent: [String]

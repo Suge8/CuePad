@@ -66,7 +66,6 @@ final class CueKeeper {
     @ObservationIgnored var claimed = false
     @ObservationIgnored var unfired: [CueFire] = []
     @ObservationIgnored var greeting: Date?
-    @ObservationIgnored private var roundCount = 0
     @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored var unfetchable: Set<UUID> = []
 
@@ -121,8 +120,7 @@ final class CueKeeper {
     }
 
     func beginRound(_ wake: CueWake, sent: [String], at date: Date) -> CueRound {
-        roundCount += 1
-        return CueRound(id: roundCount, wake: wake, startedAt: date, sent: sent)
+        CueRound(wake: wake, startedAt: date, sent: sent)
     }
 
     func close(_ round: CueRound) {

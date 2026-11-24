@@ -8,7 +8,7 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests.Rig {
-    /// 做完的每一轮，加上正在做的那一轮（出错的那一轮先交出、再退班，中间那一下两边都有它）。
+    /// 做完的每一轮，加上正在做的那一轮（出错的那一轮先交出、再退班，中间那一下两边都有它；轮号各值班不重）。
     var rounds: [CueRound] {
         let done = finished.rounds
         guard let turn = services.cue.keeper?.snapshot.turn, !done.contains(where: { $0.id == turn.id }) else { return done }
