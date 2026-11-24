@@ -68,7 +68,13 @@ nonisolated enum Chat {
         _ messages: [ChatMessage], previews: [PreviewItem] = [], deliveries: [DeliveryRequest] = [], cueSent: Set<UUID> = [],
         at moment: Speech.Moment = .always()
     ) -> [ChatEntry] {
-        let outgoing = Self.outgoing(deliveries, messages: messages)
+        entries(messages, previews: previews, deliveries: deliveries, outgoing: outgoing(deliveries, messages: messages), cueSent: cueSent, at: moment)
+    }
+
+    static func entries(
+        _ messages: [ChatMessage], previews: [PreviewItem], deliveries: [DeliveryRequest], outgoing: [DeliveryRequest], cueSent: Set<UUID>,
+        at moment: Speech.Moment
+    ) -> [ChatEntry] {
         let tail = outgoing.firstIndex { Speech.trip($0, at: moment).failure == nil } ?? outgoing.endIndex
         let answers = messages.filter { $0.role == .known(.answer) }.map { (at: $0.at, key: $0.id.uuidString, item: Timed.answer($0)) }
         let batches = previews.map { (at: $0.createdAt, key: $0.id.uuidString, item: Timed.preview($0)) }

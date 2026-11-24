@@ -26,8 +26,9 @@ final class ChatDerived {
         let key = Key(messages: digest.messages, previews: digest.previews, cueSent: digest.cueSent, deliveries: digest.deliveries, moment: moment)
         guard key != self.key else { return facts }
         self.key = key
-        let items = Chat.entries(digest.messages, previews: digest.previews, deliveries: digest.deliveries, cueSent: key.cueSent, at: moment)
-        let trips = Chat.outgoing(digest.deliveries, messages: digest.messages).map { Speech.trip($0, at: moment) }
+        let outgoing = Chat.outgoing(digest.deliveries, messages: digest.messages)
+        let items = Chat.entries(digest.messages, previews: digest.previews, deliveries: digest.deliveries, outgoing: outgoing, cueSent: key.cueSent, at: moment)
+        let trips = outgoing.map { Speech.trip($0, at: moment) }
         facts = Facts(items: items, marks: ChatMark.of(items), trips: trips, sending: trips.contains(where: \.inTransit), lastSaid: Chat.lastSaid(digest.messages))
         return facts
     }
