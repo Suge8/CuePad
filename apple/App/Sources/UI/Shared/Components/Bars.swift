@@ -5,39 +5,22 @@ enum Bars {
 }
 
 extension View {
-    /// 盖在内容上的栏头让出的那一截：内容按它让位，滚上去时从栏头下沿起淡出，栏头四周与后面不留字。
+    /// 盖在内容上的栏头让出的那一截：内容按它让位，滚上去时滑到栏头的玻璃下面。
     func underHead(_ height: CGFloat) -> some View {
-        safeAreaPadding(.top, height).fades(.top, from: height)
+        safeAreaPadding(.top, height).underGlass()
     }
 
-    /// 滚动内容在这一边淡出（`Chrome.fade` 长），`from` 是这一边先整段让掉多少。
-    /// 是遮罩不是盖一层底色：Cue 页底下是天空，盖底色盖不住；也不用系统的滚动边缘效果：Mac 上嵌着的托管视图里不画，手机上只糊到名牌一半。
-    func fades(_ edge: VerticalEdge, from inset: CGFloat = 0) -> some View {
-        modifier(EdgeFade(edge: edge, inset: inset))
-    }
-}
+    /// 滚到浮着的玻璃下面的内容：玻璃是唯一的遮挡，不垫渐变，也关掉系统的滚动边缘效果（它只糊到名牌一半，名牌两侧的字仍清楚）。
+    func underGlass() -> some View { scrollEdgeEffectHidden(true, for: .top) }
 
-private struct EdgeFade: ViewModifier {
-    let edge: VerticalEdge
-    let inset: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            #if os(iOS)
-            .scrollEdgeEffectHidden(true, for: edge == .top ? .top : .bottom)
-            #endif
-            .mask {
-                GeometryReader { proxy in
-                    let outer = edge == .top ? proxy.safeAreaInsets.top : proxy.safeAreaInsets.bottom
-                    VStack(spacing: 0) {
-                        Color.clear.frame(height: outer + inset)
-                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Chrome.fade)
-                        Color.black
-                    }
-                    .scaleEffect(y: edge == .top ? 1 : -1)
-                    .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
-                }
+    /// 会话条下沿：底下是工具那一排、不是玻璃，淡出一截（`Chrome.fade` 长），不一刀切。
+    func fadesAtBottom() -> some View {
+        mask {
+            VStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Chrome.fade)
             }
+        }
     }
 }
 

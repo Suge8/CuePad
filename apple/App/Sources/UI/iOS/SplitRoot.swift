@@ -16,8 +16,8 @@ struct SplitRoot: View {
             WideRail(width: width, sizes: sizes)
         } tools: { sizes in
             if !sizes.fill, !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) }
-        } cue: { fits, geometry in
-            cue(fits: fits, bottom: geometry.safeAreaInsets.bottom)
+        } cue: { _, geometry in
+            cue(bottom: geometry.safeAreaInsets.bottom)
         }
         .background(palette.desk)
         .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
@@ -25,15 +25,14 @@ struct SplitRoot: View {
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
     }
 
-    private func cue(fits: Bool, bottom: CGFloat) -> some View {
-        let inset = fits ? CuePanel.float : 0
-        return CuePage()
+    private func cue(bottom: CGFloat) -> some View {
+        CuePage()
             .environment(\.headerHost, .panel)
             .modifier(KeyboardHold())
-            .safeAreaPadding(.top, inset)
-            .safeAreaPadding(.bottom, max(0, bottom - inset))
-            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits)))
-            .cuePanel(fits: fits)
+            .safeAreaPadding(.top, CuePanel.float)
+            .safeAreaPadding(.bottom, max(0, bottom - CuePanel.float))
+            .clipShape(.rect(cornerRadius: CuePanel.radius))
+            .cuePanel()
             .ignoresSafeArea(.container, edges: .bottom)
     }
 }

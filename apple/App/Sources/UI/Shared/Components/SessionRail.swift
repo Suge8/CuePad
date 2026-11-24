@@ -97,7 +97,7 @@ private struct SessionRailContent: View {
                     .safeAreaPadding(.bottom, Chrome.fade)
                 }
                 .scrollIndicators(.hidden)
-                .fades(.bottom)
+                .fadesAtBottom()
                 .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: items.map(\.id))
                 .onScrollPhaseChange { _, phase in
                     if phase == .idle { reveal.busy.remove(column) } else { reveal.busy.insert(column) }

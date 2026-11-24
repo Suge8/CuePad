@@ -9,7 +9,7 @@ struct RailDrawer<Rail: View>: View {
         ZStack(alignment: .leading) {
             if open { DrawerCatcher(close: close).transition(.identity) }
             rail
-                .modifier(DrawerSurface(edge: .leading, ground: \.sidebar))
+                .modifier(DrawerSurface())
                 .environment(\.pageActive, open)
                 .modifier(DrawerSlide(open: open))
                 .readerHidden(!open)

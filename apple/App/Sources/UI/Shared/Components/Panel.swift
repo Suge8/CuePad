@@ -99,23 +99,15 @@ private struct PanelFeed: UIViewRepresentable {
 #endif
 
 struct DrawerSurface: ViewModifier {
-    var edge = HorizontalEdge.trailing
-    var ground: KeyPath<Palette, Color> = \.desk
-    var shown = true
-    var bleed = EdgeInsets()
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
             .frame(maxHeight: .infinity)
             // 影子只挂在底那块上：挂在整块内容上要先离屏合成里面的字再糊影子（同 `PaperSurface`）
-            .background { if shown { palette[keyPath: ground].elevation(.panel).padding(bled).ignoresSafeArea() } }
-            .overlay(alignment: edge == .trailing ? .leading : .trailing) {
-                if shown { palette.hair.frame(width: ControlMetrics.stroke).padding(bled).ignoresSafeArea() }
-            }
+            .background { palette.sidebar.elevation(.panel).ignoresSafeArea() }
+            .overlay(alignment: .trailing) { palette.hair.frame(width: ControlMetrics.stroke).ignoresSafeArea() }
     }
-
-    private var bled: EdgeInsets { EdgeInsets(top: -bleed.top, leading: -bleed.leading, bottom: -bleed.bottom, trailing: -bleed.trailing) }
 }
 
 /// 调用处挂 `transition(.identity)`：收起那一下就撤，不然它跟着收起的动画淡完之前还接点按。

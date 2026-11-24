@@ -187,10 +187,10 @@ struct RailSessions: View {
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: rows.waiting.map(\.id))
         }
         .scrollIndicators(.hidden)
-        .fades(.bottom)
+        .fadesAtBottom()
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .onChange(of: workspace.mainRoute) { _, route in
-            if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
+        .onChange(of: workspace.pageRoute) { _, route in
+            if case .project(let id)? = route, !expanded.contains(id) { expand { $0.insert(id) } }
         }
         .onChange(of: marked) { old, new in
             let opened = new.subtracting(old).subtracting(SessionRailRows(data, pulse: workspace.pulse).waiting.map(\.id))
@@ -215,7 +215,7 @@ struct RailSessions: View {
     private func shownProjects(running: [UUID: [SessionRailRows.Item]]) -> [Project] {
         let all = workspace.catalog?.projects ?? []
         func kept(_ project: Project) -> Bool {
-            running[project.id] != nil || project.isPinned || expanded.contains(project.id) || workspace.mainRoute == .project(project.id)
+            running[project.id] != nil || project.isPinned || expanded.contains(project.id) || workspace.pageRoute == .project(project.id)
         }
         var room = Self.projectCap - all.count(where: kept)
         return all.filter { project in
@@ -226,7 +226,7 @@ struct RailSessions: View {
     }
 
     private var projectsHeader: some View {
-        let selected = workspace.mainRoute == .shelf
+        let selected = workspace.pageRoute == .shelf
         return Button { workspace.selectPane(.projects) } label: {
             HStack(spacing: Spacing.glyph) {
                 Text("项目").emphasis(selected ? .bold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
@@ -242,7 +242,7 @@ struct RailSessions: View {
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
-        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id), open: expanded.contains(project.id)) {
+        RailProjectRow(project: project, running: running, selected: workspace.pageRoute == .project(project.id), open: expanded.contains(project.id)) {
             workspace.show(.project(project.id))
             expand { $0.insert(project.id) }
         } toggle: {

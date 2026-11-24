@@ -35,7 +35,7 @@ struct WideShell<Rail: View, Tools: View, Cue: View>: View {
             }
             .readerHidden(covered)
             .overlay {
-                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) {
+                CueDock(sizes: sizes, width: geometry.size.width, focus: focus) {
                     cue($0, geometry)
                 }
             }

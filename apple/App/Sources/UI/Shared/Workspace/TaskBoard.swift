@@ -58,7 +58,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var project: UUID {
             switch work {
             case .task(let board): board.task.projectID
-            case .session(let session): TaskBoard.home(session)
+            case .session(let session): item?.task.projectID ?? TaskBoard.home(session)
             }
         }
     }
@@ -162,8 +162,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return board
     }
 
+    /// 进行中里任务自己的卡；等你任务在跑的会话（`siblingsRunning`）卡面也是任务，但任务在等你，不能从这里排回待办。
+    private var started: [Item] {
+        advancing.compactMap { if case .task = $0.work { $0.item } else { nil } }
+    }
+
     private func placeable(_ id: UUID) -> Card? {
-        let card = todo.first { $0.id == id }?.task ?? advancing.lazy.compactMap(\.item).first { $0.id == id }?.task
+        let card = todo.first { $0.id == id }?.task ?? started.first { $0.id == id }?.task
         return card?.parentID == nil ? card : nil
     }
 
@@ -200,7 +205,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         case (.waiting, _), (_, .idea), (.advancing, .session): return nil
         case (.todo, .task(let id)):
             let move = slot.flatMap { move(id, before: todo.indices.contains($0) ? todo[$0].id : nil) }
-            if advancing.contains(where: { $0.item?.id == id }) { return .backToTodo(id, move) }
+            if started.contains(where: { $0.id == id }) { return .backToTodo(id, move) }
             return slots(for: id).isEmpty ? nil : .place(id, move)
         case (.advancing, .task(let id)):
             return todo.first { $0.id == id }.map { .start($0.task) }
@@ -222,6 +227,15 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         (advancing.compactMap(\.loose) + held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }).first { $0.state.sessionID == session }
     }
 
+    /// 任务有会话在等你时整件在等你（Cue 的计数也这么数）；看板另把它别的还在跑的会话各以会话留在进行中，卡面是这件任务。
+    /// 一条会话只出一张：同一条会话绑在两件都在等你的任务上时卡面取先到的那件，飞行身份（会话）不重。
+    private static func siblingsRunning(_ tally: CueTally) -> [(session: SessionState, task: Card)] {
+        var seen = Set<String>()
+        return tally.works.filter { tally.held(of: $0) > 0 }.flatMap { work in
+            work.task.map { task in work.sessions.filter(\.state.isWorking).map { (session: $0, task: task) } } ?? []
+        }.filter { seen.insert($0.session.sessionID).inserted }
+    }
+
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()
@@ -234,7 +248,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let others = try store.boardItems(todo + finished + held)
         let boards = Dictionary((working + others).map { ($0.id, $0) }) { first, _ in first }
         let loose = tally.advancing.compactMap { if case .session(let state) = $0 { state } else { nil } }
-        let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))
+        let siblings = siblingsRunning(tally)
+        let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + (loose + siblings.map(\.session)).map(\.sessionID))
         func item(_ task: Card) throws -> Item {
             let progress = steps[task.id]
             let leaf = progress == nil ? task : task.status == .inProgress ? try store.workingLeaf(of: task.id) : nil
@@ -260,6 +275,10 @@ nonisolated struct TaskBoard: Sendable, Equatable {
                 case .task(let board): Work(work: work, item: try item(board.task))
                 case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? SessionListItem(state: state))
                 }
+            } + siblings.map { sibling in
+                var running = try item(sibling.task)
+                running.agent = agents[sibling.session.sessionID] ?? SessionListItem(state: sibling.session)
+                return Work(work: .session(sibling.session), item: running)
             },
             held: try heldCards(tally, from: store, item: item),
             done: try (pinned + rest[..<split]).map(finishedItem),
