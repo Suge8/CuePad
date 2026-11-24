@@ -82,16 +82,13 @@ final class Workspace {
         }
     }
 
-    /// 新进这一排的会话，它的回复框摆出来时接过焦点（`settle` 定，那个回复框摆出来时取走）。只在 Mac：触屏上不替人弹键盘。
-    /// 页不自己一摆出来就拿：启动时几页一起摆出来、答完题输入框重新出来，都会从别处把焦点拿走。
-    @ObservationIgnored private var replyLanding: UUID?
     /// 刚从这一排右头走掉的块（它右边没有留下来的）：滑出去之前照旧画着（`PaneRow`），滑完撤掉。别处走掉的当场就没了，旁边的块滑过来补上。
     private(set) var leaving: [WideNavigation.Pane] = []
     @ObservationIgnored private var leavingDone: Task<Void, Never>?
 
     private func settle(from was: WideNavigation, to now: WideNavigation) {
         #if os(macOS)
-        if let opened = now.sessions.first(where: { opened in !was.sessions.contains { $0.id == opened.id } }) { replyLanding = opened.id }
+        if let opened = now.sessions.first(where: { opened in !was.sessions.contains { $0.id == opened.id } }) { replyFocus = opened.id }
         #endif
         leave(was.panes.dropFirst(now.panes.count).reversed().prefix { $0.page == nil && !now.panes.contains($0) })
         let moved = was.panes[was.host] != now.panes[now.host]
@@ -112,12 +109,6 @@ final class Workspace {
             guard (try? await Task.sleep(for: WideSlide.duration)) != nil else { return }
             leaving = []
         }
-    }
-
-    func takeReplyLanding(_ session: UUID) -> Bool {
-        guard replyLanding == session else { return false }
-        replyLanding = nil
-        return true
     }
 
     enum Overlay: Hashable {
@@ -191,7 +182,9 @@ final class Workspace {
     }
     var preview: PreviewOpening?
     var dropTarget: WideDropTarget?
-    @ObservationIgnored var dragging: WideNavigation.Pane??
+    @ObservationIgnored var dragging = WideDrag.unknown
+    /// 点名要这个会话的回复框接焦点：别处点名的（引用、点选、再点一次已在这一排的会话），与 Mac 上新进这一排的会话（`settle`，触屏上不替人弹键盘）。
+    /// 页不自己一摆出来就拿：启动时几页一起摆出来、答完题输入框重新出来，都会从别处把焦点拿走。
     var replyFocus: UUID?
     var folderPicker: Project?
 

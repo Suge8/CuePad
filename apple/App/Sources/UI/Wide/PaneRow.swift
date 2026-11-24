@@ -49,7 +49,7 @@ struct PaneRow: View {
                 let width = left?.width ?? sizes.width(item.index) + (leading ? under : 0)
                 let grew = before.map { $0.widths.count < sizes.widths.count } == true && item.index == sizes.widths.count - 1
                 WideColumnHost(
-                    slot: item.placed ? WideSlot(Workspace.Column(index: item.index)) : nil, focus: focus, origin: origin, width: width, shape: sizes.shape,
+                    slot: item.placed ? .pane(Workspace.Column(index: item.index)) : nil, focus: focus, origin: origin, width: width, shape: sizes.shape,
                     hidden: !item.placed || (leading ? sizes.fill : origin >= window), under: leading ? under : 0,
                     arrival: before.map { .init(before: $0.shape, edge: grew ? window : nil) }
                 ) {

@@ -114,9 +114,9 @@ private struct CardDraggable<S: Shape>: ViewModifier {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    private var wide: WideNavigation.Pane?? {
-        if let session = session ?? card.session { return .session(SessionRoute(id: SessionState.recordID(sessionID: session), sessionID: session)) }
-        return .some(card.idea.map { .card($0) })
+    private var wide: WideDrag {
+        if let session = session ?? card.session { return .pane(.session(SessionRoute(id: SessionState.recordID(sessionID: session), sessionID: session))) }
+        return card.idea.map { .pane(.card($0)) } ?? .refused
     }
 
     func body(content: Content) -> some View {
@@ -136,13 +136,10 @@ private struct CardDraggable<S: Shape>: ViewModifier {
             }
         }
             .contentShape(.dragPreview, shape)
-            .reportsWideDrag(wide)
-            .onDragSessionUpdated { session in
+            .reportsWideDrag(wide) { dragging in
                 guard let drags else { return }
-                switch session.phase {
-                case .initial, .active: if drags.current != card || drags.flight != flight { (drags.current, drags.flight) = (card, flight) }
-                default: if drags.current == card, drags.flight == flight { (drags.current, drags.flight) = (nil, nil) }
-                }
+                if dragging, drags.current != card || drags.flight != flight { (drags.current, drags.flight) = (card, flight) }
+                if !dragging, drags.current == card, drags.flight == flight { (drags.current, drags.flight) = (nil, nil) }
             }
     }
 }

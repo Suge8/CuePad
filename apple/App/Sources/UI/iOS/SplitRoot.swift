@@ -10,38 +10,19 @@ struct SplitRoot: View {
 
     var body: some View {
         let covered = modals?.modal?.inPage == true
-        GeometryReader { geometry in
-            let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            HStack(spacing: 0) {
-                if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                Spacer(minLength: 0)
-            }
-            .overlay {
-                PaneRow(sizes: sizes, window: geometry.size.width, focus: focus) { index in
-                    EdgeInsets(top: 0, leading: index == 0 ? Chrome.headLead(rail: sizes.rail) : Spacing.page, bottom: 0, trailing: Spacing.page)
-                }
-            }
-            .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
-            .overlay { WideDropFeedback(window: geometry.size.width) }
-            .overlay { if !sizes.fill { railChrome(sizes) } }
-            .readerHidden(covered)
-            .overlay {
-                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { cue(fits: $0, bottom: geometry.safeAreaInsets.bottom) }
-            }
-            .reportsWideFits(sizes, to: workspace)
-            .background(palette.desk)
+        WideShell(focus: focus, covered: covered) { sizes, index in
+            EdgeInsets(top: 0, leading: index == 0 ? Chrome.headLead(rail: sizes.rail) : Spacing.page, bottom: 0, trailing: Spacing.page)
+        } rail: { sizes, width in
+            WideRail(width: width, sizes: sizes)
+        } tools: { sizes in
+            if !sizes.fill, !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) }
+        } cue: { fits, geometry in
+            cue(fits: fits, bottom: geometry.safeAreaInsets.bottom)
         }
+        .background(palette.desk)
         .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
         .environment(\.wideWindowID, focus.windowID)
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
-    }
-
-    private func railChrome(_ sizes: WideMetrics) -> some View {
-        ZStack(alignment: .topLeading) {
-            if !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) }
-            if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail, sizes: sizes) } }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func cue(fits: Bool, bottom: CGFloat) -> some View {
@@ -57,54 +38,19 @@ struct SplitRoot: View {
     }
 }
 
-/// 这一排里的那一页连同它的栏头。
-struct PageLayer: View {
+/// 宽屏一块里的内容（`PageLayer`、`SessionLayer`、`CoverLayer` 摆它）：页与会话在各自的导航栈里，页里的链接经它交给 `Workspace.show`。
+struct RouteBody: View {
+    let route: Route?
     let column: Workspace.Column
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.headInset) private var inset
-    @Environment(\.underCue) private var under
-
-    var body: some View {
-        if let page = workspace.pageRoute {
-            ZStack(alignment: .top) {
-                RouteStack(route: page, column: column)
-                if page != .search, workspace.overlay == nil { WideColumnHead(column: column).padding(inset).frame(height: Chrome.band) }
-            }
-            .padding(.trailing, page == .progress ? 0 : under)
-        }
-    }
-}
-
-struct SessionLayer: View {
-    let route: SessionRoute
-    let column: Workspace.Column
-    @Environment(\.underCue) private var under
-
-    var body: some View {
-        RouteStack(route: .session(route), column: column).padding(.trailing, under)
-    }
-}
-
-/// 点开盖在页上的那一层：灵感、规则文件。
-struct CoverLayer: View {
-    @Environment(Workspace.self) private var workspace
     @Environment(\.underCue) private var under
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let overlay = workspace.overlay
-        ZStack(alignment: .top) {
-            switch overlay {
-            case .card(let id)?:
-                IdeaPane(cardID: id, covers: true) { workspace.close(.card(id)) }.id(id).transition(.opacity)
-            case .library(let file)?:
-                RouteView(route: .libraryFile(file)).environment(\.headerHost, .column).background(palette.desk).id(file).transition(.opacity)
-                LibraryFileHead(file: file).transition(.opacity)
-            case nil: EmptyView()
-            }
+        switch route {
+        case nil: EmptyView()
+        case .libraryFile(let file)?: RouteView(route: .libraryFile(file)).environment(\.headerHost, .column).background(palette.desk)
+        case let route?: RouteStack(route: route, column: column).padding(.trailing, route == .progress ? 0 : under)
         }
-        .animation(Motion.fade, value: overlay)
-        .padding(.trailing, under)
     }
 }
 
