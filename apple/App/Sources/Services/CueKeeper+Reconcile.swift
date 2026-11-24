@@ -14,7 +14,6 @@ extension CueKeeper {
         await claimUnanswered()
         await giveBack([])
         await recordFires()
-        await leaveStopsCueSkips()
         let next = await step(at: now)
         schedule([next, alarm(at: now)].compactMap(\.self).min())
     }
@@ -177,15 +176,6 @@ extension CueKeeper {
     private func interject(_ text: String, images: [MessageImage], delivering ids: [UUID]) async throws {
         guard try await hand(text, images: images, id: UUID(), delivering: ids) else { return }
         updateShift { $0.turn?.round.sent.append(text) }
-    }
-
-    private func leaveStopsCueSkips() async {
-        guard let from = handedOver ?? progress.marks?.sessions else { return }
-        do {
-            handedOver = try await store.leaveStopsCueSkips(after: from)
-        } catch {
-            Self.log.error("不归 Cue 的停下没能留给他回：\(error.localizedDescription, privacy: .public)")
-        }
     }
 
     private func follow(_ wanted: BrainSettings) async {

@@ -24,8 +24,6 @@ public struct CueChange: Equatable, Sendable {
 }
 
 extension SessionState {
-  var atStop: Bool { runtimeState.known?.isStopped == true && (runtimeState != .known(.settled) || answered) }
-
   func reachesCue(_ tier: CueTier) -> Bool {
     switch tier {
     case .yours: false
@@ -33,6 +31,17 @@ extension SessionState {
     case .full: true
     }
   }
+
+  public func isLeftToYou(_ left: [CueLeft], tiers: [String: CueTier]) -> Bool {
+    left.contains { $0.holds(for: self) } || stopsWithYou(CueTier.of(self, chosen: tiers))
+  }
+
+  private func stopsWithYou(_ tier: CueTier) -> Bool {
+    guard let stop = state.known, Self.leftStops.contains(stop), !reachesCue(tier) else { return false }
+    return stop != .settled || answered
+  }
+
+  static let leftStops: [WorkState] = [.settled, .error, .interrupted]
 }
 
 public struct CueMarks: Codable, Equatable, Sendable {

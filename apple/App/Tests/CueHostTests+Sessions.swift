@@ -83,8 +83,8 @@ extension CueHostTests {
         default: session.setState(["kind": stop, "title": "要换个做法吗？", "error": "500 Internal server error"])
         }
         try await eventually("他那一轮的停下留给他回") {
-            guard let state = try await rig.store.sessionState(session.sessionID) else { return false }
-            return try await rig.store.cueState()?.left.contains { $0.holds(for: state) } == true
+            guard let state = try await rig.store.sessionState(session.sessionID), let duty = try await rig.store.cueDuty() else { return false }
+            return state.asksYou(duty) || duty.leftToYou(state)
         }
         try await rig.reconciled()
         #expect(woke() == 1)
