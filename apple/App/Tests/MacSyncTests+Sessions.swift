@@ -140,9 +140,8 @@ extension MacSyncTests {
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.succeeded))
         try await store.deleteDelivery(request.id)
 
-        let derived = ChatDerived()
-        derived.refresh(try await SessionDigest.read(SessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store), at: .always())
-        #expect(try #require(derived.items.first).fromCue)
+        let chat = ChatDerived().refresh(try await SessionDigest.read(SessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store), at: .always())
+        #expect(try #require(chat.items.first).fromCue)
     }
 
     @Test(arguments: [true, false], [true, false])

@@ -51,7 +51,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
             let size = proxy.size, window = self.window(size), first = ids.count - window
             let margin = ChatLayout.margin(size.width, readingWidth: readingWidth, inset: inset)
             ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow, holding: holding) {
-                content(ChatWindow(count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
+                content(ChatWindow(column: column, count: window, earlier: first > 0 ? paging.step(size, first) : 0) { showEarlier(size) })
                     .environment(\.chatMargin, margin)
             }
             .environment(\.chatReading, reading)
@@ -105,8 +105,11 @@ nonisolated struct ChatPaging {
     static func fixed(first: Int, step: Int) -> ChatPaging { ChatPaging(first: { _, _ in first }, step: { _, _ in step }) }
 }
 
-struct ChatWindow {
+struct ChatWindow: Equatable {
+    let column: UUID
     let count: Int
     let earlier: Int
     let showEarlier: () -> Void
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column && a.count == b.count && a.earlier == b.earlier }
 }

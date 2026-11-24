@@ -228,10 +228,6 @@ nonisolated enum Chat {
         return deliveries.filter { $0.mode == .known(.send) && !arrived.contains($0.id) }
     }
 
-    static func sending(_ deliveries: [DeliveryRequest], messages: [ChatMessage], at moment: Speech.Moment) -> Bool {
-        outgoing(deliveries, messages: messages).contains { Speech.trip($0, at: moment).inTransit }
-    }
-
     static func lastSaid(_ messages: [ChatMessage]) -> String? {
         messages.last { $0.role == .known(.user) }.map { SkillCall.shown($0.text) }?.nonEmpty
     }

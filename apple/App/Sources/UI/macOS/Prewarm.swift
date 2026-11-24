@@ -35,7 +35,7 @@ struct Prewarm: View {
             case .conversation:
                 ChatScroll(followKey: 0, readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow) {
                     Conversation(
-                        session: Self.session, items: Chat.entries(Self.messages), messages: Self.messages, window: ChatWindow(count: Conversation.firstWindow, earlier: 0) {})
+                        session: Self.session, items: Chat.entries(Self.messages), messages: Self.messages, window: ChatWindow(column: UUID(), count: Conversation.firstWindow, earlier: 0) {})
                 }
             case .replyBar: ReplyBar(session: Self.session, config: nil, catalog: nil, stopping: false) {}
             case .newSession: NewSessionInput(start: SessionStart())

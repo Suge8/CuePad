@@ -30,6 +30,7 @@ private struct SessionPageBody: View {
     @State private var lastSeen: SessionState?
     @State private var task: SessionTaskLink?
     @State private var follow = ChatFollow()
+    @State private var derived = ChatDerived()
     @State private var secondary = Self.dockAtOnce
 
     init(_ route: SessionRoute, column: Workspace.Column) {
@@ -43,9 +44,10 @@ private struct SessionPageBody: View {
     var body: some View {
         let digest = shown
         let session = digest?.session ?? lastSeen
+        let chat = derived.refresh(stored == nil ? nil : digest, at: services.speech)
         Group {
             if workspace.layout == .wide {
-                reply(session, digest)
+                reply(session, digest, chat)
                     .safeAreaPadding(.top, Chrome.band)
                     .overlay(alignment: .top) {
                         if let session {
@@ -63,14 +65,13 @@ private struct SessionPageBody: View {
                     }
             } else {
                 #if os(iOS)
-                reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
-                    if let session { menu(session, digest, tier: digest?.tier) }
-                } detail: {
-                    if let session { SessionSubtitle(session: session, delivery: digest?.delivery, tier: digest?.tier, ending: ending(digest)) }
-                } trailing: {
-                    LivePhoneTool(session: id, zoom: zoom)
-                }
-                .livePhoneCover(id, zoom: zoom)
+                reply(session, digest, chat)
+                    .modifier(SessionHeader(
+                        follow: $follow, title: digest?.title(at: services.speech) ?? session?.title ?? "",
+                        menu: session.map { menu($0, digest, tier: digest?.tier) },
+                        detail: session.map { SessionSubtitle(session: $0, delivery: digest?.delivery, tier: digest?.tier, ending: ending(digest)) },
+                        trailing: LivePhoneTool(session: id, zoom: zoom)))
+                    .livePhoneCover(id, zoom: zoom)
                 #endif
             }
         }
@@ -142,22 +143,22 @@ private struct SessionPageBody: View {
         SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest), tier: tier)
     }
 
-    private func reply(_ session: SessionState?, _ digest: SessionDigest?) -> some View {
+    private func reply(_ session: SessionState?, _ digest: SessionDigest?, _ chat: ChatDerived.Facts) -> some View {
         FloatingReply {
-            chat(session, digest)
+            self.chat(session, digest, chat)
         } reply: {
             if let session {
                 Group {
                     #if os(macOS)
                     if secondary {
-                        dock(session, digest)
+                        dock(session, digest, chat)
                     } else {
                         Color.clear.frame(height: ComposerMetrics.openOneLine)
                     }
                     #else
                     VStack(spacing: 0) {
                         DockedCard(workspace.ideaDock.flatMap { $0.session == id ? $0 : nil }) { IdeaDockCard(dock: $0) }
-                        dock(session, digest)
+                        dock(session, digest, chat).modifier(CompactAway(follow: $follow))
                     }
                     #endif
                 }
@@ -174,25 +175,21 @@ private struct SessionPageBody: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
-    private func dock(_ session: SessionState, _ digest: SessionDigest?) -> SessionDock {
-        #if os(macOS)
-        SessionDock(session: session, digest: digest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
-        #else
-        SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
-        #endif
+    private func dock(_ session: SessionState, _ digest: SessionDigest?, _ chat: ChatDerived.Facts) -> SessionDock {
+        SessionDock(session: session, digest: digest, chat: chat, revealNote: { follow.seek($0.entry) }) { follow.sent() }
     }
 
     /// 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入。读到前也排一个真的视图：这一页的 `.task` 与读库的 `.observing` 要等视图出现才启动。
-    private func chat(_ session: SessionState?, _ digest: SessionDigest?) -> some View {
+    private func chat(_ session: SessionState?, _ digest: SessionDigest?, _ chat: ChatDerived.Facts) -> some View {
         Group {
             if stored != nil, let digest {
                 if let session {
                     #if os(macOS)
-                    SessionChat(session: session, digest: digest, readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow,
+                    SessionChat(session: session, digest: digest, readingWidth: Spacing.reading, inset: Spacing.page, chat: chat, follow: $follow,
                                 slot: sessionID.flatMap { services.bridge.slot(sessionID: $0) })
                         .replyNotes(session: session.id, messages: digest.messages)
                     #else
-                    SessionChat(session: session, digest: digest, readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow)
+                    SessionChat(session: session, digest: digest, readingWidth: Spacing.reading, inset: Spacing.page, chat: chat, follow: $follow)
                         .replyNotes(session: session.id, messages: digest.messages)
                     #endif
                 } else {
@@ -215,6 +212,33 @@ extension SessionPageBody {
     fileprivate static let dockAtOnce = true
     #endif
 }
+
+#if os(iOS)
+/// 修饰器重算时它包着的内容不跟着重算：跟随在滚动的每次起止、越线时都变，只让这一层读它。
+private struct SessionHeader<Items: View, Detail: View, Trailing: View>: ViewModifier {
+    @Binding var follow: ChatFollow
+    let title: String
+    let menu: Items?
+    let detail: Detail?
+    let trailing: Trailing
+
+    func body(content: Content) -> some View {
+        content.floatingHeader(.verbatim(title), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+            if let menu { menu }
+        } detail: {
+            if let detail { detail }
+        } trailing: {
+            trailing
+        }
+    }
+}
+
+private struct CompactAway: ViewModifier {
+    @Binding var follow: ChatFollow
+
+    func body(content: Content) -> some View { content.environment(\.replyCompact, !follow.atNewest) }
+}
+#endif
 
 private struct DigestKey: Equatable {
     var id: UUID

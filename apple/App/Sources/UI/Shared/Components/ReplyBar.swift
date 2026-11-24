@@ -8,7 +8,6 @@ struct ReplyBar: View {
     let session: SessionState
     let config: ConfigShown?
     let catalog: AgentCatalog?
-    var compact = false
     let stopping: Bool
     var commandProgress: MacDelivery.CommandProgress?
     var sending = false
@@ -22,6 +21,7 @@ struct ReplyBar: View {
     @Environment(\.palette) private var palette
     @Environment(\.pageActive) private var active
     @Environment(\.sendFlight) private var flight
+    @Environment(\.replyCompact) private var compact
     @State private var sentCount = 0
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
@@ -262,4 +262,8 @@ extension AppSettings {
     func replyDraftBinding(for session: UUID) -> Binding<ComposerDraft> {
         Binding(get: { self.replyDraft(for: session) }, set: { self.setReplyDraft($0, for: session) })
     }
+}
+
+extension EnvironmentValues {
+    @Entry var replyCompact = false
 }
