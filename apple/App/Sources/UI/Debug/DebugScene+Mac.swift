@@ -5,31 +5,13 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    static func prepare(_ workspace: Workspace) async {
-        // 窗口在首帧之后才定下尺寸（窗口位置记忆、内容尺寸），这之后再改
-        await Task.wait(for: .milliseconds(100))
-        resizeWindow()
-        let opened = await prepareLibrary(workspace)
-        let sampleCue = args.sampleCue
-        if sampleCue > 0 { Task { await cueSample(after: .seconds(sampleCue), services: workspace.services) } }
-        Task { await SyncBench.run(workspace) }
-        Task { await voiceCallIfAsked(workspace) }
-        presetColumns(workspace.services.settings)
-        if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
-        await presetBeside(workspace)
-        openLivePreviewIfAsked(workspace)
-        if args.demoMac { Task { await runDemoMac(workspace.services) } }
-        presetDrawers(workspace)
-        if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast") { send(#selector(AppDelegate.toggleCueSidebar(_:))) } } }
-        if let pace = args.layoutOpts.rightCycle { Task { await cycleColumn(fast: pace == "fast") { send(#selector(AppDelegate.toggleCueColumn(_:))) } } }
-        await reverseWideIfAsked(workspace)
-        await presetSpeech(workspace)
-        await voiceLayoutIfAsked(workspace)
-        switch args.driveOpts.bench {
-        case "churn": await benchChurn(workspace)
-        case "interact": await InteractionBench.run(workspace)
-        case "chatscroll": Task { await ChatScrollBench.run() }
-        default: break
+    /// `projectform` 画面：项目表单经浮层弹出（同真用时，压暗的窗口上居中一块），给了 `-CuePadProject` 是编辑它（项目页垫在下面），否则新建。
+    static func projectFormIfAsked(_ workspace: Workspace) async {
+        guard scene == "projectform" else { return }
+        await running("项目表单") {
+            let asked = args.project == nil ? nil : workspace.currentProject
+            let existing = if let asked { try await workspace.services.store.project(asked) } else { Project?.none }
+            workspace.projectForm = .init(project: existing)
         }
     }
 
@@ -39,11 +21,11 @@ extension DebugScene {
         await seedCue(services)
     }
 
-    private static func send(_ action: Selector) {
+    static func send(_ action: Selector) {
         NSApp.sendAction(action, to: nil, from: nil)
     }
 
-    private static func cueSample(after delay: Duration, services: AppServices) async {
+    static func cueSample(after delay: Duration, services: AppServices) async {
         await Task.wait(for: delay)
         await running("Cue 说一句") {
             let message = try await services.store.addCueMessage(.cue, text: String(localized: "登录页修好了，要推送到 origin/main 吗？", table: "Demo"), urgent: true)
@@ -90,7 +72,7 @@ extension DebugScene {
     /// 布局反馈环的压力场景：数据持续变化（像首次启动导入）的同时，窗口宽度逐点扫过列数与目标栏的切换档位。
     /// 配合 `-AppleShowScrollBars Always`（滚动条占宽，内容高度一变可用宽度就变）最容易触发几何读数↔布局的循环；
     /// 出现循环时 SwiftUI 记 "Geometry action is cycling"，严重时 AppKit 因布局迭代超限抛异常退出。跑完自动退出。
-    private static func benchChurn(_ workspace: Workspace) async {
+    static func benchChurn(_ workspace: Workspace) async {
         await Task.wait(for: .seconds(1))
         guard let window = mainWindow else { return }
         let project = workspace.currentProject ?? Project.defaultID
@@ -109,7 +91,7 @@ extension DebugScene {
 
     static var mainWindow: NSWindow? { NSApp.windows.first { $0 is DebugWindow } }
 
-    private static func resizeWindow() {
+    static func resizeWindow() {
         guard let size = windowSize, let window = mainWindow else { return }
         window.setContentSize(size)
         if offscreen { placeOffscreen(window) } else { window.center() }
