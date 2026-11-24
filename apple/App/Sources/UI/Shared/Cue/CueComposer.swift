@@ -60,7 +60,7 @@ struct CueComposer: View {
             }
             #if os(iOS)
             // 推入别的页就交出焦点、收起键盘，返回时不还：只由系统收起的话 SwiftUI 记着它，返回时在推出转场里把键盘弹回来，
-            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）
+            // 这一页的托管控制器不认转场里到的键盘，输入框就压在键盘底下（实测）
             .onChange(of: workspace.top) { _, top in
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
