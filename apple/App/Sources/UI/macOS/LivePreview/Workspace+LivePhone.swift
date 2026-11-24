@@ -42,10 +42,8 @@ extension Workspace {
             await answerLivePhones()
         case .peerClosed(let endpoint, _):
             livePhones = livePhones.filter { $0.key.phone != endpoint }
-            syncLiveDoor()
         case .localClosed:
             livePhones = [:]
-            syncLiveDoor()
         default: break
         }
     }
@@ -53,7 +51,6 @@ extension Workspace {
     func answerLivePhones() async {
         let now = ContinuousClock.now
         livePhones = livePhones.filter { $0.value.until > now }
-        syncLiveDoor()
         guard !livePhones.isEmpty else { return }
         let needsDoor = livePhones.values.contains { $0.ticket != nil }
         let port = needsDoor ? await openLiveDoor() : nil
@@ -62,15 +59,13 @@ extension Workspace {
             let id = SessionState.recordID(sessionID: key.sessionID)
             let here = hosted.contains(key.sessionID)
             var door: LiveSignal.Door?
-            if let ticket = phone.ticket, let port { door = LiveSignal.Door(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket) }
-            var ports: [Int]?
             if let ticket = phone.ticket {
                 let allowed = here ? await livePorts(key.sessionID) : [:]
                 liveServer?.server.limit(ticket, to: Set(allowed.keys.compactMap { UInt16(exactly: $0) }))
-                if here, door != nil { ports = allowed.keys.sorted() }
+                if let port { door = LiveSignal.Door(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket, ports: allowed.keys.sorted()) }
             }
             let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? livePreviews.entries[id]?.found ?? [] : [],
-                                          sent: here ? livePreviews.entries[id]?.sent : nil, door: here ? door : nil, ports: ports)
+                                          sent: here ? livePreviews.entries[id]?.sent : nil, door: here ? door : nil)
             guard answer != phone.answered, livePhones[key] != nil else { continue }
             livePhones[key]?.answered = answer
             do {
@@ -112,7 +107,8 @@ extension Workspace {
                 let server = try LiveTunnel.Server(key: key) { [weak self] request in await self?.admitLive(request) ?? .refused }
                 let port = try await server.start()
                 self?.liveServer = (server, port)
-                return port
+                self?.syncLiveDoor()
+                return self?.liveServer?.port
             } catch {
                 AppServices.log.error("活预览的隧道口开不了：\(String(describing: error), privacy: .public)")
                 return nil
@@ -124,7 +120,8 @@ extension Workspace {
         return port
     }
 
-    private func syncLiveDoor() {
+    /// 隧道口跟着开着预览的手机走（`livePhones` 一变就来）：没有票据就关上，起到一半的那个起好时也来这里核一遍。
+    func syncLiveDoor() {
         guard let liveServer else { return }
         let tickets = Set(livePhones.values.compactMap(\.ticket))
         guard tickets.isEmpty else { return liveServer.server.keep(tickets) }

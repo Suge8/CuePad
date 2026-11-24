@@ -102,7 +102,7 @@ final class LiveLink {
             if door != nil { lose(.gone, preview) }
             return
         }
-        proxy.mirror(Set(answer.ports.compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
+        proxy.mirror(Set((answer.door?.ports ?? []).compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
         previews.follow(preview, answer, showing: true)
         if state == .ready { preview.serve(served) }
         guard let next = answer.door, next != door else { return }

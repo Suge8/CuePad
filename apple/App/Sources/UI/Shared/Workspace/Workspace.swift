@@ -220,7 +220,7 @@ final class Workspace {
     @ObservationIgnored var liveScanner = LiveServers()
     @ObservationIgnored var liveScanning: Task<Void, Never>?
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
-    var livePhones: [LivePhone.Key: LivePhone] = [:]
+    var livePhones: [LivePhone.Key: LivePhone] = [:] { didSet { syncLiveDoor() } }
     @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?
     @ObservationIgnored var liveServerStarting: Task<UInt16?, Never>?
     @ObservationIgnored var livePorts: [String: (ports: [Int: String], at: ContinuousClock.Instant)] = [:]

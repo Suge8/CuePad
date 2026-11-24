@@ -280,7 +280,7 @@ struct LivePhoneTests {
         #expect(try await Tab(proxy, port: entry, to: url).get("index.html") == "页面")
         await #expect(throws: (any Error).self) { try await Tab(proxy, port: entry, to: database) }
         _ = try await Tab(proxy, port: entry, to: api)
-        #expect(remote.answers["live"]?.ports == [try #require(url.port), try #require(api.port)].sorted(), "报给手机照搬的也只有答 HTTP 的口")
+        #expect(remote.answers["live"]?.door?.ports == [try #require(url.port), try #require(api.port)].sorted(), "报给手机照搬的也只有答 HTTP 的口")
         await watching.stop()
         }
     }
