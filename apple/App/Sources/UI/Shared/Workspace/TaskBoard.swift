@@ -90,10 +90,9 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let asking = tally.waiting.map { ($0.session, $0.task) }
             .sorted { ($0.0.stateSince, $0.0.sessionID) < ($1.0.stateSince, $1.0.sessionID) }
         let waiting = asking.map { ($0.0, $0.1, true) } + tally.replies.map { ($0.session, $0.task, false) }
-        var flown: Set<UUID> = []
         return try waiting.map { session, task, deciding in
             let item = try task.flatMap { try store.card($0) }.map(item)
-            let id = item.flatMap { flown.insert($0.id).inserted ? $0.flight : nil } ?? .session(session.sessionID)
+            let id = item.flatMap { $0.agent?.state.sessionID == session.sessionID ? $0.flight : nil } ?? .session(session.sessionID)
             return Held(id: id, session: session, item: item, deciding: deciding)
         }
     }
