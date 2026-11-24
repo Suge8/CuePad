@@ -39,6 +39,8 @@ def interact_mac(app, derived, runs, extra):
                 sys.exit(status)
             rows += [{"库": label, **json.loads(line[9:])} for line in lines if line.startswith("INTERACT ")]
     shutil.rmtree(f"{derived}/library-run", ignore_errors=True)
+    if not rows:
+        fail("一项交互也没量到：-CuePadInteractOnly 列的项名对不上 InteractionBench 里的？")
     rows_file(derived, "interact", rows)
     sys.exit(mac_table(rows))
 
