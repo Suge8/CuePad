@@ -8,25 +8,21 @@ struct ContextGauge: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var showsDetail = BubbleSwitch()
-    @State private var shown = ContextShown()
-
-    private var facts: ContextShown.Facts { .init(meter: meter, cache: cache, working: session.runtimeState.isWorking) }
 
     var body: some View {
         Moments(next: { cache?.nextTick(after: $0) }) { now in
-            let note = CacheNote(cache, working: facts.working, at: now)
+            let note = CacheNote(cache, working: session.runtimeState.isWorking, at: now)
             if meter != nil || note != nil {
                 let help = (meter?.help ?? Dotted([])) + Dotted(note?.line)
                 Button { showsDetail.toggle() } label: { label(note) }
                     .buttonStyle(PressStyle())
                     .help(help.visible)
-                    .bubble($showsDetail) { ContextDetail(shown: shown, compact: compact) }
+                    .bubble($showsDetail) { ContextDetail(meter: meter, cache: cache, working: session.runtimeState.isWorking, compact: compact) }
                     .accessibilityLabel("上下文")
                     .accessibilityValue(help.spoken)
             }
         }
         .animation(Motion.fade, value: meter)
-        .onChange(of: facts, initial: true) { shown.facts = facts }
     }
 
     private func label(_ note: CacheNote?) -> some View {
@@ -43,7 +39,7 @@ struct ContextGauge: View {
             if let meter {
                 HStack(spacing: Spacing.tight) {
                     ContextArc(meter: meter)
-                    Text(verbatim: meter.percent).monospacedDigit()
+                    Text(verbatim: meter.percent)
                         .foregroundStyle(meter.level == .roomy ? palette.ink2 : palette.ink)
                         .contentTransition(.numericText(value: meter.fraction))
                 }
@@ -60,43 +56,34 @@ struct ContextGauge: View {
     }
 }
 
-@Observable private final class ContextShown {
-    struct Facts: Equatable {
-        var meter: ContextMeter?
-        var cache: ChatMessage.Tools.Cache?
-        var working = false
-    }
-
-    var facts = Facts()
-}
-
 private struct ContextDetail: View {
-    let shown: ContextShown
+    let meter: ContextMeter?
+    let cache: ChatMessage.Tools.Cache?
+    let working: Bool
     let compact: () -> Void
     @Environment(\.palette) private var palette
 
     private static let width: CGFloat = 240
 
     var body: some View {
-        let facts = shown.facts
-        Moments(next: { facts.cache?.nextTick(after: $0) }) { now in
-            let note = CacheNote(facts.cache, working: facts.working, at: now)
+        Moments(next: { cache?.nextTick(after: $0) }) { now in
+            let note = CacheNote(cache, working: working, at: now)
             VStack(alignment: .leading, spacing: Spacing.item) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+                    Text("上下文").font(Typography.secondaryBold).foregroundStyle(palette.ink)
                     Spacer(minLength: Spacing.block)
-                    if let meter = facts.meter { Text(meter.percent).font(Typography.secondary.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink) }
+                    if let meter { Text(meter.percent).font(Typography.secondaryBold).foregroundStyle(palette.ink) }
                 }
-                if let meter = facts.meter {
+                if let meter {
                     HStack(spacing: Spacing.group) {
                         MarkedBar(fill: meter.fraction, mark: meter.mark, level: meter.level)
                         if meter.suggestsCompact { RescueDisc(icon: .compacting, title: "现在压缩", action: compact) }
                     }
-                    Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                    Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 if let note {
                     Label { Text(note.line) } icon: { Image(note.icon) }
-                        .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                        .font(Typography.meta).foregroundStyle(palette.ink2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -160,7 +147,6 @@ private struct CacheMark: View {
                 }
             }
         }
-        .monospacedDigit()
         .foregroundStyle(palette.ink3)
     }
 }

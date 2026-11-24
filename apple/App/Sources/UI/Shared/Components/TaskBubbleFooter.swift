@@ -85,7 +85,7 @@ private struct AgentStrip: View {
     var body: some View {
         if let item = agents.items[leaf.id] {
             #if os(macOS)
-            let state = workspace.withLiveState(item.state)
+            let state = workspace.withHostedState(item.state)
             #else
             let state = item.state
             #endif
@@ -131,7 +131,7 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
                 .frame(width: BubbleMetrics.markSlot)
                 .accessibilityLabel(markLabel ?? "")
             content
-            Spacer(minLength: 4)
+            Spacer(minLength: Spacing.tight)
             trailing.padding(.trailing, Spacing.item)
         }
         .contentShape(.rect)
@@ -202,7 +202,7 @@ private struct HandOffChoice: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let sessions = services.liveSessions.live.filter { ($0.state.projectID ?? Project.defaultID) == leaf.projectID }
+        let sessions = services.sessionFeed.live.filter { ($0.state.projectID ?? Project.defaultID) == leaf.projectID }
         let bound = sessions.first { $0.state.sessionID == leaf.piSessionID }
         MenuButton(sections: [
             ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话", image: .icon(.add), checked: leaf.piSessionID == nil) { unbind() }]),

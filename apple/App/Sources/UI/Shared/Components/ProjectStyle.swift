@@ -20,7 +20,7 @@ struct ProjectStylePicker: View {
                 ForEach(ProjectIcon.allCases, id: \.self) { choice in
                     let selected = icon == choice
                     Button { icon = choice } label: {
-                        Image(.project(choice)).font(.system(size: cell * Self.glyph, weight: .medium)).frame(width: cell, height: cell)
+                        Image(.project(choice)).font(Glyph.project(cell * Self.glyph)).frame(width: cell, height: cell)
                             .modifier(Picked(selected: selected))
                     }
                     .buttonStyle(PressStyle(.button))

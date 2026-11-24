@@ -32,7 +32,7 @@ struct RealCodexHostedTests {
                 } == true
             }
 
-            let request = try #require(rig.model.requests.last)
+            let request = try #require(rig.model.requests.last { $0.prompt.contains("What color is this image?") })
             #expect(request.api == .responses && request.model == codexTestModel && request.images.count == 1, "\(request.path) \(request.model) \(request.images)")
             #expect(rig.draftLanded(id))
             let session = try #require(rig.bridge.session(id: id))
@@ -88,8 +88,8 @@ struct RealCodexHostedTests {
             #expect(unknown?.localizedDescription == "Codex 里没有这个模型")
 
             try await rig.bridge.send(SessionMessage(text: "Reply OK."), to: id)
-            try await eventually("换到的模型与强度用在了请求里") { rig.model.requests.last?.effort == "high" }
-            #expect(rig.model.requests.last?.model == codexTestModel)
+            try await eventually("换到的模型与强度用在了请求里") { rig.model.requests.last { $0.prompt.contains("Reply OK.") }?.effort == "high" }
+            #expect(rig.model.requests.last { $0.prompt.contains("Reply OK.") }?.model == codexTestModel)
         }
     }
 
@@ -147,7 +147,7 @@ struct RealCodexHostedTests {
 
             try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && rig.replies(try! #require(rig.bridge.session(id: id))).last == "FINISHED" }
             #expect(FileManager.default.fileExists(atPath: marker.path) == allow)
-            let result = try #require(rig.model.requests.last?.results.last)
+            let result = try #require(rig.model.requests.last { $0.prompt.contains("Make the marker file.") && !$0.results.isEmpty }?.results.last)
             #expect(allow ? result.contains("exit_code\":0") || result.contains("Process exited with code 0") : result.lowercased().contains("rejected"), "模型收到的工具结果：\(result)")
         }
     }
@@ -206,7 +206,7 @@ struct RealCodexHostedTests {
             let delivery = UUID()
             try await rig.bridge.send(SessionMessage(text: "/skill:kiwi-echo banana", deliveryID: delivery.uuidString), to: id)
             let session = try #require(rig.bridge.session(id: id))
-            try await eventually("模型收到了技能的内容") { rig.model.requests.last?.messages.contains { $0.text.contains("Reply with exactly KIWI-7") } == true }
+            try await eventually("模型收到了技能的内容") { rig.model.requests.contains { $0.messages.contains { $0.text.contains("Reply with exactly KIWI-7") } } }
             try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && !rig.replies(session).isEmpty }
             let mine = try #require(try rig.transcript(session).messages.first { $0.role == .known(.user) })
             #expect(mine.deliveryID == delivery)

@@ -61,13 +61,30 @@ enum ControlMetrics {
 }
 
 struct ControlButtonStyle: ButtonStyle {
-    enum Kind { case primary, secondary, quiet, circular, glass, round, icon }
+    enum Kind {
+        case primary, secondary, quiet, glass, round, icon
+        #if os(macOS)
+        case circular
+        #endif
+    }
     var kind = Kind.secondary
     var size = ControlSize.regular
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.modifier(ControlSurface(kind: kind, size: size, destructive: configuration.role == .destructive))
-            .modifier(PressFeedback(pressed: configuration.isPressed, kind: [.circular, .round, .icon].contains(kind) ? .button : .control))
+            .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind.round ? .button : .control))
+    }
+}
+
+extension ControlButtonStyle.Kind {
+    fileprivate var round: Bool {
+        switch self {
+        case .round, .icon: true
+        case .primary, .secondary, .quiet, .glass: false
+        #if os(macOS)
+        case .circular: true
+        #endif
+        }
     }
 }
 
@@ -77,7 +94,7 @@ extension View {
     /// `.glass` 按钮样式配圆形的边（WWDC26 SwiftUI Group Lab：玻璃钮用玻璃按钮样式，不在钮上套 `glassEffect`，那是"钮坐在玻璃上"），
     /// 按压、悬停的反应都是系统给的（玻璃随手指鼓起、透光），不再叠 `PressFeedback`；只画图标，墨色，字号封顶同页顶那一排。
     /// 大小只有一种：`ControlMetrics.height` 见方（同系统导航栏里的圆钮），图标排在里面居中；一排里相邻两颗隔 `Spacing.item` 以内时放进同一个
-    /// `GlassEffectContainer`，玻璃彼此取样、开合时相融。Mac 的工具栏圆钮仍是 `ControlButtonStyle(kind: .circular)`。
+    /// `GlassEffectContainer`，玻璃彼此取样、开合时相融。Mac 的工具栏圆钮是 `ControlButtonStyle(kind: .circular)`，只在 Mac 编。
     func glassCircle() -> some View { modifier(GlassCircle()) }
 }
 
@@ -86,7 +103,7 @@ private struct GlassCircle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(Typography.body.weight(.medium))
+            .font(Typography.bodyBold)
             .foregroundStyle(palette.ink)
             .labelStyle(GlassIconLabel())
             .buttonStyle(.glass)
@@ -128,16 +145,18 @@ struct ControlSurface: ViewModifier {
 
     @ViewBuilder private func shape(_ content: Content) -> some View {
         switch kind {
+        #if os(macOS)
         case .circular:
             content
-                .font(Typography.body.weight(.medium))
+                .font(Typography.bodyBold)
                 .foregroundStyle(ink)
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
                 .glass(in: .circle, interactive: true, ink: .clear)
+        #endif
         case .icon:
             content
-                .font(Typography.body.weight(.medium))
+                .font(Typography.bodyBold)
                 .foregroundStyle(ink)
                 .frame(width: size.height, height: size.height)
                 .contentShape(.circle)
@@ -151,7 +170,7 @@ struct ControlSurface: ViewModifier {
                 .contentShape(.rect)
         case .glass:
             content
-                .font(Typography.secondary.weight(.medium))
+                .font(Typography.secondaryBold)
                 .foregroundStyle(ink)
                 .padding(.horizontal, ControlSize.compact.padding)
                 .frame(height: ControlMetrics.height)
@@ -159,7 +178,7 @@ struct ControlSurface: ViewModifier {
                 .glass(in: .capsule, interactive: true)
         default:
             content
-                .font(size.font.weight(selected ? .semibold : .medium))
+                .font(size.font).emphasis(.bold)
                 .foregroundStyle(kind == .primary ? palette.onAction : ink)
                 .padding(.horizontal, size.padding)
                 .padding(.vertical, size.verticalPadding)
@@ -187,7 +206,10 @@ struct ControlSurface: ViewModifier {
         return switch kind {
         case .primary: palette.action
         case .quiet, .glass, .icon: .clear
-        case .secondary, .circular, .round: palette.fill
+        case .secondary, .round: palette.fill
+        #if os(macOS)
+        case .circular: palette.fill
+        #endif
         }
     }
 }

@@ -37,7 +37,7 @@ struct NoticeCapsule: View {
 
     private enum Part { case link, action }
 
-    private var held: Bool { hovering || focus != nil || voiceOver || DebugHooks.preset.readerOn }
+    private var held: Bool { hovering || focus != nil || voiceOver || DebugHooks.args.layoutOpts.reader }
     private var acts: Bool { notice.link != nil || notice.action != nil }
 
     var body: some View {
@@ -112,7 +112,7 @@ struct NoticeCapsule: View {
                 .padding(.trailing, Spacing.tight)
             }
         }
-        .font(font.weight(.medium)).lineLimit(lines)
+        .font(font).emphasis(.bold).lineLimit(lines)
         .fixedSize(horizontal: false, vertical: lines > 1)
     }
 

@@ -16,6 +16,10 @@ struct PaneGrip {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    private var report: (Bool) -> Void {
+        { [workspace, pane = drag?.pane] dragging in workspace.dragging = dragging ? pane.map { .pane($0) } ?? .unknown : .unknown }
+    }
+
     private var lift: Lift? {
         guard let column = drag?.column else { return nil }
         return { [workspace, title, palette] scale in
@@ -57,13 +61,12 @@ extension PaneGrip: UIViewRepresentable {
 
     func updateUIView(_ view: PaneGripView, context: Context) {
         view.lift = lift
-        view.dragging = { [workspace, pane = drag?.pane] on in workspace.dragging = on ? pane.map { .some($0) } : nil }
+        view.dragging = report
     }
 }
 
 final class PaneGripView: UIView, UIDragInteractionDelegate {
     var lift: PaneGrip.Lift?
-    /// 拖着时落点读不到带的东西（`UIDropSession` 放下才给），起拖时把拖的是哪一块记给 `Workspace.dragging`。
     var dragging: ((Bool) -> Void)?
 
     init() {
@@ -106,6 +109,7 @@ extension PaneGrip: NSViewRepresentable {
 
     func updateNSView(_ view: PaneGripView, context: Context) {
         view.lift = lift
+        view.dragging = report
         view.hover = hover
         view.actions = actions.map { actions in { [environment = context.environment] in NSHostingMenu(rootView: actions.environment(\.self, environment)) } }
         view.setAccessibilityElement(actions != nil)
@@ -116,6 +120,7 @@ extension PaneGrip: NSViewRepresentable {
 
 final class PaneGripView: NSView, NSDraggingSource {
     var lift: PaneGrip.Lift?
+    var dragging: ((Bool) -> Void)?
     var actions: (() -> NSMenu)?
     var hover: ((Bool) -> Void)?
     private var pressed: NSEvent?
@@ -184,6 +189,7 @@ final class PaneGripView: NSView, NSDraggingSource {
         let chip = lifted.chip.nsImage
         let size = chip?.size ?? bounds.size
         item.setDraggingFrame(NSRect(x: PaneChip.lead, y: (bounds.height - size.height) / 2, width: size.width, height: size.height), contents: chip)
+        dragging?(true)
         beginDraggingSession(with: [item], event: pressed, source: self)
     }
 
@@ -191,6 +197,9 @@ final class PaneGripView: NSView, NSDraggingSource {
         context == .withinApplication ? .copy : []
     }
 
-    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) { resettle() }
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        dragging?(false)
+        resettle()
+    }
 }
 #endif

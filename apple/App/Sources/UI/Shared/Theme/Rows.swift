@@ -32,7 +32,6 @@ nonisolated enum RowMetrics {
     static let height: CGFloat = 32
     static let bleed: CGFloat = 8
     #endif
-    static let revealFade: CGFloat = 16
 }
 
 struct RowStyle: ButtonStyle {
@@ -104,11 +103,11 @@ private struct HoverReveal<Actions: View>: View {
                 .background {
                     ZStack { surface ?? palette.desk; palette.fill }
                         .compositingGroup()
-                        .padding(.leading, -RowMetrics.revealFade)
+                        .padding(.leading, -Chrome.fade)
                         .mask {
                             HStack(spacing: 0) {
                                 LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
-                                    .frame(width: RowMetrics.revealFade)
+                                    .frame(width: Chrome.fade)
                                 Color.black
                             }
                         }

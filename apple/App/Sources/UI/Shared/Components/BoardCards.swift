@@ -32,13 +32,13 @@ private struct BoardCardFrame: ViewModifier {
             .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .leading)
             .background {
                 if let arrival {
-                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius)
+                    RoundedRectangle(cornerRadius: Radius.card)
                         .fill(arrival.from.paper(palette) ?? palette.paper).opacity(arrival.landed ? 0 : 1)
                 }
             }
-            .paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
-            .overlay { if running, plays { LoopLayer(kind: .aura(radius: TaskMetrics.cardRadius), color: palette.signature).allowsHitTesting(false) } }
-            .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
+            .paper(cornerRadius: Radius.card, wash: column.paper(palette))
+            .overlay { if running, plays { LoopLayer(kind: .aura(radius: Radius.card), color: palette.signature).allowsHitTesting(false) } }
+            .contentShape(.rect(cornerRadius: Radius.card))
     }
 }
 

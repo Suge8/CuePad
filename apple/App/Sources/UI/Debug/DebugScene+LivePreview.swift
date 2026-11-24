@@ -8,11 +8,10 @@ extension DebugScene {
     static func openLivePreviewIfAsked(_ workspace: Workspace) {
         guard let address = args.layoutOpts.livePreview else { return }
         workspace.toggleLivePreview()
-        guard let session = workspace.liveSession, let preview = workspace.livePreviews[session.id] else { return }
-        if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }
+        guard let session = workspace.liveSession else { return }
         if ["window", "remote"].contains(args.layoutOpts.liveViewport) { workspace.liveFill = .init(session: session.id, remote: args.layoutOpts.liveViewport == "remote") }
-        guard address != "blank", let url = LiveAddress.url(from: address) else { return }
-        preview.retarget(.init(url: url, source: .typed))
+        guard address != "blank", workspace.typeLive(address, for: session.id), let preview = workspace.livePreviews[session.id] else { return }
+        if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }
         holdingReady("活预览载入") {
             while [.idle, .live].contains(preview.phase) && !preview.revealed { await Task.wait(for: .milliseconds(100)) }
             await Task.wait(for: .milliseconds(400))

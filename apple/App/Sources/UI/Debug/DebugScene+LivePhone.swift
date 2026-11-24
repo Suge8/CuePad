@@ -28,7 +28,7 @@ extension DebugScene {
 
         func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws {
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
-            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: pages, sent: nil, door: open ? door : nil, ports: nil)
+            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: pages, sent: nil, door: open ? door : nil)
             let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: endpoint, recipient: local, session: session, sequence: 1,
                                            expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30_000, purpose: VoiceSignalPayload.live(signal: reply).purpose)
             answer(.received(.init(header: header, payload: .live(signal: reply))))
@@ -53,7 +53,7 @@ extension DebugScene {
             }
             let port = try await server.start()
             let addresses = args.layoutOpts.liveApart ? [.init(host: "127.0.0.2", prefix: 32)] : LiveTunnel.localAddresses().filter { !$0.host.contains(":") }
-            mac.door = LiveSignal.Door(addresses: addresses.isEmpty ? [.init(host: "127.0.0.1", prefix: 8)] : addresses, port: port, ticket: ticket)
+            mac.door = LiveSignal.Door(entrance: .init(addresses: addresses.isEmpty ? [.init(host: "127.0.0.1", prefix: 8)] : addresses, port: port, ticket: ticket), ports: [url.port].compactMap(\.self))
             liveMac = (mac, server)
             services.liveSignaling = mac
             services.liveRemote.renew(sessionID)

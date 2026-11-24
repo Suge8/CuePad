@@ -89,6 +89,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
     }
 
     struct LastYou: Equatable, Sendable {
+        var id: UUID?
         var said: Date
         var delivered: Date?
         var reachedServer: Bool
@@ -105,7 +106,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
             tally: tally,
             unread: try store.cueUnread().count,
             hostUntil: try profile?.activeHost.flatMap { try store.macOnlineUntil($0) },
-            lastYou: try store.cueLastYou().map { LastYou(said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
+            lastYou: try store.cueLastYou().map { LastYou(id: $0.id, said: $0.said, delivered: $0.delivered, reachedServer: $0.reachedServer) },
             state: try store.cueState(),
             woke: try store.cueWaking().map { row in
                 var seen = Set<String>()

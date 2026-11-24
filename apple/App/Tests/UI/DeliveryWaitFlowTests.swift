@@ -24,11 +24,7 @@ struct DeliveryWaitFlowTests {
             }
         }
         try await services.executor.start()
-        defer {
-            atlas.close(bye: "quit")
-            app.bridge.stop()
-            services.cancelBackgroundWork()
-        }
+        defer { atlas.close(bye: "quit") }
 
         var box = ComposerDraft(text: "看这张截图", files: [DraftFile(key: key, name: "")])
         let binding = Binding(get: { box }, set: { box = $0 })
@@ -48,7 +44,7 @@ extension UpgradePreparationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let workspace = Workspace(services: app.services)
         let request = try await workspace.said(ComposerDraft(text: "排到期了的一句"), to: target, mode: .send)
         try await app.services.executor.start()

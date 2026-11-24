@@ -19,36 +19,35 @@ public enum LiveChannel {
 
   public struct Request: Codable, Sendable, Equatable {
     public var session: String
-    public var op: String
-    public var args: Args
+    public var op: Op
 
-    public init(session: String, op: String, args: Args = Args()) {
+    public init(session: String, op: Op) {
       self.session = session
       self.op = op
-      self.args = args
     }
   }
 
-  public struct Args: Codable, Sendable, Equatable {
-    public var ref: String?
-    public var text: String?
-    public var key: String?
-    public var selector: String?
-    public var url: String?
-    public var timeout: Double?
-    public var files: [Upload]?
-    public var all: Bool?
-    public var interactive: Bool?
-    public var find: String?
-    public var code: String?
+  /// 命令行能交给 App 的每一件事（`cuepad live` 与它的动词）：两头都只认这一份，加一件两头一起编。
+  public enum Op: Codable, Sendable, Equatable {
+    /// 不带地址：用 App 认出的这个会话的服务。
+    case open(URL?)
+    case snapshot(ref: String? = nil, interactive: Bool = false, find: String? = nil)
+    case click(ref: String)
+    case fill(ref: String, text: String)
+    case press(key: String, ref: String? = nil)
+    case wait(Awaited, timeout: Double)
+    case screenshot(ref: String? = nil)
+    case console(all: Bool = false)
+    case upload(ref: String, files: [Upload])
+    case eval(code: String)
 
-    public init(
-      ref: String? = nil, text: String? = nil, key: String? = nil, selector: String? = nil, url: String? = nil, timeout: Double? = nil,
-      files: [Upload]? = nil, all: Bool? = nil, interactive: Bool? = nil, find: String? = nil, code: String? = nil
-    ) {
-      (self.ref, self.text, self.key, self.selector, self.url, self.timeout) = (ref, text, key, selector, url, timeout)
-      (self.files, self.all, self.interactive, self.find, self.code) = (files, all, interactive, find, code)
+    public var patience: Duration {
+      if case .wait(_, let timeout) = self { .seconds(timeout + 60) } else { .seconds(60) }
     }
+  }
+
+  public enum Awaited: Codable, Sendable, Equatable {
+    case text(String), selector(String), url(String)
   }
 
   public struct Upload: Codable, Sendable, Equatable {
@@ -91,7 +90,8 @@ public enum LiveChannel {
     case broken(String)
   }
 
-  public static func ask(_ request: Request, path: String, timeout: Duration) throws(Failure) -> Reply {
+  public static func ask(_ request: Request, path: String) throws(Failure) -> Reply {
+    let timeout = request.op.patience
     let fd = socket(AF_UNIX, SOCK_STREAM, 0)
     guard fd >= 0 else { throw .broken("socket: \(String(cString: strerror(errno)))") }
     defer { close(fd) }

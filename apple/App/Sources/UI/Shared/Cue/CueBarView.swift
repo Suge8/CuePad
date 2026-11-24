@@ -50,7 +50,7 @@ struct CueBarTargets: View {
                 Image(icon(target)).font(Glyph.small).foregroundStyle(on ? palette.signature : palette.ink3)
                 Text(title(target)).lineLimit(1)
             }
-            .font(Typography.meta.weight(on ? .semibold : .medium))
+            .font(Typography.metaBold)
             .foregroundStyle(on ? palette.ink : palette.ink2)
             .padding(.horizontal, Spacing.group)
             .frame(height: ControlSize.inline.height)
@@ -88,7 +88,7 @@ struct CueBarTargets: View {
 import SwiftUI
 
 struct CueStatusRow<Trailing: View>: View {
-    var font = Typography.body.weight(.semibold)
+    var font = Typography.bodyBold
     var status = true
     @ViewBuilder var trailing: Trailing
     @Environment(Workspace.self) private var workspace
@@ -109,7 +109,7 @@ struct CueStatusRow<Trailing: View>: View {
         return HStack(spacing: Spacing.item) {
             CueEntryAvatar()
             VStack(alignment: .leading, spacing: Spacing.hair) {
-                Text(cue.name).font(font).fontWeight(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                Text(cue.name).font(font).emphasis(cue.unread > 0 ? .bold : nil).foregroundStyle(palette.ink).lineLimit(1)
                 if status { CueStatusLine(tally: true).lineLimit(1).transition(.opacity) }
             }
             .layoutPriority(1)
@@ -139,7 +139,7 @@ struct UnreadCount: View {
         if count > 0 {
             HStack(spacing: Spacing.glyph) {
                 StatusDot(color: palette.replied)
-                Text(count, format: .number).fontWeight(.semibold).monospacedDigit().contentTransition(.numericText(value: Double(count)))
+                Text(count, format: .number).emphasis(.bold).contentTransition(.numericText(value: Double(count)))
             }
             .foregroundStyle(palette.replied)
             .fixedSize()
@@ -187,5 +187,5 @@ struct CueStatusLine: View {
 }
 
 extension CueStatusRow where Trailing == EmptyView {
-    init(font: Font = Typography.body.weight(.semibold), status: Bool = true) { self.init(font: font, status: status) { EmptyView() } }
+    init(font: Font = Typography.bodyBold, status: Bool = true) { self.init(font: font, status: status) { EmptyView() } }
 }

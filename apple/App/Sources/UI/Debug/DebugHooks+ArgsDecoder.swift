@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 nonisolated protocol DebugArgGroup: Decodable {
@@ -7,9 +6,13 @@ nonisolated protocol DebugArgGroup: Decodable {
 
 extension DebugArgs {
     nonisolated static let launch: DebugArgs = {
+        #if DEBUG
         // 标准输出接到文件（app-mac.log、app-sim.log）时整块缓冲，实例被结束时还没写出的就丢了：按行写出，`print` 的探针才看得到
         setvbuf(stdout, nil, _IOLBF, 0)
         let domain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        #else
+        let domain: [String: Any] = [:]
+        #endif
         var values: [String: String] = [:]
         var spelled: [String: String] = [:]
         for (key, value) in domain where key.lowercased().hasPrefix("cuepad") {
@@ -21,7 +24,7 @@ extension DebugArgs {
         let args: DebugArgs
         do { args = try DebugArgs(from: ArgDecoder(values: values, prefix: "", asked: asked)) } catch { fatalError("启动参数解不出来：\(error)") }
         let unknown = spelled.filter { !asked.names.contains($0.key) }.map { "-" + $0.value }.sorted()
-        if !unknown.isEmpty { fatalError("不认识的启动参数：\(unknown.joined(separator: "、"))（拼错了，或只在另一端认；登记表在 DebugScene+Args*.swift）") }
+        if !unknown.isEmpty { fatalError("不认识的启动参数：\(unknown.joined(separator: "、"))（拼错了，或只在另一端认；登记表在 DebugHooks+Args*.swift）") }
         return args
     }()
 
@@ -67,8 +70,16 @@ private nonisolated struct ArgDecoder: Decoder {
             return text
         }
         func decode<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
-            guard let group = type as? any DebugArgGroup.Type else { throw DecodingError.typeMismatch(type, .init(codingPath: [], debugDescription: "只支持 Bool、数、字符串与参数组")) }
+            if type == URL.self { return URL(filePath: try decode(String.self, forKey: key)) as! T }
+            if let choice = type as? any RawRepresentable<String>.Type { return try pick(choice, key) as! T }
+            guard let group = type as? any DebugArgGroup.Type else { throw DecodingError.typeMismatch(type, .init(codingPath: [], debugDescription: "只支持 Bool、数、字符串、路径、字符串枚举与参数组")) }
             return try group.init(from: ArgDecoder(values: values, prefix: group.prefix, asked: asked)) as! T
+        }
+
+        private func pick<Choice: RawRepresentable<String>>(_ type: Choice.Type, _ key: Key) throws -> Choice {
+            let text = try decode(String.self, forKey: key)
+            guard let choice = Choice(rawValue: text) else { fatalError("启动参数 -CuePad\(prefix)\(key.stringValue) 不认识 \(text)") }
+            return choice
         }
 
         func decode(_ type: Float.Type, forKey key: Key) throws -> Float { fatalError("不用") }
@@ -87,4 +98,3 @@ private nonisolated struct ArgDecoder: Decoder {
         func superDecoder(forKey key: Key) throws -> Decoder { fatalError("不用") }
     }
 }
-#endif

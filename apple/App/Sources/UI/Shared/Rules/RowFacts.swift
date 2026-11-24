@@ -44,7 +44,7 @@ extension Workspace {
     func facts(_ session: SessionState, shown: SessionShown, end: Speech.Trip?, rename: DeliveryRequest?, at moment: Speech.Moment) -> RowFacts {
         RowFacts(
             session, shown: shown, end: end, renaming: SessionRename.isPending(rename, at: moment),
-            renameFailed: SessionRename.failed(rename, seen: services.liveSessions.marks[session.sessionID]?.seen, at: moment),
+            renameFailed: SessionRename.failed(rename, seen: services.sessionFeed.marks[session.sessionID]?.seen, at: moment),
             hasDraft: services.settings.draftPreview(for: session.id) != nil)
     }
 }

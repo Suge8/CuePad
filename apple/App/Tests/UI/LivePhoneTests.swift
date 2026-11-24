@@ -17,7 +17,7 @@ struct LivePhoneTests {
         let pair = LiveSignalPair(macHost: flow.services.hostID)
         flow.services.liveSignaling = pair.mac
         let remote = LiveRemote(store: phoneApp.services.store, settings: phoneApp.services.settings) { pair.phone }
-        pair.phone.deliver = { await workspace.receiveLive($0) }
+        pair.phone.deliver = { do { try await workspace.receiveLive($0) } catch { Issue.record(error) } }
         pair.mac.deliver = { remote.receive($0) }
         try await phoneApp.services.store.recordMacPresence(host: flow.services.hostID) { true }
         let scanning = Task { await workspace.watchLiveServers() }
@@ -77,7 +77,7 @@ struct LivePhoneTests {
     }
 
     private func route(_ proxy: LiveTunnel.Proxy, _ key: SymmetricKey, _ door: LiveSignal.Door, ticket: Data? = nil) {
-        proxy.use(.init(key: key, ticket: ticket ?? door.ticket, mac: .hostPort(host: "127.0.0.1", port: .init(rawValue: door.port)!), addresses: []))
+        proxy.use(.init(key: key, ticket: ticket ?? door.entrance.ticket, mac: .hostPort(host: "127.0.0.1", port: .init(rawValue: door.entrance.port)!), addresses: []))
     }
 
     private func awaited<T>(_ what: String, _ read: () -> T?) async throws -> T {
@@ -280,7 +280,7 @@ struct LivePhoneTests {
         #expect(try await Tab(proxy, port: entry, to: url).get("index.html") == "页面")
         await #expect(throws: (any Error).self) { try await Tab(proxy, port: entry, to: database) }
         _ = try await Tab(proxy, port: entry, to: api)
-        #expect(remote.answers["live"]?.ports == [try #require(url.port), try #require(api.port)].sorted(), "报给手机照搬的也只有答 HTTP 的口")
+        #expect(remote.answers["live"]?.door?.ports == [try #require(url.port), try #require(api.port)].sorted(), "报给手机照搬的也只有答 HTTP 的口")
         await watching.stop()
         }
     }
@@ -292,8 +292,7 @@ struct LivePhoneTests {
         let (server, url) = try await flow.serve(in: elsewhere)
         defer { server.terminate() }
         try "页面".write(to: elsewhere.appending(path: "index.html"), atomically: true, encoding: .utf8)
-        let following = Task { await workspace.followLiveAddresses() }
-        _ = try await flow.live(url.absoluteString, for: "live")
+        _ = try await flow.live(url.absoluteString, for: "live", in: workspace)
 
         let watching = Task { await remote.watch("live", on: flow.services.hostID, open: true) }
         let door = try await awaited("Mac 给了隧道的入口") { remote.answers["live"]?.door }
@@ -304,11 +303,10 @@ struct LivePhoneTests {
         let held = try await Tab(proxy, port: port, to: url)
         #expect(workspace.liveServer?.server.connections == 1)
 
-        _ = try await flow.live("http://localhost:9", for: "live")
+        _ = try await flow.live("http://localhost:9", for: "live", in: workspace)
         try await eventually("Agent 换了地址，原来那个口上连着的断了") { workspace.liveServer?.server.connections == 0 }
         await #expect(throws: (any Error).self) { try await held.get("index.html") }
         await watching.stop()
-        await following.stop()
         }
     }
 
@@ -330,7 +328,7 @@ struct LivePhoneTests {
         try await eventually("取完的去掉、还连着的记着") { workspace.liveServer?.server.connections == 1 }
 
         await watching.stop()
-        await workspace.receiveLive(.peerClosed(endpoint: pair.phone.local, reason: .disconnected))
+        try await workspace.receiveLive(.peerClosed(endpoint: pair.phone.local, reason: .disconnected))
         #expect(workspace.livePhones.isEmpty && workspace.liveServer == nil)
         await #expect(throws: (any Error).self) { try await held.get("index.html") }
         }

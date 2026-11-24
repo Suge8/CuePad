@@ -17,7 +17,8 @@ final class WideColumnController: UIHostingController<AnyView> {
     /// 主区的一块（否则是 Cue 那一栏）。
     let pane: Bool
     var slot: WideSlot?
-    let drop = WideDropState()
+    var dropUnder: CGFloat = 0
+    var passedDrop: (interaction: UIDropInteraction, takes: Bool)?
     let focus: WideFocus
     let workspace: Workspace
     private(set) lazy var slide = WideColumnSlide { [unowned self] in self.view.isHidden = $0 }
@@ -83,5 +84,124 @@ final class WideColumnController: UIHostingController<AnyView> {
     @objc private func cycle() { focus.cycle() }
     @objc private func left() { focus.move(by: -1, in: workspace) }
     @objc private func right() { focus.move(by: 1, in: workspace) }
+}
+
+struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
+    /// 这一块此刻在第几格；不在这一排里（挂着的页、正滑走的块）是 nil。
+    let slot: WideSlot?
+    let focus: WideFocus
+    let origin: CGFloat
+    let width: CGFloat
+    let shape: WideMetrics.Shape
+    var hidden = false
+    var under: CGFloat = 0
+    var arrival: WideColumnSlide.Arrival?
+    @ViewBuilder let content: Content
+    @Environment(\.self) private var environment
+    @Environment(Workspace.self) private var workspace
+    @Environment(AlertCenter.self) private var alerts
+
+    func makeUIViewController(context: Context) -> WideColumnController {
+        let controller = WideColumnController(pane: slot != .cue, focus: focus, workspace: workspace)
+        focus.register(controller)
+        return controller
+    }
+
+    func updateUIViewController(_ controller: WideColumnController, context: Context) {
+        controller.slot = slot
+        controller.slide.move(controller.view.layer, page: controller.view.layer, origin: origin, width: width, shape: shape, leading: slot == .pane(.main), arrival: arrival)
+        controller.dropUnder = under
+        controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
+        controller.slide.park(hidden)
+        if controller.pane { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }
+    }
+}
+
+extension WideColumnController: UIDropInteractionDelegate {
+    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
+        guard pane else { return false }
+        return session.hasItemsConforming(toTypeIdentifiers: WideDrop.types.map(\.identifier))
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
+        let types = Set(WideDrop.types.filter { session.hasItemsConforming(toTypeIdentifiers: [$0.identifier]) })
+        let column = slot?.column
+        let onPage = types.contains(.cuepadCard) && column.flatMap { workspace.pane(in: $0)?.page } != nil
+        let taken = pass(onPage ? pageDrop(beside: interaction, session) : nil, session)
+        let target = taken == nil ? column.flatMap { WideDrop.target(types, at: session.location(in: view).x / max(1, view.bounds.width - dropUnder), in: $0, workspace: workspace) } : nil
+        if workspace.dropTarget != target { workspace.dropTarget = target }
+        return taken ?? UIDropProposal(operation: target == nil ? .cancel : .copy)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) {
+        stopPassing(session)
+        if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) {
+        if let page = passedDrop?.interaction { page.delegate?.dropInteraction?(page, sessionDidEnd: session) }
+        passedDrop = nil
+        if let column = slot?.column { WideDrop.leave(column, workspace: workspace) }
+    }
+
+    /// 同一个视图上有几个接收器时 UIKit 只问其中一个（iPadOS 27 实测：页的托管视图上 SwiftUI 的接收器与这里加的并存，整场只问这里的），
+    /// 这里答"不接"也不会再去问别的。所以页里自己的落点由这里转着问：同一个视图上 SwiftUI 的那个接收器（它不答 canHandle，UIKit 当作能接）。
+    private func pageDrop(beside ours: UIDropInteraction, _ session: any UIDropSession) -> UIDropInteraction? {
+        ours.view?.interactions.lazy.compactMap { $0 as? UIDropInteraction }.first { other in
+            guard other !== ours, let delegate = other.delegate else { return false }
+            return delegate.dropInteraction?(other, canHandle: session) ?? true
+        }
+    }
+
+    private func pass(_ page: UIDropInteraction?, _ session: any UIDropSession) -> UIDropProposal? {
+        if let passed = passedDrop?.interaction, passed !== page { passed.delegate?.dropInteraction?(passed, sessionDidExit: session) }
+        guard let page, let delegate = page.delegate else {
+            passedDrop = nil
+            return nil
+        }
+        if passedDrop?.interaction !== page { delegate.dropInteraction?(page, sessionDidEnter: session) }
+        let proposal = delegate.dropInteraction?(page, sessionDidUpdate: session)
+        let takes = proposal.map { $0.operation != .cancel && $0.operation != .forbidden } ?? false
+        passedDrop = (page, takes)
+        return takes ? proposal : nil
+    }
+
+    private func stopPassing(_ session: any UIDropSession) {
+        if let page = passedDrop?.interaction { page.delegate?.dropInteraction?(page, sessionDidExit: session) }
+        passedDrop = nil
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
+        if let passed = passedDrop {
+            passedDrop = nil
+            if passed.takes {
+                passed.interaction.delegate?.dropInteraction?(passed.interaction, performDrop: session)
+                return
+            }
+            passed.interaction.delegate?.dropInteraction?(passed.interaction, sessionDidExit: session)
+        }
+        let target = workspace.dropTarget
+        workspace.dropTarget = nil
+        guard let target, target.column == slot?.column, let provider = session.items.first?.itemProvider,
+              let type = WideDrop.types.first(where: { provider.hasItemConformingToTypeIdentifier($0.identifier) }) else { return }
+        load(provider, type) { [workspace] result in
+            do {
+                if let pane = try result.get() { WideDrop.apply(pane, target, workspace: workspace) }
+            } catch {
+                workspace.fail(error)
+            }
+        }
+    }
+
+    private func load(_ provider: NSItemProvider, _ type: UTType, _ done: @escaping @MainActor (Result<WideNavigation.Pane?, any Error>) -> Void) {
+        provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { [workspace, window = focus.windowID] data, error in
+            Task { @MainActor in
+                done(Result {
+                    if let error { throw error }
+                    return try WideDrop.pane(type, data ?? Data(), window: window, workspace: workspace)
+                })
+            }
+        }
+    }
 }
 #endif

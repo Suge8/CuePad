@@ -15,7 +15,7 @@ extension DeliveryConfirmationTests {
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         try await app.connect(.pi)
         app.services.start()
         let request = try await say("真实消息比ACK先回来", to: target, in: app)
@@ -40,7 +40,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, _) = try await session(app)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await say("截止时间不随版本续长", to: target, in: app)
         try await app.services.executor.start()
         let confirming = try await settledDispatch(request, in: app)
@@ -63,7 +63,6 @@ extension DeliveryConfirmationTests {
     func 持久阶段期限已过而接收端没写回_再点控制新增一个意图(mode: DeliveryMode, status: String) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), store = app.services.store
-        defer { app.services.cancelBackgroundWork() }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .error, detail: "network", failure: .network)
         let target = try #require(try await store.allSessionStates().first)
@@ -88,10 +87,7 @@ extension DeliveryConfirmationTests {
     func 启动Agent不是写盘确认_确认窗口从交出后起算_退出不能遗留启动或重开旧请求(cancelOpening: Bool) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
-        defer {
-            for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.bridge.stop(); app.services.cancelBackgroundWork()
-        }
+        defer { for ext in app.host.extensions.values { ext.close(bye: "quit") } }
         try await app.offersPi()
         let gate = AsyncStream<Void>.makeStream()
         app.host.openingGate = gate.stream

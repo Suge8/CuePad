@@ -81,16 +81,15 @@ extension Workspace {
         to listener: Listener, as id: UUID, taking: @escaping () async -> (draft: ComposerDraft, body: String), restore: @escaping (ComposerDraft) -> Void
     ) -> Task<Void, Never> {
         let services = services
+        if listener.says { launching.begin(id, to: listener.orderKey) }
         return services.sendOrder.enqueue(listener.orderKey) { [self] in
             let (sent, body) = await taking()
             do {
                 try await services.recordSpeech(body, to: listener, as: id)
+                if listener.says { releaseWhenGone(id) }
             } catch {
                 restore(sent)
-                switch listener {
-                case .cue: cue.launchFailed()
-                case .session(let target, let host, _, _): launching.settle(host: host, target: target)
-                }
+                launching.release(id)
                 fail(error)
             }
         }
@@ -98,7 +97,37 @@ extension Workspace {
 
 }
 
+extension Workspace {
+    private func releaseWhenGone(_ id: UUID) {
+        let store = services.store, launching = launching
+        services.follow { [weak self] in
+            let gone = Task { @MainActor in
+                do {
+                    for try await held in store.observe({ try $0.holdsSpeech(id) }) where !held { break }
+                } catch where !Task.isCancelled {
+                    self?.fail(error)
+                } catch {}
+                launching.release(id)
+            }
+            await withTaskCancellationHandler {
+                for await pending in Observations({ launching.holds(id) }) where !pending { break }
+            } onCancel: {
+                gone.cancel()
+            }
+            gone.cancel()
+            await gone.value
+        }
+    }
+}
+
 extension Listener {
+    fileprivate var says: Bool {
+        switch self {
+        case .cue: true
+        case .session(_, _, let mode, _): mode == .send
+        }
+    }
+
     var orderKey: SendingTarget {
         switch self {
         case .cue: .cue

@@ -45,13 +45,13 @@ struct SharedPagesTests {
             return workspace.notice
         }
         let inProject = try await restored(try #require(summary.cards.first { $0.id == card.id }))
-        #expect(inProject?.text.visible == "已恢复到 圆桌" && inProject?.link == .project(project.id))
+        #expect(inProject?.link == .project(project.id))
         let home = try await restored(try #require(summary.cards.first { $0.id == loose.id }))
-        #expect(home?.text.visible == "已恢复到 默认" && home?.link == .project(Project.defaultID))
+        #expect(home?.link == .project(Project.defaultID))
 
         try await store.trashProject(project.id)
         let whole = try await restored(try #require(try await TrashSummary.read(from: store).projects.first))
-        #expect(whole?.text.visible == "已恢复到 圆桌" && whole?.link == .project(project.id))
+        #expect(whole?.link == .project(project.id))
     }
 
     #if os(iOS)

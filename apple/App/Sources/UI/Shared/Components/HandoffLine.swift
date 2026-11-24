@@ -4,8 +4,8 @@ import SwiftUI
 extension Workspace {
     func handoff(of session: SessionState, shown: SessionShown? = nil) -> CueHandoff? {
         let id = session.sessionID
-        guard let handoff = services.liveSessions.handoffs[id],
-              (shown ?? self.shown(session, delivery: services.liveSessions.deliveries[id])).status == .resting else { return nil }
+        guard let handoff = services.sessionFeed.handoffs[id],
+              (shown ?? self.shown(session, delivery: services.sessionFeed.deliveries[id])).status == .resting else { return nil }
         return handoff
     }
 }

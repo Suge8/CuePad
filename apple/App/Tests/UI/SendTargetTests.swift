@@ -25,7 +25,7 @@ struct SendTargetTests {
         Task {
             do { try await services.consumeSessionChanges(changes) } catch { Issue.record(error) }
         }
-        rig.services.startLiveSessions()
+        rig.services.startSessionFeed()
     }
 
     private func open(_ sessionID: String, in directory: String, pid: Int32 = 100) async throws -> FakeExtension {
@@ -69,7 +69,6 @@ struct SendTargetTests {
         try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
         try Data("留着".utf8).write(to: existing.appending(path: "notes.md"))
         try await rig.services.executor.start()
-        defer { rig.services.cancelBackgroundWork() }
 
         for (project, folder) in [(project, folder), (home, root.appending(path: "默认")), (site, existing)] {
             let task = try await leaf(in: project)
@@ -100,7 +99,6 @@ struct SendTargetTests {
     @Test func 上一步绑着会话_开始时接着发进那个会话_送达后这一步绑上_不开新会话() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         try await rig.services.executor.start()
-        defer { rig.services.cancelBackgroundWork() }
         let task = try await leaf(in: project, session: "a")
 
         workspace.handOff(task)
@@ -119,7 +117,6 @@ struct SendTargetTests {
         let file = "/sessions/--work-alpha--/a.jsonl"
         try await store.upsertSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
         try await rig.services.executor.start()
-        defer { rig.services.cancelBackgroundWork() }
         try await end(alpha)
 
         workspace.handOff(task)
@@ -140,7 +137,6 @@ struct SendTargetTests {
             IndexedSession(id: "h", path: "/sessions/--work-history--/h.jsonl", cwd: folder.path, title: "history", lastActivityAt: .now), host: TestApp.hostID)
         #expect(try await store.hostedSessionIDs(of: .pi, host: TestApp.hostID).isEmpty)
         try await rig.services.executor.start()
-        defer { rig.services.cancelBackgroundWork() }
 
         workspace.send("接着做", to: AgentTarget(session: "h"))
         try await eventually("接着它、话送到") { rig.host.extensions["h"]?.messages.isEmpty == false }
@@ -156,7 +152,6 @@ struct SendTargetTests {
     @Test func 唤醒不了_会话文件不在这台Mac上_没送到_这一步不绑会话() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         try await rig.services.executor.start()
-        defer { rig.services.cancelBackgroundWork() }
         let task = try await leaf(in: project, session: "a")
         try await end(alpha)
 
@@ -171,7 +166,6 @@ struct SendTargetTests {
     @Test func 上一步的会话重新打开了_直接发进新开的那个() async throws {
         let first = try await open("a", in: "/work/alpha", pid: 100)
         try await rig.services.executor.start()
-        defer { rig.services.cancelBackgroundWork() }
         let task = try await leaf(in: project, session: "a")
         try await end(first)
         let again = try await open("a", in: "/work/alpha", pid: 200)
@@ -186,7 +180,7 @@ struct SendTargetTests {
     @Test func Mac开始与Cue开工_交到同一个地方_别的Mac上的会话正忙也不先问() async throws {
         try await remoteSession("r", title: "atlas", state: .thinking)
         let (forMac, forCue) = (try await leaf(in: project, session: "r"), try await leaf(in: project, session: "r"))
-        try await eventually("liveSessions.live == [r]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["r"] }
+        try await eventually("sessionFeed.live == [r]") { rig.services.sessionFeed.live.map(\.state.sessionID) == ["r"] }
         workspace.handOff(forMac)
         let mac = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil })
         #expect(mac.hostID == "mac-b" && mac.mode == .known(.send) && mac.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))

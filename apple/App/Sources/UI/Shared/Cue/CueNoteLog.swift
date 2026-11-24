@@ -5,7 +5,7 @@ import SwiftUI
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
     let settled: Bool
-    @State private var unfolded = DebugHooks.preset.toolsOpen
+    @State private var unfolded = DebugHooks.args.layoutOpts.toolsOpen
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -21,7 +21,7 @@ struct CueNoteLog: View {
                                 summary(folds)
                                 if let time = folds.last?.last.date {
                                     Dot()
-                                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " ")).monospacedDigit()
+                                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
                                 }
                             }
                         }
@@ -97,7 +97,7 @@ private struct CueNoteLine: View {
             line
             if fold.rounds.count > 1 {
                 Dot()
-                Text("\(fold.rounds.count) 次").monospacedDigit().fixedSize().contentTransition(.numericText())
+                Text("\(fold.rounds.count) 次").fixedSize().contentTransition(.numericText())
             }
         }
     }
@@ -116,7 +116,7 @@ private struct CueNoteLine: View {
 
     private func tint(_ places: [CueWakeHeader.Place]) -> Color? {
         guard newest, places.count == 1, let kind = places[0].kind, case .session(_, let id?) = places[0].target,
-              let item = workspace.services.liveSessions.live.first(where: { $0.state.sessionID == id }),
+              let item = workspace.services.sessionFeed.live.first(where: { $0.state.sessionID == id }),
               kind.isUnresolved(workspace.shown(item).status, session: item.state, since: round.date) else { return nil }
         return kind.openTint(palette)
     }
@@ -193,7 +193,7 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
                     words
                 } meta: {
                     Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
-                        .monospacedDigit().foregroundStyle(palette.ink3)
+                        .foregroundStyle(palette.ink3)
                         .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing)
                         #if os(macOS)
                         .opacity(hovered ? 1 : 0)

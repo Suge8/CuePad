@@ -49,6 +49,55 @@ extension View {
 
 private struct Shown: Identifiable { let id = true }
 
+/// 浮层画在窗口那一层，不在源视图下面：会话、Cue 那一栏各在自己的托管视图里，偏好值传不到窗口那一层。
+/// 开着时源视图挂 `feeds`，每次重算经平台视图的更新把新内容写进盒子，开着的浮层随源的状态变（不用再把源的值抄进自己的盒子）；
+/// 收起后盒子留着最后一份，退场动画画的就是它。
+@Observable
+final class PanelContent {
+    var view: AnyView
+
+    init(_ view: AnyView = AnyView(EmptyView())) { self.view = view }
+}
+
+struct PanelBody: View {
+    let content: PanelContent
+
+    var body: some View { content.view }
+}
+
+extension View {
+    func feeds(_ content: PanelContent, while on: Bool, _ view: @escaping () -> AnyView) -> some View {
+        background { if on { PanelFeed(content: content, view: view()) } }
+    }
+}
+
+#if os(macOS)
+private struct PanelFeed: NSViewRepresentable {
+    let content: PanelContent
+    let view: AnyView
+
+    func makeNSView(context: Context) -> Inert { Inert() }
+    func updateNSView(_ inert: Inert, context: Context) { content.view = view }
+
+    final class Inert: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+#else
+private struct PanelFeed: UIViewRepresentable {
+    let content: PanelContent
+    let view: AnyView
+
+    func makeUIView(context: Context) -> UIView {
+        let inert = UIView()
+        inert.isUserInteractionEnabled = false
+        return inert
+    }
+
+    func updateUIView(_ inert: UIView, context: Context) { content.view = view }
+}
+#endif
+
 struct DrawerSurface: ViewModifier {
     var edge = HorizontalEdge.trailing
     var ground: KeyPath<Palette, Color> = \.desk
@@ -92,11 +141,9 @@ struct DrawerSlide: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
-    private static let shadowRoom: CGFloat = 40
-
     func body(content: Content) -> some View {
         content
-            .visualEffect { [shown, room = Self.shadowRoom] effect, proxy in
+            .visualEffect { [shown, room = Elevation.panel.reach] effect, proxy in
                 effect.offset(x: shown ? 0 : -(proxy.size.width + room))
             }
             .allowsHitTesting(open)

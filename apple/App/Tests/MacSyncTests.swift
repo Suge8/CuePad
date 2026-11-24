@@ -85,7 +85,6 @@ struct MacSyncTests {
 
     @Test func 系统唤醒时立即同步() async throws {
         services.startSync()
-        defer { services.cancelBackgroundWork() }
         try await eventually("启动后拉一次") { rig.sync.started == 1 && rig.sync.syncNows == 1 }
 
         rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
@@ -102,7 +101,6 @@ struct MacSyncTests {
         let record = MacPresence.recordID(host: host).uuidString.lowercased()
         let uploads = Watch(rig.sync.uploads.stream) { $0 == record }
         services.start()
-        defer { services.cancelBackgroundWork() }
 
         #expect(try await uploads.next("在线记录上传") == record)
         #expect(try await store.macOnline(host))
@@ -165,7 +163,7 @@ struct MacSyncTests {
         #expect(live.stateSince == seen.stateSince)
         var stored = seen
         stored.lastReply = "做完了"
-        let row = try #require(SessionState.live(live, over: stored, hostID: TestApp.hostID, projectID: nil))
+        let row = try #require(SessionState.hosted(live, over: stored, hostID: TestApp.hostID, projectID: nil))
         #expect(!row.isUnread(try await services.store.sessionMarks()["s1"], at: .now))
         #expect(try #require(services.bridge.session(id: changed.id)).stateSince > past)
     }

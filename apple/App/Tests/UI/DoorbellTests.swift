@@ -16,7 +16,6 @@ struct DoorbellTests {
         let still = ManualTiming()
         let phone = TestApp(sync: .built({ CloudSync(store: $0) { cloud } }, relay: relay.endpoint), timing: still.timing, host: "mac-phone")
         let mac = TestApp(sync: .built({ CloudSync(store: $0) { cloud } }, relay: relay.endpoint), timing: still.timing)
-        defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
         phone.services.startSync()
         phone.services.startRelay()
         try await eventually("手机入房") { relay.joined == 1 }

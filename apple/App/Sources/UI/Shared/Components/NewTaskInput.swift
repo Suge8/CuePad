@@ -14,7 +14,7 @@ struct NewTaskInput: View {
     var body: some View {
         Composer(
             draft: $draft, prompt: "写下任务", label: "添加任务", focus: $focused, accepts: [],
-            shortcuts: [.send: add],
+            submit: add,
             header: {
                 HStack(spacing: Spacing.item) {
                     DestinationMenu(project: target, lead: Text("记到")) { project = $0 }

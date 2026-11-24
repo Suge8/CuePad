@@ -39,7 +39,7 @@ struct CommandProgressTests {
             default: return ["ok": false, "error": "failed: Nothing to compact (session too small)"]
             }
         }
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let request = try await command()
         #expect(try await progress() == .running("/compact"))
         try await app.services.executor.start()
@@ -70,7 +70,7 @@ struct CommandProgressTests {
         ext.onCommand = { _, command in
             command["t"] as? String == "command" ? ["ok": false, "error": "unknown_command"] : ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         try await app.services.executor.start()
         let request = try await command()
         #expect(try await store.outcome(of: request).status == .known(.failed))

@@ -27,17 +27,27 @@ struct SessionMenuItems: View {
                 RowActionButtons(actions: [SessionActions.rename(session, task: pin, in: workspace)])
                 if let link = task { SessionTaskBindItems(session: session, link: link) }
                 HandoffButton(session: session)
-                #if os(macOS)
-                if workspace.livesHere(session), workspace.liveButton(session.id) == nil {
-                    Button("打开活预览", icon: .livePreview) { workspace.openLivePreview(session) }
-                }
-                #endif
+                OpenLivePreviewButton(session: session)
             }
             #if os(iOS)
             Section { RemoteMacActions(host: session.hostID) }
             #endif
         }
         .menuIcons()
+    }
+}
+
+/// 会话菜单里手动开活预览（只 Mac）：会话在本机、栏头还没有预览钮时才给。
+struct OpenLivePreviewButton: View {
+    let session: SessionState
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        #if os(macOS)
+        if workspace.livesHere(session), workspace.liveButton(session.id) == nil {
+            Button("打开活预览", icon: .livePreview) { workspace.openLivePreview(session) }
+        }
+        #endif
     }
 }
 

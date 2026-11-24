@@ -12,6 +12,9 @@ forbid "常驻循环动效只用 LoopLayer（Core Animation）：SwiftUI 的 rep
 forbid "动画曲线只用 Motion 的几种（AppGroup/Motion.swift；UIKit 视图上经 Motion.Fade.animate）：另写的是又一套手感，减弱动态效果也各管各的。软糖换拍子（Jelly）是按进度走的编排" \
   '(?:(?:(?<![\w.])|\bAnimation)\.(?:spring|easeOut|easeIn|easeInOut|timingCurve|smooth|snappy|bouncy|interactiveSpring|interpolatingSpring|linear)|\bUIView\.animate)\(' \
   'App/AppGroup/Motion.swift' '**/Theme/Jelly.swift'
+forbid "Core Animation 的时长与弹簧参数也只经 Motion（Motion.Glide.timing、Motion.Fade.timing 与几档时长）：直接写数是又一套手感，SwiftUI 那条规则看不见它们。常驻的循环（LoopLayer、StateInk）与开门（OpeningCurtain）是编排，节奏在它们自己那里" \
+  '\.(?:duration|stiffness|damping|mass|initialVelocity|settlingDuration|speed)\s*=\s*[\d.]' \
+  'App/AppGroup/Motion.swift' '**/Theme/LoopLayer*.swift' '**/Theme/StateInk.swift' '**/Cue/OpeningCurtain.swift'
 forbid "自定义转场的 body 写成 nonisolated func：协议标的是主线程，iOS 上 SwiftUI 却在渲染线程求值，body 继承来的主线程隔离让里面的闭包一调就崩；只在类型上写 nonisolated 不够（理由在 BoardFlight.swift 的 board）" \
   '(?<!nonisolated )func body\(content: Content, phase: TransitionPhase\)'
 # 例外：实时活动的视图画完就被系统存档，LiveText 的定时重画不会跑，只有系统时间文本自己走
@@ -41,6 +44,9 @@ forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类�
 forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（图标，Theme/Glyph.swift）的几档，Theme 以外不写 .system(size: 数) 与 ofSize:、pointSize: 的数：各处自写的字号是又一套层级，新东西先问它是正文、说明还是哪一档图标；确要新档就在那两处按用途加一个" \
   '(?:\.system\(size:\s*[\d.]|\b(?:ofSize|pointSize):\s*[\d.])' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
+FORBID_IN=App/Sources forbid "字重与等宽数字只在 Typography（文字）与 Glyph（图标）：界面字只有常规与粗两档（Typography.Weight，圆体-简只有这两档），要粗的用角色的粗体（Typography.bodyBold…），字体由外面给的一段用 .emphasis；调用处写的中、半粗在中文里落到同一个粗、英文里又各是一档。圆体-简没有等宽数字，界面字的等宽数字在 Typography.ui 里一次给，调用处不写 .monospacedDigit()" \
+  '(?:\.weight\(|\.fontWeight\(|\.system\([^)]*\bweight:|\.monospacedDigit\(\)|\.bold\()' \
+  '**/Theme/Typography*.swift' '**/Theme/Glyph.swift' 'App/Sources/UI/Debug/**'
 forbid "字体名称只在 Typography 选择：界面与编辑器复用同一角色，让系统按文字选择中英文字形，不在单个组件强制中文字体" \
   '(?:\b(?:CueFont|NSFont|UIFont)\(name:|\bFont\.custom\(|\.font\(\s*\.custom\()' \
   'App/Sources/UI/Debug/**' '**/Tests/**'
@@ -59,6 +65,10 @@ forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(_:) 或 H
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
   '\b(?:Color|UIColor|NSColor|CGColor)\(\s*(?:hex|red|white|hue|srgbRed|calibratedRed|displayP3Red|deviceRed|calibratedWhite)\s*:' \
   'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+# 例外：Cue 立体小人的着色（FigureLook）是美术资产，同 CueFaces 的图，白天、夜里各一套，不进色板
+forbid "按 0–255 拆通道写的颜色（r / 255、SIMD3(…) / 255）同样只在色板：换个写法也是又一份颜色" \
+  '/\s*255(?:\.0)?\b' \
+  'App/AppGroup/Palette.swift' '**/Figure/FigureLook.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "不用系统色与系统灰（.secondary、.gray、NSColor.labelColor…）：冷灰与系统蓝和纸墨并排是两套颜色；次要字用 palette.ink2、辅助字 ink3、浅底 fill" \
   '(?<![\w.])(?:Color\.|\.)(?:white|gray|grey|red|green|blue|orange|yellow|purple|pink|mint|teal|cyan|indigo|brown|accentColor)\b(?!\s*:)|\b(?:UIColor|NSColor)\.(?!clear\b)[a-z]\w*|(?:foregroundStyle|AnyShapeStyle|\.background|\.fill|\.tint)\(\s*\.(?:primary|secondary|tertiary|quaternary|quinary)\b|\.(?:secondary|tertiary|quaternary|quinary)\.opacity' \
   'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'

@@ -5,7 +5,7 @@ struct ProjectTasks: View {
     let data: ProjectPageData
     @Binding var position: ScrollPosition
     let anchor: TaskFoldAnchor
-    @State private var fold = DebugHooks.preset.taskFold
+    @State private var fold = DebugHooks.args.taskFold
     @State private var collapses = 0
     @State private var lane: ClosedRange<CGFloat>?
     @State private var doneShown = donePage
@@ -29,7 +29,6 @@ struct ProjectTasks: View {
         let roots = data.tasks.roots
         let kept = TaskFold.folded(data.tasks, limit: Self.visibleTasks)
         let hidden = roots.count - kept.count
-        let counts = data.taskCounts
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 if !roots.isEmpty {
@@ -50,10 +49,10 @@ struct ProjectTasks: View {
                 }
                 HStack(spacing: Spacing.item) {
                     NewTaskField(project: data.project?.id).newTaskDrop()
-                    if counts.done > 0 { DoneFold(title: TaskCopy.done(counts.done), open: fold.showsDone) { toggle(\.showsDone) } }
+                    if data.doneCount > 0 { DoneFold(title: TaskCopy.done(data.doneCount), open: fold.showsDone) { toggle(\.showsDone) } }
                 }
                 .padding(.vertical, TaskMetrics.rowGap)
-                if counts.done > 0 {
+                if data.doneCount > 0 {
                     if fold.showsDone {
                         ForEach(data.done.prefix(doneShown)) { TaskLine(task: $0) }
                         if data.done.count > doneShown {

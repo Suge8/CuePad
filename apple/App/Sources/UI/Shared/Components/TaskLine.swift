@@ -91,7 +91,7 @@ struct TaskLine: View {
                 case .ran(let since): LiveText(style: SessionClock.Elapsed(since: since))
                 }
             }
-            .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3)
+            .font(TaskMetrics.caption).foregroundStyle(palette.ink3)
             .yields(first: true)
         }
         if !done, leads, let next, inlines(next) { TaskNextMark(next: next, primary: true, retry: retry).fixedSize().transition(.opacity) }

@@ -47,8 +47,8 @@ struct SearchScreen: View {
             SearchCapsule(query: $query.text, focusRequests: workspace.searchFocusRequests).frame(width: fieldWidth)
         }) { SearchFilterMenu(query: $query) }
         .onAppear {
-            if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
-            if DebugHooks.preset.searchListsSessions { query.kind = .sessions }
+            if query.text.isEmpty { query.text = DebugHooks.args.search ?? "" }
+            if DebugHooks.args.searchListsSessions { query.kind = .sessions }
         }
     }
 
@@ -179,7 +179,7 @@ private struct ActiveFilters: View {
                 }
             }
             if let total {
-                Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text(CountCopy.hits(total)).font(Typography.meta).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText()).animation(Motion.fade, value: total).fixedSize()
             }
         }

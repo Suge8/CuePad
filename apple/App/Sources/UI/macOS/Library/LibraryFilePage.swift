@@ -2,22 +2,7 @@
 import CueStore
 import SwiftUI
 
-struct LibraryFileLayer: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        ZStack {
-            if workspace.isLibraryReady, let file = workspace.openLibraryFile {
-                LibraryFilePage(file: file).safeAreaPadding(.top, Chrome.band)
-                    .overlay(alignment: .top) { LibraryFileHead(file: file) }
-                    .id(file).transition(.opacity)
-            }
-        }
-        .animation(Motion.fade, value: workspace.openLibraryFile)
-    }
-}
-
-private struct LibraryFilePage: View {
+struct LibraryFilePage: View {
     let file: LibraryFile
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

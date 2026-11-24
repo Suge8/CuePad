@@ -123,14 +123,10 @@ nonisolated struct BubblePlacement: Equatable {
         return BubbleTail(edge: tailEdge, offset: min(max(anchor - x(width: width), Self.tailInset), width - Self.tailInset))
     }
 
-    /// 不缩放（实测，Instruments）：缩放时每一帧字都按新的大小重画一遍（字形重新栅格化），开合各约 400ms 里主线程三成在重画字，掉帧；
-    /// 平移不改字的大小，一次画好跟着走，开合的指令数降到原来的三成。缩放铺满整窗的一层更糟：AppKit 每帧重排整窗、重算鼠标跟踪区。
     func transition(reduceMotion: Bool) -> AnyTransition {
-        if reduceMotion { return .opacity }
-        return sheet ? .move(edge: .bottom) : .offset(y: side * Self.rise).combined(with: .opacity)
+        sheet && !reduceMotion ? .move(edge: .bottom) : Motion.surface(from: side < 0 ? .top : .bottom, reduceMotion: reduceMotion)
     }
 
-    static let rise: CGFloat = 8
     static let radius = Radius.field
     static let reach: CGFloat = RowMetrics.height / 2
     // 尾巴根离圆角起弧处再让一点，尾巴不骑在弧上

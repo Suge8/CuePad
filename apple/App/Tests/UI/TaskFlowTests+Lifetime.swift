@@ -39,7 +39,7 @@ extension TaskFlowTests {
         try await store.bindSession("voice", to: id)
         #expect(try await store.card(id) == first)
         #expect(try await store.deliveryRequests().isEmpty)
-        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["task/\(id.uuidString)"])
+        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == [.task(id)])
         switch action {
         case "archive": try await workspace.archive(id)
         case "trash": try await workspace.trash(id)
@@ -60,7 +60,7 @@ extension TaskFlowTests {
         try await store.setDirectory(rig.directory.path, for: Project.defaultID)
         let changes = rig.bridge.changes()
         let recording = Task { try await rig.services.consumeSessionChanges(changes) }
-        defer { await recording.stop(); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        defer { await recording.stop() }
         try await rig.services.executor.start()
         let workspace = Workspace(services: rig.services)
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)

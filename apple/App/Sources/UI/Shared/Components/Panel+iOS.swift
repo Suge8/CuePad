@@ -42,7 +42,7 @@ final class PanelHost {
         let identity: AnyHashable
         let source: BubbleSource
         let width: BubblePlacement.Width
-        let content: AnyView
+        let content: PanelContent
         let close: ClosePanel
     }
 
@@ -53,16 +53,15 @@ final class PanelHost {
 
     func show(_ entry: Shown) { shown = entry }
 
-    func present(
-        token: UUID, key: AnyHashable, source: BubbleSource, width: BubblePlacement.Width, close: ClosePanel, environment: EnvironmentValues, content: some View
-    ) {
-        show(Shown(
-            token: token, identity: [AnyHashable(token), key], source: source, width: width,
-            content: AnyView(
-                content.environment(\.closePanel, close.of(token))
-                    .environment(\.dynamicTypeSize, min(typeSize, Self.largestType))
-                    .environment(\.self, environment)),
-            close: close))
+    func present(token: UUID, key: AnyHashable, source: BubbleSource, width: BubblePlacement.Width, close: ClosePanel, content: PanelContent) {
+        show(Shown(token: token, identity: [AnyHashable(token), key], source: source, width: width, content: content, close: close))
+    }
+
+    func view(_ content: some View, token: UUID, close: ClosePanel, environment: EnvironmentValues) -> AnyView {
+        AnyView(
+            content.environment(\.closePanel, close.of(token))
+                .environment(\.dynamicTypeSize, min(typeSize, Self.largestType))
+                .environment(\.self, environment))
     }
 
     func hide(_ token: UUID) {
@@ -104,16 +103,21 @@ private struct BubbleSlot<Panel: View>: ViewModifier {
     @Environment(PanelHost.self) private var host: PanelHost?
     @Environment(\.self) private var environment
     @State private var token = UUID()
+    @State private var shown = PanelContent()
 
     func body(content: Content) -> some View {
         content
+            .feeds(shown, while: key != nil && host != nil, view)
             .onChange(of: Mode(key: key, source: source, width: width), initial: true) { _, mode in
                 guard let host else { return }
                 guard let key = mode.key else { return host.hide(token) }
-                host.present(token: token, key: key, source: mode.source, width: mode.width, close: close, environment: environment, content: panel())
+                shown.view = view()
+                host.present(token: token, key: key, source: mode.source, width: mode.width, close: close, content: shown)
             }
             .onDisappear { host?.hide(token) }
     }
+
+    private func view() -> AnyView { host?.view(panel(), token: token, close: close, environment: environment) ?? AnyView(EmptyView()) }
 
     private struct Mode: Equatable {
         let key: AnyHashable?
@@ -154,7 +158,7 @@ private struct BubbleLayer: View {
             BubbleStage {
                 if let shown {
                     BubbleFrame(placement: placement) {
-                        shown.content
+                        PanelBody(content: shown.content)
                     } area: {
                         TouchWatch { point, area in
                             if !area.bounds.contains(area.convert(point, from: nil)) { shown.close() }

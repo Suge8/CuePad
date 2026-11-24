@@ -162,43 +162,25 @@ final class TestApp {
     #endif
 
     isolated deinit {
+        LibraryLedger.close(ledger, app: createdAt, services.close())
         #if os(macOS)
-        let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
-        LibraryLedger.close(ledger, app: createdAt) {
-            _ = await finish()
-            await followers?.value
-        }
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: socketDirectory)
         #else
-        retire(services, app: createdAt)
         UIPasteboard.remove(withName: pasteboardName)
         #endif
     }
 
     func see(_ session: SessionState, at moment: Date = .now.addingTimeInterval(1)) async throws {
         try await services.store.mark(.sessionSeen(session.sessionID), at: moment)
-        services.liveSessions.apply(try await LiveSessions.Page.read(from: services.store), at: .always())
+        services.sessionFeed.apply(try await SessionFeed.Page.read(from: services.store), at: .always())
     }
 
     @discardableResult
     func relaunch() -> AppServices {
-        retire(services)
+        LibraryLedger.close(ledger, services.close(keepingBridge: true))
         services = makeServices()
         return services
-    }
-
-    private func retire(_ services: AppServices, app: SourceLocation? = nil) {
-        let halted = services.halt()
-        LibraryLedger.close(ledger, app: app) {
-            var failure: (any Error)?
-            for step in halted.steps {
-                do { try await step.run() } catch { failure = failure ?? error }
-            }
-            await halted.stopSync()
-            await halted.followers?.value
-            if let failure { throw failure }
-        }
     }
 
     func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> StateRecorder {
@@ -365,6 +347,30 @@ extension CKRecord {
 }
 
 extension AppServices {
+    /// 用例收尾的唯一一处：Mac 上走退出时的那一套（停桥、托管的 Agent、热键与同步）；`keepingBridge` 是 relaunch 换一份服务，
+    /// 桥与托管的 Agent 归 TestApp、还要给新的那份用，同 iOS 只停服务自己的组件。返回等它们都走完的那一步。
+    func close(keepingBridge: Bool = false) -> @Sendable () async throws -> Void {
+        #if os(macOS)
+        if !keepingBridge {
+            let followers = cancelBackgroundWork(), finish = beginShutdown()
+            return {
+                _ = await finish()
+                await followers?.value
+            }
+        }
+        #endif
+        let halted = halt()
+        return {
+            var failure: (any Error)?
+            for step in halted.steps {
+                do { try await step.run() } catch { failure = failure ?? error }
+            }
+            await halted.stopSync()
+            await halted.followers?.value
+            if let failure { throw failure }
+        }
+    }
+
     func upload(_ records: UUID...) async {
         _ = await sync?.send(recordNames: Set(records.map { $0.uuidString.lowercased() }))
     }

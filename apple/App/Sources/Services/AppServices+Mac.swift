@@ -46,7 +46,7 @@ extension AppServices {
         startRelay()
         startActivityPushes()
         startSpeechClock()
-        startLiveSessions()
+        startSessionFeed()
         startAccountQuotas()
         startAlerts()
     }

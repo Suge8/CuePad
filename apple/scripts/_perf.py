@@ -32,10 +32,20 @@ def fresh(library, source=None):
 
 
 def mac(app, library, args, ready=None, stdout=subprocess.DEVNULL):
-    """经 app.py exec 起 Mac 实例（隔离、占住本检出那一份后 exec 成 CuePad）：返回的进程就是 CuePad。"""
+    """经 app.py exec 起 Mac 实例（隔离、占住本检出那一份后 exec 成 CuePad）：返回的进程就是 CuePad。
+    标准错误写进 <库>.stderr：调试场景放弃时（DebugScene.abandon）原因只写在那里，失败时由 last_error 读出。"""
     env = dict(os.environ, CUEPAD_SHOT_READY=ready) if ready else None
-    return subprocess.Popen([sys.executable, f"{APPLE}/scripts/app.py", "exec", app, library, "--", *args],
-                            env=env, stdout=stdout, stderr=subprocess.DEVNULL, text=True)
+    with open(f"{library}.stderr", "w") as err:
+        return subprocess.Popen([sys.executable, f"{APPLE}/scripts/app.py", "exec", app, library, "--", *args],
+                                env=env, stdout=stdout, stderr=err, text=True)
+
+
+def last_error(library, lines=5):
+    try:
+        with open(f"{library}.stderr") as f:
+            return "".join(f.readlines()[-lines:]).strip()
+    except FileNotFoundError:
+        return ""
 
 
 def stop(proc):

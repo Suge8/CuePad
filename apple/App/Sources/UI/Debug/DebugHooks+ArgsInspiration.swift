@@ -1,5 +1,3 @@
-#if DEBUG
-
 nonisolated struct InspirationArgs: Decodable, DebugArgGroup {
     static let prefix = "Inspiration"
     /// `-CuePadInspirationArrival <秒>`：先只有图片记录，再模拟下载完成
@@ -15,4 +13,3 @@ nonisolated struct InspirationArgs: Decodable, DebugArgGroup {
     /// `-CuePadInspirationSource <路径>`：用指定 Markdown 正文复现编辑、墙面摘要和导出
     let source: String?
 }
-#endif

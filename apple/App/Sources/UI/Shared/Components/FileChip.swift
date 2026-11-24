@@ -25,9 +25,9 @@ struct FileChip: View {
             HStack(spacing: Spacing.item) {
                 picture
                 VStack(alignment: .leading, spacing: Spacing.hair) {
-                    Text(verbatim: name).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
+                    Text(verbatim: name).font(Typography.secondaryBold).foregroundStyle(palette.ink)
                         .lineLimit(1).truncationMode(.middle)
-                    Text(verbatim: status.detail).font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(verbatim: status.detail).font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }

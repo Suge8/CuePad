@@ -15,7 +15,7 @@ struct LivePhoneFlowTests {
         var task: Task<Void, Never>?
     }
 
-    private func phone(page html: String = "<html><body>手机上的页面</body></html>",
+    func phone(page html: String = "<html><body>手机上的页面</body></html>",
                        _ body: (Workspace, Mac, URL, SessionRoute, Page) async throws -> Void) async throws {
         let mac = Mac()
         app.services.liveSignaling = mac
@@ -46,12 +46,8 @@ struct LivePhoneFlowTests {
         app.services.liveSignaling = nil
     }
 
-    private func shown(_ preview: LivePreview, in workspace: Workspace) -> Task<Void, Never> {
-        Task {
-            async let watching: Void = preview.watch()
-            await workspace.connectLive(preview)
-            await watching
-        }
+    func shown(_ preview: LivePreview, in workspace: Workspace) -> Task<Void, Never> {
+        Task { await workspace.connectLive(preview) }
     }
 
     @Test func Mac答有页面就出钮_点开经隧道载出Mac上的页面_收起留着_离开会话页放掉() async throws {
@@ -169,55 +165,6 @@ struct LivePhoneFlowTests {
             open = shown(preview, in: workspace)
             try await eventually("再点开载的是新地址") { preview.url?.port == again.port && preview.phase == .live && preview.revealed }
             #expect(preview.address == again)
-            workspace.toggleLivePreview()
-            await open.stop()
-        }
-    }
-
-    @Test func 手机上自己填的地址_Mac的答复变了也不换() async throws {
-        try await phone { workspace, mac, url, route, _ in
-            try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
-            workspace.toggleLivePreview()
-            let preview = try #require(workspace.livePreviews[route.id])
-            let open = shown(preview, in: workspace)
-            try await eventually("页面载出") { preview.phase == .live && preview.revealed }
-
-            let typed = url.appending(path: "pricing")
-            preview.retarget(.init(url: typed, source: .typed))
-            try await eventually("载出填的那一页") { preview.url?.path() == "/pricing" && preview.phase == .live && preview.revealed }
-
-            let other = try await vacant()
-            mac.allow(other)
-            mac.pages = [url, other]
-            app.services.liveRemote.renew("live")
-            try await eventually("手机收到变了的答复") { app.services.liveRemote.answers["live"]?.pages.count == 2 }
-            await quietPeriod(.milliseconds(500))
-            #expect(preview.address == typed && preview.url?.path() == "/pricing")
-            await open.stop()
-        }
-    }
-
-    @Test func 收着时Agent发来新地址_再点开是新地址() async throws {
-        try await phone { workspace, mac, url, route, _ in
-            try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
-            workspace.toggleLivePreview()
-            let preview = try #require(workspace.livePreviews[route.id])
-            var open = shown(preview, in: workspace)
-            try await eventually("页面载出") { preview.phase == .live && preview.revealed }
-            workspace.toggleLivePreview()
-            await open.stop()
-
-            let sent = url.appending(path: "pricing")
-            mac.sent = LiveAddress(sessionID: "live", url: sent, found: false, sentAt: .now)
-            mac.found = [url]
-            mac.pages = [sent, url]
-            app.services.liveRemote.renew("live")
-            try await eventually("钮指着新发来的地址") { workspace.liveButton(route.id) == .closed(sent) }
-
-            workspace.toggleLivePreview()
-            open = shown(preview, in: workspace)
-            try await eventually("再点开载的是新地址") { preview.url?.path() == "/pricing" && preview.phase == .live && preview.revealed }
-            #expect(preview.address == sent)
             workspace.toggleLivePreview()
             await open.stop()
         }

@@ -28,14 +28,16 @@ extension TokenSheet {
     private static let glyphCell: CGFloat = 112
 
     private static let glyphs: [(String, Font)] = [
-        ("mark", Glyph.mark), ("chevron", Glyph.chevron(Glyph.chevronSize)), ("small", Glyph.small), ("row", Glyph.row),
-        ("control", Glyph.control), ("large", Glyph.large), ("projectIdentity", .system(size: Glyph.projectIdentity)), ("hero", Glyph.hero),
+        ("mark", Glyph.mark), ("at", Glyph.at(Glyph.chevronSize)), ("project", Glyph.project(Glyph.chevronSize)), ("small", Glyph.small), ("row", Glyph.row),
+        ("control", Glyph.control), ("controlBold", Glyph.controlBold), ("large", Glyph.large), ("projectIdentity", .system(size: Glyph.projectIdentity)), ("hero", Glyph.hero),
     ]
 
     private static let fonts: [(String, Font)] = [
-        ("body", Typography.body), ("bodyStrong", Typography.bodyStrong), ("secondary", Typography.secondary), ("meta", Typography.meta),
-        ("label", Typography.label), ("caption", Typography.caption), ("caption2", Typography.caption2),
-        ("reading", Typography.reading), ("readingHeading", Typography.readingHeading),
+        ("body", Typography.body), ("bodyBold", Typography.bodyBold), ("bodyStrong", Typography.bodyStrong),
+        ("secondary", Typography.secondary), ("secondaryBold", Typography.secondaryBold), ("meta", Typography.meta), ("metaBold", Typography.metaBold),
+        ("label", Typography.label), ("caption", Typography.caption), ("captionBold", Typography.captionBold),
+        ("caption2", Typography.caption2), ("caption2Bold", Typography.caption2Bold),
+        ("reading", Typography.reading), ("readingBold", Typography.readingBold), ("readingHeading", Typography.readingHeading),
         ("code", Typography.code), ("codeNote", Typography.codeNote), ("inlineCode", Typography.inlineCode),
         ("title", Typography.title), ("sectionTitle", Typography.sectionTitle), ("sectionCount", Typography.sectionCount),
         ("heading", Typography.heading), ("emptyTitle", Typography.emptyTitle), ("cueCardName", Typography.cueCardName), ("gaugeNumber", Typography.gaugeNumber),

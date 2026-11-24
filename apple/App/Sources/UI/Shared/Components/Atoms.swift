@@ -21,31 +21,43 @@ extension View {
     }
 }
 
-struct SectionHeader: View {
+struct SectionHeader<Trailing: View>: View {
     enum Level { case page, group }
 
     let title: Dotted
     var level = Level.page
     var count: Int?
+    var countInk: Color?
     var icon: Icon?
+    var trailing: Trailing?
     @Environment(\.palette) private var palette
 
-    init(_ title: Dotted, level: Level = .page, count: Int? = nil, icon: Icon? = nil) {
+    init(_ title: Dotted, level: Level = .page, count: Int? = nil, countInk: Color? = nil, icon: Icon? = nil, @ViewBuilder trailing: () -> Trailing) {
         self.title = title
         self.level = level
         self.count = count
+        self.countInk = countInk
         self.icon = icon
-    }
-
-    init(_ title: LocalizedStringResource, level: Level = .page, count: Int? = nil, icon: Icon? = nil) {
-        self.init(Dotted(String(localized: title)), level: level, count: count, icon: icon)
+        self.trailing = trailing()
     }
 
     var body: some View {
+        if let trailing {
+            HStack(spacing: Spacing.item) {
+                heading
+                Spacer(minLength: 0)
+                trailing
+            }
+        } else {
+            heading
+        }
+    }
+
+    private var heading: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
             if let icon { Image(icon).readerHidden(true) }
-            Text(title)
-            if let count { Text("\(count)").font(countFont).monospacedDigit().foregroundStyle(palette.ink3).counting(count) }
+            Text(title).lineLimit(1)
+            if let count { Text("\(count)").font(countFont).foregroundStyle(countInk ?? palette.ink3).counting(count) }
         }
         .font(titleFont)
         .foregroundStyle(level == .page ? palette.ink : palette.ink3)
@@ -59,6 +71,20 @@ struct SectionHeader: View {
 
     private var countFont: Font {
         level == .page ? Typography.sectionCount : Typography.label
+    }
+}
+
+extension SectionHeader where Trailing == EmptyView {
+    init(_ title: Dotted, level: Level = .page, count: Int? = nil, countInk: Color? = nil, icon: Icon? = nil) {
+        self.title = title
+        self.level = level
+        self.count = count
+        self.countInk = countInk
+        self.icon = icon
+    }
+
+    init(_ title: LocalizedStringResource, level: Level = .page, count: Int? = nil, countInk: Color? = nil, icon: Icon? = nil) {
+        self.init(Dotted(String(localized: title)), level: level, count: count, countInk: countInk, icon: icon)
     }
 }
 

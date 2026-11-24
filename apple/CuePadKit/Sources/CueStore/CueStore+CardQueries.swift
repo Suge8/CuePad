@@ -78,6 +78,22 @@ extension CueStore {
     }
   }
 
+  public func projectTasks(in project: UUID, doneLimit: Int) throws -> ProjectTasks {
+    let open = "SELECT id FROM cards WHERE projectID = ?1 AND \(Self.taskOpen)"
+    let trees = try db.query(
+      """
+      SELECT \(Card.selection(as: "t")) FROM cards t
+      WHERE t.id IN (\(Self.subtree(from: "SELECT DISTINCT top FROM (\(Self.tops(of: open)))"))) AND \(Self.taskOnBoard("t"))
+      ORDER BY t.sortKey, t.id
+      """, [project]
+    ) { Card(row: $0) }
+    return ProjectTasks(
+      trees: Self.preorder(trees),
+      done: try tasksDone(in: project, limit: doneLimit),
+      doneCount: try taskCounts(in: project).done,
+      progress: try subtaskProgress(of: trees.filter { $0.completedAt == nil }.map(\.id)))
+  }
+
   private static func preorder(_ tasks: [Card]) -> [Card] {
     let ids = Set(tasks.map(\.id))
     var children: [UUID: [Card]] = [:]
@@ -138,8 +154,6 @@ extension CueStore {
   public func subtaskProgress(of parents: some Sequence<UUID>) throws -> [UUID: TaskProgress] {
     try subtaskProgress(scope: "AND parentID IN (SELECT value FROM json_each(?))", [Self.idList(parents)])
   }
-
-  public func subtaskProgress(in project: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID = ?", [project]) }
 
   private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     try Self.subtaskProgress(scope: scope, arguments, in: db)

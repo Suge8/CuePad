@@ -5,7 +5,6 @@ public enum Table: String, Codable, Sendable, CaseIterable {
   case activityDestinations
   case writeCounter
   case syncRecords
-  case liveAddresses
 }
 
 extension Table {
@@ -38,7 +37,6 @@ extension Table {
     case .projectDirectories: ["projectID", "directory"]
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     case .writeCounter: ["seq"]
-    case .liveAddresses: ["sessionID", "url", "found", "sentAt"]
     case .syncRecords: ["recordName", "recordType", "systemFields", "pushedModifiedAt", "sentModifiedAt"]
     default: syncedFields.map(\.name)
     }
@@ -83,7 +81,7 @@ extension Table {
     case .agentLibraryFiles: LibraryFileText.fields
     case .sessionViewers: Viewer.fields
     case .activityDestinations: ActivityDestination.fields
-    case .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords, .liveAddresses: []
+    case .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords: []
     }
   }
 }

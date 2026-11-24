@@ -68,10 +68,10 @@ private struct ChatImage: View {
                 .overlay {
                     if place.isAway {
                         Text(verbatim: AttachmentLooks.awayLine(hash, services))
-                            .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
+                            .font(Typography.caption).foregroundStyle(palette.ink3)
                             .multilineTextAlignment(.center).padding(Spacing.tight)
                     } else if more > 0 {
-                        Text(verbatim: "+\(more)").font(Typography.body.weight(.semibold)).monospacedDigit().foregroundStyle(palette.onMedia)
+                        Text(verbatim: "+\(more)").font(Typography.bodyBold).foregroundStyle(palette.onMedia)
                             .frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.mediaScrim, in: .rect(cornerRadius: Radius.block))
                             .transition(.opacity)
                     }

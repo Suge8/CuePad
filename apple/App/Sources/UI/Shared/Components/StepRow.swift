@@ -27,7 +27,7 @@ struct StepRow: View {
                 }
             }
             .task {
-                guard message != nil, DebugHooks.preset.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                guard message != nil, DebugHooks.args.layoutOpts.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 open()
             }
             .onChange(of: item.detail) { if let detail = item.detail { land(.ready(detail), over: .missing(Self.late)) } }
@@ -46,7 +46,7 @@ struct StepRow: View {
             if item.failed {
                 Text("失败").font(Typography.caption).foregroundStyle(palette.failure)
             } else if item.added != nil || item.removed != nil {
-                Text(Chat.diffLabel(added: item.added, removed: item.removed)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text(Chat.diffLabel(added: item.added, removed: item.removed)).font(Typography.caption).foregroundStyle(palette.ink3)
             }
             if let open { DisclosureChevron(open: open) }
         }

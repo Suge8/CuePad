@@ -32,11 +32,11 @@ nonisolated struct BoardArrival: Equatable {
     }
 
     let departures = BoardDepartures()
-    @ObservationIgnored private var landing: Set<String> = []
-    @ObservationIgnored var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:] { didSet { land() } }
+    @ObservationIgnored private var landing: Set<TaskBoard.Flight> = []
+    @ObservationIgnored var frames: [TaskBoard.Flight: (lane: TaskBoard.Column, frame: CGRect)] = [:] { didSet { land() } }
     /// 此刻排出来的卡（值是那一份视图自己的记号）。懒加载撤掉的卡留着撤掉前的框：一下跳过几屏（拖滚动条）时那个框还在可视区里，
     /// 按住会拎起早已不在那儿的卡、排序会把它算进去，所以取框只认排出来的（`laid`）。
-    @ObservationIgnored var shown: [String: UUID] = [:]
+    @ObservationIgnored var shown: [TaskBoard.Flight: UUID] = [:]
     @ObservationIgnored var stacks: [UUID: Stack] = [:] { didSet { land() } }
     @ObservationIgnored var lanes: [TaskBoard.Column: CGRect] = [:]
 
@@ -61,14 +61,14 @@ nonisolated struct BoardArrival: Equatable {
     fileprivate func read(_ board: TaskBoard, from before: TaskBoard) {
         var moved = board.moved(from: before)
         let now = ContinuousClock.now
-        var shed: (id: String, from: TaskBoard.Column, frame: CGRect)?
+        var shed: (id: TaskBoard.Flight, from: TaskBoard.Column, frame: CGRect)?
         if let held, held.phase == .pending, let new = board.renamed(held.id, from: before) {
             shed = frame(of: held.id).map { (held.id, new.from, $0) }
             self.held?.id = new.id
             if new.to != new.from { moved[new.id] = new.from }
         }
         if let hung = self.held, before.column(of: hung.id) != nil, board.column(of: hung.id) == nil { leave() }
-        var from: [String: Departure] = moved.reduce(into: [:]) { departures, move in
+        var from: [TaskBoard.Flight: Departure] = moved.reduce(into: [:]) { departures, move in
             guard let frame = frame(of: move.key) else { return }
             departures[move.key] = Departure(column: move.value, frame: frame, at: now)
         }
@@ -87,21 +87,21 @@ nonisolated struct BoardArrival: Equatable {
         if !moved.isEmpty { landing = Set(moved.keys) }
     }
 
-    func lands(in flights: [String]) -> Bool { !landing.isEmpty && flights.contains(where: landing.contains) }
+    func lands(in flights: [TaskBoard.Flight]) -> Bool { !landing.isEmpty && flights.contains(where: landing.contains) }
 }
 
 /// iOS 上转场在渲染线程上求值，所以是加锁的一份，不是主线程上的状态。
 /// 一趟飞行要飞完才撤下（`Motion.Spring.travel` 收住的时长）：飞着时又来一份没人换列的看板，正在飞的那张、刚撤的那张再求值转场时照样认得出自己在飞；
 /// 过了这么久就不算数；还没飞完就离开看板或又回来的，读看板那一处当场撤掉它的记录（`BoardMoves.read`），照常淡出淡入。
 nonisolated final class BoardDepartures: Sendable {
-    private let state = Mutex<[String: BoardMoves.Departure]>([:])
+    private let state = Mutex<[TaskBoard.Flight: BoardMoves.Departure]>([:])
     private static let lasts = Duration.seconds(Motion.Spring.travel.settlingDuration)
 
-    func callAsFunction(_ id: String) -> BoardMoves.Departure? {
+    func callAsFunction(_ id: TaskBoard.Flight) -> BoardMoves.Departure? {
         state.withLock { $0[id] }.flatMap { ContinuousClock.now - $0.at < Self.lasts ? $0 : nil }
     }
 
-    fileprivate func add(_ departures: [String: BoardMoves.Departure], dropping gone: Set<String>, at now: ContinuousClock.Instant) {
+    fileprivate func add(_ departures: [TaskBoard.Flight: BoardMoves.Departure], dropping gone: Set<TaskBoard.Flight>, at now: ContinuousClock.Instant) {
         state.withLock { current in
             current = current.filter { now - $0.value.at < Self.lasts && !gone.contains($0.key) }.merging(departures) { _, new in new }
         }
@@ -109,11 +109,11 @@ nonisolated final class BoardDepartures: Sendable {
 }
 
 extension View {
-    /// 卡换列是这一列删一张、那一列添一张，两张同一个身份（`TaskBoard.Item.flight`：任务是 `task/…`，没绑任务的会话是 `session/…`，换列不换），在同一个动画事务里（`observingBoard`）：旧的当场撤掉，新的在原处接上、平移到新处，只留一张在飞。
+    /// 卡换列是这一列删一张、那一列添一张，两张同一个身份（`TaskBoard.Flight`，换列不换），在同一个动画事务里（`observingBoard`）：旧的当场撤掉，新的在原处接上、平移到新处，只留一张在飞。
     /// 它按这一列的终态排好，一路不重排、不缩放，只是渲染时的位移：插值整个框的话每帧按插值的宽高重排一遍字，字逐帧挪动，主线程也跟不上；从旧的大小缩放过来的话，两列宽高比不同，字被横着拉宽。
     /// 不让旧的那张淡出、与新的交叉淡：懒加载栈里撤掉的那张从第二帧起排在栈顶，淡着的旧样子在列顶闪一下。
     /// 飞行要越过所在列、行的边，所以列与行的滚动区不裁内容（`scrollClipDisabled`；超出窗口的照样被窗口裁掉）。
-    func boardFlight(_ id: String) -> some View { modifier(BoardFlight(id: id)) }
+    func boardFlight(_ id: TaskBoard.Flight) -> some View { modifier(BoardFlight(id: id)) }
 
     func boardLane(_ column: TaskBoard.Column) -> some View { modifier(BoardLaneFrame(column: column)) }
 }
@@ -130,7 +130,7 @@ private struct BoardLaneFrame: ViewModifier {
 }
 
 private struct BoardFlight: ViewModifier {
-    let id: String
+    let id: TaskBoard.Flight
     @Environment(\.boardMoves) private var moves
     @Environment(\.boardLane) private var lane
     @Environment(\.boardRow) private var row
@@ -155,14 +155,14 @@ private struct BoardFlight: ViewModifier {
 }
 
 extension ContainerValues {
-    @Entry var boardFlight: String?
+    @Entry var boardFlight: TaskBoard.Flight?
 }
 
 extension BoardMoves {
     struct Stack {
         let lane: TaskBoard.Column
         var frame = CGRect.null
-        var ids: [String?] = []
+        var ids: [TaskBoard.Flight?] = []
         var height: CGFloat = 0
         var pitch: CGFloat = 0
     }
@@ -172,13 +172,13 @@ extension View {
     /// 手机的行里一小列（`BoardRowLane`）记它排在哪、里面是哪几张：行里各格一样高，卡的框按第几格算（`BoardMoves.laid`）。
     /// 不挂在卡上记：行把卡一格一格重新摆（`Group(subviews:)`），卡换小列时它身上那一份不报新位置（实测：卡的状态跟着卡走、位置却是另一格的），
     /// 留着的旧框正好盖在挪进它原处的那张卡上，按住那张拎起来的是它。也不挂在格上记：格上多套一层，卡换行时的飞行就丢了，旧的那张在原处露两帧（实测）。
-    func boardStack(_ ids: [String?], in lane: TaskBoard.Column, height: CGFloat, pitch: CGFloat) -> some View {
+    func boardStack(_ ids: [TaskBoard.Flight?], in lane: TaskBoard.Column, height: CGFloat, pitch: CGFloat) -> some View {
         modifier(BoardStackSpot(ids: ids, lane: lane, height: height, pitch: pitch))
     }
 }
 
 private struct BoardStackSpot: ViewModifier {
-    let ids: [String?]
+    let ids: [TaskBoard.Flight?]
     let lane: TaskBoard.Column
     let height: CGFloat
     let pitch: CGFloat
@@ -201,7 +201,7 @@ extension Transition where Self == BoardPresence {
     /// 三段的 `body` 都写明 `nonisolated`：协议把它标成主线程，SwiftUI 在 iOS 上却由渲染线程求值（`com.apple.SwiftUI.AsyncRenderer`）。
     /// 只在类型上写 `nonisolated` 不够，`body` 照样从协议继承主线程隔离，里面的闭包都带主线程检查，渲染线程一调就崩；
     /// 写在 `body` 上，里面用到的类型、环境键、常量都得不带隔离，编译器替它把关。
-    static func board(_ id: String, _ departures: BoardDepartures) -> some Transition {
+    static func board(_ id: TaskBoard.Flight, _ departures: BoardDepartures) -> some Transition {
         BoardPresence(id: id, departures: departures)
             .combined(with: BoardFade(id: id, departures: departures).animation(Motion.fade))
             .combined(with: BoardDrop(id: id, departures: departures).animation(nil))
@@ -211,7 +211,7 @@ extension Transition where Self == BoardPresence {
 /// 平移是渲染时插值的效果，起点与终点各算一次，途中每帧不重算卡的内容。撤掉的那张（`didDisappear`）什么都不加：
 /// 给它换环境、挂效果，它所在的那一列会整列跳一下。
 nonisolated struct BoardPresence: Transition {
-    let id: String
+    let id: TaskBoard.Flight
     let departures: BoardDepartures
 
     nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
@@ -227,7 +227,7 @@ nonisolated struct BoardPresence: Transition {
 }
 
 nonisolated private struct BoardFade: Transition {
-    let id: String
+    let id: TaskBoard.Flight
     let departures: BoardDepartures
 
     nonisolated func body(content: Content, phase: TransitionPhase) -> some View {
@@ -236,7 +236,7 @@ nonisolated private struct BoardFade: Transition {
 }
 
 nonisolated private struct BoardDrop: Transition {
-    let id: String
+    let id: TaskBoard.Flight
     let departures: BoardDepartures
 
     nonisolated func body(content: Content, phase: TransitionPhase) -> some View {

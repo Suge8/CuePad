@@ -10,15 +10,14 @@ struct ModelPick: View {
     let meter: ThinkingMeter?
     let chooseThinking: (ThinkingLevel) -> Void
     @Binding var picking: BubbleSwitch
-    @State private var live = Live()
 
     var body: some View {
         Moments(next: quotas.nextReset(after:)) { now in
             Button { picking.toggle() } label: { label(at: now) }
                 .buttonStyle(PressStyle())
-                .bubble($picking, width: .fixed(Self.width)) { ModelPickBubble(live: live) }
-                .onChange(of: picking.open, initial: true) { if picking.open { live.take(self) } }
-                .onChange(of: Seen(self)) { live.take(self) }
+                .bubble($picking, width: .fixed(Self.width)) {
+                    ModelPickBubble(models: models, current: current, quotas: quotas, meter: meter, chooseThinking: chooseThinking)
+                }
                 .accessibilityLabel("模型")
                 .accessibilityValue(Dotted(spoken(at: now), meter.map { String(localized: "思考 \($0.label)") }).spoken)
                 .accessibilityAdjustableAction { direction in
@@ -60,45 +59,12 @@ struct ModelPick: View {
     }
 }
 
-@Observable private final class Live {
-    var models = ModelMenu(models: [], current: nil) { _ in }
-    var current: ModelOption?
-    var quotas: [AccountQuota] = []
-    var meter: ThinkingMeter?
-    var chooseThinking: (ThinkingLevel) -> Void = { _ in }
-
-    func take(_ pick: ModelPick) {
-        models = pick.models
-        current = pick.current
-        quotas = pick.quotas
-        meter = pick.meter
-        chooseThinking = pick.chooseThinking
-    }
-}
-
-private struct Seen: Equatable {
-    let models: [ModelOption]
-    let defaultModel: ModelKey?
+private struct ModelPickBubble: View {
+    let models: ModelMenu
     let current: ModelOption?
     let quotas: [AccountQuota]
     let meter: ThinkingMeter?
-
-    init(_ pick: ModelPick) {
-        models = pick.models.models
-        defaultModel = pick.models.defaultModel
-        current = pick.current
-        quotas = pick.quotas
-        meter = pick.meter
-    }
-}
-
-private struct ModelPickBubble: View {
-    let live: Live
-    private var models: ModelMenu { live.models }
-    private var current: ModelOption? { live.current }
-    private var quotas: [AccountQuota] { live.quotas }
-    private var meter: ThinkingMeter? { live.meter }
-    private var chooseThinking: (ThinkingLevel) -> Void { live.chooseThinking }
+    let chooseThinking: (ThinkingLevel) -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -147,12 +113,12 @@ private struct ModelPickBubble: View {
             HStack(spacing: Spacing.item) {
                 ModelBadge(mark: mark, binding: binding).readerHidden(true)
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(verbatim: model.displayName).font(Typography.secondary.weight(chosen ? .semibold : .regular)).foregroundStyle(palette.ink)
+                    Text(verbatim: model.displayName).font(chosen ? Typography.secondaryBold : Typography.secondary).foregroundStyle(palette.ink)
                     if !note.isEmpty { Text(note).font(Typography.caption).foregroundStyle(palette.ink3) }
                 }
                 .lineLimit(1)
                 Spacer(minLength: Spacing.item)
-                if chosen { Image(.checked).font(Glyph.small.weight(.semibold)).foregroundStyle(palette.ink).readerHidden(true) }
+                if chosen { Image(.checked).font(Glyph.small).foregroundStyle(palette.ink).readerHidden(true) }
             }
             .padding(.horizontal, Spacing.item)
             .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
@@ -190,7 +156,7 @@ private struct ThinkingTrack: View {
             HStack(spacing: Spacing.tight) {
                 Text("思考强度").foregroundStyle(palette.ink3)
                 Spacer(minLength: Spacing.item)
-                Text(verbatim: level?.label ?? meter.label).fontWeight(.semibold).foregroundStyle(palette.ink)
+                Text(verbatim: level?.label ?? meter.label).emphasis(.bold).foregroundStyle(palette.ink)
                     .contentTransition(.numericText(value: Double(index ?? 0)))
                     .modifier(LevelPop(level: level))
                     .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: level)
@@ -286,7 +252,7 @@ struct ThinkingWord: View {
                     .contentTransition(.numericText(value: Double(meter.levels.firstIndex(of: level) ?? 0)))
                     .modifier(LevelPop(level: level))
             }
-            .font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
+            .font(Typography.metaBold).fontDesign(.rounded)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: level)
         }
     }

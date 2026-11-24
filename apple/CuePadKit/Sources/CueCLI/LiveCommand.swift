@@ -33,26 +33,15 @@ extension Command {
     let session = try agentSession(call, "live 只能在 Agent 执行的命令里运行，预览开在那个会话旁边")
     let given = call.args.positionals
     guard given.count <= 1 else { throw CLIError.usage("最多一个地址或端口（给了 \(given.count) 个）") }
-    let url: URL
+    var url: URL?
     if let text = given.first {
       guard let parsed = LiveAddress.url(from: text) else { throw CLIError.usage("「\(text)」不是能打开的网页地址：给端口（1–65535，如 5173）或 http(s) 地址（localhost:3000/admin）") }
       guard LiveAddress.isLocal(parsed) else { throw CLIError.usage("「\(text)」不是本机地址：活预览只开本机的开发服务（localhost、127.0.0.1、局域网 IP、.local）") }
       url = parsed
-    } else {
-      var servers = LiveServers(), owners = try await call.store.liveAgents()
-      owners[session] = try await call.store.liveOwner(session)
-      guard let first = await servers.find(for: owners, only: [session])[session]?.first else {
-        throw CLIError.invalid(
-          "没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
-      }
-      url = first
     }
-    let found = given.isEmpty
-    guard call.store.appIsOpen else { throw notOpen(call, "没有交出去。请用户打开 CuePad 后再运行 cuepad live") }
-    try await call.store.sendLive(url, to: session, found: found)
-    let shown = LiveAddress.shown(url)
-    let text = "已交给这台 Mac 上的 CuePad：\(shown)。会话开在主区、右半空着时预览直接滑开；否则会话栏头的预览钮亮起，等用户点开。CuePad 在后台载入这一页：要自己看、点它，用 cuepad live snapshot（cuepad live --help）。手机、iPad 与这台 Mac 在同一个网络时也看得到。\n"
-    return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: found)))
+    let (opened, shown) = try openLive(call, url, session: session, name: "live")
+    let text = opened + "要自己看、点它，用 cuepad live snapshot（cuepad live --help）。\n"
+    return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: shown.absoluteString, found: url == nil)))
   }
 
   private static func synopsis(_ command: Command) -> String {
@@ -62,8 +51,26 @@ extension Command {
     return (["cuepad", command.name, command.arguments] + options).filter { !$0.isEmpty }.joined(separator: " ")
   }
 
-  static func notOpen(_ call: Call, _ then: String) -> CLIError {
-    .invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：\(then)")
+  /// 交给 App 打开（不给地址时由它认这个会话的服务）：它照此刻的排布决定滑开还是只亮钮，在回执里说是哪一种，带回开的是哪个地址。
+  static func openLive(_ call: Call, _ url: URL?, session: String, name: String) throws -> (text: String, url: URL) {
+    let reply = try askLive(call, LiveChannel.Request(session: session, op: .open(url)), name: name)
+    if reply.failed { throw CLIError.invalid(reply.text) }
+    guard let opened = reply.info?.url.flatMap(URL.init(string:)) else { throw CLIError.invalid("CuePad 没说开的是哪个地址") }
+    return (reply.text, opened)
+  }
+
+  static func askLive(_ call: Call, _ request: LiveChannel.Request, name: String) throws -> LiveChannel.Reply {
+    do throws(LiveChannel.Failure) {
+      return try LiveChannel.ask(request, path: LiveChannel.socketPath(databasePath: call.store.databasePath))
+    } catch .notListening {
+      throw CLIError.invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：请用户打开 CuePad 后再运行 cuepad \(name)")
+    } catch .sandboxed {
+      throw CLIError.invalid("沙箱不让这条命令连 CuePad（connect: Operation not permitted）：申请在沙箱外运行这条命令再试")
+    } catch .timedOut {
+      throw CLIError.invalid("CuePad \(request.op.patience.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
+    } catch .broken(let reason) {
+      throw CLIError.invalid("与 CuePad 的连接出错：\(reason)")
+    }
   }
 }
 #endif

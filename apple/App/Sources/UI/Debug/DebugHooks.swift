@@ -5,53 +5,7 @@ import AppKit
 #endif
 
 enum DebugHooks {
-    struct Preset {
-        var searchText = ""
-        var editorSelection: NSRange?
-        var toolsOpen = false
-        var stepOpen: Int?
-        var crashSheet = false
-        var demoMac = false
-        var alwaysReachable = false
-        var modelMenu = false
-        var cueFocus = false
-        var taskFold = TaskFold()
-        var reducesMotion = false
-        var reducesTransparency = false
-        var largestType = false
-        var highContrast = false
-        /// 当作读屏开着（`-CuePadReader YES`）：只给提示条，与真开着旁白同一条路（`NoticeCapsule`），模拟器的旁白没有设置开关、Mac 上那是用户的全局设置。
-        var readerOn = false
-        #if os(macOS)
-        /// 窗口里这几点（左上为原点，同 `-CuePadClick`）上的按钮、行与卡一出现就画成指针停着的样子（`-CuePadHover x,y[;x,y…]`，`presetHover`）：
-        /// 后台截图里指针进不来，合成的鼠标移动事件也不触发不在前台的应用的悬停。一张图里看几处时给几个点。
-        var hovered: [CGPoint] = []
-        /// 指针停这么久后移开（`-CuePadHoverSeconds <秒>`，从那一块出现起算）：录悬停停表、移开重新计满。不给是一直停着。
-        var hoverSeconds: Double?
-        #endif
-        var showsDone = false
-        var quotaOpen = false
-        var scheduleOpen = false
-        var mergePreview = false
-        var cuePanelOpen = false
-        /// Cue 页的天空钉成哪个时段（`-CuePadCueSky`，`CueSky.Period`）。
-        var cueSky: String?
-        /// 贴这一边的边缘索引一出现就展开成面板（`-CuePadIndexOpen`）。
-        var indexOpen: HorizontalEdge?
-        #if os(iOS)
-        var alertStatus: AlertStatus?
-        var searchListsSessions = false
-        var quietAlerts = false
-        #endif
-    }
-
-    static let preset: Preset = {
-        #if DEBUG
-        Preset(DebugScene.args)
-        #else
-        Preset()
-        #endif
-    }()
+    nonisolated static let args = DebugArgs.launch
 
     /// 调试画面钉住的 Cue 此刻（`-CuePadCueNow` 起来就钉、`-CuePadCueCycle` 轮流换，`DebugScene.pinned`）：钉着就不随库变。
     static var cueNow: CueNow? {
@@ -71,41 +25,15 @@ enum DebugHooks {
         #endif
     }
 
-    /// `-CuePadSharedCloud <目录>`：同步连这个目录里的模拟云（`SharedCloud`），不连 iCloud。
-    static var diagnosticsEvery: Duration? {
-        #if DEBUG
-        DebugScene.args.diagnosticsEvery.map { .seconds($0) }
-        #else
-        nil
-        #endif
-    }
-
-    static var sharedCloud: URL? {
-        #if DEBUG
-        DebugScene.args.sharedCloud.map { URL(filePath: $0, directoryHint: .isDirectory) }
-        #else
-        nil
-        #endif
-    }
-
     /// 隔离库也同步：模拟云（任何平台），或连 CloudKit 开发环境（`-CuePadCloudKit YES`：Mac 是同步测量，限流与这台的正式版共用，只经 sync-bench.py，见 `DebugScene.syncsIsolatedLibrary`；
     /// 模拟器是真云验收，用模拟器里登着的测试账号，没登就是没有账号、不同步）。
     static var syncsIsolatedLibrary: Bool {
         #if DEBUG && os(macOS)
-        sharedCloud != nil || DebugScene.syncsIsolatedLibrary
-        #elseif DEBUG && targetEnvironment(simulator)
-        sharedCloud != nil || DebugScene.args.cloudKit
+        args.sharedCloud != nil || DebugScene.syncsIsolatedLibrary
+        #elseif targetEnvironment(simulator)
+        args.sharedCloud != nil || args.cloudKit
         #else
-        sharedCloud != nil
-        #endif
-    }
-
-    /// 同步测量里代替手机的实例按手机开着 Agent 页的节奏拉（`-CuePadSyncBench remote`，见 `SyncBench`）。
-    static var pollsLikePhone: Bool {
-        #if DEBUG && os(macOS)
-        DebugScene.args.syncBench == "remote"
-        #else
-        false
+        args.sharedCloud != nil
         #endif
     }
 
@@ -114,74 +42,6 @@ enum DebugHooks {
         DebugScene.args.demo ? DebugScene.demoHosts : []
         #else
         []
-        #endif
-    }
-
-    /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
-    static var hostID: String? {
-        #if DEBUG
-        DebugScene.args.host.map { "mac-\($0)" }
-        #else
-        nil
-        #endif
-    }
-
-    /// 隔离库下 Cue 的大脑换成 `-CuePadCueBrain <可执行文件>`：隔离目录里没有登录的运行时，真的大脑起不来。nil：用检测挑中的。
-    static var cueBrain: URL? {
-        #if DEBUG
-        DebugScene.args.driveOpts.cueBrain.map { URL(filePath: $0) }
-        #else
-        nil
-        #endif
-    }
-
-    /// 隔离库下和 Cue 通话的令牌从 `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 经本机 Codex app-server 获取，续期语义见 CodexAccess）：隔离目录里的 Codex 没登录，
-    /// 实例也不碰真实的 `~/.codex`。nil：向检测到的 Codex 要。
-    /// `-CuePadVoiceCodex <可执行文件>`：通话凭证向它要，不向检测到的 Codex 要。
-    static var voiceCodex: URL? {
-        #if DEBUG
-        DebugScene.args.voiceOpts.codex.map { URL(filePath: $0) }
-        #else
-        nil
-        #endif
-    }
-
-    static var voiceToken: URL? {
-        #if DEBUG
-        DebugScene.args.voiceOpts.token.map { URL(filePath: $0) }
-        #else
-        nil
-        #endif
-    }
-
-    /// 隔离库下 Agent 当作装在这个家目录里（`-CuePadAgentHome <目录>`）：只在它的 `.local/bin` 里找，装、登录也按它当 HOME、PATH 只有系统目录，
-    /// 像一台什么都没装的 Mac。给一个空目录就是一家都没装；点"安装"真去跑官方脚本，装进这个目录，不碰真实的家目录。
-    static var agentHome: URL? {
-        #if DEBUG
-        DebugScene.args.agentHome.map { URL(filePath: $0, directoryHint: .isDirectory) }
-        #else
-        nil
-        #endif
-    }
-
-    /// 脚本起的实例也像正式版那样首次打开时请工作区决定弹不弹接入面板（`-CuePadOfferSetup YES`，同一个 `Workspace.offerSetup`）：验收第一次打开与老用户升级后自动弹的那一次。
-    static var offersSetup: Bool {
-        #if DEBUG
-        DebugScene.args.offerSetup
-        #else
-        false
-        #endif
-    }
-
-    /// 指定的隔离库当作本机构建的开发库来定碰不碰真实世界（`-CuePadActsAs development|stranger`，`LibraryLocation.touchesRealWorld`）：
-    /// development 照真的去找这台装没装正式版（维护者的 Mac），stranger 当作没装（克隆仓库自己编的人：接入真实的 Agent、发通知）。
-    /// 各家配置目录、命令行链接、连接目录与工作区照样由 xc.sh 给的环境变量（app_env.py 的 `isolated_env`）换进隔离库，换不走的（通知权限、主机标识）是真的。
-    enum ActsAs: String { case development, stranger }
-    static var actsAs: ActsAs? {
-        #if DEBUG
-        DebugScene.args.actsAs.flatMap(ActsAs.init)
-        #else
-        nil
         #endif
     }
 
@@ -293,24 +153,6 @@ enum DebugHooks {
         #endif
     }
     #endif
-
-    /// 隔离库下也要通知权限、发真实的系统通知、装提示音、设角标（`-CuePadNotifications YES`，见 `AlertCenter.delivers`）。
-    static var deliversNotifications: Bool {
-        #if DEBUG
-        DebugScene.args.notifications
-        #else
-        false
-        #endif
-    }
-
-    /// 隔离库下也开实时活动（`-CuePadLiveActivity YES`，见 `AppServices.cueActivity`）：验收锁屏与灵动岛时用，用完结束掉。
-    static var opensLiveActivity: Bool {
-        #if DEBUG
-        DebugScene.args.liveActivity
-        #else
-        false
-        #endif
-    }
 
     static func willReadCatalog(attempt: Int) throws {
         #if DEBUG

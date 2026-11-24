@@ -16,7 +16,6 @@ extension MacSyncTests {
 
     @Test func 手机的控制请求交给桥按各自的通道执行_不写发送记录() async throws {
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
         let store = services.store, host = TestApp.hostID
         func target(_ ref: String) -> SendTarget { SendTarget(kind: .piSession, name: "app", ref: ref) }
         let cases: [(ref: String, received: String, request: () async throws -> DeliveryRequest, sent: ([String: Any]) -> Bool)] = [
@@ -46,7 +45,6 @@ extension MacSyncTests {
         let png = pngData(shade: 0.4)
         let key = try services.store.files.store(png)
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
             "按这张改\n\(CueFormat.imageMarkup(key: key))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
@@ -59,7 +57,6 @@ extension MacSyncTests {
         let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
         let task = try await services.store.createTask("改登录")
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
         let target = SendTarget(kind: .piSession, name: "app", ref: "sess-1")
 
         let request = try await services.store.requestDelivery("/greet\n\n改登录", to: target, on: TestApp.hostID, mode: .command, card: task.id)
@@ -78,7 +75,6 @@ extension MacSyncTests {
     @Test(arguments: [DeliveryMode.end, .stop])
     func 结束或停止已经结束的会话直接成功_不恢复(mode: DeliveryMode) async throws {
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let target = SendTarget(kind: .piSession, name: "app", ref: "old")
         let request = mode == .end
@@ -125,7 +121,6 @@ extension MacSyncTests {
             $0.enabledAt = .now
         }
         services.start()
-        defer { services.cancelBackgroundWork() }
         try await eventually("Cue 在这台值班") { services.cue.onDuty }
         #expect(services.bridge.slots.isEmpty && !services.hasOpenDeliveries)
         #expect(services.pollingCadence != nil)
@@ -133,7 +128,6 @@ extension MacSyncTests {
 
     @Test func 旧版本写来的发到应用请求按失败写回() async throws {
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .unknown("app"), name: "Ghostty", ref: "com.mitchellh.ghostty"), on: TestApp.hostID)

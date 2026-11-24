@@ -1,5 +1,3 @@
-#if DEBUG
-
 nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
     /// `-CuePadBeside <会话>`（宽屏）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
@@ -51,8 +49,6 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let narrowCycle: Bool
     /// `-CuePadNarrowPane projects|progress`（iOS 窄屏）：起在满屏侧栏的哪一栏
     let narrowPane: String?
-    /// `-CuePadNarrowWaiting <N>`（iOS 窄屏）：再加入 N 个拍板，检查固定块内部滚动
-    let narrowWaiting: Int
     /// `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上
     let offscreen: Bool
     /// `-CuePadPanelCycle YES`（配 cue 画面录屏）：画面就绪后每 1.5 秒点一下 Cue 页头，开合面板几遍，看动效
@@ -98,4 +94,3 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     /// `-CuePadWindowSize 1280x800`：主窗口尺寸（Mac 内容铺满标题栏，即整窗尺寸）
     let windowSize: String?
 }
-#endif

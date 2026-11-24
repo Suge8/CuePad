@@ -110,7 +110,7 @@ extension AppServices {
     }
     #else
     private var quotaBatch: AccountQuotas.Batch {
-        let hosts = Array(Set(liveSessions.live.filter { $0.state.capabilities.contains(.quota) }.map(\.state.hostID))).sorted()
+        let hosts = Array(Set(sessionFeed.live.filter { $0.state.capabilities.contains(.quota) }.map(\.state.hostID))).sorted()
         return AccountQuotas.Batch(key: hosts) { await self.queryQuota(on: hosts) }
     }
 

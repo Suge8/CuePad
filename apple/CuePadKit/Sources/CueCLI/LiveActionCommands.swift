@@ -17,7 +17,7 @@ extension Command {
         """
     ) { call in
       guard call.args.positionals.count <= 1 else { throw CLIError.usage("最多一个 ref") }
-      return LiveChannel.Args(ref: call.args.positionals.first, interactive: call.args.has("interactive"), find: call.args.value("find"))
+      return .snapshot(ref: call.args.positionals.first, interactive: call.args.has("interactive"), find: call.args.value("find"))
     },
     action(
       "click", "点一个元素", arguments: "<ref>",
@@ -27,14 +27,14 @@ extension Command {
         """
     ) { call in
       try call.args.expect("ref")
-      return LiveChannel.Args(ref: call.args.positionals[0])
+      return .click(ref: call.args.positionals[0])
     },
     action(
       "fill", "把输入框的值换成这段文字（React 这类受控输入照常生效）；下拉框（select）按值或标签选", arguments: "<ref> <文字>",
       notes: "清空：fill <ref> ''。复选框、单选框、按钮不是输入框，用 click。密码框在回执里只报字符数。"
     ) { call in
       try call.args.expect("ref", "文字")
-      return LiveChannel.Args(ref: call.args.positionals[0], text: call.args.positionals[1])
+      return .fill(ref: call.args.positionals[0], text: call.args.positionals[1])
     },
     action(
       "press", "按一个键：Enter、Tab、Escape、Backspace、方向键（ArrowDown 等）或单个字符；给了 ref 先聚焦它", arguments: "<键> [ref]",
@@ -44,7 +44,7 @@ extension Command {
         """
     ) { call in
       guard (1...2).contains(call.args.positionals.count) else { throw CLIError.usage("需要 <键> [ref]") }
-      return LiveChannel.Args(ref: call.args.positionals.dropFirst().first, key: call.args.positionals[0])
+      return .press(key: call.args.positionals[0], ref: call.args.positionals.dropFirst().first)
     },
     action(
       "wait", "等页面上出现一段文字、一个选择器，或地址含一段：到了就返回，超时报错",
@@ -54,14 +54,16 @@ extension Command {
       ]
     ) { call in
       try call.args.expect()
-      let given = ["text", "selector", "url"].filter { call.args.value($0) != nil }
+      let given: [LiveChannel.Awaited] = [
+        call.args.value("text").map { .text($0) }, call.args.value("selector").map { .selector($0) }, call.args.value("url").map { .url($0) },
+      ].compactMap(\.self)
       guard given.count == 1 else { throw CLIError.usage("--text、--selector、--url 给且只给一个") }
       var timeout = 10.0
       if let text = call.args.value("timeout") {
         guard let seconds = Double(text), seconds > 0, seconds <= 120 else { throw CLIError.usage("--timeout 要 0–120 之间的秒数，收到「\(text)」") }
         timeout = seconds
       }
-      return LiveChannel.Args(text: call.args.value("text"), selector: call.args.value("selector"), url: call.args.value("url"), timeout: timeout)
+      return .wait(given[0], timeout: timeout)
     },
     action(
       "screenshot", "把页面此刻的画面存成 PNG（给了 ref 只截那个元素）", arguments: "[ref]",
@@ -73,14 +75,14 @@ extension Command {
       }
     ) { call in
       guard call.args.positionals.count <= 1 else { throw CLIError.usage("最多一个 ref") }
-      return LiveChannel.Args(ref: call.args.positionals.first)
+      return .screenshot(ref: call.args.positionals.first)
     },
     action(
       "console", "页面的控制台报错与警告、未捕获的异常、失败的请求、网页弹的对话框：默认只给上次读之后新的",
       options: [Opt("all", "从页面载入起的全部，连 log、info 也列（最近 200 条）")]
     ) { call in
       try call.args.expect()
-      return LiveChannel.Args(all: call.args.has("all"))
+      return .console(all: call.args.has("all"))
     },
     action(
       "upload", "给文件框（input type=file，快照里带 [file] 的那个）交文件", arguments: "<ref> <文件…>",
@@ -96,7 +98,7 @@ extension Command {
       guard files.reduce(0, { $0 + $1.data.count }) <= LiveChannel.uploadLimit else {
         throw CLIError.invalid("文件合计超过 \(LiveChannel.uploadLimit / 1_000_000) MB，交不过去")
       }
-      return LiveChannel.Args(ref: call.args.positionals[0], files: files)
+      return .upload(ref: call.args.positionals[0], files: files)
     },
     action(
       "eval", "在页面里跑一段 JavaScript 函数体：可 await，return 的值按 JSON 回来（截到 8 KB）；不给代码就读 stdin", arguments: "[代码]",
@@ -106,32 +108,17 @@ extension Command {
       guard let code = call.args.positionals.first ?? call.stdin(), !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         throw CLIError.usage("给 [代码] 或经 stdin")
       }
-      return LiveChannel.Args(code: code)
+      return .eval(code: code)
     },
   ]
 
   private static func action(
     _ name: String, _ summary: String, arguments: String = "", options: [Opt] = [], notes: String = "",
-    saves: (@Sendable (Call) -> URL)? = nil, _ build: @escaping @Sendable (Call) throws -> LiveChannel.Args
+    saves: (@Sendable (Call) -> URL)? = nil, _ build: @escaping @Sendable (Call) throws -> LiveChannel.Op
   ) -> Command {
     Command(path: ["live", name], summary: summary, arguments: arguments, options: options, notes: notes) { call in
       let session = try agentSession(call, "live \(name) 只能在 Agent 执行的命令里运行，操作的是那个会话的活预览")
-      let args = try build(call)
-      let timeout = Duration.seconds((args.timeout ?? 0) + 60)
-      let reply: LiveChannel.Reply
-      do throws(LiveChannel.Failure) {
-        reply = try LiveChannel.ask(
-          LiveChannel.Request(session: session, op: name, args: args), path: LiveChannel.socketPath(databasePath: call.store.databasePath), timeout: timeout)
-      } catch .notListening {
-        guard call.store.appIsOpen else { throw notOpen(call, "请用户打开 CuePad 后再运行") }
-        throw CLIError.invalid("开着资料库 \(UserHome.shown(call.store.databasePath)) 的 CuePad 不认 cuepad live \(name)：它比这个命令行旧，请用户更新 CuePad")
-      } catch .sandboxed {
-        throw CLIError.invalid("沙箱不让这条命令连 CuePad（connect: Operation not permitted）：申请在沙箱外运行这条命令再试")
-      } catch .timedOut {
-        throw CLIError.invalid("CuePad \(timeout.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
-      } catch .broken(let reason) {
-        throw CLIError.invalid("与 CuePad 的连接出错：\(reason)")
-      }
+      let reply = try askLive(call, LiveChannel.Request(session: session, op: try build(call)), name: "live \(name)")
       if reply.failed { throw CLIError.invalid(reply.text) }
       var text = reply.text, saved: String?
       if let file = reply.file, let saves {

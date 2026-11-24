@@ -72,7 +72,6 @@ struct CueActivityTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let workspace = Workspace(services: app.services), store = app.services.store
-        defer { app.services.cancelBackgroundWork() }
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "mac-cue"
             profile.enabledAt = clock.now

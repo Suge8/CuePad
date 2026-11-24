@@ -25,7 +25,7 @@ failed=0
 # 真实 pi 要求目录存在，用仓库根
 DEMO_DIR="$HOME/$(sed -n 's/.*name: "CuePad".*directory: "\\(home)\([^"]*\)".*/\1/p' "$APPLE_DIR/App/Sources/UI/Debug/DemoLibrary.swift")"
 REAL_DIR="$(cd "$APPLE_DIR/.." && pwd)"
-READY_TIMEOUT="${CUEPAD_STRESS_READY_TIMEOUT:-60}" # 等画面就绪的秒数上限
+READY_TIMEOUT=60 # 等画面就绪的秒数上限
 SOCK="$(python3 "$APPLE_DIR/scripts/app.py" sockets)"
 
 run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…

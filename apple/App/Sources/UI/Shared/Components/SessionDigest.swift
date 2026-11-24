@@ -145,7 +145,7 @@ struct SessionElapsed: View {
     var body: some View {
         if let clock = shown.clock {
             LiveText(style: clock.live(style))
-                .font(font.monospacedDigit())
+                .font(font)
                 .foregroundStyle(palette.ink3)
         }
     }

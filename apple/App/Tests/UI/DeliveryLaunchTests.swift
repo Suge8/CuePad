@@ -12,10 +12,7 @@ struct DeliveryLaunchTests {
     @Test(arguments: ["no_auth", "unconfirmed_turn"])
     func 会话已创建但首句拒绝_保留未知_不能删除重发或自动再开(reason: String) async throws {
         let app = TestApp(), store = app.services.store
-        defer {
-            for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.bridge.stop(); app.services.cancelBackgroundWork()
-        }
+        defer { for ext in app.host.extensions.values { ext.close(bye: "quit") } }
         try await app.offersPi()
         app.host.openingRejection = reason
         let task = try await store.createTask("检查发布结果")

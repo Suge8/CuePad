@@ -25,7 +25,7 @@ struct SlashDeliveryTests {
         if agent == .refuses {
             ext.onCommand = { _, command in ["send", "command"].contains(command["t"] as? String) ? ["ok": false, "error": "no_auth"] : ["ok": true] }
         }
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: id, state: .settled)
         let session = try #require(try await store.allSessionStates().first { $0.sessionID == id })
 
@@ -62,7 +62,7 @@ struct SlashDeliveryTests {
         let app = TestApp(), store = app.services.store
         let id = UUID().uuidString.lowercased()
         let ext = try await app.host.connect(id, cwd: app.directory.path)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: id, state: .settled)
         let session = try #require(try await store.allSessionStates().first { $0.sessionID == id })
 
@@ -83,7 +83,6 @@ struct SlashDeliveryTests {
     @Test(arguments: [nil, "Not logged in · Please run /login"])
     func 托管ClaudeCode执行了命令才算送达_拒收写它的原话(refusal: String?) async throws {
         let app = TestApp(), store = app.services.store
-        defer { app.bridge.stop(); app.services.cancelBackgroundWork() }
         app.claude.refusal = refusal
         app.claude.host("claude", state: .settled)
         try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: "claude", state: .settled, agent: .claudeCode)

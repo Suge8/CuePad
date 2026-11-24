@@ -81,11 +81,7 @@ struct HistoryRulesTests {
 
         func shutdown() {
             for session in bridge.sessions { kill(session.pid, SIGTERM) }
-            let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
-            LibraryLedger.close(LibraryLedger.current) {
-                _ = await finish()
-                await followers?.value
-            }
+            LibraryLedger.close(LibraryLedger.current, services.close())
         }
 
         func records(_ scope: SessionScope) async throws -> [SessionState] {

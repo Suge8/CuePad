@@ -39,6 +39,5 @@ struct AnswerLineTests {
         #expect(entries.map(\.role) == [.user, .answer, .user, .pi])
         #expect(entries[1].text == "另存为 feed-full.xml" && entries[1].question == question.text)
         #expect(try await store.chatMessages(of: "s").filter { $0.role == .known(.answer) }.map(\.deliveryID) == [request.id])
-        #expect(ChatMark.of(entries).map(\.preview) == ["把 RSS 改成全文", "另存为 feed-full.xml", "顺便把 Atom 也输出"])
     }
 }

@@ -15,7 +15,6 @@ extension AgentLibraryTests {
         let root = macApp.directory.appending(path: "agents/skills", directoryHint: .isDirectory)
         for name in ["a", "b", "c"] { try write("---\nname: \(name)\ndescription: \(name) 的说明\n---\n\n正文\n", root.appending(path: "\(name)/SKILL.md")) }
         for side in [macApp, phone] { side.services.startSync() }
-        defer { for side in [macApp, phone] { side.services.cancelBackgroundWork() } }
         let keeping = Task { try? await macApp.services.library.keep() }
         defer { await keeping.stop() }
         let pulling = Task {
@@ -65,7 +64,6 @@ extension AgentLibraryTests {
             try write("---\nname: \(name)\ndescription: \(description)\n---\n\n\(body)", root.appending(path: "group-\(index % 12)/\(name)/SKILL.md"))
         }
         macApp.services.startSync()
-        defer { macApp.services.cancelBackgroundWork() }
         let keeping = Task { try? await macApp.services.library.keep() }
         defer { await keeping.stop() }
 

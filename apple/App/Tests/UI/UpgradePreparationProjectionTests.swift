@@ -14,7 +14,7 @@ extension UpgradePreparationTests {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing), phone = TestApp(timing: clock.timing, host: "phone")
         let (target, old) = try await oldSession(mac)
-        defer { old.crash(); mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let workspace = Workspace(services: phone.services)
         let request = try await workspace.said(ComposerDraft(text: "在手机上撤回升级等待"), to: target, mode: .send)
         let outbound = try #require(try await phone.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
@@ -30,8 +30,7 @@ extension UpgradePreparationTests {
         guard case .preparing(let reason) = trip else { Issue.record("手机应显示准备，而不是发送中或失败"); return }
         #expect(reason.contains("尚未派发") && reason.contains("升级"))
         let shown = SessionShown(target, delivery: received, at: phone.services.speech)
-        #expect(!shown.isRunning && shown.ink == nil && !shown.flies)
-        #expect(TaskNext(shown: shown, session: target, startable: nil)?.agentBusy == false)
+        #expect(!shown.isRunning && shown.ink == nil && !shown.flies && !shown.agentBusy)
         if action == "end" {
             await workspace.end(target)
             try #require(try await phone.services.store.deliveryRequest(request.id)?.status == .known(.preparing))
@@ -73,7 +72,7 @@ extension UpgradePreparationTests {
     @Test func 准备保留交接占位_不授权新任务活动_真实送达才关联会话() async throws {
         let app = TestApp(), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let workspace = Workspace(services: app.services)
         let task = try await workspace.createTask("升级就绪再交接", in: Project.defaultID)
         let request = try await workspace.said(ComposerDraft(text: task.body), to: target, mode: .send, card: task.id)
@@ -94,7 +93,6 @@ extension UpgradePreparationTests {
 
     @Test func 附件准备后的历史会话仍可恢复_不是等待旧进程重连() async throws {
         let app = TestApp(), store = app.services.store
-        defer { app.bridge.stop(); app.services.cancelBackgroundWork() }
         try FileManager.default.createDirectory(at: app.directory, withIntermediateDirectories: true)
         let file = app.directory.appending(path: "sleeping.jsonl")
         try await store.upsertSession(IndexedSession(id: "sleeping", path: file.path, cwd: app.directory.path,
@@ -136,7 +134,7 @@ extension UpgradePreparationTests {
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: ext.sessionID, state: .settled)
         let target = try #require(try await app.services.store.allSessionStates().first)
-        defer { ext.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.crash() }
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "不把拒绝当升级"), to: target, mode: .send)
         try await app.services.executor.start()
         try await eventually("收到拒绝，不等待升级") {
@@ -156,7 +154,7 @@ extension UpgradePreparationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "最后一刻就绪也只送一次"), to: target, mode: .send)
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)

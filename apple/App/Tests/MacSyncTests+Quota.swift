@@ -23,7 +23,6 @@ extension MacSyncTests {
     func 手机的额度刷新请求经在线会话查到_写回额度与成功() async throws {
         recordingQuotas()
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
         let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
         let resetsAt = Self.resetsAt.timeIntervalSince1970
         ext.sendQuota(provider: "anthropic", windows: [["seconds": 18_000, "used": 0.42, "resetsAt": resetsAt, "binding": true]], complete: false)
@@ -47,7 +46,6 @@ extension MacSyncTests {
 
     @Test func 手机的额度刷新请求_这台Mac没有在线会话时按失败写回原因() async throws {
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestQuotaRefresh(on: TestApp.hostID)
         let done = try await awaitFinished(request.id)

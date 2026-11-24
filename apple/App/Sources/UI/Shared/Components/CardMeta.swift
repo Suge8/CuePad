@@ -40,7 +40,7 @@ struct AttachmentMark: View {
     var body: some View {
         Group {
             if count > 1 {
-                Label { Text(verbatim: "\(count)").monospacedDigit() } icon: { Image(.attachment) }.labelStyle(.titleAndIcon)
+                Label { Text(verbatim: "\(count)") } icon: { Image(.attachment) }.labelStyle(.titleAndIcon)
             } else {
                 Image(.attachment)
             }

@@ -34,7 +34,6 @@ struct LaunchLockTests {
 
     @Test func 离线一直没传上去_不锁_再开时撤回它() async throws {
         let phone = TestApp(timing: clock.timing, host: "phone")
-        defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         clock.advance(month)
         #expect(try await shown(phone, first).submission == .safe, "未上传可安全替换")
@@ -44,7 +43,6 @@ struct LaunchLockTests {
 
     @Test func 服务器收下后等待结果_超时再开需要确认() async throws {
         let phone = TestApp(timing: clock.timing, host: "phone")
-        defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         try await serverHas(phone, first)
         clock.advance(.seconds(DeliveryRequest.phaseLimit))
@@ -58,7 +56,6 @@ struct LaunchLockTests {
     @Test(arguments: [DeliveryStatus.succeeded.rawValue, DeliveryStatus.unconfirmed.rawValue, "missing"])
     func 未知或已开但未连上_不能安全替换_确认后才另开(status: String) async throws {
         let phone = TestApp(timing: clock.timing, host: "phone")
-        defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         if status == "missing" { try await phone.services.store.deleteDelivery(first.request) }
         else { try await serverHas(phone, first, status: status) }
@@ -75,7 +72,6 @@ struct LaunchLockTests {
 
     @Test func 上传器已领取旧请求_安全替换不写新请求() async throws {
         let phone = TestApp(timing: clock.timing, host: "phone"), store = phone.services.store
-        defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         let row = try #require(try await store.syncRow(recordName: first.request.uuidString.lowercased()))
         #expect(try await store.reserveForUpload([(row.id, row.table, row.modifiedAt)]).isEmpty)
@@ -85,7 +81,6 @@ struct LaunchLockTests {
 
     @Test func 同一条离线请求两次替换_只有一次能写成() async throws {
         let phone = TestApp(timing: clock.timing, host: "phone")
-        defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         async let left = try? launch(phone, replacing: first)
         async let right = try? launch(phone, replacing: first)

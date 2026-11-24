@@ -14,7 +14,7 @@ extension AppServices {
         case .custom(let sync): return (sync, .starting)
         case .built(let make, _): return (make(store), .starting)
         case .iCloud where location.isIsolated && !DebugHooks.syncsIsolatedLibrary: reason = String(localized: "开发用的隔离资料库，不连 iCloud")
-        case .iCloud where !Entitlements.hasCloudKit && DebugHooks.sharedCloud == nil: reason = String(localized: "这个构建没有 iCloud 权限（本机开发构建），不会同步")
+        case .iCloud where !Entitlements.hasCloudKit && DebugHooks.args.sharedCloud == nil: reason = String(localized: "这个构建没有 iCloud 权限（本机开发构建），不会同步")
         case .iCloud: return (DebugHooks.cloudSync(store), .starting)
         }
         log.notice("同步未启用：\(reason, privacy: .public)")
@@ -39,7 +39,7 @@ extension AppServices {
 
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        DebugHooks.pollsLikePhone
+        DebugHooks.args.syncBench == "remote"
             ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true, doorbell: doorbellFallback)
             : .mac(waiting: hasOpenDeliveries || !bridge.slots.isEmpty || cue.onDuty, doorbell: doorbellFallback)
         #else

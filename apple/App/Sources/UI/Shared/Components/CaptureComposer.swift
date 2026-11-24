@@ -22,7 +22,7 @@ struct CaptureComposer: View {
     var body: some View {
         Composer(
             draft: $state.draft, prompt: .verbatim(CaptureCopy.prompt), label: "随手记",
-            focus: $focused, accepts: .files, form: .open, shortcuts: [.send: save],
+            focus: $focused, accepts: .files, form: .open, submit: save,
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
         .onAppear { if !covered { focused = true } }
@@ -31,7 +31,7 @@ struct CaptureComposer: View {
     private var header: some View {
         HStack(spacing: Spacing.item) {
             DestinationMenu(project: project) { state.project = $0 }
-            Spacer(minLength: 8)
+            Spacer(minLength: Spacing.item)
             if let notice = workspace.notice {
                 Text(notice.text).font(Typography.meta)
                     .foregroundStyle(notice.isError ? palette.failure : palette.ink3)

@@ -26,7 +26,6 @@ struct SyncWiringTests {
         }
         #expect(services.syncing.state.status == .starting)
         services.startSync()
-        defer { services.cancelBackgroundWork() }
         try await eventually("app.sync.started == 1") { app.sync.started == 1 }
     }
 
@@ -36,7 +35,6 @@ struct SyncWiringTests {
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!
         services.startSync()
-        defer { services.cancelBackgroundWork() }
 
         try await eventually("提示更新") { services.syncing.state.status == .outdated }
         #expect(!services.syncing.canSyncNow)
@@ -54,7 +52,6 @@ struct SyncWiringTests {
         let services = app.services!
         let workspace = Workspace(services: services)
         services.startSync()
-        defer { services.cancelBackgroundWork() }
 
         let before = try await workspace.createCard(body: "门槛之后才传", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
@@ -79,7 +76,6 @@ struct SyncWiringTests {
         let services = app.services!
         let workspace = Workspace(services: services)
         services.startSync()
-        defer { services.cancelBackgroundWork() }
         let before = try await workspace.createCard(body: "换账号前记的", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
         try await services.store.upsertSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
@@ -122,7 +118,6 @@ struct SyncWiringTests {
 
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {
         services.startSync()
-        defer { services.cancelBackgroundWork() }
         let original = try await services.store.createCard(body: "原卡")
         let copy = try await services.store.createCard(body: "副本")
         try markConflict(copy: copy.id, of: original.id)

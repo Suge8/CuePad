@@ -70,7 +70,6 @@ struct CaptureTests {
 
     @Test func 收到扩展的通知后自动入库() async throws {
         services.startCaptureIngest()
-        defer { services.cancelBackgroundWork() }
         try CaptureQueue.enqueue(ShareContent(text: "来自扩展"), project: Project.defaultID, into: queue)
 
         DarwinNotifications.post(CaptureQueue.notification)

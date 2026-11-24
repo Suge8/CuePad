@@ -33,7 +33,7 @@ struct NewSessionInput: View {
         Composer(
             draft: $draft, prompt: nil, label: "新会话的第一句话", focus: $focused,
             cardsFrom: chosen?.project.id,
-            tooled: brain != nil, shortcuts: [.send: launch],
+            tooled: brain != nil, submit: launch,
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id) } },
             send: {
@@ -104,7 +104,7 @@ struct LaunchStatusLine: View {
             case .phase(.unconfirmed(let reason)): Text(verbatim: reason).foregroundStyle(palette.ink3)
             case .phase(.missing): Text("上一次开会话的结果已经查不到了").foregroundStyle(palette.ink3)
             case .phase(.sending(let transit)):
-                HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+                HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.metaBold).foregroundStyle(palette.ink2)
             case .phase:
                 HStack(spacing: Spacing.glyph) { Spinner(.mini); Text("Mac 正在开 Agent 会话…") }.foregroundStyle(palette.ink3)
             }

@@ -25,12 +25,13 @@ nonisolated enum Motion {
         reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
     }
 
+    /// 浮层（气泡、浮窗、提示条、长开的面板）出现只升一小段、淡入，不缩放：缩放时字每帧按新大小重新栅格化，开合的主线程三成在重画字（Instruments 实测）。
     static func surface(from edge: VerticalEdge, reduceMotion: Bool) -> AnyTransition {
-        reduceMotion ? .opacity : .offset(y: edge == .top ? -Surface.shift : Surface.shift).combined(with: .scale(scale: 0.97)).combined(with: .opacity)
+        reduceMotion ? .opacity : .offset(y: edge == .top ? -Surface.shift : Surface.shift).combined(with: .opacity)
     }
 
     nonisolated enum Surface {
-        static let shift: CGFloat = 10
+        static let shift: CGFloat = 8
     }
 
     nonisolated enum Turn {

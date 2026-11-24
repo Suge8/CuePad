@@ -40,7 +40,6 @@ extension TaskFlowTests {
     @Test(arguments: ["source", "ui", "cue"])
     func 结束交出后执行器中断_按源端证据或明确恢复收敛(recovery: String) async throws {
         let services = try #require(rig.services), workspace = Workspace(services: services)
-        defer { rig.bridge.stop(); services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
@@ -93,7 +92,6 @@ extension TaskFlowTests {
 
     @Test func 远端后到关联保留_不能撤回执行端已受理的结束() async throws {
         let services = try #require(rig.services), workspace = Workspace(services: services), peer = TestApp(host: "phone")
-        defer { rig.bridge.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
@@ -129,7 +127,6 @@ extension TaskFlowTests {
         let clock = ManualTiming()
         let rig = TestApp(timing: clock.timing), store = rig.services.store, peer = TestApp(host: "phone")
         let services = try #require(rig.services), workspace = Workspace(services: services)
-        defer { rig.bridge.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)

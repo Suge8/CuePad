@@ -5,7 +5,7 @@ struct CueHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.headerHost) private var host
     @Environment(Workspace.self) private var workspace
-    @State private var expanded = DebugHooks.preset.cuePanelOpen
+    @State private var expanded = DebugHooks.args.layoutOpts.cuePanel
     @State private var brain: AgentModelChoice?
 
     nonisolated static let height: CGFloat = 56

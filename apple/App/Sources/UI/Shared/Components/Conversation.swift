@@ -5,7 +5,7 @@ import CueBridge
 #endif
 
 
-struct Conversation: View {
+struct Conversation: View, Equatable {
     let session: SessionState
     let items: [ChatEntry]
     let messages: [ChatMessage]
@@ -46,6 +46,14 @@ struct Conversation: View {
         #endif
         .previewPresenter($opened, reply: .session(session))
         .debugOpensPreview(in: items, session: session, $opened) { [workspace] in workspace.quote($0, in: $1, of: session) }
+    }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        var same = a.session == b.session && a.items == b.items && a.messages == b.messages && a.window == b.window && a.fetching == b.fetching
+        #if os(macOS)
+        same = same && a.slot === b.slot
+        #endif
+        return same
     }
 
     static var spacing: CGFloat { Spacing.block }
@@ -213,12 +221,6 @@ extension Conversation {
         var outgoing: [Speech.Trip]
         var state: Open<WorkState>?
     }
-
-    static func followKey(
-        session: SessionState?, messages: [ChatMessage], previews: [PreviewItem] = [], deliveries: [DeliveryRequest], at moment: Speech.Moment
-    ) -> FollowKey {
-        FollowKey(messages: messages.count, previews: previews.count, outgoing: Chat.outgoing(deliveries, messages: messages).map { Speech.trip($0, at: moment) }, state: session?.state)
-    }
 }
 
 
@@ -277,7 +279,7 @@ struct SessionShownLabel: View {
             #if os(iOS)
             StateDot(shown: shown, size: 6)
             #endif
-            Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+            Text(shown.label).emphasis(shown.needsYou ? .bold : nil).foregroundStyle(shown.labelTint(palette))
                 .contentTransition(.opacity)
                 .animation(Motion.fade, value: shown)
         }

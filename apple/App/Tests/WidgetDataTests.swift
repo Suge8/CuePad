@@ -31,7 +31,6 @@ struct WidgetDataTests {
     #if os(iOS)
     @Test func 资料库变化后快照自动更新() async throws {
         services.startSnapshots()
-        defer { services.cancelBackgroundWork() }
 
         _ = try await services.store.createProject(name: "新项目", color: "#abcdef")
         _ = try await services.store.createCard(body: "默认项目里的")

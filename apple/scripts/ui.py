@@ -8,7 +8,7 @@
                              每个点约 1.5 秒（axe 1.8.0 实测），整趟是慢动作：验的是放下的结果与抬手之后的动效，不是拖着时的手感。
                              --rec 把这一趟录下来（抬手后再录 2 秒），打印抬手在片里的秒数；逐帧看用 xc.sh sheet -from
   type <文字>                 在有焦点的输入框里按键打字，屏上读回才算成。只打得出键盘上有的字符，拼音键盘下字母还停在候选里（数字直接上屏）。
-                             模拟器的剪贴板与这台 Mac 共用，不经它粘贴；要中文内容用启动参数预置（-CuePadSpeech、-CuePadCueDraft，DebugScene+Args*.swift）
+                             模拟器的剪贴板与这台 Mac 共用，不经它粘贴；要中文内容用启动参数预置（-CuePadSpeech、-CuePadCueDraft，DebugHooks+Args*.swift）
   key <cmd+n|esc|…>           组合键：修饰键 cmd ctrl alt shift，键 a–z 0–9 return esc tab space delete left right up down
   wait <文字> [秒=20]          读到标签或值包含它为止，打印用时；超时以 1 退出
   shot [图.png]               截图

@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 /// 与 Cue 通话的参数（Mac 发起见 `DebugScene+Voice`，手机发起见 `DebugScene+PhoneVoiceCall`）。
@@ -8,7 +7,7 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     /// `-CuePadVoiceCloseSeconds <秒>`：通话多久后关闭
     let closeSeconds: Double
     /// `-CuePadVoiceCodex <可执行文件>`（Mac）：通话的凭证照正式路径向这个 Codex 要（`codexAccess`），不读令牌文件；用替身验取凭证卡住、失败
-    let codex: String?
+    let codex: URL?
     /// `-CuePadVoiceDropRelay <在听后秒>,<断多久秒>`：像网络断了一样断掉这台的中转连接（`DebugRelayDrop`），核对通话等对端以新租约回来（`VoiceLink`）
     let dropRelay: String?
     /// `-CuePadVoiceFailProjection <在听后秒>,<多久秒>`（Mac）：这段时间里发给手机的投影一律当发送失败，核对 Mac 不因此当链路断
@@ -51,7 +50,7 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     /// `-CuePadVoiceSeconds <秒>`（默认 60）：通话这么久后挂断；Mac 等手机来电时给了才挂（从接通算）
     let seconds: Double?
     /// `-CuePadVoiceToken <文件>` 读（`scripts/voice-token.py` 经本机 Codex app-server 获取，续期语义见 CodexAccess）：隔离目录里的 Codex 没登录
-    let token: String?
+    let token: URL?
     /// `-CuePadVoiceWireLog <文件>`：通话协议的收发日志
     let wireLog: String?
 }
@@ -83,4 +82,3 @@ extension DebugScene {
         }
     }
 }
-#endif

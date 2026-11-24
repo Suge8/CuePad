@@ -34,7 +34,7 @@ struct DebugSessionRail: View {
     }
 
     private var rail: some View {
-        SessionRail(data: workspace.services.liveSessions.rail, form: form, pulse: workspace.pulse) { session, opening in
+        SessionRail(data: workspace.services.sessionFeed.rail, form: form, pulse: workspace.pulse) { session, opening in
             event = "\(opening == .beside ? "beside" : "primary"): \(session.sessionID)"
         }
     }

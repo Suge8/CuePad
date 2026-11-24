@@ -32,8 +32,8 @@ struct SearchFilters: View {
     private func chip(_ name: String, _ value: String?, on: Bool) -> some View {
         HStack(spacing: Spacing.tight) {
             if let value, on {
-                Text(name).fontWeight(.regular).foregroundStyle(palette.ink2)
-                Text(value).fontWeight(.medium)
+                Text(name).emphasis(.regular).foregroundStyle(palette.ink2)
+                Text(value).emphasis(.bold)
             } else {
                 Text(name)
             }

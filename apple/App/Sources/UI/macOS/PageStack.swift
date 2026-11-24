@@ -33,7 +33,7 @@ struct PageStack: View {
 
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
-        case .shelf: ProjectShelf().safeAreaPadding(.top, Bars.contentGap).fadesUnderHead()
+        case .shelf: ProjectShelf().safeAreaPadding(.top, Bars.contentGap).fades(.top)
         case .project(let id): ProjectPage(projectID: id)
         case .archive: ArchivePage()
         case .trash: TrashPage()

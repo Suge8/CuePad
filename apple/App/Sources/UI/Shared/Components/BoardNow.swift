@@ -40,7 +40,7 @@ struct BoardWord: View {
         if case .context(let meter) = pulse.word {
             ContextFact(meter: meter)
         } else if let shown = pulse.shown, !shown.isOffline {
-            Text(shown.label).fontWeight(.semibold).foregroundStyle(pulse.tint(palette))
+            Text(shown.label).emphasis(.bold).foregroundStyle(pulse.tint(palette))
         }
     }
 }
@@ -65,7 +65,7 @@ struct BoardVitals: View {
                     Circle().stroke(palette.track, lineWidth: Self.stroke)
                         .overlay { Circle().trim(from: 0, to: meter.fraction).stroke(tint, style: StrokeStyle(lineWidth: Self.stroke, lineCap: .round)).rotationEffect(.degrees(-90)) }
                         .frame(width: Self.ring, height: Self.ring)
-                    Text(meter.percent).monospacedDigit().foregroundStyle(tint)
+                    Text(meter.percent).foregroundStyle(tint)
                 }
                 .help(meter.help.visible)
             }
@@ -80,6 +80,6 @@ struct TimeSpent: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        LiveText(style: clock.live(.span)) { [ink = palette.ink3] text in Text(text).monospacedDigit().foregroundStyle(ink) }
+        LiveText(style: clock.live(.span)) { [ink = palette.ink3] text in Text(text).foregroundStyle(ink) }
     }
 }

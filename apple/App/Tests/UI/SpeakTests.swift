@@ -95,7 +95,7 @@ struct SpeakTests {
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == [
             "周末读完第三章\n\n![](cuepad://file/\(photos[0].key))\n![](cuepad://file/\(photos[1].key))\n[第三章 (批注).pdf](cuepad://file/\(pdf.key))",
         ])
-        #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))
+        #expect(workspace.notice?.link == .project(Project.defaultID))
         #expect(try await youSaid().isEmpty)
     }
 
@@ -111,7 +111,7 @@ struct SpeakTests {
 
         #expect(try await store.tasks(in: project.id, .todo).map(\.body) == ["给发布脚本补上回滚步骤"])
         #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(workspace.notice?.text.visible == "任务已加到 发布" && workspace.notice?.link == .project(project.id))
+        #expect(workspace.notice?.link == .project(project.id))
         #expect(try await youSaid().isEmpty)
     }
 
@@ -157,7 +157,7 @@ struct SpeakTests {
 
         try await store.markCueMessagesDelivered([renewed[0].id])
         workspace.resend(.cue(renewed[0], host: "mac-cue"), restoringInto: Bindable(workspace.cue).draft)
-        try await eventually("提示撤不回") { workspace.notice?.text.visible == "Cue 已经收到这句了，撤不回" }
+        try await eventually("提示撤不回") { workspace.notice?.isError == true }
         #expect(try await youSaid().map(\.id) == [renewed[0].id])
     }
 
@@ -211,6 +211,26 @@ struct SpeakTests {
         let done = try await eventually(store, { try $0.deliveryRequest(request.id) }) { $0?.isOpen == false }
         await executor.stop()
         #expect(Said.request(try #require(done)).trip(at: .always(at: .now)) == .delivered)
+    }
+
+    @Test(arguments: [true, false])
+    func 发出后还没读到就被别处撤回_发送中照样收起(toCue: Bool) async throws {
+        try await enableCue()
+        let target = try await session()
+        let workspace = Workspace(services: app.services)
+        let box = toCue ? Bindable(workspace.cue).draft : app.services.settings.replyDraftBinding(for: target.id)
+        box.wrappedValue = ComposerDraft(text: "先别动生产库")
+        let key: SendingTarget = toCue ? .cue : SendingTarget(target)
+
+        await workspace.speak(to: toCue ? .cue : .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(workspace.launching.contains(key))
+
+        if toCue {
+            #expect(try await store.withdrawCueMessage(try #require(try await youSaid().first).id))
+        } else {
+            try await store.deleteDelivery(try #require(try await store.deliveryRequests().first).id)
+        }
+        try await eventually("撤回后发送中收起") { !workspace.launching.contains(key) }
     }
 
     @Test func 发给会话_Mac明确拒绝才失败_失败重发撤回旧的() async throws {

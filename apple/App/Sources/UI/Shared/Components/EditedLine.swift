@@ -8,7 +8,7 @@ struct EditedLine: View {
     var body: some View {
         HStack(spacing: Spacing.tight) {
             slot { if pinned { Image(.pin).font(Self.glyph).iconLabel("已置顶") } }
-            Text(DateLabel.short(edited)).monospacedDigit()
+            Text(DateLabel.short(edited))
                 .accessibilityLabel("改于 \(DateLabel.short(edited))")
             slot { EmptyView() }
         }

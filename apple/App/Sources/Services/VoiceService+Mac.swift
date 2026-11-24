@@ -22,13 +22,13 @@ extension VoiceService {
         let value = makeCall(.init(
             access: { [weak services] in
                 guard let services else { throw CancellationError() }
-                if let file = DebugHooks.voiceToken {
+                if let file = DebugHooks.args.voiceOpts.token {
                     guard let access = CodexAccess(token: try String(contentsOf: file, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) else {
                         throw CodexAccessError.signedOut
                     }
                     return access
                 }
-                let codex = if let debug = DebugHooks.voiceCodex { debug } else { await services.agents.executable(.codex) }
+                let codex = if let debug = DebugHooks.args.voiceOpts.codex { debug } else { await services.agents.executable(.codex) }
                 return try await services.agents.integration.codexAccess(executable: codex)
             },
             source: source), VoiceRecord(store: services.store, tell: tell))

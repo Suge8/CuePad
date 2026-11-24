@@ -53,7 +53,7 @@ private struct NarrowCue: View {
             .environment(\.headerHost, .page)
             .background(palette.desk.ignoresSafeArea())
             .overlay {
-                SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
+                SessionRail(data: workspace.services.sessionFeed.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
                 .safeAreaPadding(.top, CueHeader.height + Bars.contentGap)

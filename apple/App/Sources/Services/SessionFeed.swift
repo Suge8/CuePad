@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 @Observable
-final class LiveSessions {
+final class SessionFeed {
     private(set) var items: [SessionListItem] = []
     private(set) var total = 0
     private(set) var live: [SessionListItem] = []
@@ -57,7 +57,7 @@ final class LiveSessions {
             let items = try store.sessionPage(.current).items
             return Page(
                 items: items, total: try store.sessionCount(),
-                ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
+                ended: try host.map { try store.endedSessions(on: $0, since: since, limit: SessionFeed.endedWindow) } ?? [],
                 cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store), rail: try SessionRailData.read(from: store),
                 marks: try store.sessionMarks())
         }
@@ -94,16 +94,16 @@ final class LiveSessions {
         }
     }
 
-    private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<LiveSessions, Value>, _ value: Value) {
+    private func set<Value: Equatable>(_ path: ReferenceWritableKeyPath<SessionFeed, Value>, _ value: Value) {
         if self[keyPath: path] != value { self[keyPath: path] = value }
     }
 }
 
 extension AppServices {
-    func startLiveSessions() {
+    func startSessionFeed() {
         follow(reporting: { .syncUnavailable(String(localized: "读取在线会话失败，会话状态不再更新：\(String(describing: $0))")) }) {
-            try await self.liveSessions.follow(self)
+            try await self.sessionFeed.follow(self)
         }
-        follow { for await marks in Observations({ self.liveSessions.marks }) { await self.alerts?.dismissSeen(marks) } }
+        follow { for await marks in Observations({ self.sessionFeed.marks }) { await self.alerts?.dismissSeen(marks) } }
     }
 }

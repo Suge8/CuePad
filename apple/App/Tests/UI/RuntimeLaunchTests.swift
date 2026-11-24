@@ -22,7 +22,7 @@ struct RuntimeLaunchTests {
         try await store.recordMacPresence(host: TestApp.hostID) { false }
 
         let services = app.relaunch()
-        let first = Dictionary(uniqueKeysWithValues: services.liveSessions.items.map { ($0.state.sessionID, $0) })
+        let first = Dictionary(uniqueKeysWithValues: services.sessionFeed.items.map { ($0.state.sessionID, $0) })
         let workspace = Workspace(services: services)
         let resting = workspace.shown(try #require(first["resting"])), gone = workspace.shown(try #require(first["gone"]))
         #expect(resting.status != .unknown && resting.label != "状态未确认", "\(resting.label)")

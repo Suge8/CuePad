@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueStore
 import SwiftUI
 
 struct CardOpenStyle: ButtonStyle {
@@ -35,52 +34,16 @@ struct RowOpenStyle: ButtonStyle {
     }
 }
 
-private struct CardFace: View {
-    let card: Card
-    let floated: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let text = CardText(card.body), image = text.images.first
-        VStack(alignment: .leading, spacing: 0) {
-        if let image { Thumbnail(hash: image, height: NoteTile.thumbnail, framed: false) }
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
-                Text(text.label)
-                    .font(Typography.bodyStrong)
-                    .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
-                    .lineLimit(image == nil ? NoteTile.titleLines : 1)
-                Spacer(minLength: 0)
-                AgentDot(card: card.id)
-            }
-            if image == nil, !text.preview.isEmpty {
-                Text(VariableText.styled(text.preview, palette))
-                    .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink2)
-                    .lineLimit(CardText.previewLines)
-                    .frame(maxHeight: .infinity, alignment: .top)
-            } else {
-                Spacer(minLength: 0)
-            }
-            CardMeta(card: card, text: text, floated: floated, font: Typography.meta)
-        }
-        .padding(Spacing.block)
-        }
-        .frame(height: NoteTile.height)
-        .clipShape(.rect(cornerRadius: Radius.card))
-    }
-}
-
-struct CardTile: View {
-
-    let card: Card
+struct IdeaTile: View {
+    let entry: CardEntry
     let floated: Bool
     @Environment(Workspace.self) private var workspace
     @State private var hovering = false
 
     var body: some View {
+        let card = entry.card
         Button(action: open) {
-            CardFace(card: card, floated: floated)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            IdeaTileFace(entry: entry, floated: floated)
                 .modifier(SelectedCard())
                 .note(lifted: hovering)
                 .contentShape(.rect(cornerRadius: Radius.card))
@@ -101,6 +64,7 @@ struct CardTile: View {
     }
 
     private func open() {
+        let card = entry.card
         guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
         workspace.open(card)
     }

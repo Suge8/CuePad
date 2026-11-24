@@ -44,7 +44,7 @@ struct TaskCountTests {
         #expect(Set(board.todo.map(\.id)) == [closed.id, orphan.id])
         #expect(board.advancing.compactMap(\.item?.id) == [release.id])
         let done = [fix.id, shipped.id]
-        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)
+        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.doneCount == done.count)
     }
 
     #if os(macOS)
@@ -92,14 +92,14 @@ struct TaskCountTests {
         func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }
 
         var board = try await TaskBoard.read(from: store)
-        #expect(Set(board.advancing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"])
+        #expect(Set(board.advancing.map(\.id)) == [.task(card.id), .task(live.id), .session("term")])
         #expect(board.todo.isEmpty)
         #expect(try await CueDigest.read(from: store).advancing == 3)
         #expect(try await inEnvelope() == 2)
 
         try await recorder.update(sessionID: "kyc", state: .thinking)
         board = try await TaskBoard.read(from: store)
-        #expect(Set(board.advancing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"] && board.todo.isEmpty)
+        #expect(Set(board.advancing.map(\.id)) == [.task(card.id), .task(live.id), .session("term")] && board.todo.isEmpty)
         #expect(try await inEnvelope() == 3)
     }
 }

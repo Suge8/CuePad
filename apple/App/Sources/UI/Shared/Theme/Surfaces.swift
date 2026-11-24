@@ -39,6 +39,9 @@ enum Elevation: CaseIterable {
         }
     }
 
+    /// 影子伸出底的最远处：裁剪、滑走时要让出的那一圈。
+    var reach: CGFloat { radius + offset }
+
     fileprivate func color(_ palette: Palette) -> Color { self == .panel ? palette.panelShadow : palette.shadow }
 }
 
@@ -254,14 +257,14 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 调试预设（`-CuePadHover`，`DebugHooks.Preset.hovered`）：这块盖住其中一点时画成指针停着的样子——后台截图里指针进不来；
+    /// 调试预设（`-CuePadHover`，`DriveArgs.hoverPoints`）：这块盖住其中一点时画成指针停着的样子——后台截图里指针进不来；
     /// 给了 `hoverSeconds` 时停那么久后移开。按钮、行与卡、提示条的悬停都经它，平时什么都不挂。
     @ViewBuilder func presetHover(_ hovering: Binding<Bool>) -> some View {
-        let points = DebugHooks.preset.hovered
+        let points = DebugHooks.args.driveOpts.hoverPoints
         if !points.isEmpty {
             onGeometryChange(for: Bool.self) { frame in points.contains { frame.frame(in: .global).contains($0) } } action: { hovering.wrappedValue = $0 }
                 .task {
-                    guard let seconds = DebugHooks.preset.hoverSeconds, (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
+                    guard let seconds = DebugHooks.args.driveOpts.hoverSeconds, (try? await Task.sleep(for: .seconds(seconds))) != nil else { return }
                     hovering.wrappedValue = false
                 }
         } else {

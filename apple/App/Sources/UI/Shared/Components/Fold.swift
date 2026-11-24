@@ -21,7 +21,7 @@ struct Fold<Label: View, Content: View>: View {
             }
             VStack(alignment: .leading, spacing: 0) { content }.clipsFold()
         }
-        .onDisappear { if open { stay?.stay(key, false) } }
+        .onDisappear { stay?.leave(key) }
     }
 }
 
@@ -51,6 +51,7 @@ struct RisingFold<Label: View, Content: View>: View {
                 label
             }
         }
+        .onDisappear { stay?.leave(key) }
     }
 }
 
@@ -136,7 +137,7 @@ struct DisclosureChevron: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Image(.expand).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+        Image(.expand).font(Typography.caption2Bold).foregroundStyle(palette.ink3)
             .rotationEffect(.degrees(open ? 180 : 0))
             .readerHidden(true)
     }

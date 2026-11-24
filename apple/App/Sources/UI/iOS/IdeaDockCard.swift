@@ -6,7 +6,6 @@ import SwiftUI
 struct IdeaDockCard: View {
     let dock: IdeaDock
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.chatHeight) private var chatHeight
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -27,22 +26,10 @@ struct IdeaDockCard: View {
         }
         .clipShape(shape)
         .glass(in: shape)
-        .observing(services.store, id: dock.card, into: $card, onError: { [workspace] error in
-            if case CueStoreError.notFound = error { return undock() }
-            workspace.fail(error)
-        }) { [id = dock.card] store in
-            guard let card = try store.card(id) else { throw CueStoreError.notFound }
-            return card
-        }
-        .onChange(of: card?.id, initial: true) {
-            guard editing == nil, let card else { return }
-            editing = CardEditing(card, workspace: workspace)
-        }
-        .onChange(of: card?.deletedAt != nil) { _, gone in if gone { undock() } }
+        .ideaEditing(dock.card, card: $card, editing: $editing, gone: undock)
         .onReceive(NotificationCenter.default.publisher(for: UITextView.textDidBeginEditingNotification)) { _ in
             if dock.open, editing?.handle.focused != true { show(open: false) }
         }
-        .onDisappear { editing?.leave() }
     }
 
     private var editorHeight: CGFloat {
@@ -56,7 +43,7 @@ struct IdeaDockCard: View {
                 HStack(spacing: Spacing.glyph) {
                     Image(.idea).foregroundStyle(palette.ink3)
                     Text(verbatim: CueSummary.title(of: editing?.text ?? card?.body ?? ""))
-                        .font(Typography.secondary.weight(.medium))
+                        .font(Typography.secondaryBold)
                         .foregroundStyle(palette.ink)
                         .lineLimit(1)
                     Spacer(minLength: 0)

@@ -31,7 +31,7 @@ extension Composer {
             HStack(spacing: Spacing.item) {
                 Image(.pickCards).foregroundStyle(palette.ink3)
                 VStack(alignment: .leading, spacing: Spacing.hair) {
-                    Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(name).font(Typography.secondaryBold).foregroundStyle(palette.ink).lineLimit(1)
                     if accepts.contains(.files), attached > 0 {
                         Text("\(attached) 个附件").font(Typography.caption).foregroundStyle(palette.ink3)
                     }

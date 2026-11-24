@@ -30,7 +30,6 @@ struct SessionLifecycleTests {
         try await eventually("两个宿主都可见") { app.bridge.sessions.count == 2 }
         let session = try await record()
         try await app.services.executor.start()
-        defer { app.services.cancelBackgroundWork() }
 
         await Workspace(services: app.services).end(session)
         let request = try #require(try await store.deliveryRequests(toSession: "atlas").last)
@@ -46,7 +45,6 @@ struct SessionLifecycleTests {
         ext.onCommand = { _, _ in ["ok": true] }
         let session = try await record()
         try await app.services.executor.start()
-        defer { app.services.cancelBackgroundWork() }
 
         await Workspace(services: app.services).end(session)
         let request = try #require(try await store.deliveryRequests(toSession: "atlas").last)

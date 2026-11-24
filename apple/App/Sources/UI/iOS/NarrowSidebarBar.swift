@@ -101,7 +101,7 @@ private struct ScopeButton: View {
 }
 
 private struct QuotaButton: View {
-    @State private var open = DebugHooks.preset.quotaOpen
+    @State private var open = DebugHooks.args.layoutOpts.quotaOpen
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
@@ -123,7 +123,7 @@ private struct QuotaButton: View {
             if let tightest = rings.min(by: { $0.window.left < $1.window.left }) {
                 ModelBadge(mark: Provider(id: tightest.provider).mark, binding: tightest.window)
             } else {
-                Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize()
+                Text("额度").font(Typography.metaBold).foregroundStyle(palette.ink3).fixedSize()
             }
         }
         .foregroundStyle(palette.ink2)

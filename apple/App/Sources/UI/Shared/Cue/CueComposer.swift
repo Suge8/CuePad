@@ -33,7 +33,7 @@ struct CueComposer: View {
             draft: Bindable(cue).draft, prompt: prompt,
             label: "对 \(cue.name) 说",
             focus: $focused, accepts: .files,
-            form: form, showsSendEmpty: sending || calls || inCall || receipt != nil, yielded: inCall, lead: lead, tooled: tooled, shortcuts: shortcuts, keys: keys,
+            form: form, showsSendEmpty: sending || calls || inCall || receipt != nil, yielded: inCall, lead: lead, tooled: tooled, submit: send, keys: keys,
             header: { EmptyView() },
             tools: { tools },
             send: { sendButton })
@@ -51,7 +51,7 @@ struct CueComposer: View {
             #endif
             .onChange(of: opens, initial: true) {
                 if !hasDraft { target = .cue }
-                if !covered, opens != nil || style == .page && DebugHooks.preset.cueFocus { focused = true }
+                if !covered, opens != nil || style == .page && DebugHooks.args.cueOpts.focus { focused = true }
             }
             .onChange(of: takesFocusRequests && workspace.cueFocusPending, initial: true) { _, pending in
                 guard pending, !covered else { return }
@@ -60,8 +60,8 @@ struct CueComposer: View {
             }
             #if os(iOS)
             // 推入别的页就交出焦点、收起键盘，返回时不还：只由系统收起的话 SwiftUI 记着它，返回时在推出转场里把键盘弹回来，
-            // 这一页的托管控制器不认转场里到的键盘，输入框与拍板卡就压在键盘底下（实测）
-            .onChange(of: workspace.top) { _, top in
+            // 这一页的托管控制器不认转场里到的键盘，输入框就压在键盘底下（实测）
+            .onChange(of: workspace.mainRoute) { _, top in
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
             #endif
@@ -174,7 +174,7 @@ struct CueComposer: View {
         workspace.runVoice(.hangUp)
         #endif
     }
-    private var sending: Bool { aim == .cue && workspace.cue.canHear && (workspace.cue.launching || workspace.cue.sending) }
+    private var sending: Bool { aim == .cue && workspace.cue.canHear && (workspace.launching.contains(.cue) || workspace.cue.sending) }
 
     private var form: ComposerForm {
         #if os(iOS)
@@ -182,8 +182,6 @@ struct CueComposer: View {
         #endif
         return .open
     }
-
-    private var shortcuts: [ReplyShortcut: () -> Void] { [.send: send] }
 
     private var opens: Int? { if case .bar(let opens) = style { opens } else { nil } }
 

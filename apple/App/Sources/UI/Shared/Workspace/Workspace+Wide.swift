@@ -48,15 +48,17 @@ extension Workspace {
     func railShown(_ sizes: WideMetrics) -> Bool { sizes.rail > 0 || !sizes.railFits && railDrawer }
 
     func showCue() {
-        services.settings.cueOpen = true
-        if wideFits?.cue != true { cueDrawer = true }
+        if wideFits?.cue == true { services.settings.cueOpen = true } else { cueDrawer = true }
     }
 
     func fit(_ fits: WideMetrics.Fits) {
         let previous = wideFits
         wideFits = fits
         if railDrawer, fits.rail || previous.map({ $0.rail != fits.rail }) == true { railDrawer = false }
-        if cueDrawer, fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
+        if cueDrawer, fits.cue {
+            cueDrawer = false
+            services.settings.cueOpen = true
+        }
         if overlay != nil { revealHost() }
     }
 
@@ -129,7 +131,7 @@ extension Workspace {
     /// 窗口里看得见几块（窗口窄时最右的藏起）。
     var wideShown: Int { wideSizes?.widths.count ?? panes.count }
 
-    private func presentWide(_ state: WideNavigation) {
+    func presentWide(_ state: WideNavigation) {
         cueDrawer = false
         railDrawer = false
         navigation = .wide(state)

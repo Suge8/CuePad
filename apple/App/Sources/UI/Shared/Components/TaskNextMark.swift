@@ -52,7 +52,7 @@ struct TaskNextMark: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     private var edge: Alignment { !primary && (sizeClass == .regular || typeSize.isAccessibilitySize) ? .leading : .trailing }
     private static let dot: CGFloat = 7
-    static let glyph = Typography.caption2.weight(.bold)
+    static let glyph = Typography.caption2Bold
     static let target: CGFloat = TaskMetrics.chipTarget
     static let disc: CGFloat = 28
     #endif

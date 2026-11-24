@@ -3,8 +3,6 @@ import Foundation
 import Observation
 
 extension Workspace {
-    var top: Route { mainRoute }
-
     var currentProject: UUID? {
         let routes = layout == .narrow ? path : [pageRoute].compactMap(\.self)
         return routes.reversed().compactMap { route in

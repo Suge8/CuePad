@@ -95,7 +95,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
   }
 
   public func holds(for session: SessionState) -> Bool {
-    session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
+    session.sessionID == sessionID && session.stateSince.stored == since.stored
   }
 }
 
@@ -110,7 +110,7 @@ public struct CueDuty: Equatable, Sendable {
     self.tiers = tiers
   }
 
-  public func leftToYou(_ session: SessionState) -> Bool { left.contains { $0.holds(for: session) } }
+  public func leftToYou(_ session: SessionState) -> Bool { session.isLeftToYou(left, tiers: tiers) }
 
   public func tier(of session: SessionState) -> CueTier { CueTier.of(session, chosen: tiers) }
 }

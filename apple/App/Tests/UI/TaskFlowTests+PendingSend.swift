@@ -14,7 +14,7 @@ extension TaskFlowTests {
         workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         let ext = try await rig.host.connect("pending-send", cwd: rig.directory.path, launchToken: launch.launch?.token)
-        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let accept = ext.onCommand
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "send" { return nil }
@@ -73,7 +73,7 @@ extension TaskFlowTests {
         workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         let ext = try await rig.host.connect("resumed", cwd: rig.directory.path, launchToken: launch.launch?.token)
-        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let recorder = try await rig.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
@@ -110,7 +110,7 @@ extension TaskFlowTests {
         workspace.handOff(step.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         let ext = try await rig.host.connect("restored", cwd: rig.directory.path, launchToken: launch.launch?.token)
-        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let recorder = try await rig.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
@@ -149,15 +149,14 @@ extension TaskFlowTests {
         workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         let ext = try await rig.host.connect("asked", cwd: rig.directory.path, launchToken: launch.launch?.token)
-        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit") }
         let recorder = try await rig.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         ext.setState(["kind": "thinking"])
         func asked(_ id: UUID) async throws -> (session: SessionState, sleeps: Bool)? {
-            let card = try #require(try await store.card(id))
-            try await eventually("在做") { workspace.next(for: card, in: workspace.agentLinks, steps: nil)?.busySession != nil }
-            try await workspace.confirmComplete(card)
+            try await eventually("在做") { workspace.agentLinks.items[id].map { workspace.pulse(of: $0).shown?.agentBusy == true } ?? false }
+            try await workspace.confirmComplete(id)
             defer { workspace.sessionAsk = nil }
             guard case .complete(.agent(let busy, let sleeps), _, _) = workspace.sessionAsk else { return nil }
             return (busy, sleeps)

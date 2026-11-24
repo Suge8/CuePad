@@ -8,7 +8,7 @@ struct ProjectGlyph: View {
 
     var body: some View {
         Image(Self.icon(project))
-            .font(.system(size: size, weight: .medium))
+            .font(Glyph.project(size))
             // 项目还没同步到时是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
             .foregroundStyle(project.map { palette.project($0.color) } ?? palette.ink2)
             .frame(width: size + Self.margin)

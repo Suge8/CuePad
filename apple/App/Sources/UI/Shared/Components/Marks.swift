@@ -9,7 +9,7 @@ struct Chevron: View {
     init(_ direction: Direction) { self.direction = direction }
 
     var body: some View {
-        Image(icon).font(Glyph.chevron(size)).readerHidden(true)
+        Image(icon).font(Glyph.at(size)).readerHidden(true)
     }
 
     private var icon: Icon {
@@ -32,5 +32,13 @@ struct StatusDot: View {
         Circle().fill(color).frame(width: Self.size, height: Self.size)
             .padding(rim == nil ? 0 : Self.rimWidth)
             .background(rim ?? .clear, in: .circle)
+    }
+}
+
+extension View {
+    /// 角上的小点（未读、等你）：挂在右上角、探出一点；圆的往里收一档，落在圆周上。
+    func cornerDot(round: Bool = false, @ViewBuilder _ dot: () -> some View) -> some View {
+        let shift = round ? -Spacing.tight : Spacing.hair
+        return overlay(alignment: .topTrailing) { dot().offset(x: shift, y: -shift) }
     }
 }

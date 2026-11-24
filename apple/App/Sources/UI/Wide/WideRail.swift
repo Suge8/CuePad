@@ -37,7 +37,7 @@ struct WideRail: View {
             if let sizes { RailTopTools(sizes: sizes, floating: false) }
             #endif
             RailHome()
-            RailSessions(data: services.liveSessions.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
+            RailSessions(data: services.sessionFeed.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .aside : .main)
             }
             tools
@@ -84,9 +84,7 @@ struct RailTopTools: View {
 
     @ViewBuilder private func tool(_ icon: Icon, _ help: LocalizedStringResource, action: @escaping () -> Void) -> some View {
         if floating {
-            Button(help, icon: icon, action: action)
-                .labelStyle(.iconOnly)
-                .buttonStyle(ControlButtonStyle(kind: .circular))
+            Button(help, icon: icon, action: action).glassCircle()
         } else {
             RailTool(icon: icon, help: help, action: action)
         }
@@ -97,7 +95,7 @@ struct RailTopTools: View {
 
 private struct RailQuota: View {
     @Environment(AppServices.self) private var services
-    @State private var detail = BubbleSwitch(open: DebugHooks.preset.quotaOpen)
+    @State private var detail = BubbleSwitch(open: DebugHooks.args.layoutOpts.quotaOpen)
 
     var body: some View {
         QuotaRings(open: detail.open, height: Chrome.control, cell: true) { detail.toggle() }

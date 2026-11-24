@@ -107,7 +107,7 @@ private struct PreviewPager: View {
     }
 
     private var stepper: some View {
-        Text(verbatim: "\(index + 1) / \(batch.count)").font(Typography.caption).foregroundStyle(palette.ink2).monospacedDigit()
+        Text(verbatim: "\(index + 1) / \(batch.count)").font(Typography.caption).foregroundStyle(palette.ink2)
             .padding(.horizontal, Spacing.group + Spacing.tight).frame(height: ControlMetrics.height)
             .glass(in: .capsule)
     }

@@ -9,9 +9,8 @@ final class LiveRemote {
     struct Pages: Equatable, Sendable {
         var pages: [URL]
         var serving: [URL]
-        var sent: LiveAddress?
+        var sent: LiveSignal.Sent?
         var door: LiveSignal.Door?
-        var ports: [Int]
     }
 
     private(set) var answers: [String: Pages] = [:]
@@ -25,7 +24,8 @@ final class LiveRemote {
         var waiting: CheckedContinuation<Void, Never>?
         var owed = false
         var answeredAt: ContinuousClock.Instant?
-        var requests: Set<UUID> = []
+        /// 最近一次问的：中转退回它才算 Mac 不在，更早的退回是迟到的、不算。
+        var asked: UUID?
     }
 
     @ObservationIgnored private var watches: [String: Watch] = [:]
@@ -108,7 +108,7 @@ final class LiveRemote {
         guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return held(sessionID) }
         guard (try? await store.macOnline(watch.host)) == true else { return unreachable(sessionID) }
         let request = UUID()
-        watches[sessionID]?.requests.insert(request)
+        watches[sessionID]?.asked = request
         do {
             let peer = try await signaling.resolveVoicePeer(VoiceDeviceID(watch.host))
             let open = (watches[sessionID]?.opens ?? 0) > 0
@@ -197,17 +197,17 @@ final class LiveRemote {
     func receive(_ event: VoiceRelayEvent) {
         switch event {
         case .received(let received):
-            guard case .live(.pages(_, let sessionID, let pages, let serving, let sent, let door, let ports)) = received.payload,
+            guard case .live(.pages(_, let sessionID, let pages, let serving, let sent, let door)) = received.payload,
                   let watch = watches[sessionID], received.header.sender.device == VoiceDeviceID(watch.host) else { return }
             watches[sessionID]?.answeredAt = .now
             offline.remove(sessionID)
-            let next = pages.isEmpty ? nil : Pages(pages: pages, serving: serving, sent: sent, door: door, ports: ports ?? pages.compactMap(\.port))
+            let next = pages.isEmpty ? nil : Pages(pages: pages, serving: serving, sent: sent, door: door)
             if answers[sessionID] != next { answers[sessionID] = next }
         case .peerClosed(let endpoint, _):
             for (sessionID, watch) in watches where VoiceDeviceID(watch.host) == endpoint.device { unreachable(sessionID) }
         case .rejected(let header, _):
             guard case .command(let id) = header.purpose, backs.remove(id.rawValue) == nil,
-                  let (sessionID, _) = watches.first(where: { $0.value.requests.contains(id.rawValue) }) else { return }
+                  let (sessionID, _) = watches.first(where: { $0.value.asked == id.rawValue }) else { return }
             unreachable(sessionID)
         case .availability(.ready):
             for sessionID in watches.keys { renew(sessionID) }

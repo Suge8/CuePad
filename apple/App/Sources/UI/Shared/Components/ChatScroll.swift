@@ -11,7 +11,7 @@ import SwiftUI
 ///
 /// 栏的边距只能是滚动区自己的边（`safeAreaPadding`），不能是内容外面的 padding 或居中的框：按条跳（`scrollTo`）时滚动区把那一条对回可见区，
 /// 行若离内容原点有一段边距，整段对话就被横着推出那一段。
-/// 不用 `contentMargins(…, for: .scrollContent)`：同一棵树里几块滚动区在同一次更新里定内容边距时，SwiftUI 会把一块的边距写到另一块上、之后不改回（这里犯过：Cue 页拍板卡那一排件的边被写到对话上，整段左移、上移 16）。
+/// 不用 `contentMargins(…, for: .scrollContent)`：同一棵树里几块滚动区在同一次更新里定内容边距时，SwiftUI 会把一块的边距写到另一块上、之后不改回（这里犯过：Cue 页另一块滚动区的边被写到对话上，整段左移、上移 16）。
 /// `.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
 /// Mac 上不画系统滚动条，定位靠右缘的对话目录与"回到最新"（`ChatColumn`）：按"显示滚动条"的系统设置，它要么是常驻的一根粗灰条，
 /// 要么是悬浮的、栏露出时亮一下再在主线程逐帧淡掉（约 250ms、千万条指令，每露出一次一回）。手机上的滚动指示条细、只在滚时出现，照系统。
@@ -131,7 +131,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。
                         // 贴着最新却离最新处远了（系统挪的：栏的高度第一次加进内容边距时它把偏移放回顶上）、回复框长高了：直接补滚过去。在读数里补（布局定下来之后）。
                         // 回复框长高不等离远了才补：Mac 打开会话时回复框比占位高，读数已报在底、画面与点按却还停在原处，最后一行压在回复框下、选不中；
-                        // 内容或浮着的那块变矮（拍板卡答掉后让出的高一下收起、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
+                        // 内容或浮着的那块变矮（回复框上的问题卡答掉后让出的高一下收起、一格收起）、偏移已越过最新处时也补回去：iOS 的滚动区不一定自己退回来，
                         // 底下空着一截，矮得多时整屏空白。只认变矮：发出一句的那一拍里有一次读数的可见区还没算上两行的输入框，
                         // 按"越过了"补回的话对话先掉下去再滑上来
                         let shrank = grown < 0 || reading.floating < last.floating
@@ -164,6 +164,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         Task {
                             await NextFrame.wait()
                             reader.scrollTo(target.id, anchor: target.anchor)
+                            await NextFrame.drawn()
+                            follow.wrappedValue.arrived(at: target)
                         }
                     }
             }

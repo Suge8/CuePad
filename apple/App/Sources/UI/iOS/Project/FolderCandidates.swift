@@ -29,7 +29,7 @@ struct FolderCandidateList: View {
                             HStack(spacing: Spacing.item) {
                                 Image(.folder).foregroundStyle(palette.ink3)
                                 Text(candidate.folder).foregroundStyle(palette.ink).lineLimit(1)
-                                Spacer(minLength: 8)
+                                Spacer(minLength: Spacing.item)
                                 if let usedBy = candidate.usedBy { Text("「\(usedBy)」在用").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1) }
                             }
                             .frame(minHeight: 44).contentShape(.rect)

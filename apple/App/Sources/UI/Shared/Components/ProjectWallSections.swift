@@ -1,54 +1,65 @@
 import CueStore
 import SwiftUI
 
-struct ProjectWallSections<Tile: View>: View {
+struct ProjectWallSections: View {
     let data: ProjectPageData
-    let arrangement: WallArrangement
-    let older: [OlderGroup]
-    let metrics: Metrics
+    let board: WallBoard
     var showsOlder = true
-    @ViewBuilder let tile: (CardEntry) -> Tile
     @State private var olderOpen = true
     @State private var adding = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     #if os(iOS)
     @State private var born: UUID?
     @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @Environment(Workspace.self) private var workspace
     #if os(macOS)
     @Environment(AppServices.self) private var services
     #endif
 
-    struct Metrics {
+    private struct Metrics {
         let minColumnWidth: CGFloat
         let maxColumns: Int
         let wallSpacing: CGFloat
-        let sectionGap: CGFloat
         let olderGap: CGFloat
     }
 
+    private var metrics: Metrics {
+        let columns = typeSize.isAccessibilitySize ? 1 : nil
+        #if os(iOS)
+        if sizeClass == .compact { return Metrics(minColumnWidth: 150, maxColumns: columns ?? 4, wallSpacing: Spacing.group, olderGap: Spacing.item) }
+        #endif
+        return Metrics(minColumnWidth: 208, maxColumns: columns ?? 12, wallSpacing: Spacing.block, olderGap: Spacing.group)
+    }
+
     var body: some View {
+        if let arrangement = board.arrangement { wall(arrangement) }
+    }
+
+    private func wall(_ arrangement: WallArrangement) -> some View {
         #if os(iOS)
         let held = born
         #else
         let held = UUID?.none
         #endif
+        let older = board.older
         let shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil && $0 != held }
-        LazyVStack(alignment: .leading, spacing: 0) {
+        return LazyVStack(alignment: .leading, spacing: 0) {
             MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) {
                 AddIdea(data: data, action: add)
                     #if os(iOS)
                     .zoomSource(born ?? Project.defaultID, in: zoom)
                     #endif
                 // 一张卡是一整块挪过去的（`geometryGroup`）：不然卡的底在滑，里面的字已经按新的宽排好、先到了，看着像字从卡上掉下来
-                ForEach(shown.compactMap { data.entries[$0] }) { tile($0).geometryGroup().transition(.opacity) }
+                ForEach(shown.compactMap { data.entries[$0] }) { IdeaTile(entry: $0, floated: board.floated.contains($0.id)).geometryGroup().transition(.opacity) }
             }
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: shown)
-            .padding(.bottom, metrics.sectionGap)
+            .padding(.bottom, Spacing.section)
             #if os(macOS)
             if data.cards.isEmpty, services.syncing.showsCatchingUp {
-                SyncingLabel().font(Typography.secondary).padding(.bottom, metrics.sectionGap)
+                SyncingLabel().font(Typography.secondary).padding(.bottom, Spacing.section)
             }
             #endif
             if showsOlder, !older.isEmpty {
@@ -121,7 +132,7 @@ private struct AddIdea: View {
     private var mood: AddIdeaTile.Mood {
         let waits = data.tasks.ordered.contains { workspace.agent(of: $0.id, in: agents)?.shown.needsYou ?? false }
         if waits { return .waiting }
-        return data.taskCounts.done > 0 && data.taskCounts.open == 0 ? .done : .idea
+        return data.doneCount > 0 && data.tasks.isEmpty ? .done : .idea
     }
 }
 
@@ -236,7 +247,7 @@ private struct OlderRowLine: View {
                 #endif
             }
             .font(Look.marks)
-            Text(DateLabel.short(card.modifiedAt)).font(Look.date.monospacedDigit()).frame(minWidth: Look.dateWidth, alignment: .trailing)
+            Text(DateLabel.short(card.modifiedAt)).font(Look.date).frame(minWidth: Look.dateWidth, alignment: .trailing)
                 #if os(macOS)
                 .yieldsToReveal(when: !workspace.presses.isSelecting)
                 #endif
@@ -250,7 +261,7 @@ private struct OlderRowLine: View {
         static let base: Font? = Typography.meta
         static let alignment = VerticalAlignment.center
         static let titles = AnyLayout(HStackLayout(spacing: Spacing.item))
-        static let label = Typography.body.weight(.medium)
+        static let label = Typography.bodyBold
         static let preview = Typography.secondary
         static let marks = Typography.meta
         static let date = Typography.meta
@@ -261,7 +272,7 @@ private struct OlderRowLine: View {
         static let base: Font? = nil
         static let alignment = VerticalAlignment.firstTextBaseline
         static let titles = AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.hair))
-        static let label = Typography.secondary.weight(.medium)
+        static let label = Typography.secondaryBold
         static let preview = Typography.meta
         static let marks = Typography.caption2
         static let date = Typography.caption

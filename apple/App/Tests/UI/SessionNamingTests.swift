@@ -56,7 +56,6 @@ struct SessionNamingTests {
         try await stop()
         consume.cancel()
         _ = await consume.result
-        app.services.cancelBackgroundWork()
     }
 
     private func shown() async throws -> String? {

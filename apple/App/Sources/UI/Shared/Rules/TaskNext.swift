@@ -22,13 +22,6 @@ nonisolated enum TaskNext: Equatable, Sendable {
         }
     }
 
-    var agentBusy: Bool { busySession != nil }
-
-    var busySession: SessionState? {
-        guard case .agent(let shown, let session) = self, shown.agentBusy else { return nil }
-        return session
-    }
-
     var speech: String {
         switch self {
         case .agent(let shown, _): shown.label
@@ -52,7 +45,7 @@ extension Workspace {
 
     func agent(of task: UUID, in agents: AgentLinks) -> (shown: SessionShown, session: SessionState)? {
         #if os(macOS)
-        guard let agent = agents.items[task].map(withLiveState) else { return nil }
+        guard let agent = agents.items[task].map(withHostedState) else { return nil }
         #else
         guard let agent = agents.items[task] else { return nil }
         #endif

@@ -15,7 +15,7 @@ struct HandOffInput: View {
     @FocusState private var focused: Bool
 
     private var sessions: [SessionListItem] {
-        HandOffTargets.sessions(services.liveSessions.live, project: outbox.project, bound: planned?.bound, at: services.speech)
+        HandOffTargets.sessions(services.sessionFeed.live, project: outbox.project, bound: planned?.bound, at: services.speech)
     }
     private var chosen: SessionListItem? {
         guard !fresh else { return nil }
@@ -44,7 +44,7 @@ struct HandOffInput: View {
     }
     private var chosenLive: SessionState? {
         guard let chosen = chosen?.state else { return nil }
-        return services.liveSessions.live.contains { $0.state.id == chosen.id } ? chosen : nil
+        return services.sessionFeed.live.contains { $0.state.id == chosen.id } ? chosen : nil
     }
     private var chosenDigest: SessionDigest? {
         guard let digest, let id = chosenLive?.id, digest.session?.id == id else { return nil }
@@ -72,7 +72,7 @@ struct HandOffInput: View {
         Composer(
             draft: box, prompt: "补一句", label: "发给 Agent", focus: $focused,
             accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil || launchTools != nil,
-            commands: commands,
+            commands: commands, submit: send,
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
                 if let tools {

@@ -46,7 +46,7 @@ private struct ReplyNoteLayer: ViewModifier {
         case .offer(let note, let at):
             Button { begin(note, at: at) } label: {
                 Label("批注", icon: .said)
-                    .font(Typography.caption.weight(.semibold))
+                    .font(Typography.captionBold)
                     .padding(.horizontal, Spacing.inset).frame(height: 28)
                     .contentShape(.capsule)
             }

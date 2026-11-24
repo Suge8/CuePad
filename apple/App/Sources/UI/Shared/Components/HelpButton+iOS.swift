@@ -28,9 +28,10 @@ struct BarHelpButton<Content: View>: View {
     }
 
     private func show() {
+        let close = ClosePanel { [host, token] in host.hide(token) }
         host.present(
             token: token, key: token, source: spot.frame.map { .control($0) } ?? .unanchored, width: .fitting,
-            close: ClosePanel { [host, token] in host.hide(token) }, environment: environment, content: Live(content: content))
+            close: close, content: PanelContent(host.view(Live(content: content), token: token, close: close, environment: environment)))
     }
 
     private struct Live: View {

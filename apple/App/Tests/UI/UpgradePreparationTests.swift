@@ -37,7 +37,7 @@ struct UpgradePreparationTests {
     @Test func 升级准备保留原请求与原因_不挡其他会话_重连后只派发一次() async throws {
         let app = TestApp(), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "升级好后处理这一句"), to: target, mode: .send)
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)
@@ -62,7 +62,7 @@ struct UpgradePreparationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let workspace = Workspace(services: app.services)
         let request = try await workspace.said(ComposerDraft(text: "取消后不要派发"), to: target, mode: .send)
         try await app.services.executor.start()
@@ -105,7 +105,7 @@ struct UpgradePreparationTests {
     @Test func 就绪事件不是派发许可_轮到它前再升级仍留在准备() async throws {
         let app = TestApp(), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash() }
         let workspace = Workspace(services: app.services)
         let request = try await workspace.said(ComposerDraft(text: "只在真实就绪时派发"), to: target, mode: .send)
         try await app.services.executor.start()
@@ -145,7 +145,6 @@ struct UpgradePreparationTests {
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: sessionID, state: .settled)
         let target = try #require(try await store.allSessionStates().first { $0.sessionID == sessionID })
-        defer { app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "不能把整个操作重做"), to: target, mode: .send)
         try await app.services.executor.start()
         let result = try await store.outcome(of: request)

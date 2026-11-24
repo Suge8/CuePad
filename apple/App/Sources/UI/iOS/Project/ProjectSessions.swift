@@ -38,7 +38,7 @@ struct ProjectSessions: View {
             HStack(spacing: TaskMetrics.columnGap) {
                 Image(icon).font(Glyph.small).frame(width: TaskMetrics.ringColumn)
                 title.font(Typography.body)
-                if let count { Text(count, format: .number).font(Typography.body).monospacedDigit() }
+                if let count { Text(count, format: .number).font(Typography.body) }
                 Spacer(minLength: 0)
             }
             .foregroundStyle(palette.ink3)

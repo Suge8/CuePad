@@ -100,7 +100,7 @@ private struct Arrival: ViewModifier {
 
 extension Workspace {
     func relays(session: String?, task: UUID? = nil) -> Bool {
-        let live = services.liveSessions
+        let live = services.sessionFeed
         return session.map { cue.wake?.sessions.contains($0) == true || live.relays(session: $0) } == true
             || task.map { live.relays(task: $0) } == true
     }

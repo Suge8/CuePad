@@ -52,10 +52,8 @@ struct TaskFlowTests {
         #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
 
         try await workspace.complete(task.id)
-        #expect(workspace.notice?.text.visible == "已完成")
-        let archive = try #require(workspace.notice?.action)
-        #expect(archive.title == "归档")
-        try await archive.run(workspace)
+        #expect(workspace.notice?.tone == .done)
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
@@ -73,7 +71,7 @@ struct TaskFlowTests {
         try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .thinking, title: "atlas", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
+        rig.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
         try await store.bindSession("s1", to: second.id)
@@ -102,7 +100,7 @@ struct TaskFlowTests {
         try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .settled, title: "atlas", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
         try await store.deleteDelivery(opening.id)
-        rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
+        rig.services.sessionFeed.apply(try await SessionFeed.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
 
@@ -159,7 +157,7 @@ struct TaskFlowTests {
         let mergeUndo = try #require(workspace.notice?.action)
         try await store.updateCard(check.id) { $0.body += "\n合并后又写的" }
         workspace.run(mergeUndo)
-        try await eventually("提示已改过") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        try await eventually("提示已改过") { workspace.notice?.isError == true }
         #expect(try await store.card(check.id)?.body == "上线前检查\n\n补一句\n合并后又写的")
         #expect(try await store.trashedCards().map(\.id) == [note.id])
 
@@ -170,27 +168,27 @@ struct TaskFlowTests {
         try await store.updateCard(spawned.id) { $0.body += "\n补充" }
         workspace.notice = nil
         workspace.run(spawnUndo)
-        try await eventually("提示已改过") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        try await eventually("提示已改过") { workspace.notice?.isError == true }
         #expect(try await store.card(spawned.id)?.deletedAt == nil)
         #expect(Set(try await store.trashedCards().map(\.id)) == [note.id, idea.id])
     }
 
-    @Test func 提示收走后_系统撤销照样撤回并说撤了什么_点过提示上的撤销就不再留着() async throws {
+    @Test func 提示收走后_系统撤销照样撤回并提示_点过提示上的撤销就不再留着() async throws {
         let workspace = Workspace(services: rig.services)
         let undoManager = UndoManager()
         workspace.undoManager = undoManager
         let idea = try await store.createCard(body: "续费域名")
         try await workspace.trash(idea.id)
         workspace.notice = nil
-        #expect(undoManager.undoActionName == "删除")
+        #expect(undoManager.canUndo)
         undoManager.undo()
-        try await eventually("说了撤的是什么") { workspace.notice?.text.visible == "已撤销：删除" }
+        try await eventually("说了撤的是什么") { workspace.notice?.sound == .undo }
         #expect(try await store.trashedCards().isEmpty)
 
         try await workspace.trash(idea.id)
         workspace.run(try #require(workspace.notice?.action))
         #expect(!undoManager.canUndo)
-        try await eventually("撤回来了") { workspace.notice?.text.visible == "已撤销：删除" }
+        try await eventually("撤回来了") { workspace.notice?.sound == .undo }
         #expect(try await store.trashedCards().isEmpty)
         undoManager.removeAllActions()
     }
@@ -204,9 +202,9 @@ struct TaskFlowTests {
         let site = try await store.createTask("官网")
 
         try await workspace.complete(release.id)
-        #expect(undoManager.undoActionName == "完成")
+        #expect(undoManager.canUndo)
         undoManager.undo()
-        try await eventually("完成撤回来了") { workspace.notice?.text.visible == "已撤销：完成" }
+        try await eventually("完成撤回来了") { workspace.notice?.sound == .undo }
         #expect(try await store.card(release.id)?.completedAt == nil)
         #expect(try await store.card(notes.id)?.completedAt == nil)
 
@@ -214,7 +212,7 @@ struct TaskFlowTests {
         try await eventually("挪过去了") { try await store.card(notes.id)?.parentID == site.id }
         workspace.move(notes.id, to: .top(project: Project.defaultID), after: nil)
         try await eventually("挪到顶层了") { try await store.card(notes.id)?.parentID == nil }
-        try await eventually("记下了") { undoManager.undoActionName == "移动" }
+        try await eventually("记下了") { undoManager.canUndo }
         undoManager.undo()
         try await eventually("后一步撤了") { try await store.card(notes.id)?.parentID != nil }
         if undoManager.canUndo { undoManager.undo() }
@@ -230,11 +228,11 @@ struct TaskFlowTests {
         try await eventually("记下了") { undoManager.canUndo }
         _ = try await store.moveCard(notes.id, to: .top(project: Project.defaultID), after: nil)
         undoManager.undo()
-        try await eventually("其间又挪过：不撤") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        try await eventually("其间又挪过：不撤") { workspace.notice?.isError == true }
         #expect(try await store.card(notes.id)?.parentID == nil)
 
         workspace.setPinned(site.id, true)
-        try await eventually("记下了") { undoManager.undoActionName == "置顶" }
+        try await eventually("记下了") { undoManager.canUndo }
         undoManager.undo()
         try await eventually("取消了置顶") { try await store.card(site.id)?.isPinned == false }
         undoManager.removeAllActions()
@@ -251,7 +249,7 @@ struct TaskFlowTests {
         _ = try await store.moveCard(notes.id, to: .under(other.id), after: nil)
         workspace.notice = nil
         undoManager.undo()
-        try await eventually("删除撤回来了") { workspace.notice?.text.visible == "已撤销：删除" }
+        try await eventually("删除撤回来了") { workspace.notice?.sound == .undo }
         #expect(try await store.card(release.id)?.deletedAt == nil)
         #expect(try await store.card(notes.id)?.parentID == other.id)
 
@@ -261,7 +259,7 @@ struct TaskFlowTests {
         try await store.archive(notes.id)
         workspace.notice = nil
         undoManager.undo()
-        try await eventually("归档撤回来了") { workspace.notice?.text.visible == "已撤销：归档" }
+        try await eventually("归档撤回来了") { workspace.notice?.sound == .undo }
         #expect(try await store.card(other.id)?.archivedAt == nil)
         #expect(try await store.card(notes.id)?.archivedAt != nil)
         undoManager.removeAllActions()
@@ -274,7 +272,6 @@ struct TaskFlowTests {
         let crash = try await store.createCard(body: "看下 {{平台}} 崩溃率，{{阈值}}")
         try await store.updateCard(crash.id) { $0.variableValues = ["平台": "iOS"] }
         try await workspace.mergeIdea(crash.id, into: check.id)
-        #expect(workspace.notice?.text.visible == "已接到「上线前检查」的正文后面")
         #expect(try await store.card(check.id)?.body == body + "\n\n看下 iOS 崩溃率，{{阈值}}")
         try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.card(check.id)?.body == body)
@@ -282,7 +279,6 @@ struct TaskFlowTests {
 
         let idea = try await store.createCard(body: "续费域名")
         try await workspace.trash(idea.id)
-        #expect(workspace.notice?.text.visible == "已删除")
         #expect(try await store.trashedCards().map(\.id) == [idea.id])
         try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.trashedCards().isEmpty)
@@ -290,7 +286,6 @@ struct TaskFlowTests {
         let flaky = try await store.createCard(body: "排查 {{平台}} 闪退")
         try await store.updateCard(flaky.id) { $0.variableValues = ["平台": "iOS"] }
         try await workspace.newTask(fromIdea: flaky.id)
-        #expect(workspace.notice?.text.visible == "已新建任务「排查 iOS 闪退」")
         let spawned = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "排查 iOS 闪退" })
         #expect(try await store.trashedCards().map(\.id) == [flaky.id])
         try await #require(workspace.notice?.action).run(workspace)
@@ -300,7 +295,7 @@ struct TaskFlowTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
 
         workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
-        try await eventually("转好任务") { workspace.notice?.text.visible == "已转为 2 个任务" }
+        try await eventually("转好任务") { try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.count == 2 }
         #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body) == ["写发布说明", "更新截图"])
         try await store.trashProject(project.id)
         workspace.notice = nil

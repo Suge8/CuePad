@@ -19,7 +19,6 @@ struct IOSLaunchHistoryTests {
 
     @Test(arguments: [false, true])
     func 确认再开失败后_关闭重开仍须确认旧未知请求(retryWithoutClosing: Bool) async throws {
-        defer { app.services.cancelBackgroundWork() }
         let task = try await store.createTask("修乱序", in: Project.defaultID)
         let workspace = Workspace(services: app.services)
         func launch(_ intent: SessionLaunchIntent) async throws -> SessionLaunch {

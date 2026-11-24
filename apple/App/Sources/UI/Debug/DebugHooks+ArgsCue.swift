@@ -1,5 +1,3 @@
-#if DEBUG
-
 nonisolated struct CueArgs: Decodable, DebugArgGroup {
     static let prefix = "Cue"
     /// `-CuePadCycle YES`：就绪后循环走过各个画面状态，录屏用
@@ -21,4 +19,3 @@ nonisolated struct CueArgs: Decodable, DebugArgGroup {
     /// `-CuePadCueStale YES`：Cue 页摆成对话停滞的样子
     let stale: Bool
 }
-#endif

@@ -5,46 +5,6 @@ import SwiftUI
 import WebKit
 
 extension Workspace {
-    /// 没点名时说的是开着预览的那个会话，没有就是这一排最左的会话。
-    var liveSession: SessionRoute? {
-        guard case .wide(let state) = navigation else { return nil }
-        return state.sessions.first { $0.id == state.preview } ?? state.sessions.first
-    }
-
-    func toggleLivePreview(of route: SessionRoute? = nil) {
-        guard case .wide(var state) = navigation, let session = route ?? liveSession else { return }
-        if state.preview != session.id {
-            let preview = livePreviews[session.id] ?? LivePreview()
-            preview.sessionID = preview.sessionID ?? session.sessionID
-            livePreviews[session.id] = preview
-            if let sent = liveSent.removeValue(forKey: session.id) {
-                preview.retarget(sent)
-            } else if let found = liveFound[session.id], let first = found.first, !preview.keeps(found) {
-                preview.retarget(.init(url: first, source: .found))
-            }
-        }
-        state.togglePreview(of: session.id, room: wideRoom)
-        navigation = .wide(state)
-    }
-
-    func livePages(_ session: UUID) -> [URL] {
-        let found = liveFound[session] ?? []
-        let kept = livePreviews[session].flatMap { $0.keeps(found) ? $0.address : nil }
-        var pages: [URL] = []
-        for url in [liveSent[session]?.url, kept].compactMap(\.self) + found where !pages.contains(url) { pages.append(url) }
-        return pages
-    }
-
-    func hasLivePage(_ session: UUID) -> Bool { !livePages(session).isEmpty }
-
-    func showsLivePreview(_ session: UUID) -> Bool { panes.contains(.preview(session)) }
-
-    func liveButton(_ session: UUID) -> LiveButton? {
-        if showsLivePreview(session) { return .open(livePreviews[session]?.address) }
-        guard let first = livePages(session).first else { return nil }
-        return .closed(first)
-    }
-
     func openLivePreview(_ session: SessionState) {
         if !shownSessions.contains(where: { $0.id == session.id }) { openSession(session.id, sessionID: session.sessionID, in: .main) }
         if !showsLivePreview(session.id) { toggleLivePreview(of: SessionRoute(id: session.id, sessionID: session.sessionID)) }
@@ -54,40 +14,45 @@ extension Workspace {
 
     static func liveHosts(_ services: AppServices) -> [String] { [services.hostID] + DebugHooks.liveHosts }
 
-    func followLiveAddresses() async {
-        do {
-            for try await addresses in services.store.observe({ try $0.liveAddresses() }) { take(addresses) }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
+    /// Agent 交来的地址（`cuepad live`、`live app`、`live sim`；不给地址时用这里认出的这个会话的服务）：后台照开着的载入，照此刻的排布滑开或只亮钮，
+    /// 回执说的是实际是哪一种、开的是哪个地址。
+    func openLive(_ sessionID: String, url given: URL?) async throws -> LiveChannel.Reply {
+        let id = SessionState.recordID(sessionID: sessionID)
+        let url: URL
+        if let given {
+            url = given
+        } else {
+            try await scanLive(only: [sessionID])
+            guard let first = livePreviews.entries[id]?.found.first else {
+                throw LiveRefusal("没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
+            }
+            url = first
         }
+        let reply = try await openLive(sessionID, id, url: url, found: given == nil)
+        return .done(reply, LiveChannel.Info(url: url.absoluteString))
     }
 
-    func take(_ addresses: [LiveAddress]) {
-        let start = LiveServers.launched() ?? .now
-        for address in addresses where address.sentAt > liveTaken[address.sessionID]?.sentAt ?? start {
-            liveTaken[address.sessionID] = address
-            receive(address)
+    private func openLive(_ sessionID: String, _ id: UUID, url: URL, found: Bool) async throws -> String {
+        let here = try await services.store.sessionState(sessionID).map(livesHere) ?? false
+        let shown = LiveAddress.shown(url)
+        let wasShowing = showsLivePreview(id)
+        let phones = "手机、iPad 与这台 Mac 在同一个网络时也看得到。"
+        switch livePreviews.receive(.init(url: url, found: found, at: .now), for: id, sessionID: sessionID, showing: showsLivePreview(id)) {
+        case .held(let typed):
+            return "用户正开着这个会话的预览、看着他自己填的 \(LiveAddress.shown(typed))，没换掉：他收起再打开时换成 \(shown)。在那之前 cuepad live snapshot 等操作的是他那一页。"
+        case .loaded(let preview):
+            preview.start()
+            preview.engage()
         }
-    }
-
-    private func receive(_ address: LiveAddress) {
-        let id = SessionState.recordID(sessionID: address.sessionID)
-        let target = LivePreview.Target(url: address.url, source: address.found ? .found : .sent)
-        let here = session(in: .main)?.id == id
-        let preview = livePreviews[id] ?? LivePreview()
-        preview.sessionID = address.sessionID
-        livePreviews[id] = preview
-        liveReleased.remove(id)
-        if !preview.yields(showing: showsLivePreview(id)) { return liveSent[id] = target }
-        liveSent[id] = nil
-        preview.retarget(target)
-        preview.start()
-        preview.engage()
-        if here, !isSplit { toggleLivePreview() }
+        if session(in: .main)?.id == id, !isSplit { toggleLivePreview() }
+        if wasShowing { return "已在这台 Mac 的 CuePad 里换成 \(shown)：用户开着的预览就是它。\(phones)" }
+        if showsLivePreview(id) { return "已在这台 Mac 的 CuePad 里打开 \(shown)：会话开在主区，预览滑开了。\(phones)" }
+        guard here else { return "已交给这台 Mac 上的 CuePad：\(shown)。这个会话不在这台 Mac 的 CuePad 里，用户看不到这一页；页面在后台载着，你照样能操作它。" }
+        return "已交给这台 Mac 上的 CuePad：\(shown)。会话没开在主区（或右半开着别的），会话栏头的预览钮亮起、等用户点开；页面在后台载着。\(phones)"
     }
 
     func watchLiveServers() async {
+        var failing = false
         while !Task.isCancelled {
             let everyone = services.viewer.present
             let phones = Set(livePhones.keys.map(\.sessionID))
@@ -95,58 +60,46 @@ extension Workspace {
                 for await busy in Observations({ self.services.viewer.present || !self.livePhones.isEmpty }) where busy { break }
                 continue
             }
-            await scanLive(only: everyone ? nil : phones)
-            await answerLivePhones()
+            do {
+                try await scanLive(only: everyone ? nil : phones)
+                try await answerLivePhones()
+                failing = false
+            } catch {
+                // 每 2 秒一遍：同一次故障只报一回，好了再坏再报
+                if !failing { fail(error) }
+                failing = true
+            }
             try? await Task.sleep(for: Self.liveScan)
         }
     }
 
-    func liveOwners() async -> [String: LiveServers.Owner] {
-        var owners = (try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]
+    func liveOwners() async throws -> [String: LiveServers.Owner] {
+        var owners = try await services.store.liveOwners(hosts: Self.liveHosts(services))
         for (sessionID, owner) in owners where owner.directory?.isEmpty != false {
             owners[sessionID]?.directory = services.bridge.session(sessionID: sessionID)?.cwd.path
         }
         return owners
     }
 
-    func scanLive(only sessionIDs: Set<String>? = nil) async {
+    func scanLive(only sessionIDs: Set<String>? = nil) async throws {
         let before = liveScanning
         let scan = Task {
-            await before?.value
-            await self.scanLiveNow(only: sessionIDs)
+            _ = await before?.result
+            try await self.scanLiveNow(only: sessionIDs)
         }
         liveScanning = scan
-        await scan.value
+        try await scan.value
     }
 
-    private func scanLiveNow(only sessionIDs: Set<String>?) async {
-        let owners = await liveOwners()
+    private func scanLiveNow(only sessionIDs: Set<String>?) async throws {
+        let owners = try await liveOwners()
         var scanner = liveScanner
         let found = await scanner.find(for: owners, only: sessionIDs).reduce(into: [UUID: [URL]]()) { $0[SessionState.recordID(sessionID: $1.key)] = $1.value }
         liveScanner = scanner
-        let scanned = sessionIDs.map { Set($0.map(SessionState.recordID(sessionID:))) }
-        var next = liveFound
-        if let scanned { for id in scanned { next[id] = found[id] } } else { next = found }
-        if liveFound != next { liveFound = next }
-        for (id, preview) in livePreviews where scanned?.contains(id) ?? true {
-            let urls = found[id] ?? []
-            preview.serving = urls
-            if let first = urls.first, !preview.keeps(urls) { preview.retarget(.init(url: first, source: .found)) }
-        }
+        livePreviews.found(found, scanned: sessionIDs.map { Set($0.map(SessionState.recordID(sessionID:))) })
     }
 
     /// 2 秒：服务起来到钮出现等得住。实测本机约 1,600 个进程时一遍 10 个会话中位 3.7 ms、50 个 4.7 ms，大头是读全部监听口，不随会话数涨。
     static let liveScan = Duration.seconds(2)
-
-    func pickElement() {
-        guard let session = liveSession, let preview = livePreviews[session.id] else { return }
-        if preview.picking { return preview.cancelPick() }
-        Task {
-            guard let element = await preview.pick() else { return }
-            services.settings.quote(element, for: session.id)
-            endLiveFill()
-            replyFocus = session.id
-        }
-    }
 }
 #endif

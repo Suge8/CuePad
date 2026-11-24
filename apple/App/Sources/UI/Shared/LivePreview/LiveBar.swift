@@ -38,8 +38,7 @@ struct LiveBar: View {
             tool(preview.viewport == .phone ? "铺满" : "手机宽度", icon: .phoneWidth, on: preview.viewport == .phone) {
                 withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { preview.viewport = preview.viewport == .phone ? .fill : .phone }
             }
-            tool("在浏览器里打开", icon: .openInBrowser) { if let url = preview.shownAddress { LivePreview.openOutside(url) } }
-                .disabled(preview.shownAddress == nil)
+            tool("在浏览器里打开", icon: .openInBrowser) { LivePreview.openOutside(preview.shownAddress) }
             #endif
             if !narrow { PaneClose { workspace.toggleLivePreview() } }
         }
@@ -68,15 +67,15 @@ private struct LiveAddressField: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shown = preview.shownAddress.map(LiveAddress.shown) ?? ""
-        let others = (preview.serving ?? []).filter { $0 != preview.address }
+        let shown = LiveAddress.shown(preview.shownAddress)
+        let others = workspace.livePages(SessionState.recordID(sessionID: preview.sessionID)).filter { $0 != preview.address }
         Group {
             if editing {
                 TextField(text: $text, prompt: Text("输入地址").foregroundStyle(palette.ink3)) { Text("地址") }
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .onSubmit {
-                        if let url = LiveAddress.url(from: text) { go(url) }
+                        workspace.typeLive(text, for: SessionState.recordID(sessionID: preview.sessionID))
                         editing = false
                     }
                     #if os(macOS)
@@ -110,7 +109,7 @@ private struct LiveAddressField: View {
                 .accessibilityValue(Text(verbatim: shown))
             }
         }
-        .font(Typography.secondary.weight(.medium))
+        .font(Typography.secondaryBold)
         .foregroundStyle(palette.ink)
         .frame(height: ControlSize.compact.height)
         .frame(maxWidth: .infinity)
@@ -120,7 +119,7 @@ private struct LiveAddressField: View {
         .animation(Motion.fade, value: preview.driven)
     }
 
-    private func go(_ url: URL) { preview.retarget(.init(url: url, source: .typed)) }
+    private func go(_ url: URL) { workspace.typeLive(url.absoluteString, for: SessionState.recordID(sessionID: preview.sessionID)) }
 }
 
 private struct LiveDriven: View {
@@ -151,7 +150,7 @@ private struct LiveCandidates: View {
             }
         }
         .fixedSize(horizontal: true, vertical: false)
-        .font(Typography.secondary.weight(.medium))
+        .font(Typography.secondaryBold)
         .foregroundStyle(palette.ink)
         .padding(.horizontal, RowMetrics.bleed)
         .padding(.vertical, Spacing.tight)

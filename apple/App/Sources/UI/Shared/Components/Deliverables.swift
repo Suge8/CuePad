@@ -189,7 +189,7 @@ struct DeliverableTile: View {
                 } else if file == nil {
                     VStack(spacing: Spacing.tight) {
                         Image(.downloading).font(Glyph.control)
-                        Text(verbatim: AttachmentLooks.awayLine(preview.key, services)).font(Typography.caption).monospacedDigit().multilineTextAlignment(.center)
+                        Text(verbatim: AttachmentLooks.awayLine(preview.key, services)).font(Typography.caption).multilineTextAlignment(.center)
                     }
                     .padding(.horizontal, Spacing.tight)
                     .foregroundStyle(palette.ink3)
@@ -197,7 +197,7 @@ struct DeliverableTile: View {
                 } else {
                     VStack(spacing: Spacing.tight) {
                         Image(kindIcon).font(radius < Radius.block ? Glyph.control : Glyph.large)
-                        if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption).monospacedDigit() }
+                        if preview.kind == .audio, let detail = shown?.detail { Text(detail).font(Typography.caption) }
                     }
                     .foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -205,7 +205,7 @@ struct DeliverableTile: View {
             }
             .overlay(alignment: .bottomLeading) {
                 if preview.kind == .video, shown?.image != nil {
-                    Image(.play).font(Glyph.small.weight(.bold)).foregroundStyle(palette.onMedia)
+                    Image(.play).font(Glyph.small).foregroundStyle(palette.onMedia)
                         .padding(Spacing.item).background(palette.mediaScrim, in: .circle).padding(Spacing.item)
                 }
             }
@@ -229,7 +229,7 @@ struct DeliverableTile: View {
                 Text("\(Text(label).foregroundStyle(palette.ink2))\(Dotted.inline)\(Text(kind))").foregroundStyle(palette.ink3)
             }
         }
-        .font(Typography.caption).monospacedDigit().lineLimit(2)
+        .font(Typography.caption).lineLimit(2)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

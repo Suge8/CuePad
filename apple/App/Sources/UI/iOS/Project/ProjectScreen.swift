@@ -8,7 +8,6 @@ struct ProjectScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
     @State private var data: ProjectPageData?
     @State private var position = ScrollPosition()
@@ -44,8 +43,8 @@ struct ProjectScreen: View {
     var body: some View {
         ScrollView {
             ScrollViewReader { proxy in
-                if let data, let arrangement = board.arrangement {
-                    content(data, arrangement)
+                if let data, board.arrangement != nil {
+                    content(data)
                 }
                 Color.clear.frame(height: 0).debugScrollsToOlder(proxy, ready: board.arrangement != nil)
             }
@@ -53,6 +52,7 @@ struct ProjectScreen: View {
         .scrollPosition($position)
         .taskFoldScroll(anchor)
         .modifier(Head(project: project, panes: sizeClass == .compact && project != nil ? AnyView(panes) : nil))
+        .compactFocus(open: data?.tasks.roots.count ?? 0, shown: sizeClass == .regular && data?.tasks.isEmpty == false, position: $position)
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) {
             [projectID] store in try ProjectPageData.read(projectID, from: store)
         }
@@ -66,7 +66,7 @@ struct ProjectScreen: View {
     private var sessionLimit: Int { ProjectSessions.cap + moreSessions }
 
     @ViewBuilder
-    private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
+    private func content(_ data: ProjectPageData) -> some View {
         // 任务区不进懒加载栈：在懒加载栈的一格里时，收起后按 id 滚回"收起"那一行会偏出一屏（`TaskFoldAnchor`）
         let paned = sizeClass == .compact && data.project != nil
         VStack(alignment: .leading, spacing: Spacing.part) {
@@ -78,11 +78,9 @@ struct ProjectScreen: View {
                 ProjectSessions(project: projectID, list: sessions, extra: $moreSessions)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
-                ProjectSplit(project: paned ? nil : data.project, gap: Self.sectionGap) {
+                ProjectSplit(project: paned ? nil : data.project, gap: Spacing.section) {
                     if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor) }
-                    ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
-                        CardTileView(entry: entry, floated: board.floated.contains(entry.id))
-                    }
+                    ProjectWallSections(data: data, board: board)
                 }
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
@@ -128,12 +126,6 @@ struct ProjectScreen: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    private static let sectionGap = Spacing.section
-
-    private var metrics: ProjectWallSections<CardTileView>.Metrics {
-        .init(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: typeSize.isAccessibilitySize ? 1 : 4, wallSpacing: 12,
-              sectionGap: Self.sectionGap, olderGap: 8)
-    }
 
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }

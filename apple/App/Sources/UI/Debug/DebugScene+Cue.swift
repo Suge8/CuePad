@@ -4,7 +4,7 @@ import CueText
 import Foundation
 
 /// `-CuePadCuePresence asleep` 要配 `-CuePadDemoMac YES`：隔离库没有同步，要演示 Mac 才算同步通着、说它在睡觉。
-/// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
+/// 配 fresh 时 notes-edit 也结束，没有等你回答的：名牌说几个会话待回复。
 /// 演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`）。
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {

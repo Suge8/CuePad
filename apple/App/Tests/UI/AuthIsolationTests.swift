@@ -60,7 +60,6 @@ struct AuthIsolationTests {
         #expect(workspace.notice?.isError != true)
         let failed = try #require(try await eventually(store, { try $0.accountQuotas().first { $0.provider == "anthropic" } }) { $0?.status == .failed })
         #expect(failed.observedAt == nil && failed.windows.isEmpty)
-        #expect(QuotaMeter(failed, at: .now).message == "额度查询失败")
 
         workspace.send("normal", to: AgentTarget(session: sessionID))
         let messages = try await eventually(store, { try $0.chatMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 3 }

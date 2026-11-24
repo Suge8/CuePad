@@ -111,11 +111,12 @@ extension CueStore {
   }
 
   public func sessionsAwaitingReply() throws -> [SessionState] {
-    guard let cue = try cueDuty(), !cue.left.isEmpty else { return [] }
-    let resting: [WorkState] = [.settled, .error]
-    let candidates = "state IN (\(sqlList(resting))) AND sessionID IN (SELECT value FROM json_each(?))"
+    guard let cue = try cueDuty() else { return [] }
+    let resting = SessionState.leftStops
+    let handed = cue.tiers.filter { $0.value != .yours }.keys
+    let candidates = "state IN (\(sqlList(resting))) AND (sessionID IN (SELECT value FROM json_each(?)) OR sessionID NOT IN (SELECT value FROM json_each(?)))"
     let left = try narrow(
-      .piSessionStates, column: "state", candidates: candidates, arguments: [JSONColumn.encode(cue.left.map(\.sessionID))],
+      .piSessionStates, column: "state", candidates: candidates, arguments: [JSONColumn.encode(cue.left.map(\.sessionID)), JSONColumn.encode(Array(handed))],
       to: { WorkState(rawValue: $0).map(resting.contains) == true }
     ) { rows in try sessions(rows).filter { $0.awaitsReply(cue) } }
     let said = try latestDeliveries(to: left.map(\.sessionID))

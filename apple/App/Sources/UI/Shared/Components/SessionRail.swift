@@ -37,6 +37,7 @@ private struct SessionRailContent: View {
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
     @State private var reveal = SessionRailReveal()
     @Namespace private var moves
 
@@ -44,14 +45,13 @@ private struct SessionRailContent: View {
         GeometryReader { geometry in
             let waitingIdeal = idealHeight(rows.waiting), waitingCap = geometry.size.height * (rows.advancing.isEmpty ? 1 : 0.5)
             let waitingHeight = min(waitingIdeal, waitingCap)
-            let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap)
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
-                    group(rows.waiting, column: .waiting, overflows: waitingIdeal > waitingCap)
+                    group(rows.waiting, column: .waiting)
                         .frame(height: waitingHeight)
                 }
                 if !rows.advancing.isEmpty {
-                    group(rows.advancing, column: .advancing, overflows: idealHeight(rows.advancing) > advancingRoom)
+                    group(rows.advancing, column: .advancing)
                         .frame(maxHeight: idealHeight(rows.advancing))
                 }
                 if rows.waiting.isEmpty, rows.advancing.isEmpty { SessionRailEmpty() }
@@ -73,13 +73,14 @@ private struct SessionRailContent: View {
     }
 
     private func idealHeight(_ items: [SessionRailRows.Item]) -> CGFloat {
-        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
+        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.fade
     }
 
-    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
+    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column) -> some View {
         VStack(spacing: 0) {
-            SessionRailHeader(column: column, count: items.count)
-                .frame(height: Chrome.groupHeader)
+            SectionHeader(Dotted(column.title), level: .group, count: items.count, countInk: column.countInk(palette))
+                .railGroupHeader()
+                .padding(.horizontal, RowMetrics.bleed)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: cellGap) {
@@ -93,10 +94,10 @@ private struct SessionRailContent: View {
                     }
                     .padding(.horizontal, RowMetrics.bleed)
                     .scrollTargetLayout()
-                    .safeAreaPadding(.bottom, overflows ? Chrome.scrollFade : Chrome.pad)
+                    .safeAreaPadding(.bottom, Chrome.fade)
                 }
                 .scrollIndicators(.hidden)
-                .modifier(BottomFade(on: overflows))
+                .fades(.bottom)
                 .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: items.map(\.id))
                 .onScrollPhaseChange { _, phase in
                     if phase == .idle { reveal.busy.remove(column) } else { reveal.busy.insert(column) }
@@ -115,46 +116,9 @@ private struct SessionRailContent: View {
     }
 }
 
-private struct SessionRailHeader: View {
-    let column: TaskBoard.Column
-    let count: Int
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: Spacing.glyph) {
-            Text(column.title).foregroundStyle(palette.ink3).lineLimit(1)
-            tally
-        }
-        .font(Typography.label)
-        .padding(.horizontal, RowMetrics.bleed)
-        .padding(.bottom, Spacing.tight)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(column.title)
-        .accessibilityValue(Text(count, format: .number))
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    private var tally: some View {
-        Text(count, format: .number).foregroundStyle(column.countInk(palette)).monospacedDigit()
-    }
-}
-
-/// 要滚的一组下沿淡出一截：遮罩只在要滚时挂（挂着的遮罩每一帧都要离屏合成一遍，放得下的组不付这笔）。
-private struct BottomFade: ViewModifier {
-    let on: Bool
-
-    func body(content: Content) -> some View {
-        if on {
-            content.mask {
-                VStack(spacing: 0) {
-                    Color.black
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Chrome.scrollFade)
-                }
-            }
-        } else {
-            content
-        }
+extension View {
+    func railGroupHeader() -> some View {
+        padding(.bottom, Spacing.tight).frame(maxWidth: .infinity, alignment: .bottomLeading).frame(height: Chrome.groupHeader, alignment: .bottom)
     }
 }
 

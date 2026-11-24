@@ -9,7 +9,6 @@ import Testing
 struct CueVoiceTests {
     @Test func 每一通用开始时库里的音色_通话中改了下一通才换_认不出的按默认() async throws {
         let app = TestApp(), store = app.services.store, host = TestApp.hostID
-        defer { app.services.cancelBackgroundWork() }
         try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host; $0.voice = .known(.hanul) }
         let fixture = VoiceFlowFixture(app.services)
         try await fixture.connect()

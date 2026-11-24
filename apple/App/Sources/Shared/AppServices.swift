@@ -61,7 +61,7 @@ final class AppServices {
     #endif
     let speechClock: SpeechClock
     @ObservationIgnored let timing: Timing
-    let liveSessions: LiveSessions
+    let sessionFeed: SessionFeed
     let cueFeed: CueFeed
     let accountQuotas = AccountQuotas()
 
@@ -135,11 +135,11 @@ final class AppServices {
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         self.sync = engine
         relay = Self.makeRelay(sync, engine, device: mac.hostID)
-        speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
+        speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.args.alwaysReachable, timing: mac.timing)
         let tasks = Followers()
         self.tasks = tasks
         syncStart = status
-        liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
+        sessionFeed = try SessionFeed(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
         hostID = mac.hostID
@@ -179,17 +179,17 @@ final class AppServices {
         let device = UIDevice.current.identifierForVendor?.uuidString
         self.device = device
         relay = Self.makeRelay(sync, engine, device: device)
-        speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.args.alwaysReachable, timing: timing)
         let tasks = Followers()
         self.tasks = tasks
         syncStart = status
-        liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
+        sessionFeed = try SessionFeed(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
         viewer = ViewerKeeper(store: store, sync: self.sync, device: device)
-        if location.touchesRealWorld || DebugHooks.opensLiveActivity {
+        if location.touchesRealWorld || DebugHooks.args.liveActivity {
             cueActivity = CueLiveActivity(store: store, sync: activitySync, device: device, diagnostics: diagnostics) { [weak self] in
                 guard let self else { return nil }
                 return try self.activityState(try self.store.snapshot { try CueDigest.read(from: $0) }.value)

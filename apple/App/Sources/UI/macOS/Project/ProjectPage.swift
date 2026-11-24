@@ -10,8 +10,6 @@ struct ProjectPage: View {
     @Environment(\.pageActive) private var active
     @State private var data: ProjectPageData?
     @State private var board = WallBoard()
-    @State private var collapsed = false
-    @Environment(\.topBand) private var band
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
     @State private var stage = Stage.header
@@ -21,34 +19,16 @@ struct ProjectPage: View {
         static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
     }
 
-    private static let collapseOffset: CGFloat = 140
-    private static let metrics = ProjectWallSections<CardTile>.Metrics(
-        minColumnWidth: 208, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, olderGap: Spacing.group)
     private static let bottomClearance: CGFloat = 88
 
     var body: some View {
         ScrollViewReader { proxy in
-            ZStack(alignment: .top) {
-                ScrollView {
-                    content.id("top")
-                }
+            ScrollView { content }
                 .scrollPosition($position)
-                .fadesUnderHead()
+                .fades(.top)
                 .taskFoldScroll(anchor)
-                .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
-                    withAnimation(Motion.fade) { collapsed = isCollapsed }
-                }
-                if collapsed, let data, !data.tasks.isEmpty {
-                    CompactFocus(data: data) {
-                        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
-                    }
-                    .frame(height: band)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .ignoresSafeArea(edges: .top)
-                    .transition(.opacity)
-                }
-            }
-            .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
+                .compactFocus(open: data?.tasks.roots.count ?? 0, shown: data?.tasks.isEmpty == false, position: $position)
+                .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
         .onChange(of: SelectableKey(active: active, ids: board.arrangement.map { $0.pinned + $0.wall + $0.older }), initial: true) { _, key in
             if key.active, let ids = key.ids { workspace.presses.selectable = ids }
@@ -69,7 +49,7 @@ struct ProjectPage: View {
 
     @ViewBuilder private var content: some View {
         ProjectSplit(project: data?.project, gap: Spacing.section) {
-            if let data, let arrangement = board.arrangement { page(data, arrangement) }
+            if let data, board.arrangement != nil { page(data) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, Self.bottomClearance)
@@ -77,15 +57,9 @@ struct ProjectPage: View {
     }
 
     @ViewBuilder
-    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
+    private func page(_ data: ProjectPageData) -> some View {
         if stage >= .focus { ProjectTasks(data: data, position: $position, anchor: anchor) }
-        if stage >= .wall {
-            ProjectWallSections(
-                data: data, arrangement: arrangement, older: board.older, metrics: Self.metrics, showsOlder: stage >= .older
-            ) { entry in
-                CardTile(card: entry.card, floated: board.floated.contains(entry.id))
-            }
-        }
+        if stage >= .wall { ProjectWallSections(data: data, board: board, showsOlder: stage >= .older) }
     }
 
     private var dataBinding: Binding<ProjectPageData?> {

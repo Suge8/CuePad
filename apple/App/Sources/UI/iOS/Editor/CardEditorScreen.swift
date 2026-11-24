@@ -3,18 +3,12 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-nonisolated private struct EditorData: Sendable, Equatable {
-    var card: Card
-    var project: Project?
-}
-
 struct CardEditorScreen: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var data: EditorData?
+    @State private var card: Card?
     @State private var editing: CardEditing?
     @State private var inspirationSharing = InspirationSharing()
 
@@ -22,32 +16,21 @@ struct CardEditorScreen: View {
         page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
             .floatingHeader(.verbatim(editing?.title ?? "")) {
-                if let card = data?.card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing) }
+                if let card, let editing { InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing) }
             } detail: {
                 detail
             } trailing: {
                 ChatAlongsideButton(cardID: cardID, editing: editing)
             }
-            .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
-                if case CueStoreError.notFound = error { return }
-                workspace.fail(error)
-            }) { [cardID] store in
-                guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-                return EditorData(card: card, project: try store.project(card.projectID))
-            }
-            .onChange(of: data?.card.id, initial: true) {
-                guard editing == nil, let card = data?.card else { return }
-                editing = CardEditing(card, workspace: workspace)
-            }
-            .onDisappear { editing?.leave() }
+            .ideaEditing(cardID, card: $card, editing: $editing) { [workspace, cardID] in workspace.leave(.card(cardID)) }
     }
 
     private var wide: Bool { sizeClass == .regular }
 
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let data, let editing {
-                CardTextField(card: data.card, editing: editing, theme: .inspiration(
+            if let card, let editing {
+                CardTextField(card: card, editing: editing, theme: .inspiration(
                     palette, horizontalInset: wide ? Spacing.page : LibraryLayout.textInset, maxTextWidth: InspirationPaper.textWidth), underHeader: true)
             }
         }
@@ -56,7 +39,7 @@ struct CardEditorScreen: View {
 
     @ViewBuilder private var detail: some View {
         Group {
-            if let card = data?.card {
+            if let card {
                 EditedLine(edited: card.modifiedAt, pinned: card.isPinned)
             } else {
                 Text(verbatim: " ")

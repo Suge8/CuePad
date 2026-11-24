@@ -184,7 +184,7 @@ private struct NotificationSection: View {
     var body: some View {
         Section {
             permission
-            row("等你", kind: .waitingForUser, help: "Agent 在等你回答，或 Cue 带选项来问你、有急事")
+            row("等你", kind: .waitingForUser, help: "Agent 在等你回答，或 Cue 有急事")
             row("有新回复", kind: .awaitsReply, help: "Agent 做完了、轮到你看；Cue 值班时只提示它留给你的")
         }
         .task { await alerts.refresh() }
@@ -231,7 +231,7 @@ enum ShortcutText {
 
 private struct CrashRow: View {
     let report: CrashReport
-    @State private var showing = DebugHooks.preset.crashSheet
+    @State private var showing = DebugHooks.args.crashSheet
 
     var body: some View {
         SettingRow(
@@ -288,7 +288,7 @@ private struct ConflictsRow: View {
     private func version(_ version: ConflictVersion, of conflict: CardConflict) -> some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
             HStack {
-                Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
+                Text(Dotted(version.label, DateLabel.short(version.card.modifiedAt))).font(Typography.metaBold).foregroundStyle(palette.ink3)
                 Spacer()
                 Button(SyncChoices.keep) { choices.keep(version.keep, of: conflict, services) }
                     .buttonStyle(ControlButtonStyle(size: .compact))

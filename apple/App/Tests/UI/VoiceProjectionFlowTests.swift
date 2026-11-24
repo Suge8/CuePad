@@ -12,7 +12,7 @@ import Testing
         let host = TestApp.hostID
         try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
         let fixture = VoiceFlowFixture(services)
-        defer { fixture.call.hangUp(); services.cancelBackgroundWork() }
+        defer { fixture.call.hangUp() }
         try await fixture.connect()
         let db = RawDB(app.databaseURL)
         try db.exec("CREATE TRIGGER voice_preview_failure BEFORE INSERT ON cueMessages WHEN NEW.author = 'you' BEGIN SELECT RAISE(FAIL, 'preview flow write failure'); END")
@@ -42,7 +42,6 @@ import Testing
         let app = TestApp(), services = app.services!, host = TestApp.hostID
         try await services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
         let fixture = VoiceFlowFixture(services)
-        defer { services.cancelBackgroundWork() }
         try await fixture.connect()
         fixture.media.onEvent(.ended(.audioInterrupted))
         try await eventually("通话按媒体给的原因结束") { !fixture.call.isLive }

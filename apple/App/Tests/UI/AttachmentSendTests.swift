@@ -31,7 +31,6 @@ struct AttachmentSendTests {
             }
         }
         try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
         let workspace = Workspace(services: services)
 
         for (session, draft) in [("atlas", ComposerDraft(text: "看这段录屏", files: [DraftFile(key: key, name: "录屏.mov")])), ("web", ComposerDraft(text: "先改文案"))] {

@@ -51,10 +51,12 @@ extension Workspace {
         try await proceed(self)
     }
 
-    func confirmComplete(_ task: Card) async throws {
-        let id = task.id
-        let subtasks = try await services.store.subtaskProgress(of: [id])[id]
-        try await confirmComplete(id, subtasks: subtasks, busy: next(for: task, in: agentLinks, steps: subtasks)?.busySession) { try await $0.complete(id) }
+    func confirmComplete(_ task: UUID, anchored: Bool = true, then proceed: (@MainActor (Workspace) async throws -> Void)? = nil) async throws {
+        let store = services.store
+        let subtasks = try await store.subtaskProgress(of: [task])[task]
+        let busy = try await store.sessionsKept(afterCompleting: task).sorted { $0.sessionID < $1.sessionID }
+            .first { pulse(of: SessionListItem(state: $0)).shown?.agentBusy == true }
+        try await confirmComplete(task, subtasks: subtasks, busy: busy, anchored: anchored, then: proceed ?? { try await $0.complete(task) })
     }
 
     func reopen(_ id: UUID) async throws {

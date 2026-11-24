@@ -15,7 +15,7 @@ struct CueButton: View {
             if shown { workspace.hideCue(fits: fits) } else { workspace.showCue() }
         } label: {
             avatar
-                .overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
+                .cornerDot { CueDot() }
                 .frame(width: ControlMetrics.height, height: ControlMetrics.height)
                 .contentShape(.circle)
         }

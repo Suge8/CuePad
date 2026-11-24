@@ -31,7 +31,7 @@ struct SessionSpine: View {
     }
 
     private func words(_ item: SessionRailRows.Item, twoLines: Bool) -> some View {
-        let name = Text(verbatim: item.name).font(Typography.secondary.weight(.medium))
+        let name = Text(verbatim: item.name).font(Typography.secondaryBold)
             .foregroundStyle(item.resting ? palette.ink2 : palette.ink)
         let said = line(item).map { Text(verbatim: $0).font(Typography.caption).foregroundStyle(palette.ink3) }
         return Group {

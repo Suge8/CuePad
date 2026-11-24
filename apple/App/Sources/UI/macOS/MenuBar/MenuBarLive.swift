@@ -16,7 +16,7 @@ struct MenuBarLive: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            Text("在做").font(Typography.label).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+            SectionHeader("在做", level: .group)
             HugHeight {
                 ScrollView { sessions }.scrollBounceBehavior(.basedOnSize)
             }
@@ -36,8 +36,8 @@ struct MenuBarLive: View {
     private func row(_ session: SessionState) -> some View {
         SessionRow(
             session: session, project: workspace.catalog?.project(session.projectID),
-            delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
-            undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
+            delivery: services.sessionFeed.deliveries[session.sessionID], rename: services.sessionFeed.renames[session.sessionID],
+            undelivered: services.sessionFeed.undelivered[session.sessionID] ?? 0).equatable()
             .contentShape(.rect)
             .row()
             .onTapGesture { open(.session(session.sessionID)) }
@@ -55,13 +55,13 @@ private struct LiveMoreFold: View {
     var body: some View {
         Button { expanded.toggle() } label: {
             HStack(spacing: style.dot + Spacing.hair) {
-                Text(expanded ? "收起" : "还有 \(hidden) 个").monospacedDigit()
-                Image(.expand).font(style.line.weight(.semibold))
+                Text(expanded ? "收起" : "还有 \(hidden) 个")
+                Image(.expand).font(style.line).emphasis(.bold)
                     .rotationEffect(.degrees(expanded ? 180 : 0))
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
             }
-            .font(style.line.weight(.medium)).foregroundStyle(palette.ink3)
+            .font(style.line).emphasis(.bold).foregroundStyle(palette.ink3)
             .padding(.leading, style.dot * 1.8 + style.dot + Spacing.hair)
             .frame(minHeight: 28)
             .contentShape(.rect)

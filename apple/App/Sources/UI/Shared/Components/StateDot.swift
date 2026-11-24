@@ -101,7 +101,7 @@ struct StateDot: View {
 
     private func symbol(_ tint: Color) -> some View {
         Image(shown.icon)
-            .font(.system(size: box * 0.86, weight: .semibold))
+            .font(Glyph.at(box * 0.86))
             .foregroundStyle(tint)
             .contentTransition(.symbolEffect(.replace))
             .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
