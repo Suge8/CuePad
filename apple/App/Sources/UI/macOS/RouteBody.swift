@@ -13,7 +13,7 @@ struct RouteBody: View {
         case .session(let session)?:
             if session.sessionID != nil { SessionPage(session, column: column).padding(.trailing, under) }
         case .libraryFile(let file)?:
-            LibraryFilePage(file: file).underHead(Chrome.band)
+            LibraryFilePage(file: file)
         default:
             PageStack().overlay(alignment: .bottom) { SelectionSlot().padding(.trailing, under) }
         }

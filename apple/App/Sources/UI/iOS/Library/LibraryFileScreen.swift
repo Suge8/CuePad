@@ -13,7 +13,6 @@ struct LibraryFileScreen: View {
         let draft = workspace.draft(of: file, in: library)
         VStack(spacing: 0) {
             if let library, let draft {
-                LibraryFileTop(file: file, library: library, draft: draft, texts: texts)
                 LibraryFileBody(file: file, library: library, draft: draft, texts: texts)
             } else if library?.file(file) != nil {
                 Spinner(.small).padding(.top, Spacing.vacant)

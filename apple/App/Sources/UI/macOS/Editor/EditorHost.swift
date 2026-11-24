@@ -32,6 +32,9 @@ struct EditorHost: NSViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     var editable = true
     var bottomInset: CGFloat = 0
+    var topInset: CGFloat = 0
+    /// 正文上面跟着一起滚的一块（`CueEditorView.header`）
+    var header: AnyView?
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
@@ -47,6 +50,12 @@ struct EditorHost: NSViewRepresentable {
         view.textView.storedText = initialText
         context.coordinator.watching = AttachmentLooks.follow(services, in: view.textView)
         view.scrollerStyle = .overlay
+        if header != nil {
+            let host = NSHostingView(rootView: AnyView(EmptyView()))
+            host.sizingOptions = []
+            host.safeAreaRegions = []
+            view.header = host
+        }
         handle.textView = view.textView
         if let range = DebugHooks.args.selection {
             DebugHooks.later {
@@ -59,6 +68,14 @@ struct EditorHost: NSViewRepresentable {
 
     func updateNSView(_ view: CueEditorView, context: Context) {
         if view.contentInsets.bottom != bottomInset { view.contentInsets.bottom = bottomInset }
+        view.topInset = topInset
+        if let header, let host = view.header as? NSHostingView<AnyView> {
+            host.rootView = AnyView(
+                header.fixedSize(horizontal: false, vertical: true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { [weak view] in view?.headerHeight = $0 }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .modifier(WideEnvironment(workspace: workspace, values: context.environment)))
+        }
         update(view.textView, root: view, workspace: workspace, opener: openPreview)
     }
 
