@@ -56,7 +56,6 @@ final class Diagnostics {
             do { try await activity.record(event) } catch {
                 Self.log.error("活动取证没存下：\((error as NSError).domain, privacy: .public) \((error as NSError).code)")
             }
-            push()
         }
     }
 
