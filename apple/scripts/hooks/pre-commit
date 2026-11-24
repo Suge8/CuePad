@@ -14,6 +14,14 @@ EOF
   exit 1
 fi
 status=0
+# 资料库（真实库的副本 xc.sh real copy、演示库）里是私人内容，只该在忽略掉的 .derived 里：拷进检出别处的一提交就带上了
+# -z 给原样的路径：不加 -z 时含中文等的路径被 git 加引号转义，行尾对不上
+databases="$(git diff --cached --name-only -z --diff-filter=AR | grep -zE '(^|/)cuepad\.db(-wal|-shm)?$' | tr '\0' '\n')"
+if [ -n "$databases" ]; then
+  printf '%s\n' "$databases" >&2
+  echo "上面是资料库文件，不入库：副本只留在 apple/.derived（apple/scripts/AGENTS.md「真实数据复现」），git rm --cached 撤掉" >&2
+  status=1
+fi
 # 文件大小（size.py）：合并提交里是两边各自提交时已经过了这道检查的改动，不再查
 git rev-parse -q --verify MERGE_HEAD >/dev/null || python3 apple/scripts/hooks/size.py || status=1
 apple/scripts/lint.sh --staged || status=1

@@ -48,7 +48,7 @@ extension Workspace {
     func railShown(_ sizes: WideMetrics) -> Bool { sizes.rail > 0 || !sizes.railFits && railDrawer }
 
     func showCue() {
-        if wideFits?.cue == true { services.settings.cueOpen = true } else { cueDrawer = true }
+        if wideSizes?.cueFits == true { services.settings.cueOpen = true } else { cueDrawer = true }
     }
 
     func fit(_ fits: WideMetrics.Fits) {
@@ -124,7 +124,8 @@ extension Workspace {
 
     func session(in column: Column) -> SessionRoute? { pane(in: column)?.session }
 
-    private var wideSizes: WideMetrics? { wideFits.map { WideMetrics(width: $0.width, workspace: self) } }
+    /// 按此刻的块算，不等排版回报（`wideFits` 是上一帧排出来的，刚开了一块时它还是开之前的宽窄）。
+    var wideSizes: WideMetrics? { wideFits.map { WideMetrics(width: $0.width, workspace: self) } }
 
     var wideRoom: Int { wideSizes?.room ?? 2 }
 

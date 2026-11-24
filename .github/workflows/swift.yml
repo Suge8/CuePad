@@ -43,6 +43,8 @@ jobs:
       TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
       # 真 Agent 用例跑全量（RealAgents.swift）；本机的签核只跑每家的冒烟
       TEST_RUNNER_CUEPAD_AGENT_TESTS: all
+      # check 里那遍不带 DEBUG 的 Mac 编译用正式版的 Release 配置（_build.sh 的 release_build）
+      CUEPAD_RELEASE_CONFIGURATION: Release
     steps:
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7

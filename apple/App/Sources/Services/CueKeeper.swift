@@ -10,7 +10,6 @@ import os
 @Observable
 final class CueKeeper {
     nonisolated static let patrolsPerDay = 3
-    nonisolated static let roundsKept = 50
 
     struct Setup {
         var recorder: StateRecorder
@@ -20,6 +19,7 @@ final class CueKeeper {
         var piAgentDirectory: URL
         var timing: CueTiming
         var fetchFile: FileFetching
+        var finished: (CueRound) -> Void
 
         var directory: URL { library.appending(path: "Cue", directoryHint: .isDirectory) }
     }
@@ -66,8 +66,6 @@ final class CueKeeper {
     @ObservationIgnored var claimed = false
     @ObservationIgnored var unfired: [CueFire] = []
     @ObservationIgnored var greeting: Date?
-    private var history: [CueRound] = []
-    @ObservationIgnored private var roundCount = 0
     @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored var unfetchable: Set<UUID> = []
 
@@ -94,7 +92,6 @@ final class CueKeeper {
         var state: State
         var setbacks: [Setback]
         var turn: CueRound?
-        var rounds: [CueRound]
         var greeted: Bool
     }
 
@@ -107,8 +104,7 @@ final class CueKeeper {
         case .running: stuck ? .stalled : setbacks.isEmpty ? .idle : .resting
         }
         return Snapshot(
-            state: state, setbacks: setbacks, turn: turn?.round, rounds: turn.map { history + [$0.round] } ?? history,
-            greeted: progress.greeted != nil)
+            state: state, setbacks: setbacks, turn: turn?.round, greeted: progress.greeted != nil)
     }
     let speech = LiveDraftFeed()
 
@@ -124,16 +120,14 @@ final class CueKeeper {
     }
 
     func beginRound(_ wake: CueWake, sent: [String], at date: Date) -> CueRound {
-        roundCount += 1
-        return CueRound(id: roundCount, wake: wake, startedAt: date, sent: sent)
+        CueRound(wake: wake, startedAt: date, sent: sent)
     }
 
-    func archive(_ round: CueRound) {
+    func close(_ round: CueRound) {
         var round = round
         round.finishedAt = now
         round.context = shift?.context?.used
-        history.append(round)
-        if history.count > Self.roundsKept { history.removeFirst(history.count - Self.roundsKept) }
+        setup.finished(round)
     }
 
     private func publish() async {

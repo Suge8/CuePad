@@ -5,7 +5,7 @@ extension Workspace {
     private static let lastingNotice: Duration = .seconds(8)
     private static let graceNotice: Duration = .seconds(2)
 
-    var noticeInRail: Bool { layout == .wide && sidebarOpen && wideFits?.rail == true }
+    var noticeInRail: Bool { layout == .wide && sidebarOpen && wideSizes?.railFits == true }
     var noticeOnHead: Bool { notice != nil && !noticeInRail }
 
     func say(

@@ -21,7 +21,6 @@ final class CueEval {
     private let output: URL
     private var start = Date.distantFuture
     private var begin: Date?
-    private var archive: [Int: CueRound] = [:]
     var report: [String] = []
     var extra: [String: Any] = [:]
 
@@ -96,10 +95,7 @@ final class CueEval {
 
     static func opensSession(_ round: CueRound) -> Bool { round.sent.contains { $0.contains("<view>") || $0.contains("<memory>") } }
 
-    var rounds: [CueRound] {
-        for round in rig.rounds { archive[round.id] = round }
-        return archive.values.sorted { $0.startedAt < $1.startedAt }
-    }
+    var rounds: [CueRound] { rig.rounds }
 
     func calls(_ tool: String, _ action: String? = nil) -> [(call: CueToolCall, args: [String: Any])] {
         Self.calls(in: round.map { [$0] } ?? [], tool, action.map { [$0] } ?? [])

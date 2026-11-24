@@ -51,10 +51,16 @@ extension CueHostTests {
         }
     }
 
+    /// 大脑做完的每一轮（`CueDependencies.finished` 交来的）
+    final class FinishedRounds {
+        var rounds: [CueRound] = []
+    }
+
     final class Rig {
         let model: CueModel
         let notifier = RecordingCueNotifier()
         let launches = LaunchGate()
+        let finished = FinishedRounds()
         let app: TestApp
         let clocks = Clocks()
         var clock: JumpTiming { clocks.app }
@@ -84,9 +90,11 @@ extension CueHostTests {
             let directory = real.map { _ in TestLibraries.makeDirectory() }
             brainDirectory = directory
             let brainLaunch = try real.map { try $0.launch(in: directory!) }, runtime = real?.runtime, gate = launches
+            let finished = finished
             app = TestApp(cue: CueDependencies(
                 launch: { agent, _ in agent == runtime ? brainLaunch : agent == .pi ? gate.pass(launch) : gate.passElsewhere() },
-                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing),
+                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing,
+                finished: { finished.rounds.append($0) }),
                 timing: clocks.app.timing)
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
