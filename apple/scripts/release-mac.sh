@@ -71,7 +71,7 @@ if [ ! -e "$OUT/submission.json" ]; then
 # 描述文件全机一份，生成到导出完持着签名锁（_lock.sh 规则 3），公证不在锁里
 signing_begin
 python3 "$APPLE_DIR/scripts/provision.py" unlock
-python3 "$APPLE_DIR/scripts/provision.py" profiles
+python3 "$APPLE_DIR/scripts/provision.py" developer-id
 
 read -ra versions <<<"$(release_versions)"
 archive="$(release_archive mac "${OUT##*/}" "${versions[@]}")"
@@ -136,6 +136,10 @@ declared="$(sed -nE 's/.*<sparkle:version>([0-9]+)<\/sparkle:version>.*/\1/p' <<
 online="$( { echo "$declared"; sed -nE "s/^${ASSET%.zip}-([0-9]+)\.zip$/\1/p" <<<"$names"; } | sort -n | tail -1)"
 [ "${online:-0}" -le "$build_version" ] || { echo "拒绝发布旧版 ${build_version}：线上已是 ${online}" >&2; exit 1; }
 release_tag mac "$build_version" "$source_commit"
+# 这一版的 dSYM 传进草稿发布 dsyms（只有仓库成员看得到）：在云端发的归档随 runner 消失，真机崩溃的栈靠它还原（diag_report.py 的 dsyms）
+dsyms="$OUT/${ASSET%-arm64.zip}-${build_version}-dSYMs.zip"
+[ -e "$dsyms" ] || ditto -c -k --keepParent "$(ls -d "$HOME/Library/Developer/Xcode/Archives"/*/"CuePad mac ${build_version}-"*.xcarchive/dSYMs | head -1)" "$dsyms"
+grep -qxF "${dsyms##*/}" <<<"$(gh release view dsyms -R "$REPO" --json assets --jq '.assets[].name')" || gh release upload dsyms "$dsyms" -R "$REPO"
 # 顺序：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包。GitHub 不能一次换多个资产，appcast 指向带构建号的包，
 # 才没有旧 appcast 配新包、落后的客户端验签失败的窗口
 # 线上摘要（GitHub 算的 sha256）已与本地一致的不重传

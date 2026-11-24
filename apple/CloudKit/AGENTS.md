@@ -3,7 +3,7 @@
 `apple/CloudKit/cuepad.ckdb` 重新生成后导入开发环境：
 
 ```bash
-export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)
+export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w "$(python3 apple/scripts/provision.py unlock)")
 set -a; . ~/.appstoreconnect/cuepad.env; set +a   # CUEPAD_TEAM_ID
 C="--team-id $CUEPAD_TEAM_ID --container-id iCloud.$(sed -n 's/^CUEPAD_APP_ID *= *//p' apple/App/Config/Signing.xcconfig) --environment development"
 xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb

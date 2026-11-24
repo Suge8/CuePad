@@ -7,6 +7,8 @@
   identity <distribution|development>  本机没有该证书的私钥时创建证书，放进专用钥匙串
   profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID；
                                 有已登记的 Mac 时再建 Development，CloudKit 开发环境只能用它）
+  developer-id                  只装发 Mac 版用的 Developer ID 描述文件：服务端有有效的就装它，没有才建（release-mac.sh 用；
+                                不像 profiles 那样删了重建，云端与本机的发布同时跑也不会作废对方正在用的那份）
   device <UDID> <名称> [MAC_OS] 登记一台真机（Mac 用 Provisioning UDID，不是 Hardware UUID）
   devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 apple/App/Config/AGENTS.md）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
@@ -232,6 +234,16 @@ def ensure_mac_profile(ids):
         print("没有已登记的 Mac 或 Apple Development 证书：跳过 macOS Development 描述文件")
 
 
+def developer_id_profile():
+    found = api("GET", f"/v1/profiles?filter[name]={MAC_PROFILE.replace(' ', '%20')}&filter[profileState]=ACTIVE&limit=1")["data"]
+    if found:
+        return install_profile(found[0]["attributes"], ".provisionprofile")
+    certs = local_cert_ids("Developer ID Application", "DEVELOPER_ID_APPLICATION,DEVELOPER_ID_APPLICATION_G2")
+    if not certs:
+        raise SystemExit("专用钥匙串里没有 Developer ID Application 证书（见 apple/App/Config/AGENTS.md）")
+    create_mac_profile(ensure_ids(), MAC_PROFILE, "MAC_APP_DIRECT", certs)
+
+
 def create_mac_profile(ids, name, profile_type, certs, devices=()):
     for old in api("GET", f"/v1/profiles?filter[name]={name.replace(' ', '%20')}&limit=50")["data"]:
         api("DELETE", f"/v1/profiles/{old['id']}")
@@ -314,6 +326,9 @@ if __name__ == "__main__":
         ensure_identity(sys.argv[2])
     elif command == "profiles":
         ensure_profiles()
+    elif command == "developer-id":
+        os.makedirs(PROFILES_DIR, exist_ok=True)
+        developer_id_profile()
     elif command == "device":
         register_device(*sys.argv[2:5])
     elif command == "devid-csr":

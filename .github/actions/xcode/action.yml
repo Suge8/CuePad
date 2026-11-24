@@ -1,0 +1,10 @@
+name: Xcode
+description: 选中本项目开发用的 Xcode（swift.yml 与 release.yml 共用，换版本只改这里）
+runs:
+  using: composite
+  steps:
+    # 镜像默认 27.1；本项目按 27.0（27A266a）开发。选中靠 xcode-select 而不是 DEVELOPER_DIR：测试里起的 cc、python3 走系统的选择，不认环境变量
+    - shell: bash
+      run: |
+        sudo xcode-select -s /Applications/Xcode_27.0.app
+        xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
