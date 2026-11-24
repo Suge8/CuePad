@@ -37,7 +37,7 @@ private struct InPlacePanel: ViewModifier {
         content
             .background { AreaMark { [host, token] in host.areas[token] = Weak(value: $0) } }
             .onChange(of: isPresented, initial: true) { _, open in
-                host.show(token, style: .bubble(.unanchored), content: AnyView(EmptyView()), close: ClosePanel(run: close), open: open, inPlace: true)
+                host.show(token, style: .bubble(.unanchored), content: PanelContent(), close: ClosePanel(run: close), open: open, inPlace: true)
             }
             .onDisappear { host.hide(token) }
     }
@@ -52,7 +52,7 @@ final class PanelHost {
     struct Shown: Identifiable {
         let id: UUID
         let style: PanelStyle
-        let content: AnyView
+        let content: PanelContent
         let close: ClosePanel
         var open = true
         var inPlace = false
@@ -66,7 +66,7 @@ final class PanelHost {
     @ObservationIgnored fileprivate var areas: [UUID: Weak<NSView>] = [:]
     @ObservationIgnored private var monitor: Any?
 
-    func show(_ id: UUID, style: PanelStyle, content: AnyView, close: ClosePanel, open: Bool = true, inPlace: Bool = false) {
+    func show(_ id: UUID, style: PanelStyle, content: PanelContent, close: ClosePanel, open: Bool = true, inPlace: Bool = false) {
         var entry = Shown(id: id, style: style, content: content, close: close)
         entry.open = open
         entry.inPlace = inPlace
@@ -215,18 +215,25 @@ private struct WindowPanel<Panel: View>: ViewModifier {
     @ViewBuilder let panel: () -> Panel
     @Environment(PanelHost.self) private var host
     @State private var token = UUID()
+    @State private var shown = PanelContent()
 
     func body(content: Content) -> some View {
         content
+            .feeds(shown, while: key != nil || retained, view)
             .onChange(of: Mode(key: key, retained: retained, style: style), initial: true) { _, mode in
                 if mode.key != nil || mode.retained {
-                    host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close.of(token))), close: close, open: mode.key != nil)
+                    shown.view = view()
+                    host.show(token, style: style, content: shown, close: close, open: mode.key != nil)
                 } else {
                     host.hide(token)
                 }
             }
             .onDisappear { host.hide(token) }
     }
+}
+
+private extension WindowPanel {
+    func view() -> AnyView { AnyView(panel().environment(\.closePanel, close.of(token))) }
 }
 
 private struct Mode: Equatable {
@@ -338,9 +345,9 @@ private struct PanelLayer: View {
         }
         Group {
             if case .bare(let from) = shown.style {
-                BareStage(from: from) { shown.content.background { area(shown.id) } }
+                BareStage(from: from) { PanelBody(content: shown.content).background { area(shown.id) } }
             } else {
-                shown.content
+                PanelBody(content: shown.content)
                     .background { area(shown.id) }
                     .clipShape(.rect(cornerRadius: Radius.field))
                     .rowContainer(.rect(cornerRadius: Radius.field))
@@ -366,7 +373,7 @@ private struct PanelLayer: View {
                 ForEach(host.shown) { shown in
                     if !shown.inPlace, case .bubble(let source, let width) = shown.style {
                         let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.bubbleInsets, width: width)
-                        BubbleFrame(placement: placement) { shown.content.environment(\.panelCovered, host.covers(shown.id)) } area: { area(shown.id) }
+                        BubbleFrame(placement: placement) { PanelBody(content: shown.content).environment(\.panelCovered, host.covers(shown.id)) } area: { area(shown.id) }
                             .transition(placement.transition(reduceMotion: reduceMotion))
                     }
                 }

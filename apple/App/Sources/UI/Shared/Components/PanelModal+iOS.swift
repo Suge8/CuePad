@@ -33,7 +33,7 @@ final class ModalHost {
 
     struct Popup {
         let source: CGRect
-        let content: AnyView
+        let content: PanelContent
     }
 }
 
@@ -64,10 +64,15 @@ private struct PopupSlot<Panel: View>: ViewModifier {
     @Environment(\.pageActive) private var active
     @State private var token = UUID()
     @State private var measured = Measured()
+    @State private var shown = PanelContent()
     @AccessibilityFocusState private var focused: Bool
+
+    private var close: ClosePanel { ClosePanel { [$isPresented] in $isPresented.wrappedValue = false } }
+    private func view() -> AnyView { AnyView(panel().environment(\.closePanel, close).environment(\.self, environment)) }
 
     func body(content: Content) -> some View {
         content
+            .feeds(shown, while: isPresented, view)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { measured.frame = $0 }
             .accessibilityFocused($focused)
             .accessibilityExpanded(isPresented)
@@ -78,10 +83,8 @@ private struct PopupSlot<Panel: View>: ViewModifier {
                     if was { focused = true }
                     return
                 }
-                let close = ClosePanel { [$isPresented] in $isPresented.wrappedValue = false }
-                host.cover(ModalHost.Modal(
-                    token: token, close: close,
-                    popup: ModalHost.Popup(source: measured.frame ?? .zero, content: AnyView(panel().environment(\.closePanel, close).environment(\.self, environment)))))
+                shown.view = view()
+                host.cover(ModalHost.Modal(token: token, close: close, popup: ModalHost.Popup(source: measured.frame ?? .zero, content: shown)))
                 Task {
                     await NextFrame.drawn()
                     AccessibilityNotification.ScreenChanged(nil).post()
@@ -112,7 +115,7 @@ struct PopupLayer: View {
             ZStack {
                 if let modal, let popup = modal.popup {
                     let source = popup.source.offsetBy(dx: -frame.midX, dy: -frame.midY)
-                    popup.content
+                    PanelBody(content: popup.content)
                         .frame(width: max(min(frame.width - 2 * Spacing.page, Self.widest), 0))
                         .frame(maxHeight: frame.height - 2 * Spacing.page)
                         .fixedSize(horizontal: false, vertical: true)
