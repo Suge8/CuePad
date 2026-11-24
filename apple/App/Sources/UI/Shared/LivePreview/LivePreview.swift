@@ -3,15 +3,14 @@ import Observation
 import SwiftUI
 import WebKit
 
-/// 一个会话的活预览：这个会话正在开发的网页本身（`Workspace.livePreviews`，只在内存里）。
+/// 一个会话的活预览：这个会话正在开发的网页本身（`LivePreviews` 里载入了的那一项，只在内存里）。
 /// 每个会话一个 `WKWebView`、各用一份非持久的数据存储：两个会话开着同一个地址，登录状态也不串。
-/// Mac 上网页直连本机的服务、自己探服务在不在；手机、iPad 上去 Mac 的流量都经隧道（`LiveLink`），服务在不在、有哪些地址看 Mac 的答复（`serving`）。
+/// Mac 上网页直连本机的服务、自己探服务在不在；手机、iPad 上去 Mac 的流量都经隧道（`LiveLink`），服务在不在看隧道那头到得了哪些页（`reachable`）。
 /// 网页不伸到玻璃栏后面（`LivePreviewPane.screen`）：SwiftUI 的 `WebView` 公开接口里没有遮挡区（macOS 26 SDK 的 `_WebKit_SwiftUI`），
 /// `WKWebView` 的 `obscuredContentInsets` 让出的那一截 WebKit 自己画一道硬边的带（浅色白、深色灰，公开接口改不了），两档视口切换时内边距还要跳。
 @Observable
 final class LivePreview: NSObject, WKNavigationDelegate {
     enum Phase: Equatable {
-        case blank
         case idle
         case live
         case waiting
@@ -32,7 +31,7 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 
     @ObservationIgnored let web: PageView
     var driven = false
-    @ObservationIgnored var sessionID: String?
+    let sessionID: String
     #if os(macOS)
     @ObservationIgnored let record = LivePageRecord()
     @ObservationIgnored var agent = AgentState()
@@ -43,13 +42,13 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     @ObservationIgnored var tunneled: Set<String> = []
     var link: LiveLink?
     @ObservationIgnored var host: String?
-    @ObservationIgnored private var sentTaken: Date?
+    /// 隧道那头此刻到得了的页（`LiveLink` 给）；没连着时是 nil：不知道，不算服务停了。
+    @ObservationIgnored private(set) var reachable: [URL]?
     @ObservationIgnored let dataStore = WKWebsiteDataStore.nonPersistent()
     #endif
-    private(set) var address: URL?
-    private(set) var source = Source.typed
-    @ObservationIgnored var serving: [URL]?
-    private(set) var phase = Phase.blank
+    private(set) var address: URL
+    private(set) var source: Source
+    private(set) var phase = Phase.idle
     private(set) var url: URL?
     private(set) var isLoading = false
     private(set) var progress = 0.0
@@ -64,7 +63,10 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     @ObservationIgnored private var painted = false
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
 
-    override init() {
+    init(sessionID: String, target: Target) {
+        self.sessionID = sessionID
+        address = target.url
+        source = target.source
         let configuration = WKWebViewConfiguration()
         #if os(macOS)
         configuration.websiteDataStore = .nonPersistent()
@@ -104,27 +106,19 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     deinit { try? FileManager.default.removeItem(at: uploadFolder) }
     #endif
 
-    func keeps(_ found: [URL]) -> Bool {
-        guard let address else { return false }
-        return source != .found || found.contains(address)
-    }
+    var target: Target { Target(url: address, source: source) }
 
-    func yields(showing: Bool) -> Bool { !(showing && address != nil && source == .typed) }
-
-    var shownAddress: URL? { url ?? address }
+    var shownAddress: URL { url ?? address }
 
     func retarget(_ target: Target) {
         address = target.url
         source = target.source
         painted = false
         revealed = false
-        if phase == .blank || phase == .idle { phase = .idle } else { load(target.url) }
+        if phase != .idle { load(target.url) }
     }
 
-    func reload() {
-        guard let url = shownAddress else { return }
-        load(url)
-    }
+    func reload() { load(shownAddress) }
 
     private func resume(_ address: URL) {
         let here = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
@@ -135,7 +129,7 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     func stopLoading() { web.stopLoading() }
 
     func start() {
-        if phase == .idle, let address { load(address) }
+        if phase == .idle { load(address) }
     }
 
     static var paneSize = CGSize(width: 800, height: 900)
@@ -218,9 +212,10 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         phase = painted ? .stopped : .waiting
     }
 
+    /// 载入了就一直探着（`LivePreviews` 起、放掉时停），不跟着面板：没开在面板里、Agent 发来时服务还没起来，起来了照样载出。
     func watch() async {
         #if os(macOS)
-        if phase == .idle, let address { load(address) }
+        start()
         #else
         if phase == .idle { phase = .waiting }
         #endif
@@ -231,10 +226,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     }
 
     private func check() async {
-        guard let address, phase != .blank else { return }
-        let up = await isUp(address)
-        guard !Task.isCancelled else { return }
-        guard address == self.address else { return }
+        let address = address
+        guard let up = await isUp(address), !Task.isCancelled, address == self.address else { return }
         switch phase {
         case .waiting where up: load(address)
         case .stopped where up: resume(address)
@@ -246,23 +239,14 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 
     #if os(iOS)
     func serve(_ pages: [URL]?) {
-        serving = pages
+        reachable = pages
         guard phase != .idle else { return }
         Task { await check() }
     }
 
-    func follow(_ answer: LiveRemote.Pages, showing: Bool) {
-        if let sent = answer.sent, sent.at != sentTaken, address == nil || yields(showing: showing) {
-            sentTaken = sent.at
-            if address != nil { return retarget(.init(url: sent.url, source: sent.found ? .found : .sent)) }
-        }
-        guard !keeps(answer.serving), let first = answer.pages.first else { return }
-        retarget(.init(url: first, source: answer.serving.contains(first) ? .found : .sent))
-    }
-
     func linked(_ pages: [URL]) {
-        guard painted, let address, phase != .idle, serves(address, pages) else { return serve(pages) }
-        serving = pages
+        guard painted, phase != .idle, serves(address, pages) else { return serve(pages) }
+        reachable = pages
         resume(address)
     }
     #endif
@@ -280,17 +264,13 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         return URLSession(configuration: configuration)
     }()
 
-    private func isUp(_ address: URL) async -> Bool {
-        if source == .found, let serving { serving.contains(address) } else { await Self.reachable(address) }
-    }
-
-    private static func reachable(_ url: URL) async -> Bool {
-        var request = URLRequest(url: url)
+    private func isUp(_ address: URL) async -> Bool? {
+        var request = URLRequest(url: address)
         request.httpMethod = "HEAD"
-        return (try? await probe.data(for: request)) != nil
+        return (try? await Self.probe.data(for: request)) != nil
     }
     #else
-    private func isUp(_ address: URL) async -> Bool { serves(address, serving ?? []) }
+    private func isUp(_ address: URL) async -> Bool? { reachable.map { serves(address, $0) } }
 
     private func serves(_ address: URL, _ pages: [URL]) -> Bool {
         pages.contains { $0.scheme == address.scheme && $0.host() == address.host() && $0.port == address.port }

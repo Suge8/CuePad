@@ -129,7 +129,7 @@ extension Workspace {
     /// 窗口里看得见几块（窗口窄时最右的藏起）。
     var wideShown: Int { wideSizes?.widths.count ?? panes.count }
 
-    private func presentWide(_ state: WideNavigation) {
+    func presentWide(_ state: WideNavigation) {
         cueDrawer = false
         railDrawer = false
         navigation = .wide(state)

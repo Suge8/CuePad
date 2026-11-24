@@ -28,10 +28,8 @@ extension LivePreview {
         while (web.isLoading || record.main == nil) && phase == .live && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(50))
         }
-        switch phase {
-        case .blank: throw LiveRefusal("这个会话的活预览还没有地址：先 cuepad live <端口或地址>")
-        case .waiting, .stopped: throw LiveRefusal("连不上 \(address.map(LiveAddress.shown) ?? "")：服务停了或还没起来。起来之后再运行（不用再 cuepad live）")
-        case .idle, .live: break
+        if phase == .waiting || phase == .stopped {
+            throw LiveRefusal("连不上 \(LiveAddress.shown(address))：服务停了或还没起来。起来之后再运行（不用再 cuepad live）")
         }
         guard record.main != nil else { throw LiveRefusal("页面 10 秒还没载出来：过一会儿再试，或 cuepad live screenshot 看一眼") }
         await untilCurrent()

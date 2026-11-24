@@ -69,8 +69,8 @@ extension Workspace {
                 liveServer?.server.limit(ticket, to: Set(allowed.keys.compactMap { UInt16(exactly: $0) }))
                 if here, door != nil { ports = allowed.keys.sorted() }
             }
-            let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? liveFound[id] ?? [] : [],
-                                          sent: here ? liveTaken[key.sessionID] : nil, door: here ? door : nil, ports: ports)
+            let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? livePreviews.entries[id]?.found ?? [] : [],
+                                          sent: here ? livePreviews.entries[id]?.sent : nil, door: here ? door : nil, ports: ports)
             guard answer != phone.answered, livePhones[key] != nil else { continue }
             livePhones[key]?.answered = answer
             do {

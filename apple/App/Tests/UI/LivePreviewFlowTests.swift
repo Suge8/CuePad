@@ -224,11 +224,28 @@ struct LivePreviewFlowTests {
         #expect(await agent(workspace, .eval(code: "document.title")).text == "\"第二页\"")
     }
 
+    @Test func live_服务还没起来就发来_没开在面板里也等它起来自己载出() async throws {
+        let workspace = wide()
+        let directory = try site()
+        let (early, url) = try await serve(in: directory)
+        early.terminate()
+        early.waitUntilExit()
+        open("b", workspace)
+        _ = try await live(url.absoluteString, for: "a", in: workspace)
+        let preview = try #require(workspace.livePreviews[id("a")])
+        try await eventually("连不上，等着服务") { preview.phase == .waiting }
+
+        let (server, _) = try await serve(in: directory, port: try #require(url.port))
+        defer { server.terminate() }
+        try await eventually("服务起来了，没人点开、Agent 也没再动，页面自己载出") { preview.web.title == "登录" && !preview.web.isLoading }
+        #expect(!workspace.showsLivePreview(id("a")))
+    }
+
     @Test func Agent操作_没用过cuepad_live的会话报错让它先开() async throws {
         let workspace = wide()
         let reply = await agent(workspace, .snapshot(), as: "never")
         #expect(reply.failed && reply.text.contains("先 cuepad live"))
-        #expect(workspace.livePreviews.isEmpty)
+        #expect(workspace.livePreviews.entries.isEmpty)
     }
 
     @Test func Agent操作_后台预览闲置超过十分钟释放_钮还在_再操作时重建并说明_开着的与结束的会话各按规则() async throws {
@@ -306,13 +323,12 @@ struct LivePreviewFlowTests {
         defer { await following.stop() }
         open("a", workspace)
         workspace.toggleLivePreview()
+        #expect(workspace.typeLive("localhost:8080", for: id("a")))
         let preview = try #require(workspace.livePreviews[id("a")])
         let typed = try #require(URL(string: "http://localhost:8080"))
-        preview.retarget(.init(url: typed, source: .typed))
 
         let sent = try await live("http://localhost:5173", for: "a", in: workspace)
-        try await eventually("App 收到了这一条") { workspace.liveSent[id("a")] == .init(url: sent, source: .sent) }
-        #expect(preview.address == typed)
+        #expect(preview.address == typed && workspace.livePages(id("a")).first == sent)
 
         workspace.toggleLivePreview()
         #expect(workspace.liveButton(id("a")) == .closed(sent))

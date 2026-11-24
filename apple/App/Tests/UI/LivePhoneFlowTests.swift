@@ -47,11 +47,7 @@ struct LivePhoneFlowTests {
     }
 
     private func shown(_ preview: LivePreview, in workspace: Workspace) -> Task<Void, Never> {
-        Task {
-            async let watching: Void = preview.watch()
-            await workspace.connectLive(preview)
-            await watching
-        }
+        Task { await workspace.connectLive(preview) }
     }
 
     @Test func Mac答有页面就出钮_点开经隧道载出Mac上的页面_收起留着_离开会话页放掉() async throws {

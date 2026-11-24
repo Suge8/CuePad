@@ -87,7 +87,14 @@ private struct PaneColumn: View {
             switch pane {
             case .session(let route)?: SessionLayer(route: route, column: column)
             case .card(let id)?: IdeaPane(cardID: id) { workspace.closeColumn(column) }
-            case .preview(let owner)?: if let preview = workspace.livePreviews[owner] { LivePreviewPane(preview: preview) }
+            case .preview(let owner)?:
+                if let preview = workspace.livePreviews[owner] {
+                    LivePreviewPane(preview: preview)
+                } else {
+                    #if os(macOS)
+                    LiveAddressEntry(session: owner)
+                    #endif
+                }
             case .page?, nil: PageLayer(column: workspace.pageHost)
             }
             if placed, column == workspace.pageHost { CoverLayer() }

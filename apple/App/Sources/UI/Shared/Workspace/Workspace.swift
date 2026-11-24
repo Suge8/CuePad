@@ -213,19 +213,13 @@ final class Workspace {
         }
     }
 
-    var livePreviews: [UUID: LivePreview] = [:]
+    let livePreviews: LivePreviews
     var liveFill: LiveFill?
-    #if os(iOS)
     var liveCover: UUID?
-    #endif
     #if os(macOS)
-    var liveSent: [UUID: LivePreview.Target] = [:]
-    var liveFound: [UUID: [URL]] = [:]
     @ObservationIgnored var liveScanner = LiveServers()
     @ObservationIgnored var liveScanning: Task<Void, Never>?
-    @ObservationIgnored var liveTaken: [String: LiveSignal.Sent] = [:]
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
-    @ObservationIgnored var liveReleased: Set<UUID> = []
     var livePhones: [LivePhone.Key: LivePhone] = [:]
     @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?
     @ObservationIgnored var liveServerStarting: Task<UInt16?, Never>?
@@ -253,6 +247,9 @@ final class Workspace {
         cue = CueWatch(services.cueFeed.latest()?.digest, at: services.speech, local: services.cueLocal)
         #if os(macOS)
         sendState = SendState(services: services)
+        livePreviews = LivePreviews()
+        #else
+        livePreviews = LivePreviews(remote: services.liveRemote)
         #endif
         MainThreadWatch.shared.page(navigation.trail)
         readCatalog()

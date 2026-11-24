@@ -59,7 +59,7 @@ extension Workspace {
     }
 
     private func onPreview(_ sessionID: String, _ id: UUID, _ work: (LivePreview) async throws -> LiveChannel.Reply) async throws -> LiveChannel.Reply {
-        let (preview, rebuilt) = try livePreview(forAgent: sessionID, id)
+        let (preview, rebuilt) = try livePreviews.forAgent(id, sessionID: sessionID)
         await preview.touchedByAgent()
         defer { preview.agent.used = .now }
         var reply = try await work(preview)
@@ -69,40 +69,16 @@ extension Workspace {
         return reply
     }
 
-    private func livePreview(forAgent sessionID: String, _ id: UUID) throws -> (LivePreview, rebuilt: Bool) {
-        if let preview = livePreviews[id] { return (preview, false) }
-        guard let sent = liveSent.removeValue(forKey: id) else {
-            throw LiveRefusal("这个会话还没有活预览：先 cuepad live（或 cuepad live <端口>）把页面开在 CuePad 里，再操作它")
-        }
-        let preview = LivePreview()
-        preview.sessionID = sessionID
-        preview.retarget(sent)
-        preview.start()
-        preview.engage()
-        livePreviews[id] = preview
-        return (preview, liveReleased.remove(id) != nil)
-    }
-
     func releaseLivePreviews(at now: ContinuousClock.Instant) async {
         let open = Set(((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys)
-        for preview in livePreviews.values where now - preview.agent.acted > Self.liveIdle { preview.disengage() }
-        for (id, preview) in livePreviews where !showsLivePreview(id) {
+        for preview in livePreviews.loaded {
+            let id = SessionState.recordID(sessionID: preview.sessionID)
+            if now - preview.agent.acted > Self.liveIdle { preview.disengage() }
+            guard !showsLivePreview(id) else { continue }
             var ended = false
-            if let sessionID = preview.sessionID, !open.contains(sessionID), let state = try? await services.store.sessionState(sessionID) {
-                ended = state.state == .known(.ended)
-            }
+            if !open.contains(preview.sessionID), let state = try? await services.store.sessionState(preview.sessionID) { ended = state.state == .known(.ended) }
             guard ended || now - preview.agent.used > Self.liveIdle, livePreviews[id] === preview, !showsLivePreview(id) else { continue }
-            // 弹着的对话框先答掉：网页的脚本停在那一句上等着
-            for ask in preview.asks { preview.answer(ask.id, nil) }
-            preview.disengage()
-            livePreviews[id] = nil
-            if ended {
-                liveSent[id] = nil
-                liveReleased.remove(id)
-            } else {
-                if liveSent[id] == nil, let address = preview.address { liveSent[id] = .init(url: address, source: preview.source) }
-                liveReleased.insert(id)
-            }
+            livePreviews.release(id, ended: ended)
         }
     }
 
@@ -117,7 +93,7 @@ extension Workspace {
 
     private func noteUserInput(_ event: NSEvent) {
         guard let window = event.window else { return }
-        for preview in livePreviews.values where preview.web.window === window {
+        for preview in livePreviews.loaded where preview.web.window === window {
             let web = preview.web
             let inside = if event.type == .keyDown {
                 (window.firstResponder as? NSView)?.isDescendant(of: web) == true

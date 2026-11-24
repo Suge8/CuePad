@@ -29,7 +29,7 @@ final class LiveLink {
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored private var door: LiveSignal.Door?
     @ObservationIgnored private var route: UUID?
-    @ObservationIgnored private var pages: [URL] = []
+    @ObservationIgnored private var answer: () -> LiveRemote.Pages? = { nil }
     private var mirrored = LiveTunnel.Proxy.Mirrored()
 
     private static func mirror(_ url: URL) -> UInt16? {
@@ -38,10 +38,11 @@ final class LiveLink {
     }
 
     private var served: [URL] {
+        let pages = answer()?.pages ?? []
         #if targetEnvironment(simulator)
-        pages  // 模拟器不照搬：它和 Mac 共用回环
+        return pages  // 模拟器不照搬：它和 Mac 共用回环
         #else
-        pages.filter { Self.mirror($0).map(mirrored.open.contains) ?? true }
+        return pages.filter { Self.mirror($0).map(mirrored.open.contains) ?? true }
         #endif
     }
 
@@ -55,7 +56,9 @@ final class LiveLink {
 
     init() throws { proxy = try LiveTunnel.Proxy() }
 
-    func run(_ preview: LivePreview, sessionID: String, host: String, remote: LiveRemote, key: @escaping @MainActor () -> SymmetricKey?) async {
+    func run(_ preview: LivePreview, host: String, remote: LiveRemote, previews: LivePreviews, key: @escaping @MainActor () -> SymmetricKey?) async {
+        let sessionID = preview.sessionID
+        answer = { [weak remote] in remote?.answers[sessionID] }
         defer {
             connecting?.cancel()
             proxy.cancel()
@@ -69,7 +72,7 @@ final class LiveLink {
             group.addTask { await self.mend(broken, preview, sessionID: sessionID, remote: remote, key: key) }
             group.addTask { await self.remirror(preview) }
             for await seen in Observations({ Seen(answer: remote.answers[sessionID], offline: remote.offline.contains(sessionID)) }) {
-                follow(seen, preview, key: key)
+                follow(seen, preview, previews, key: key)
             }
         }
     }
@@ -93,15 +96,14 @@ final class LiveLink {
         let offline: Bool
     }
 
-    private func follow(_ seen: Seen, _ preview: LivePreview, key: () -> SymmetricKey?) {
+    private func follow(_ seen: Seen, _ preview: LivePreview, _ previews: LivePreviews, key: () -> SymmetricKey?) {
         if seen.offline { return lose(.offline, preview) }
         guard let answer = seen.answer else {
             if door != nil { lose(.gone, preview) }
             return
         }
-        pages = answer.pages
         proxy.mirror(Set(answer.ports.compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
-        preview.follow(answer, showing: true)
+        previews.follow(preview, answer, showing: true)
         if state == .ready { preview.serve(served) }
         guard let next = answer.door, next != door else { return }
         door = next
@@ -113,7 +115,7 @@ final class LiveLink {
         door = nil
         route = nil
         proxy.use(nil)
-        preview.serve(nil)
+        preview.serve([])
         state = .trouble(trouble)
     }
 
@@ -140,7 +142,7 @@ final class LiveLink {
                     for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) { break }  // 晚订：上一行刚看过还没回到活动状态，中间没让出主线程
                     continue
                 case .trouble(let trouble):
-                    preview.serve(nil)
+                    preview.serve([])
                     state = .trouble(trouble)
                 }
                 try? await Task.sleep(for: Self.retry)
