@@ -90,7 +90,11 @@ private struct SessionPageBody: View {
             [session] store in try SessionTaskLink.read(sessionID: session?.sessionID ?? "", project: session?.projectID, from: store)
         }
         .onChange(of: stored, initial: true) { _, stored in
-            if let session = stored?.session { lastSeen = session }
+            guard let stored, let session = stored.session else { return }
+            lastSeen = session
+            workspace.launching.observed(SendingTarget(session)) { id in
+                stored.deliveries.contains { $0.id == id } || stored.messages.last { $0.deliveryID == id } != nil
+            }
         }
         .requestsTranscript(stored)
         #if os(iOS)

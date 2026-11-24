@@ -60,7 +60,7 @@ struct ReplyBar: View {
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft }
     private var canStop: Bool { session.canStop }
-    private var shownSending: Bool { !hasDraft && !canStop && (workspace.launching.contains(session) || sending) }
+    private var shownSending: Bool { !hasDraft && !canStop && (workspace.launching.contains(SendingTarget(session)) || sending) }
     private var glyph: SendGlyph.Phase { canSend ? .ready : shownSending ? .sending : .idle }
     private var commandLine: String? { commands.isEmpty ? nil : Slash.line(of: draft, in: commands, for: session) }
     private var button: ReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
@@ -115,9 +115,6 @@ struct ReplyBar: View {
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
-            .onChange(of: sending) { workspace.launching.settle(session) }
-            .onChange(of: canStop) { workspace.launching.settle(session) }
-            .onDisappear { workspace.launching.settle(session) }
             .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
     }
 
@@ -148,8 +145,7 @@ struct ReplyBar: View {
         return map
     }
 
-    private func didSend(talked: Bool = true) {
-        if talked { workspace.launching.begin(session) } else { workspace.launching.settle(session) }
+    private func didSend() {
         #if os(iOS)
         focused = false
         #endif
@@ -241,11 +237,10 @@ struct ReplyBar: View {
 
     private func send(_ mode: DeliveryMode) {
         guard canSend else { return }
-        let talked = commandLine == nil
         let id = UUID()
-        if talked { flight?.depart(draft, as: id) }
+        if commandLine == nil { flight?.depart(draft, as: id) }
         workspace.reply(to: session, commands: commands, from: box, accepting: accepts, mode: mode, card: draft.attachments.first?.card, as: id)
-        didSend(talked: talked)
+        didSend()
     }
 }
 

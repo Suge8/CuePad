@@ -25,7 +25,7 @@ extension CueMessage: AwaitsServer {
 }
 
 extension CueStore {
-  public func cueLastYou() throws -> (said: Date, delivered: Date?, reachedServer: Bool)? {
+  public func cueLastYou() throws -> (id: UUID?, said: Date, delivered: Date?, reachedServer: Bool)? {
     let last = try db.untracked(.syncRecords) {
       try db.first(
         """
@@ -35,7 +35,7 @@ extension CueStore {
       ) { (id: $0.text(0), said: $0.date(1), delivered: $0.dateOrNil(2), reachedServer: $0.bool(3)) }
     }
     if let last, last.delivered == nil, !last.reachedServer { try dependOnUnsent([last.id]) }
-    return last.map { ($0.said, $0.delivered, $0.reachedServer) }
+    return last.map { (UUID(uuidString: $0.id), $0.said, $0.delivered, $0.reachedServer) }
   }
 
   func dependOnUnsent(_ names: [String]) throws {

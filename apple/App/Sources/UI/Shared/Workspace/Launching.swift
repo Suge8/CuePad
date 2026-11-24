@@ -1,12 +1,28 @@
 import CueStore
+import Foundation
 import Observation
 
 @Observable
 final class Launching {
-    private var keys: Set<SendingTarget> = []
+    private struct Pressed: Equatable {
+        let id: UUID
+        let target: SendingTarget
+    }
 
-    func contains(_ session: SessionState) -> Bool { keys.contains(SendingTarget(host: session.hostID, target: session.target)) }
-    func begin(_ session: SessionState) { keys.insert(SendingTarget(host: session.hostID, target: session.target)) }
-    func settle(_ session: SessionState) { keys.remove(SendingTarget(host: session.hostID, target: session.target)) }
-    func settle(host: String, target: SendTarget) { keys.remove(SendingTarget(host: host, target: target)) }
+    private var pressed: [Pressed] = []
+
+    func contains(_ target: SendingTarget) -> Bool { pressed.contains { $0.target == target } }
+
+    func begin(_ id: UUID, to target: SendingTarget) { pressed.append(Pressed(id: id, target: target)) }
+
+    func failed(_ id: UUID) { pressed.removeAll { $0.id == id } }
+
+    func observed(_ target: SendingTarget, seen: (UUID) -> Bool) {
+        guard let last = pressed.lastIndex(where: { $0.target == target && seen($0.id) }) else { return }
+        pressed = pressed.enumerated().filter { $0.offset > last || $0.element.target != target }.map(\.element)
+    }
+}
+
+extension SendingTarget {
+    init(_ session: SessionState) { self.init(host: session.hostID, target: session.target) }
 }

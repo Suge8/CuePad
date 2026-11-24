@@ -174,7 +174,7 @@ struct CueComposer: View {
         workspace.runVoice(.hangUp)
         #endif
     }
-    private var sending: Bool { aim == .cue && workspace.cue.canHear && (workspace.cue.launching || workspace.cue.sending) }
+    private var sending: Bool { aim == .cue && workspace.cue.canHear && (workspace.launching.contains(.cue) || workspace.cue.sending) }
 
     private var form: ComposerForm {
         #if os(iOS)
