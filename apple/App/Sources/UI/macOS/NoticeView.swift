@@ -12,7 +12,7 @@ struct NoticeView: View {
             ZStack(alignment: .top) {
                 if workspace.noticeOnHead, let notice = workspace.notice {
                     LinearGradient(stops: [.init(color: palette.desk, location: 0), .init(color: palette.desk, location: 0.75), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
-                        .frame(height: Chrome.band + Chrome.scrollFade)
+                        .frame(height: Chrome.band + Chrome.fade)
                         .padding(.leading, Chrome.headLead(rail: 0))
                         .padding(.trailing, sizes.cue == 0 ? CueButton.reserve : 0)
                         .allowsHitTesting(notice.takesHits)

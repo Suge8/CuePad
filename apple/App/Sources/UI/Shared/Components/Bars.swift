@@ -10,7 +10,7 @@ extension View {
         safeAreaPadding(.top, height).fades(.top, from: height)
     }
 
-    /// 滚动内容在这一边淡出（`Chrome.scrollFade` 长），`from` 是这一边先整段让掉多少。
+    /// 滚动内容在这一边淡出（`Chrome.fade` 长），`from` 是这一边先整段让掉多少。
     /// 是遮罩不是盖一层底色：Cue 页底下是天空，盖底色盖不住；也不用系统的滚动边缘效果：Mac 上嵌着的托管视图里不画，手机上只糊到名牌一半。
     func fades(_ edge: VerticalEdge, from inset: CGFloat = 0) -> some View {
         modifier(EdgeFade(edge: edge, inset: inset))
@@ -31,7 +31,7 @@ private struct EdgeFade: ViewModifier {
                     let outer = edge == .top ? proxy.safeAreaInsets.top : proxy.safeAreaInsets.bottom
                     VStack(spacing: 0) {
                         Color.clear.frame(height: outer + inset)
-                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Chrome.scrollFade)
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Chrome.fade)
                         Color.black
                     }
                     .scaleEffect(y: edge == .top ? 1 : -1)

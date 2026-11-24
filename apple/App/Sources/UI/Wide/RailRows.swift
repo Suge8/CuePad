@@ -182,7 +182,7 @@ struct RailSessions: View {
                 }
             }
             .padding(.horizontal, RowMetrics.bleed)
-            .safeAreaPadding(.bottom, Chrome.scrollFade)
+            .safeAreaPadding(.bottom, Chrome.fade)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: rows.waiting.map(\.id))
         }

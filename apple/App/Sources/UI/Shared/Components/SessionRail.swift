@@ -73,7 +73,7 @@ private struct SessionRailContent: View {
     }
 
     private func idealHeight(_ items: [SessionRailRows.Item]) -> CGFloat {
-        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.scrollFade
+        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.fade
     }
 
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column) -> some View {
@@ -94,7 +94,7 @@ private struct SessionRailContent: View {
                     }
                     .padding(.horizontal, RowMetrics.bleed)
                     .scrollTargetLayout()
-                    .safeAreaPadding(.bottom, Chrome.scrollFade)
+                    .safeAreaPadding(.bottom, Chrome.fade)
                 }
                 .scrollIndicators(.hidden)
                 .fades(.bottom)
