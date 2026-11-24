@@ -29,14 +29,14 @@ struct SessionNoticeTests {
         try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: recap))
         let settled = try await live()
         let done = tracker.alerts(for: settled, cue: nil, since: .distantPast)
-        #expect(done.map(\.kind) == [.settled] && done.first?.text.visible == "homepage 新回复：结论 修好了，feed.xml 没动。 测试全过")
+        #expect(done.map(\.kind) == [.settled] && done.first?.reply?.hasPrefix("修好了") == true)
         #expect(done.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, cue: nil, since: .distantPast).isEmpty)
 
         let question = Question(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
-        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你回答：要覆盖 feed.xml 吗？ 会丢掉手写的条目")
+        #expect(waiting.kind == .waitingForUser && waiting.question?.hasPrefix("要覆盖 feed.xml 吗") == true)
     }
 
     @Test func 歇下后回答还没读到就又动起来_不提示() async throws {

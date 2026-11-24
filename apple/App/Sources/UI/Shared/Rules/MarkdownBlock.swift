@@ -20,18 +20,21 @@ nonisolated struct MarkdownBlock: Equatable, Sendable {
     }
 
     static func firstPlainLine(_ source: String) -> String? {
-        var line: String?, table = false, code = false
+        func first(_ text: String) -> String? {
+            text.split(whereSeparator: \.isNewline).lazy.map { plainInline(String($0)).trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+        }
+        var line: String?, heading: String?, table = false, code = false
         _ = parse(source) { block in
             switch block.content {
-            case .paragraph(let text), .heading(_, let text), .quote(let text):
-                line = text.split(whereSeparator: \.isNewline).lazy.map { plainInline(String($0)).trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+            case .paragraph(let text), .quote(let text): line = first(text)
+            case .heading(_, let text): heading = heading ?? first(text)
             case .table: table = true
             case .code: code = true
             case .rule: break
             }
             return line == nil
         }
-        return line ?? (table ? String(localized: "（一张表格）") : code ? String(localized: "（一段代码）") : nil)
+        return line ?? heading ?? (table ? String(localized: "（一张表格）") : code ? String(localized: "（一段代码）") : nil)
     }
 
     static func plainInline(_ text: String) -> String {

@@ -213,12 +213,7 @@ extension SessionRailRows.Item {
 
     var ended: Bool { waiting == nil && shown.status == .ended }
 
-    var ask: String? { Self.firstLine(waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply) }
+    var ask: String? { SessionProgress.firstLine(waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply) }
 
-    var doing: String? { Self.firstLine(session.detail) ?? Self.firstLine(session.lastReply) }
-
-    private static func firstLine(_ text: String?) -> String? {
-        let line = text?.split(whereSeparator: \.isNewline).first.map(String.init)
-        return line?.isEmpty == false ? line : nil
-    }
+    var doing: String? { SessionProgress.firstLine(session.detail) ?? SessionProgress.firstLine(session.lastReply) }
 }
