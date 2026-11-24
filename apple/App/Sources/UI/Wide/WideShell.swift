@@ -19,6 +19,8 @@ struct WideShell<Rail: View, Tools: View, Cue: View>: View {
                 rail(sizes, sizes.rail)
                 Spacer(minLength: 0)
             }
+            // 叠在上面的几层按这一排的大小摆；HStack 里的 Spacer 高是 0，侧栏不在时主区会塌成一条线
+            .frame(maxHeight: .infinity)
             .overlay { PaneRow(sizes: sizes, window: geometry.size.width, focus: focus) { inset(sizes, $0) } }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
             .overlay { WideDropFeedback(window: geometry.size.width) }

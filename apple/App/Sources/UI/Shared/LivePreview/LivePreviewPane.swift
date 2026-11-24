@@ -35,20 +35,14 @@ struct LivePreviewPane: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                if preview.address == nil {
-                    #if os(macOS)
-                    LiveAddressEntry(preview: preview).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    #endif
-                } else {
-                    screen(in: geometry.size)
-                    if let trouble, preview.phase != .stopped {
-                        EmptyState(mascot: .search, title: trouble.title, message: trouble.message, bare: true) { LiveTroubleAction(trouble: trouble, preview: preview) }
-                            .padding(.horizontal, Spacing.page)
-                            .frame(maxHeight: .infinity)
-                            .transition(.opacity)
-                    }
-                    LiveBar(preview: preview).padding(inset).frame(height: Chrome.band)
+                screen(in: geometry.size)
+                if let trouble, preview.phase != .stopped {
+                    EmptyState(mascot: .search, title: trouble.title, message: trouble.message, bare: true) { LiveTroubleAction(trouble: trouble, preview: preview) }
+                        .padding(.horizontal, Spacing.page)
+                        .frame(maxHeight: .infinity)
+                        .transition(.opacity)
                 }
+                LiveBar(preview: preview).padding(inset).frame(height: Chrome.band)
             }
             .animation(Motion.fade, value: preview.phase)
             .animation(Motion.fade, value: trouble)
@@ -58,13 +52,12 @@ struct LivePreviewPane: View {
         }
         .background(palette.desk, ignoresSafeAreaEdges: workspace.layout == .wide ? .all : [])
         .modifier(LivePageAsks(preview: preview))
-        .task(id: preview.address) { await preview.watch() }
         #if os(iOS)
         .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-            guard workspace.panes.contains(where: { $0.previewed != nil }) else { return }
-            LivePreview.paneSize = size
+            preview.paneSize = size
+            workspace.livePreviews.paneSize = size
         }
         .onDisappear {
             if preview.picking { preview.cancelPick() }
@@ -309,10 +302,12 @@ private struct LiveStopped<Action: View>: View {
 }
 
 #if os(macOS)
-private struct LiveAddressEntry: View {
-    let preview: LivePreview
+/// 还没有地址的活预览（从会话菜单手动打开的）：填了才有网页视图。
+struct LiveAddressEntry: View {
+    let session: UUID
     @State private var text = ""
     @FocusState private var focused: Bool
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     private static let width: CGFloat = 400
@@ -324,7 +319,7 @@ private struct LiveAddressEntry: View {
             .foregroundStyle(palette.ink)
             .multilineTextAlignment(.center)
             .focused($focused)
-            .onSubmit { if let url = LiveAddress.url(from: text) { preview.retarget(.init(url: url, source: .typed)) } }
+            .onSubmit { workspace.typeLive(text, for: session) }
             .padding(.horizontal, Spacing.panel)
             .frame(height: ComposerMetrics.slot)
             .paper(cornerRadius: Radius.field)
@@ -332,6 +327,8 @@ private struct LiveAddressEntry: View {
             .padding(.horizontal, Spacing.page)
             .defaultFocus($focused, true)
             .onAppear { focused = true }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(palette.desk, ignoresSafeAreaEdges: .all)
     }
 }
 #endif

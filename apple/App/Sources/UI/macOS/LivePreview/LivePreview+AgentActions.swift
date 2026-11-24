@@ -5,7 +5,9 @@ import WebKit
 
 extension LivePreview {
 
-    func agentAct(_ act: Act, mark: (tint: String, ink: String)) async throws -> LiveChannel.Reply {
+    func agentAct(_ act: Act) async throws -> LiveChannel.Reply {
+        let colors = pickColors
+        let mark = (tint: colors["tint"] ?? "", ink: colors["ink"] ?? "")
         try await agentReady()
         try requireLocal()
         let waited = try await waitForUser()

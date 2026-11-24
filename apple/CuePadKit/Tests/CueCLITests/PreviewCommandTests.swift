@@ -57,22 +57,27 @@ import Testing
     let sb = try Fixture()
     let result = await sb.run("live", "5173", environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
-    #expect(try await sb.store.liveAddresses().isEmpty)
   }
 
   @Test(arguments: ["https://example.com", "http://8.8.8.8:3000", "github.com/login"])
   func liveRefusesAnAddressOffThisMac(address: String) async throws {
     let sb = try Fixture()
+    let (server, received) = try listen(sb)
+    defer { withExtendedLifetime(server) {} }
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 2 && result.err.contains("不是本机地址"))
-    #expect(try await sb.store.liveAddresses().isEmpty)
+    #expect(received.all.isEmpty)
   }
 
   @Test(arguments: ["localhost:3000", "192.168.1.20:5173", "myapp.local:8080", "http://[::1]:3000", "devbox:8000"])
   func liveTakesTheLocalAddressesOfThisMac(address: String) async throws {
     let sb = try Fixture()
+    let url = try #require(LiveAddress.url(from: address))
+    let (server, received) = try listen(sb, answer: .done("预览滑开了。", .init(url: url.absoluteString)))
+    defer { withExtendedLifetime(server) {} }
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
-    #expect(result.code == 1 && result.err.contains("CuePad 没开"))
+    #expect(result.code == 0 && result.out.hasPrefix("预览滑开了。"), "\(result.err)")
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: .open(url))])
   }
 
   @Test func liveActionsWithoutCuePadOpenFailAndAskForIt() async throws {
@@ -103,7 +108,7 @@ import Testing
 
     let result = await sb.run("live", "click", "a5", environment: ["CUEPAD_SESSION_ID": "s1"])
     #expect(result.code == 0 && result.out == "点了 button \"登录\"\n")
-    #expect(received.all == [LiveChannel.Request(session: "s1", op: "click", args: .init(ref: "a5"))])
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: .click(ref: "a5"))])
 
     let nobody = await sb.run("live", "click", "a5")
     #expect(nobody.code != 0 && nobody.err.contains("CUEPAD_SESSION_ID"))
@@ -130,8 +135,8 @@ import Testing
     let missing = await sb.run("live", "upload", "a3", "nope.png", cwd: work.path, environment: ["CUEPAD_SESSION_ID": "s1"])
     #expect(missing.code != 0 && missing.err.contains("读不到 ") && missing.err.contains("/work/nope.png"))
     #expect(received.all == [
-      LiveChannel.Request(session: "s1", op: "screenshot"),
-      LiveChannel.Request(session: "s1", op: "upload", args: .init(ref: "a3", files: [.init(name: "avatar.png", data: Data("头像".utf8))])),
+      LiveChannel.Request(session: "s1", op: .screenshot()),
+      LiveChannel.Request(session: "s1", op: .upload(ref: "a3", files: [.init(name: "avatar.png", data: Data("头像".utf8))])),
     ])
   }
 
@@ -164,7 +169,6 @@ import Testing
     let sb = try Fixture()
     let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 2 && result.err.contains("不是能打开的网页地址"))
-    #expect(try await sb.store.liveAddresses().isEmpty)
   }
 }
 #endif

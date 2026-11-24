@@ -206,20 +206,14 @@ final class Workspace {
         }
     }
 
-    var livePreviews: [UUID: LivePreview] = [:]
+    let livePreviews: LivePreviews
     var liveFill: LiveFill?
-    #if os(iOS)
     var liveCover: UUID?
-    #endif
     #if os(macOS)
-    var liveSent: [UUID: LivePreview.Target] = [:]
-    var liveFound: [UUID: [URL]] = [:]
     @ObservationIgnored var liveScanner = LiveServers()
-    @ObservationIgnored var liveScanning: Task<Void, Never>?
-    @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
+    @ObservationIgnored var liveScanning: Task<Void, any Error>?
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
-    @ObservationIgnored var liveReleased: Set<UUID> = []
-    var livePhones: [LivePhone.Key: LivePhone] = [:]
+    var livePhones: [LivePhone.Key: LivePhone] = [:] { didSet { syncLiveDoor() } }
     @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?
     @ObservationIgnored var liveServerStarting: Task<UInt16?, Never>?
     @ObservationIgnored var livePorts: [String: (ports: [Int: String], at: ContinuousClock.Instant)] = [:]
@@ -246,6 +240,9 @@ final class Workspace {
         cue = CueWatch(services.cueFeed.latest()?.digest, at: services.speech, local: services.cueLocal)
         #if os(macOS)
         sendState = SendState(services: services)
+        livePreviews = LivePreviews()
+        #else
+        livePreviews = LivePreviews(remote: services.liveRemote)
         #endif
         MainThreadWatch.shared.page(navigation.trail)
         readCatalog()
@@ -280,12 +277,11 @@ final class Workspace {
         #endif
         #if os(macOS)
         async let agents: Void = followLocalAgents()
-        async let live: Void = followLiveAddresses()
         async let liveAgent: Void = serveLiveAgent()
         async let liveScan: Void = watchLiveServers()
         async let livePhones: Void = followLivePhones()
         await followSessionPlacement()
-        _ = await (agents, live, liveAgent, liveScan, livePhones)
+        _ = await (agents, liveAgent, liveScan, livePhones)
         #endif
         #if os(iOS)
         await returns

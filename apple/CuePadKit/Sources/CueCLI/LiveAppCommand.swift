@@ -28,11 +28,10 @@ extension Command {
     guard !AppServe.refusesLibraries(app) else {
       throw CLIError.invalid("「\(name)」开了 Hardened Runtime（或是系统自带的应用），载不进取画面的库：用你自己的调试构建（Xcode 的 Debug 默认不开；构建脚本里是 ENABLE_HARDENED_RUNTIME=NO）")
     }
-    guard call.store.appIsOpen else { throw notOpen(call, "没有起。请用户打开 CuePad 后再运行 cuepad live app") }
     let (port, pid) = try await AppServe.launch(app, executable: executable, arguments: Array(call.args.positionals.dropFirst()), session: session)
     let url = URL(string: "http://localhost:\(port)")!
-    try await call.store.sendLive(url, to: session, found: false)
-    let text = "已起「\(name)」（进程 \(pid)），它的窗口交给了这台 Mac 上的 CuePad：\(LiveAddress.shown(url))。会话开在主区、右半空着时预览直接滑开；否则会话栏头的预览钮亮起，等用户点开。重新构建后再运行这一条，这一份会被退掉换成新的。\n"
+    let (opened, _) = try openLive(call, url, session: session, name: "live app")
+    let text = "已起「\(name)」（进程 \(pid)）。" + opened + "重新构建后再运行这一条，这一份会被退掉换成新的。\n"
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: false)))
   }
 }

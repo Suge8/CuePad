@@ -105,7 +105,7 @@ extension SyncIssue {
         case .activityDestinations: String(localized: "实时活动的推送地址")
         case .agentLibraries: String(localized: "一台 Mac 上的技能与规则")
         case .agentLibraryFiles: String(localized: "一台 Mac 上一份技能或规则的正文")
-        case nil, .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords, .liveAddresses: String(localized: "一条记录")
+        case nil, .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords: String(localized: "一条记录")
         }
     }
 }
