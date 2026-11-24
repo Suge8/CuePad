@@ -18,6 +18,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var keepsHeader = false
     var tooled = false
     var commands: [SlashCommand] = []
+    var submit: (() -> Void)?
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
     var keys: [ComposerKey: () -> Void] = [:]
     var recall: String?
@@ -59,7 +60,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     }
 
     private func shortcut(_ key: ReplyShortcut) -> (() -> Void)? {
-        key == .send && !hasContent && !submitsEmpty ? nil : shortcuts[key]
+        guard key == .send else { return shortcuts[key] }
+        return hasContent || submitsEmpty ? submit : nil
     }
 
     private func handle(_ key: ComposerKey) -> Bool {

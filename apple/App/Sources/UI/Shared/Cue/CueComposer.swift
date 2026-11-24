@@ -33,7 +33,7 @@ struct CueComposer: View {
             draft: Bindable(cue).draft, prompt: prompt,
             label: "对 \(cue.name) 说",
             focus: $focused, accepts: .files,
-            form: form, showsSendEmpty: sending || calls || inCall || receipt != nil, yielded: inCall, lead: lead, tooled: tooled, shortcuts: shortcuts, keys: keys,
+            form: form, showsSendEmpty: sending || calls || inCall || receipt != nil, yielded: inCall, lead: lead, tooled: tooled, submit: send, keys: keys,
             header: { EmptyView() },
             tools: { tools },
             send: { sendButton })
@@ -182,8 +182,6 @@ struct CueComposer: View {
         #endif
         return .open
     }
-
-    private var shortcuts: [ReplyShortcut: () -> Void] { [.send: send] }
 
     private var opens: Int? { if case .bar(let opens) = style { opens } else { nil } }
 

@@ -105,7 +105,7 @@ struct ReplyBar: View {
             Composer(
                 draft: box, prompt: prompt, promptIcon: wakes ? .wakeSession : nil, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending || macOff != nil, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
-                commands: commands, shortcuts: shortcuts, recall: recall,
+                commands: commands, submit: submit, shortcuts: shortcuts, recall: recall,
                 header: {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
@@ -115,7 +115,7 @@ struct ReplyBar: View {
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
-            .task { await DebugHooks.pressSendIfAsked(session: true) { shortcuts[.send]?() } }
+            .task { await DebugHooks.pressSendIfAsked(session: true) { submit?() } }
     }
 
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
@@ -128,14 +128,17 @@ struct ReplyBar: View {
 
     private static let unanswerable: LocalizedStringResource = "CuePad 答不了这类提问，只能让这个会话休眠"
 
+    private var submit: (() -> Void)? {
+        if macOff != nil { return { asleepNote.open = true } }
+        return switch button {
+        case .answer: answer
+        case .send(let mode): { send(mode) }
+        case .stop, nil: nil
+        }
+    }
+
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]
-        switch macOff == nil ? button : nil {
-        case .answer: map[.send] = answer
-        case .send(let mode): map[.send] = { send(mode) }
-        case .stop, nil: break
-        }
-        if macOff != nil { map[.send] = { asleepNote.open = true } }
         #if os(macOS)
         if hasTools {
             map[.model] = { opening = .model }
